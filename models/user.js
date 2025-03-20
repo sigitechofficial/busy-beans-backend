@@ -38,17 +38,7 @@ module.exports = (sequelize) => {
       },
       password: {
         type: DataTypes.STRING,
-        allowNull: false,
-        validate: {
-          notNull: {
-            msg: 'Password is Required',
-          },
-          notEmpty: {
-            msg: 'Password cannot be empty',
-          },
-        },
       },
-
       status: {
         type: DataTypes.BOOLEAN,
         allowNull: true,
@@ -88,6 +78,11 @@ module.exports = (sequelize) => {
       stripeCustomerId: {
         type: DataTypes.STRING(),
         allowNull: true,
+      },
+      registerBy: {
+        type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
+        allowNull: false,
+        defaultValue: 'email',
       },
     },
     {

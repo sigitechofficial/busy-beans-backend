@@ -6,6 +6,9 @@ const { user } = require('../models');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const Email = require('../utils/email');
+const otpGenerator = require('otp-generator');
+const EmailResetPasswordOtpToAll = require('../helper/ResetPasswordOtpToAll');
+const EmailWelcome = require('../helper/WelcomeForBoth');
 
 const signToken = (data) =>
   jwt.sign(
@@ -39,12 +42,23 @@ const createSendToken = (input, statusCode, req, res) => {
 };
 
 exports.signup = catchAsync(async (req, res, next) => {
+  const OTP = otpGenerator.generate(4, {
+    lowerCaseAlphabets: false,
+    upperCaseAlphabets: false,
+    specialChars: false,
+  });
+
   const newUser = await user.create(req.body);
+  if (!req.body?.registerBy || registerBy == 'email') {
+    EmailResetPasswordOtpToAll(OTP, newUser, 'verification');
+  }
+
   console.log('🚀 ~ exports.signup=catchAsync ~ newUser:', newUser?.id);
 
-  // const url = `${req.protocol}://${req.get('host')}/me`;
-  // console.log(url);
-  // await new Email(newUser, url).sendWelcome();
+  res.status(200).json({
+    status: 'success',
+    message: 'OTP sent to your email!',
+  });
 
   createSendToken(newUser, 201, req, res);
 });
