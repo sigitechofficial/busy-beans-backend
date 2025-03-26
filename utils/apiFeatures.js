@@ -4,6 +4,7 @@ class APIFeatures {
   constructor(query, queryString) {
     this.query = query;
     this.queryString = queryString;
+    this.queryOptions = {}; // Store query options here
   }
 
   filter() {
@@ -11,7 +12,7 @@ class APIFeatures {
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
     excludedFields.forEach((el) => delete queryObj[el]);
 
-    // 1B) Advanced filtering
+    // Advanced filtering
     const filterConditions = {};
     Object.keys(queryObj).forEach((key) => {
       if (
@@ -29,8 +30,8 @@ class APIFeatures {
       }
     });
 
-    // Apply filtering to Sequelize query
-    this.query = this.query.where(filterConditions);
+    // Apply filter conditions to the query options
+    this.queryOptions.where = filterConditions;
 
     return this;
   }
@@ -46,9 +47,9 @@ class APIFeatures {
         }
         return [field, 'ASC'];
       });
-      this.query = this.query.order(sortConditions);
+      this.queryOptions.order = sortConditions;
     } else {
-      this.query = this.query.order([['createdAt', 'DESC']]); // Default sort by createdAt descending
+      this.queryOptions.order = [['createdAt', 'DESC']]; // Default sort by createdAt descending
     }
 
     return this;
@@ -59,10 +60,10 @@ class APIFeatures {
       const fields = this.queryString.fields
         .split(',')
         .map((field) => field.trim());
-      this.query = this.query.attributes(fields);
+      this.queryOptions.attributes = fields;
     } else {
       // Default: exclude specific fields if needed
-      this.query = this.query.attributes({ exclude: ['deletedAt'] });
+      this.queryOptions.attributes = { exclude: ['deletedAt'] };
     }
 
     return this;
@@ -73,9 +74,14 @@ class APIFeatures {
     const limit = this.queryString.limit * 1 || 100;
     const offset = (page - 1) * limit;
 
-    this.query = this.query.limit(limit).offset(offset);
+    this.queryOptions.limit = limit;
+    this.queryOptions.offset = offset;
 
     return this;
+  }
+
+  getQuery() {
+    return this.queryOptions; // Return the complete query options for use in the Sequelize query
   }
 }
 

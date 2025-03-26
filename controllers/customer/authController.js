@@ -2,13 +2,15 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
-const { user } = require('../models');
-const catchAsync = require('../utils/catchAsync');
-const AppError = require('../utils/appError');
-const Email = require('../utils/email');
+const { user, address } = require('../../models');
+const catchAsync = require('../../utils/catchAsync');
+const AppError = require('../../utils/appError');
+const Email = require('../../utils/email');
 const otpGenerator = require('otp-generator');
-const EmailResetPasswordOtpToAll = require('../helper/ResetPasswordOtpToAll');
-const EmailWelcome = require('../helper/WelcomeForBoth');
+const EmailResetPasswordOtpToAll = require('../../helper/ResetPasswordOtpToAll');
+const EmailWelcome = require('../../helper/WelcomeForBoth');
+const { response } = require('../../utils/response');
+const bcrypt = require('bcryptjs');
 
 const signToken = (data) =>
   jwt.sign(
@@ -21,7 +23,11 @@ const signToken = (data) =>
 
 const createSendToken = (input, statusCode, req, res) => {
   console.log('🚀 ~ createSendToken ~ input:', input);
-  const token = signToken({ id: input.id });
+  const token = signToken({
+    id: input.id,
+    name: input.name,
+    email: input.email,
+  });
 
   res.cookie('jwt', token, {
     expires: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
@@ -31,6 +37,9 @@ const createSendToken = (input, statusCode, req, res) => {
 
   // Remove password from output
   input.password = undefined;
+  input.updatedAt = undefined;
+  input.deletedAt = undefined;
+  input.deleted = undefined;
 
   res.status(statusCode).json({
     status: 'success',
@@ -47,19 +56,26 @@ exports.signup = catchAsync(async (req, res, next) => {
     upperCaseAlphabets: false,
     specialChars: false,
   });
-
-  const newUser = await user.create(req.body);
-  if (!req.body?.registerBy || registerBy == 'email') {
-    EmailResetPasswordOtpToAll(OTP, newUser, 'verification');
+  if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
+    req.body.info.verifiedAt = Date.now();
   }
+  const newUser = await user.create(req.body?.info);
 
-  console.log('🚀 ~ exports.signup=catchAsync ~ newUser:', newUser?.id);
-
-  res.status(200).json({
-    status: 'success',
-    message: 'OTP sent to your email!',
-  });
-
+  if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
+    EmailResetPasswordOtpToAll(OTP, newUser, 'verification');
+    // return res.status(200).json(
+    //   response({
+    //     data: {
+    //       message: 'OTP sent to your email!',
+    //       data: newUser,
+    //     },
+    //   }),
+    // );
+  }
+  if (req.body?.address) {
+    req.body.address.userId = newUser?.id;
+    address.create(req.body?.address);
+  }
   createSendToken(newUser, 201, req, res);
 });
 
@@ -71,12 +87,11 @@ exports.login = catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide email and password!', 400));
   }
   // 2) Check if user exists && password is correct
-  const customer = await user.findOne({ email }).select('+password');
+  const customer = await user.findOne({
+    where: { email },
+  });
 
-  if (
-    !customer ||
-    !(await customer.correctPassword(password, customer.password))
-  ) {
+  if (!customer || !(await bcrypt.compare(password, customer?.password))) {
     return next(new AppError('Incorrect email or password', 401));
   }
 
@@ -183,14 +198,14 @@ exports.restrictTo =
 
 exports.forgotPassword = catchAsync(async (req, res, next) => {
   // 1) Get user based on POSTed email
-  const user = await User.findOne({ email: req.body.email });
-  if (!user) {
+  const customer = await user.findOne({ email: req.body.email });
+  if (!response) {
     return next(new AppError('There is no user with email address.', 404));
   }
 
   // 2) Generate the random reset token
   const resetToken = user.createPasswordResetToken();
-  await user.save({ validateBeforeSave: false });
+  await response.save({ validateBeforeSave: false });
 
   // 3) Send it to user's email
   try {
@@ -217,12 +232,8 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
 
 exports.resetPassword = catchAsync(async (req, res, next) => {
   // 1) Get user based on the token
-  const hashedToken = crypto
-    .createHash('sha256')
-    .update(req.params.token)
-    .digest('hex');
 
-  const user = await User.findOne({
+  const user = await user.findOne({
     passwordResetToken: hashedToken,
     passwordResetExpires: { $gt: Date.now() },
   });

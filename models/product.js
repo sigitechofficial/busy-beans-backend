@@ -1,59 +1,50 @@
 module.exports = (sequelize, DataTypes) => {
-  const address = sequelize.define(
-    'address',
+  const product = sequelize.define(
+    'product',
     {
-      companyaddress: {
+      name: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: {
           args: true,
-          msg: 'This email is already exist.',
+          msg: 'This product is already exist.',
         },
       },
-      addressLineOne: {
+      quantity: {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      addressLineTwo: {
+      unit: {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      town: {
-        //town
+      image: {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      zipCode: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      country: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      state: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      status: {
-        type: DataTypes.BOOLEAN,
+      price: {
+        type: DataTypes.DECIMAL(20, 2),
         allowNull: true,
-        defaultValue: true,
+        defaultValue: 0,
+      },
+      desc: {
+        type: DataTypes.STRING,
+        allowNull: true,
       },
     },
     {
-      tableName: 'addresses',
+      tableName: 'products',
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['town'],
-          name: 'town_index',
+          fields: ['product'],
+          name: 'product_index',
         },
       ],
     },
   );
-  return address;
+  return product;
 };

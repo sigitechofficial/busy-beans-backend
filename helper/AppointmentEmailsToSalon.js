@@ -1,21 +1,21 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
-const { emailDateFormate } = require('../utils/emailDateFormate')
-const { CURRENCY_UNIT } = process.env
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
+const { emailDateFormate } = require('../utils/emailDateFormate');
+const { CURRENCY_UNIT } = process.env;
 module.exports = function (to, data, state = 'book') {
-  let jobs = []
+  let jobs = [];
 
   const services = data.jobs.forEach((ele) => {
     const employee =
       ele.employee && ele.employee.user
         ? `with ${ele.employee.user.firstName} ${ele.employee.user.lastName}`
-        : 'with Un-Confirmed'
-    const date = emailDateFormate(ele.on, ele.startTime)
+        : 'with Un-Confirmed';
+    const date = emailDateFormate(ele.on, ele.startTime);
     let temp = `
   <table
   align="center"
@@ -109,48 +109,48 @@ module.exports = function (to, data, state = 'book') {
     </tr>
   </tbody>
 </table>
-  `
-    temp = jobs.push(temp)
-    return temp
-  })
-  jobs = jobs.join(' ')
-  const date = emailDateFormate(data.on, data.startTime)
-  const salonName = data.salonDetail?.salonName || ''
-  const address = data.salonDetail?.addressDB
-  let addressString = `${salonName} - ${address?.streetAddress},${address?.province} ${address?.country}`
+  `;
+    temp = jobs.push(temp);
+    return temp;
+  });
+  jobs = jobs.join(' ');
+  const date = emailDateFormate(data.on, data.startTime);
+  const salonName = data.salonDetail?.salonName || '';
+  const address = data.salonDetail?.addressDB;
+  let addressString = `${salonName} - ${address?.streetAddress},${address?.province} ${address?.country}`;
 
   const client = {
     name: `${data?.user?.firstName || ''} ${data?.user?.lastName || ''}`,
     email: `${data.user.email || '.......@gmail.com'}`,
     contact: `${data?.user?.countryCode || 'xxx-'}${data?.user?.phoneNum || 'xxxxxxxxxx'}`,
-  }
+  };
   // style="text-decoration: none;"
-  let heading = `Appointment confirmed`
-  let description = `Appointment with ${client?.name} on ${date} has been booked. Booking ID: <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a>`
-  let subject = `Appointment confirmed ref #${data?.id}.`
+  let heading = `Appointment confirmed`;
+  let description = `Appointment with ${client?.name} on ${date} has been booked. Booking ID: <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a>`;
+  let subject = `Appointment confirmed ref #${data?.id}.`;
 
   if (state === 'cancel') {
-    subject = `Booking ref #${data.id} has been cancelled!.`
-    heading = `Appointment has been cancelled`
-    description = `Appointment was scheduled for ${date} with ${client?.name}`
+    subject = `Booking ref #${data.id} has been cancelled!.`;
+    heading = `Appointment has been cancelled`;
+    description = `Appointment was scheduled for ${date} with ${client?.name}`;
   } else if (state === 'reschudle') {
-    subject = `Booking ref #${data.id} has been rescheduled!`
-    heading = `Appointment has been update`
-    description = `An appointment ref <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a> is scheduled for ${date} with ${client?.name}.`
+    subject = `Booking ref #${data.id} has been rescheduled!`;
+    heading = `Appointment has been update`;
+    description = `An appointment ref <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a> is scheduled for ${date} with ${client?.name}.`;
   } else if (state === 'complete') {
-    subject = `Booking ref #${data.id} has been completed!`
-    heading = `Appointment has been completed`
-    description = `Booking reference <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a> is now completed successfully.`
+    subject = `Booking ref #${data.id} has been completed!`;
+    heading = `Appointment has been completed`;
+    description = `Booking reference <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a> is now completed successfully.`;
   } else if (state === 'noshow') {
-    subject = `Booking ref #${data.id} marked as No-Show!`
-    heading = `Appointment marked as No-Show`
-    description = `Booking reference <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a> was marked as a no-show. The client missed the scheduled appointment.`
+    subject = `Booking ref #${data.id} marked as No-Show!`;
+    heading = `Appointment marked as No-Show`;
+    description = `Booking reference <a href="https://trimworldwide.com/BookingDetailScreen?id=${data?.id}">#${data?.id}</a> was marked as a no-show. The client missed the scheduled appointment.`;
   }
 
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com'], // list of receivers
+      to: to, // list of receivers
 
       subject: subject,
       attachments: attachment.footer,
@@ -1018,10 +1018,10 @@ module.exports = function (to, data, state = 'book') {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};

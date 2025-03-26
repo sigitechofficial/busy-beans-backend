@@ -7,6 +7,11 @@ const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
 
 module.exports = function (OTP, data, type) {
+  console.log('🚀 ~ OTP:', OTP);
+  console.log('🚀 ~ OTP:', OTP);
+  console.log('🚀 ~ OTP:', OTP);
+  console.log('🚀 ~ OTP:', OTP);
+  let heading = `Reset password`;
   let preOtpText = `We found a request for forgot password.
   Its okay! its happens. Use this OTP for
   reset your password.`;
@@ -14,6 +19,7 @@ module.exports = function (OTP, data, type) {
   let postOtpText = `If you didn’t request this, please ignore this email. your password won’t change until you access the link above and create a new one.`;
 
   if (type && type == 'verification') {
+    heading = 'Account verification';
     preOtpText = `We found a request account verification.
        Use this OTP for
       to verify your account.`;
@@ -298,7 +304,7 @@ module.exports = function (OTP, data, type) {
                                             margin-bottom: 0;
                                           "
                                         >
-                                          Reset password
+                                          ${heading}
                                         </h1>
                                       </td>
                                     </tr>

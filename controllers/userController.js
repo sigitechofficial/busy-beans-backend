@@ -5,8 +5,11 @@ const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const User = require('../models/user');
+const Address = require('../models/address');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const { response } = require('../../utils/response');
+const account = require('../models/account');
 
 const signToken = (userId) =>
   jwt.sign({ id: userId || 1 }, process.env.JWT_SECRET, {
@@ -54,7 +57,7 @@ exports.login = catchAsync(async (req, res, next) => {
     return next(new AppError('Please provide email and password!', 400));
   }
 
-  const user = await User.findOne({ where: { email } });
+  const user = await account.findOne({ where: { email } });
 
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError('Incorrect email or password', 401));

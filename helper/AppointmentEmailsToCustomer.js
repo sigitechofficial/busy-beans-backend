@@ -1,20 +1,20 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
-const { emailDateFormate } = require('../utils/emailDateFormate')
-const { CURRENCY_UNIT } = process.env
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
+const { emailDateFormate } = require('../utils/emailDateFormate');
+const { CURRENCY_UNIT } = process.env;
 //state :can be ('book','cancel','reschedule','')
 module.exports = function (to, data, state = 'book') {
-  let jobs = []
+  let jobs = [];
   const services = data.jobs.forEach((ele) => {
     const employee =
       ele.employee && ele.employee.user
         ? `with ${ele.employee.user.firstName}`
-        : ' '
+        : ' ';
 
     let temp = `
              <table
@@ -103,34 +103,34 @@ module.exports = function (to, data, state = 'book') {
                 </tr>
               </tbody>
             </table>
-  `
-    temp = jobs.push(temp)
-    return temp
-  })
+  `;
+    temp = jobs.push(temp);
+    return temp;
+  });
 
-  jobs = jobs.join(' ')
+  jobs = jobs.join(' ');
 
-  const salonName = data?.salonDetail?.salonName || ''
-  const total = data.total
-  const address = data.salonDetail.addressDB
-  let addressString = `${address.streetAddress}, ${address.province}, ${address.country}`
-  console.log('🚀 ~ addressString:', addressString)
-  const date = emailDateFormate(data.on, data.startTime)
+  const salonName = data?.salonDetail?.salonName || '';
+  const total = data.total;
+  const address = data.salonDetail.addressDB;
+  let addressString = `${address.streetAddress}, ${address.province}, ${address.country}`;
+  console.log('🚀 ~ addressString:', addressString);
+  const date = emailDateFormate(data.on, data.startTime);
 
   const client = {
     name: `${data?.user?.firstName}`,
     email: `${data?.user?.email}`,
     contact: `${data?.user?.countryCode}${data?.user?.phoneNum}`,
-  }
-  console.log('🚀 ~ process.env.EMAIL_USERNAME:', process.env.EMAIL_USERNAME)
-  let badgeText = 'Confirmed'
-  let badgeColor = '#176600'
-  let badgeImageSrc = 'cid:confirm'
+  };
+  console.log('🚀 ~ process.env.EMAIL_USERNAME:', process.env.EMAIL_USERNAME);
+  let badgeText = 'Confirmed';
+  let badgeColor = '#176600';
+  let badgeImageSrc = 'cid:confirm';
 
-  const deeplink = `https://backend.trimworldwide.com/appointmentDetail?id=${data.id}`
+  const deeplink = `https://backend.trimworldwide.com/appointmentDetail?id=${data.id}`;
 
-  let emailTitle = `Hi ${client.name}, your booking is confirmed!`
-  let subject = `Your booking ref #${data.id} is confirmed!.`
+  let emailTitle = `Hi ${client.name}, your booking is confirmed!`;
+  let subject = `Your booking ref #${data.id} is confirmed!.`;
 
   let buttonSection = `   <table
                     align="center"
@@ -226,19 +226,19 @@ module.exports = function (to, data, state = 'book') {
                         </td>
                       </tr>
                     </tbody>
-</table>`
+</table>`;
 
-  let description = `On ${date} with ${salonName}`
-  let attachments = attachment.footer.concat(attachment.confirm)
+  let description = `On ${date} with ${salonName}`;
+  let attachments = attachment.footer.concat(attachment.confirm);
 
   if (state === 'cancel') {
-    subject = `Your booking ref #${data.id} has been cancelled!.`
-    badgeText = 'Cancellation'
-    badgeColor = '#EE4A4A'
-    badgeImageSrc = 'cid:cancel'
-    attachments = attachment.footer.concat(attachment.cancel)
-    emailTitle = `Hi ${client.name}, your booking has been cancelled!`
-    description = `Appointment was scheduled for ${date} with ${salonName}`
+    subject = `Your booking ref #${data.id} has been cancelled!.`;
+    badgeText = 'Cancellation';
+    badgeColor = '#EE4A4A';
+    badgeImageSrc = 'cid:cancel';
+    attachments = attachment.footer.concat(attachment.cancel);
+    emailTitle = `Hi ${client.name}, your booking has been cancelled!`;
+    description = `Appointment was scheduled for ${date} with ${salonName}`;
     buttonSection = `<table
               align="center"
               border="0"
@@ -331,11 +331,11 @@ module.exports = function (to, data, state = 'book') {
                   </td>
                 </tr>
               </tbody>
-            </table>`
+            </table>`;
   } else if (state === 'reschudle') {
-    subject = `your booking ref #${data.id} has been rescheduled!`
-    emailTitle = `Hi ${client.name}, your booking has been rescheduled!`
-    description = `Your booking with ${salonName} is now on ${date}.`
+    subject = `your booking ref #${data.id} has been rescheduled!`;
+    emailTitle = `Hi ${client.name}, your booking has been rescheduled!`;
+    description = `Your booking with ${salonName} is now on ${date}.`;
     buttonSection = `   <table
     align="center"
     border="0"
@@ -526,15 +526,15 @@ module.exports = function (to, data, state = 'book') {
         </td>
       </tr>
     </tbody>
-  </table>`
+  </table>`;
   } else if (state === 'noshow') {
-    subject = `You missed an booking ref #${data?.id}`
-    badgeText = 'No-Show'
-    badgeColor = '#EE4A4A'
-    badgeImageSrc = 'cid:cancel'
-    attachments = attachment.footer.concat(attachment.cancel)
-    emailTitle = `Hi ${client.name}, seems you missed an appointment!`
-    description = `The shop's policy on missed bookings means they will deduct ${data?.noShowPercentage}% of the booking value. For next time, double check the shop's policy and cancel with them early if needed.`
+    subject = `You missed an booking ref #${data?.id}`;
+    badgeText = 'No-Show';
+    badgeColor = '#EE4A4A';
+    badgeImageSrc = 'cid:cancel';
+    attachments = attachment.footer.concat(attachment.cancel);
+    emailTitle = `Hi ${client.name}, seems you missed an appointment!`;
+    description = `The shop's policy on missed bookings means they will deduct ${data?.noShowPercentage}% of the booking value. For next time, double check the shop's policy and cancel with them early if needed.`;
     buttonSection = `<table
     align="center"
     border="0"
@@ -652,7 +652,7 @@ module.exports = function (to, data, state = 'book') {
                 <p>
                  Booking was scheduled for ${date} with ${salonName}
                 </p>
-              </div> `
+              </div> `;
   }
   let badge = `<tr>
                                       <td class="pad">
@@ -680,14 +680,14 @@ module.exports = function (to, data, state = 'book') {
                                           </div>
                                         </div>
                                       </td>
- </tr>`
+ </tr>`;
 
   const businessEmail =
-    data.salonDetail?.businessEmail || data.salonDetail?.user?.email
+    data.salonDetail?.businessEmail || data.salonDetail?.user?.email;
   transporter.sendMail(
     {
       from: `${salonName} ${process.env.EMAIL_USERNAME_FOR_CUSTOMER}`, // sender address
-      to: ['sigidevelopers@gmail.com'],
+      to: to,
       replyTo: businessEmail,
       subject: subject, // Subject line
       attachments: attachments,
@@ -1694,10 +1694,10 @@ module.exports = function (to, data, state = 'book') {
     },
     function (error, info) {
       if (error) {
-        console.log('---------------------------->', error)
+        console.log('---------------------------->', error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};

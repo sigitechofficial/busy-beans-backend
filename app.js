@@ -12,6 +12,7 @@ const server = require('http').createServer(app);
 const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
 const userRouter = require('./routes/userRoutes');
+const adminRouter = require('./routes/adminRoutes');
 
 dotenv.config({ path: './.env' });
 // Start express app
@@ -22,7 +23,7 @@ app.enable('trust proxy');
 
 // // 1) GLOBAL MIDDLEWARES
 // // Implement CORS
-// app.use(cors());
+app.use(cors());
 // // Access-Control-Allow-Origin *
 // // api.natours.com, front-end natours.com
 // // app.use(cors({
@@ -64,6 +65,7 @@ app.use((req, res, next) => {
 
 // 3) ROUTES
 app.use('/api/v1/users', userRouter);
+app.use('/api/v1/admin', adminRouter);
 
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

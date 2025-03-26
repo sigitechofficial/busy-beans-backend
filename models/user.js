@@ -17,12 +17,11 @@ module.exports = (sequelize) => {
           },
         },
       },
-
       email: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: {
-          msg: 'user already exists with this email',
+          msg: 'User already exists with this email',
         },
         validate: {
           notNull: {
@@ -48,7 +47,6 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-
       // company Details
       phoneNumber: {
         type: DataTypes.STRING,

@@ -1,21 +1,21 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
-const { emailDateFormate } = require('../utils/emailDateFormate')
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
+const { emailDateFormate } = require('../utils/emailDateFormate');
 
-const { CURRENCY_UNIT } = process.env
+const { CURRENCY_UNIT } = process.env;
 module.exports = function (to, input) {
-  const data = input.appointment
-  let jobs = []
+  const data = input.appointment;
+  let jobs = [];
   data.jobs.forEach((ele) => {
     const employee =
       ele.employee && ele.employee.user
         ? `with ${ele.employee?.user?.firstName}`
-        : ''
+        : '';
 
     let temp = `
              <table
@@ -104,22 +104,22 @@ module.exports = function (to, input) {
                 </tr>
               </tbody>
             </table>
-  `
-    temp = jobs.push(temp)
-    return temp
-  })
-  jobs = jobs.join(' ')
+  `;
+    temp = jobs.push(temp);
+    return temp;
+  });
+  jobs = jobs.join(' ');
 
-  const date = emailDateFormate(data.on, data.startTime)
-  const address = data.salonDetail.addressDB
-  let addressString = `$${address.streetAddress}, ${address.province}, ${address.country}`
-  const total = data.total
+  const date = emailDateFormate(data.on, data.startTime);
+  const address = data.salonDetail.addressDB;
+  let addressString = `$${address.streetAddress}, ${address.province}, ${address.country}`;
+  const total = data.total;
   const businessEmail =
-    data.salonDetail?.businessEmail || data.salonDetail?.user?.email
+    data.salonDetail?.businessEmail || data.salonDetail?.user?.email;
   transporter.sendMail(
     {
       from: `${input?.salon?.salonName} ${process.env.EMAIL_USERNAME_FOR_CUSTOMER}`,
-      to: ['sigidevelopers@gmail.com'],
+      to: to,
       replyTo: businessEmail,
       subject: ` Thank you for visiting ${input?.salon?.salonName}.`,
       attachments: attachment.footer.concat(attachment.star),
@@ -1223,13 +1223,13 @@ module.exports = function (to, input) {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};
 
 // <table
 //               align="center"
