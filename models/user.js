@@ -122,6 +122,9 @@ module.exports = (sequelize) => {
   user.associate = (models) => {
     user.hasOne(models.address);
     models.address.belongsTo(user);
+
+    user.hasOne(models.order);
+    models.order.belongsTo(user);
   };
 
   return user;

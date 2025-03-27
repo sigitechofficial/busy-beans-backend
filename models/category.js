@@ -10,6 +10,16 @@ module.exports = (sequelize, DataTypes) => {
           msg: 'This category is already exist.',
         },
       },
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
+      status: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: true,
+      },
     },
     {
       tableName: 'categories',
@@ -25,5 +35,14 @@ module.exports = (sequelize, DataTypes) => {
       ],
     },
   );
+
+  category.associate = (models) => {
+    category.hasMany(models.product);
+    models.product.belongsTo(category);
+
+    category.hasMany(models.item);
+    models.item.belongsTo(category);
+  };
+
   return category;
 };

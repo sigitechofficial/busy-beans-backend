@@ -31,6 +31,16 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
+      status: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: true,
+      },
     },
     {
       tableName: 'products',
@@ -40,11 +50,16 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true,
       indexes: [
         {
-          fields: ['product'],
-          name: 'product_index',
+          fields: ['name'],
+          name: 'name_index',
         },
       ],
     },
   );
+
+  product.associate = (models) => {
+    product.hasOne(models.item);
+    models.item.belongsTo(product);
+  };
   return product;
 };

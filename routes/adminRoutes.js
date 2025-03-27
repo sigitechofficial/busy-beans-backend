@@ -2,6 +2,7 @@ const express = require('express');
 const categoryController = require('../controllers/admin/categoriesController');
 const productController = require('../controllers/admin/productController');
 const authController = require('../controllers/admin/authController');
+const manageOrderController = require('../controllers/admin/manageOrderController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -31,9 +32,9 @@ router.get('/product', productController.getAllProducts);
 // Category by ID routes
 router
   .route('/product/:id')
-  .get(productController.getProduct) // For fetching a category by ID
-  .patch(productController.updateProduct) // For updating category by ID
-  .delete(productController.deleteProduct); // For deleting a category by ID
+  .get(productController.getProduct) // For fetching a product by ID
+  .delete(productController.deleteProduct) // For deleting a product by ID
+  .patch(upload.single('image'), productController.updateProduct); // For updating a product (including image upload)
 
 router
   .route('/category/')
@@ -46,5 +47,7 @@ router
   .get(categoryController.getCatagory) // For fetching a category by ID
   .patch(categoryController.updateCatagory) // For updating category by ID
   .delete(categoryController.deleteCatagory); // For deleting a category by ID
+
+router.get('/orders', manageOrderController.allOrder);
 
 module.exports = router;

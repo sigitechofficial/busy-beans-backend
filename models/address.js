@@ -40,6 +40,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: true,
       },
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
     },
     {
       tableName: 'addresses',
@@ -55,5 +60,11 @@ module.exports = (sequelize, DataTypes) => {
       ],
     },
   );
+
+  address.associate = (models) => {
+    address.hasMany(models.order);
+    models.order.belongsTo(address);
+  };
+
   return address;
 };
