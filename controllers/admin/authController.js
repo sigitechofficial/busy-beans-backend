@@ -84,19 +84,19 @@ exports.login = catchAsync(async (req, res, next) => {
 
   // 1) Check if email and password exist
   if (!email || !password) {
-    return next(new AppError('Please provide email and password!', 400));
+    return next(new AppError('Please provide email and password!', 200));
   }
   // 2) Check if user exists && password is correct
-  const customer = await account.findOne({
+  const data = await account.findOne({
     where: { email },
   });
 
-  if (!customer || !(await bcrypt.compare(password, customer?.password))) {
-    return next(new AppError('Incorrect email or password', 401));
+  if (!data || !(await bcrypt.compare(password, data?.password))) {
+    return next(new AppError('Incorrect email or password', 200));
   }
 
   // 3) If everything ok, send token to client
-  createSendToken(customer, 200, req, res);
+  createSendToken(data, 200, req, res);
 });
 
 exports.logout = (req, res) => {

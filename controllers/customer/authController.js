@@ -59,23 +59,27 @@ exports.signup = catchAsync(async (req, res, next) => {
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
     req.body.info.verifiedAt = Date.now();
   }
+
+  req.body.info.latestOtp = OTP;
   const newUser = await user.create(req.body?.info);
 
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
     EmailResetPasswordOtpToAll(OTP, newUser, 'verification');
-    // return res.status(200).json(
-    //   response({
-    //     data: {
-    //       message: 'OTP sent to your email!',
-    //       data: newUser,
-    //     },
-    //   }),
-    // );
+    return res.status(200).json(
+      response({
+        data: {
+          message: 'OTP sent to your email!',
+          data: newUser,
+        },
+      }),
+    );
   }
-  if (req.body?.address) {
-    req.body.address.userId = newUser?.id;
-    address.create(req.body?.address);
-  }
+
+  req.body.address.userId = newUser?.id;
+  const defaultAddress = await address.create(req.body?.address);
+
+  const input = JSON.parse(JSON.stringify(newUser));
+  input.address = defaultAddress;
   createSendToken(newUser, 201, req, res);
 });
 
@@ -84,19 +88,54 @@ exports.login = catchAsync(async (req, res, next) => {
 
   // 1) Check if email and password exist
   if (!email || !password) {
-    return next(new AppError('Please provide email and password!', 400));
+    return next(new AppError('Please provide email and password!', 200));
   }
   // 2) Check if user exists && password is correct
   const customer = await user.findOne({
     where: { email },
+    include: {
+      model: address,
+      attributes: {
+        exclude: [`deleted`, `updatedAt`, `deletedAt`],
+      },
+    },
   });
+  console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
 
   if (!customer || !(await bcrypt.compare(password, customer?.password))) {
-    return next(new AppError('Incorrect email or password', 401));
+    return next(new AppError('Incorrect email or password', 200));
   }
 
   // 3) If everything ok, send token to client
   createSendToken(customer, 200, req, res);
+});
+
+exports.otpVerification = catchAsync(async (req, res, next) => {
+  const { otp, id } = req.body;
+
+  // 2) Check if user exists && password is correct
+  const customer = await user.findOne({
+    where: { latestOtp: otp, id },
+    include: {
+      model: address,
+      attributes: {
+        exclude: [`deleted`, `updatedAt`, `deletedAt`],
+      },
+    },
+  });
+  console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
+
+  if (!customer) {
+    customer.verifiedAt = Date.now();
+    await customer.save();
+    return next(new AppError('User not found', 200));
+  }
+
+  if (customer.latestOtp == otp) {
+    createSendToken(customer, 200, req, res);
+  }
+
+  return next(new AppError('Invalid OTP', 200));
 });
 
 exports.logout = (req, res) => {
@@ -264,7 +303,6 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
 
   // 3) If so, update password
   user.password = req.body.password;
-  user.passwordConfirm = req.body.passwordConfirm;
   await user.save();
   // User.findByIdAndUpdate will NOT work as intended!
 
