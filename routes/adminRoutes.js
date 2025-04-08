@@ -3,6 +3,7 @@ const categoryController = require('../controllers/admin/categoriesController');
 const productController = require('../controllers/admin/productController');
 const authController = require('../controllers/admin/authController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
+const customerController = require('../controllers/admin/customerController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -36,6 +37,8 @@ router
   .delete(productController.deleteProduct) // For deleting a product by ID
   .patch(upload.single('image'), productController.updateProduct); // For updating a product (including image upload)
 
+//! Order Management
+
 router
   .route('/category/')
   .get(categoryController.getAllCatagories) // For fetching all categories
@@ -48,6 +51,18 @@ router
   .patch(categoryController.updateCatagory) // For updating category by ID
   .delete(categoryController.deleteCatagory); // For deleting a category by ID
 
+//! Order Management
+
 router.get('/orders', manageOrderController.allOrder);
+
+//! Customer Management
+router.get(
+  '/customer-management/dahboard-cards',
+  customerController.viewCustomersManagement,
+);
+router.get(
+  '/customer-management/customer-list/:condition',
+  customerController.customersList,
+);
 
 module.exports = router;

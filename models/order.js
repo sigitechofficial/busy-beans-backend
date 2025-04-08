@@ -53,6 +53,19 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      paymentMethodId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      paymentIntentId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      paymentStaus: {
+        type: DataTypes.ENUM('pending', 'done'),
+        allowNull: false,
+        defaultValue: 'pending',
+      },
       orderFrequency: {
         type: DataTypes.ENUM(
           'just-onces',

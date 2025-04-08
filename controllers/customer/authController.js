@@ -63,23 +63,23 @@ exports.signup = catchAsync(async (req, res, next) => {
   req.body.info.latestOtp = OTP;
   const newUser = await user.create(req.body?.info);
 
+  req.body.address.userId = newUser?.id;
+  const defaultAddress = await address.create(req.body?.address);
+
+  const input = JSON.parse(JSON.stringify(newUser));
+  input.address = defaultAddress;
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
     EmailResetPasswordOtpToAll(OTP, newUser, 'verification');
     return res.status(200).json(
       response({
         data: {
           message: 'OTP sent to your email!',
-          data: newUser,
+          data: input,
         },
       }),
     );
   }
 
-  req.body.address.userId = newUser?.id;
-  const defaultAddress = await address.create(req.body?.address);
-
-  const input = JSON.parse(JSON.stringify(newUser));
-  input.address = defaultAddress;
   createSendToken(newUser, 201, req, res);
 });
 
@@ -237,63 +237,59 @@ exports.restrictTo =
 
 exports.forgotPassword = catchAsync(async (req, res, next) => {
   // 1) Get user based on POSTed email
-  const customer = await user.findOne({ email: req.body.email });
-  if (!response) {
+  const customer = await user.findOne({
+    where: { email: req.body.email },
+    attributes: {
+      exclude: ['userId', 'updatedAt', 'deleted', 'deletedAt', 'password'],
+    },
+  });
+  if (!customer) {
     return next(new AppError('There is no user with email address.', 404));
   }
 
-  // 2) Generate the random reset token
-  const resetToken = user.createPasswordResetToken();
-  await response.save({ validateBeforeSave: false });
+  const OTP = otpGenerator.generate(4, {
+    lowerCaseAlphabets: false,
+    upperCaseAlphabets: false,
+    specialChars: false,
+  });
 
-  // 3) Send it to user's email
-  try {
-    const resetURL = `${req.protocol}://${req.get(
-      'host',
-    )}/api/v1/users/resetPassword/${resetToken}`;
-    await new Email(user, resetURL).sendPasswordReset();
+  EmailResetPasswordOtpToAll(OTP, customer, 'forgot-password');
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Token sent to email!',
-    });
-  } catch (err) {
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-    await user.save({ validateBeforeSave: false });
+  customer.latestOtp = OTP;
+  await customer.save();
 
-    return next(
-      new AppError('There was an error sending the email. Try again later!'),
-      500,
-    );
-  }
+  res.status(200).json({
+    status: 'success',
+    data: customer,
+    message: 'OTP sent to email!',
+  });
 });
 
 exports.resetPassword = catchAsync(async (req, res, next) => {
   // 1) Get user based on the token
 
-  const user = await user.findOne({
-    passwordResetToken: hashedToken,
-    passwordResetExpires: { $gt: Date.now() },
+  const customer = await user.findOne({
+    where: { id: req.body?.userId },
+    include: {
+      model: address,
+      attributes: { exclude: ['userId', 'updatedAt', 'deleted', 'deletedAt'] },
+    },
+    attributes: { exclude: ['updatedAt', 'deleted', 'deletedAt', ''] },
   });
 
   // 2) If token has not expired, and there is user, set the new password
-  if (!user) {
+  if (!customer) {
     return next(new AppError('Token is invalid or has expired', 400));
   }
-  user.password = req.body.password;
-  user.passwordConfirm = req.body.passwordConfirm;
-  user.passwordResetToken = undefined;
-  user.passwordResetExpires = undefined;
-  await user.save();
+  customer.password = req.body.password;
+  await customer.save();
 
-  // 3) Update changedPasswordAt property for the user
-  // 4) Log the user in, send JWT
-  createSendToken(user, 200, req, res);
+  customer.password = undefined;
+  createSendToken(customer, 200, req, res);
 });
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
-  // 1) Get user from collection
+  // 1) Get customer from collection
   const user = await User.findById(req.user.id).select('+password');
 
   // 2) Check if POSTed current password is correct

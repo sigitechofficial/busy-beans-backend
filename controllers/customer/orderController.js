@@ -6,6 +6,7 @@ const { response } = require('../../utils/response');
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
+
   const newOrder = await order.create(input.order);
 
   input?.items.forEach((element) => {
