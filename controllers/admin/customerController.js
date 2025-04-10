@@ -11,10 +11,31 @@ exports.customersList = catchAsync(async (req, res, next) => {
     attributes: [
       [
         literal('(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)'),
-        'totalOrder',
+        'totalOrderPlaced',
       ],
+      [
+        literal(
+          '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
+        ),
+        'totalOrderAmount',
+      ],
+      [
+        literal(
+          '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
+        ),
+        'totalOrderAmount',
+      ],
+      `id`,
+      `name`,
+      `email`,
+      `status`,
+      `image`,
+      `phoneNumber`,
+      `saleTaxNumber`,
+      `emailToSendInvoices`,
     ],
   });
+
   res.status(200).json({
     status: 'success',
     data: { data },

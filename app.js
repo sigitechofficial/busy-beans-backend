@@ -23,6 +23,9 @@ app.enable('trust proxy');
 
 // // 1) GLOBAL MIDDLEWARES
 // // Implement CORS
+app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cors());
 // // Access-Control-Allow-Origin *
 // // api.natours.com, front-end natours.com

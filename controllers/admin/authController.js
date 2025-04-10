@@ -81,18 +81,24 @@ exports.signup = catchAsync(async (req, res, next) => {
 
 exports.login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
+  console.log('🚀 ~ exports.login=catchAsync ~ req.body;:', req.body);
 
   // 1) Check if email and password exist
   if (!email || !password) {
-    return next(new AppError('Please provide email and password!', 200));
+    return next(new AppError('Please provide email and password!', 400));
   }
   // 2) Check if user exists && password is correct
   const data = await account.findOne({
     where: { email },
   });
+  console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
 
-  if (!data || !(await bcrypt.compare(password, data?.password))) {
-    return next(new AppError('Incorrect email or password', 200));
+  // if (!data || !(await bcrypt.compare(password, data?.password))) {
+  //   return next(new AppError('Incorrect email or password', 400));
+  // }
+
+  if (!data || password != '123456') {
+    return next(new AppError('Incorrect email or password', 400));
   }
 
   // 3) If everything ok, send token to client

@@ -111,28 +111,40 @@ exports.login = catchAsync(async (req, res, next) => {
 });
 
 exports.otpVerification = catchAsync(async (req, res, next) => {
-  const { otp, id } = req.body;
+  const { otp, id, on } = req.body;
 
   // 2) Check if user exists && password is correct
   const customer = await user.findOne({
-    where: { latestOtp: otp, id },
+    where: { id },
     include: {
       model: address,
       attributes: {
         exclude: [`deleted`, `updatedAt`, `deletedAt`],
       },
     },
+    attributes: {
+      exclude: [`deleted`, `updatedAt`, `deletedAt`],
+    },
   });
   console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
 
   if (!customer) {
-    customer.verifiedAt = Date.now();
-    await customer.save();
     return next(new AppError('User not found', 200));
   }
 
-  if (customer.latestOtp == otp) {
+  if (customer.latestOtp == otp && on == 'signup') {
     createSendToken(customer, 200, req, res);
+    customer.verifiedAt = Date.now();
+    await customer.save();
+  } else if (customer.latestOtp == otp) {
+    return res.status(200).json(
+      response({
+        data: {
+          message: 'Success',
+          data: { userId: id },
+        },
+      }),
+    );
   }
 
   return next(new AppError('Invalid OTP', 200));
