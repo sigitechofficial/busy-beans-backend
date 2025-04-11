@@ -5,10 +5,6 @@ module.exports = (sequelize, DataTypes) => {
       companyaddress: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: {
-          args: true,
-          msg: 'This email is already exist.',
-        },
       },
       addressLineOne: {
         type: DataTypes.STRING,

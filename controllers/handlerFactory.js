@@ -81,9 +81,9 @@ exports.getOne = (Model, includeOptions) =>
     });
   });
 
-exports.getAll = (Model) =>
+exports.getAll = (Model, incommingFilter = {}) =>
   catchAsync(async (req, res, next) => {
-    let filter = {};
+    let filter = incommingFilter;
     if (req.params.id) filter.id = req.params.id;
 
     const features = new APIFeatures(Model, req.query) // Pass the Model and query parameters

@@ -17,24 +17,24 @@ module.exports = (sequelize) => {
           },
         },
       },
-      // email: {
-      //   type: DataTypes.STRING,
-      //   allowNull: false,
-      //   unique: {
-      //     msg: 'User already exists with this email',
-      //   },
-      //   validate: {
-      //     notNull: {
-      //       msg: 'Email is Required',
-      //     },
-      //     notEmpty: {
-      //       msg: 'Email cannot be empty',
-      //     },
-      //     isEmail: {
-      //       msg: 'Please provide a valid email address',
-      //     },
-      //   },
-      // },
+      email: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: {
+          msg: 'User already exists with this email',
+        },
+        validate: {
+          notNull: {
+            msg: 'Email is Required',
+          },
+          notEmpty: {
+            msg: 'Email cannot be empty',
+          },
+          isEmail: {
+            msg: 'Please provide a valid email address',
+          },
+        },
+      },
       country: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -111,6 +111,9 @@ module.exports = (sequelize) => {
         type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
         allowNull: false,
         defaultValue: 'email',
+      },
+      password: {
+        type: DataTypes.STRING,
       },
     },
     {

@@ -1,554 +1,137 @@
-const origin = '655 South Hope Street 901 Los Angeles California 90017'
-const address = '128 City Road, London, United Kingdom, EC1V 2NX'
-const copyRight = 'Copyright @ 2025 trim'
-const supportEmail = 'support@trimworldwide.com'
-const supportNumber = '017874854624'
+const origin = '655 South Hope Street 901 Los Angeles California 90017';
+const address = '128 City Road, London, United Kingdom, EC1V 2NX';
+const copyRight = 'Copyright @ 2025 trim';
+const supportEmail = 'support@trimworldwide.com';
+const supportNumber = '017874854624';
 
-exports.footer = ` <table
-align="center"
-border="0"
-cellpadding="0"
-cellspacing="0"
-class="row row-8"
-role="presentation"
-width="100%"
->
-<tbody>
-  <tr>
-    <td>
-      <table
-        align="center"
-        border="0"
-        cellpadding="0"
-        cellspacing="0"
-        class="row-content stack"
-        role="presentation"
-        style="
-          border-radius: 0;
-          color: #000;
-          width: 500px;
-          margin: 0 auto;
-        "
-        width="500"
-      >
-        <tbody>
-          <tr>
-            <td
-              class="column column-1"
-              style="
-                font-weight: 400;
-                text-align: left;
-                padding-bottom: 5px;
-                padding-top: 5px;
-                vertical-align: top;
-                border-top: 0px;
-                border-right: 0px;
-                border-bottom: 0px;
-                border-left: 0px;
-              "
-              width="100%"
-            >
-              <div
-                class="spacer_block block-1"
-                style="
-                  height: 25px;
-                  line-height: 30px;
-                  font-size: 1px;
-                "
-              >
-                 
-              </div>
-              <div
-                style="
-                  color: #292929;
-                  direction: ltr;
-                  font-family: Chivo, sans-serif, sans-serif;
-                  font-size: 14px;
-                  font-weight: 400;
-                  letter-spacing: 0px;
-                  text-align: center;
-                "
-              >
-                <p>
-                  If you have any questions or need help, please check our FAQ or email <a href="mailto:${supportEmail}" style="color: black; text-decoration: none;">${supportEmail}</a>.
-                </p>
-              </div>
-              <table
-                border="0"
-                cellpadding="10"
-                cellspacing="0"
-                class="social_block block-2"
-                role="presentation"
-                width="100%"
-              >
-                <tr>
-                  <td class="pad">
-                    <div
-                      class="spacer_block block-2"
-                      style="
-                        height: 30px;
-                        line-height: 60px;
-                        font-size: 1px;
-                      "
-                    >
-                       
-                    </div>
-                    <div align="center" class="alignment">
-                      <table
-                        border="0"
-                        cellpadding="0"
-                        cellspacing="0"
-                        class="social-table"
-                        role="presentation"
-                        style="display: inline-block"
-                        width="144px"
-                      >
-                        <tr>
-                          <td style="padding: 0 2px 0 2px">
-                            <a
-                              href="https://www.facebook.com/"
-                              target="_blank"
-                              ><img
-                                alt="Facebook"
-                                height="32"
-                                src="cid:facebook"
-                                style="
-                                  display: block;
-                                  height: auto;
-                                  border: 0;
-                                "
-                                title="Facebook"
-                                width="32"
-                            /></a>
-                          </td>
-                          <td style="padding: 0 2px 0 2px">
-                            <a
-                              href="https://twitter.com/"
-                              target="_blank"
-                              ><img
-                                alt="Twitter"
-                                height="32"
-                                src="cid:twitter"
-                                style="
-                                  display: block;
-                                  height: auto;
-                                  border: 0;
-                                "
-                                title="Twitter"
-                                width="32"
-                            /></a>
-                          </td>
-                          <td style="padding: 0 2px 0 2px">
-                            <a
-                              href="https://instagram.com/"
-                              target="_blank"
-                              ><img
-                                alt="Instagram"
-                                height="32"
-                                src="cid:instagram"
-                                style="
-                                  display: block;
-                                  height: auto;
-                                  border: 0;
-                                "
-                                title="Instagram"
-                                width="32"
-                            /></a>
-                          </td>
-                          <td style="padding: 0 2px 0 2px">
-                            <a
-                              href="https://www.linkedin.com/"
-                              target="_blank"
-                              ><img
-                                alt="LinkedIn"
-                                height="32"
-                                src="cid:linkedin"
-                                style="
-                                  display: block;
-                                  height: auto;
-                                  border: 0;
-                                "
-                                title="LinkedIn"
-                                width="32"
-                            /></a>
-                          </td>
-                        </tr>
-                      </table>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </td>
-  </tr>
-</tbody>
-</table>
-
-<table
-align="center"
-border="0"
-cellpadding="0"
-cellspacing="0"
-class="row row-9"
-role="presentation"
-width="100%"
->
-<tbody>
-  <tr>
-    <td>
-      <table
-        align="center"
-        border="0"
-        cellpadding="0"
-        cellspacing="0"
-        class="row-content stack"
-        role="presentation"
-        style="
-          border-radius: 0;
-          color: #000;
-          width: 500px;
-          margin: 0 auto;
-        "
-        width="500"
-      >
-        <tbody>
-          <tr>
-            <td
-              class="column column-1"
-              style="
-                font-weight: 400;
-                text-align: left;
-                padding-bottom: 5px;
-                padding-top: 5px;
-                vertical-align: top;
-                border-top: 0px;
-                border-right: 0px;
-                border-bottom: 0px;
-                border-left: 0px;
-              "
-              width="100%"
-            >
-              <table
-                border="0"
-                cellpadding="0"
-                cellspacing="0"
-                class="heading_block block-1"
-                role="presentation"
-                width="100%"
-              >
-                <tr>
-                  <td
-                    class="pad"
-                    style="text-align: center; width: 100%"
-                  >
-                    <h1
-                      style="
-                        margin: 0;
-                        color: #000000;
-                        direction: ltr;
-                        font-family: Chivo, sans-serif;
-                        font-size: 16px;
-                        font-weight: 600;
-                        letter-spacing: normal;
-                        text-align: center;
-                        margin-top: 0;
-                        margin-bottom: 0;
-                      "
-                    >
-                      <span class="tinyMce-placeholder"
-                        >Follow Us</span
-                      >
-                    </h1>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </td>
-  </tr>
-</tbody>
-</table>
-
-<table
-align="center"
-border="0"
-cellpadding="0"
-cellspacing="0"
-class="row row-11"
-role="presentation"
-width="100%"
->
-<tbody>
-  <tr>
-    <td>
-      <table
-        align="center"
-        border="0"
-        cellpadding="0"
-        cellspacing="0"
-        class="row-content stack"
-        role="presentation"
-        style="
-          border-radius: 0;
-          color: #000;
-          width: 500px;
-          margin: 0 auto;
-        "
-        width="500"
-      >
-        <tbody>
-          <tr>
-            <td
-              class="column column-1"
-              style="
-                font-weight: 400;
-                text-align: left;
-                vertical-align: top;
-                border-top: 0px;
-                border-right: 0px;
-                border-bottom: 0px;
-                border-left: 0px;
-              "
-              width="100%"
-            >
-              <table
-                border="0"
-                cellpadding="10"
-                cellspacing="0"
-                class="paragraph_block block-1"
-                role="presentation"
-                style="word-break: break-word"
-                width="100%"
-              >
-                <tr>
-                  <td class="pad">
-                    <div
-                      style="
-                        color: #000000;
-                        direction: ltr;
-                        font-family: Chivo, sans-serif;
-                        font-size: 12px;
-                        font-weight: 400;
-                        letter-spacing: 0px;
-                        line-height: 120%;
-                        text-align: center;
-                      "
-                    >
-                      <p style="margin: 0">
-                      ${copyRight}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </td>
-  </tr>
-</tbody>
-</table>
-
-<table
-align="center"
-border="0"
-cellpadding="0"
-cellspacing="0"
-class="row row-9"
-role="presentation"
-width="100%"
->
-<div
-  class="spacer_block block-1"
-  style="height: 10px; line-height: 30px; font-size: 1px"
->
-   
-</div>
-<tbody>
-  <tr>
-    <td>
-      <table
-        align="center"
-        border="0"
-        cellpadding="0"
-        cellspacing="0"
-        class="row-content stack"
-        role="presentation"
-        style="
-          border-radius: 0;
-          color: #000;
-          width: 500px;
-          margin: 0 auto;
-        "
-        width="500"
-      >
-        <tbody>
-          <tr>
-            <td
-              class="column column-1"
-              style="
-                font-weight: 400;
-                text-align: left;
-                padding-bottom: 5px;
-                padding-top: 5px;
-                vertical-align: top;
-                border-top: 0px;
-                border-right: 0px;
-                border-bottom: 0px;
-                border-left: 0px;
-              "
-              width="100%"
-            >
-              <table
-                border="0"
-                cellpadding="0"
-                cellspacing="0"
-                class="heading_block block-1"
-                role="presentation"
-                width="100%"
-              >
-                <tr>
-                  <td
-                    class="pad"
-                    style="text-align: center; width: 100%"
-                  >
-                    <h1
-                      style="
-                        margin: 0;
-                        color: #00000099;
-                        direction: ltr;
-                        font-family: Chivo, sans-serif;
-                        font-size: 16px;
-                        font-weight: 400;
-                        letter-spacing: normal;
-                        text-align: center;
-                        margin-top: 0;
-                        margin-bottom: 0;
-                      "
-                    >
-                      <span class="tinyMce-placeholder"
-                        >Powered by</span
-                      >
-                    </h1>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </td>
-  </tr>
-</tbody>
-</table>
-
-<table
-align="center"
-border="0"
-cellpadding="0"
-cellspacing="0"
-class="row row-8"
-role="presentation"
-width="100%"
->
-<tbody>
-  <tr>
-    <td>
-      <table
-        align="center"
-        border="0"
-        cellpadding="0"
-        cellspacing="0"
-        class="row-content stack"
-        role="presentation"
-        style="
-          border-radius: 0;
-          color: #000;
-          width: 500px;
-          margin: 0 auto;
-        "
-        width="500"
-      >
-        <tbody>
-          <tr>
-            <td
-              class="column column-1"
-              style="
-                font-weight: 400;
-                text-align: left;
-                padding-bottom: 5px;
-                padding-top: 5px;
-                vertical-align: top;
-                border-top: 0px;
-                border-right: 0px;
-                border-bottom: 0px;
-                border-left: 0px;
-              "
-              width="100%"
-            >
-              <table
-                border="0"
-                cellpadding="10"
-                cellspacing="0"
-                class="social_block block-2"
-                role="presentation"
-                width="100%"
-              >
-                <tr>
-                  <td class="pad">
-                    <div align="center" class="alignment">
-                      <table
-                        border="0"
-                        cellpadding="0"
-                        cellspacing="0"
-                        class="social-table"
-                        role="presentation"
-                        style="display: inline-block"
-                        width="144px"
-                      >
-                        <tr>
-                          <td style="padding: 0 2px 0 2px">
-                            <img
-                              alt="Trim"
-                              height="80px"
-                              src="cid:logo"
-                              style="
-                                display: block;
-                                height: auto;
-                                border: 0;
-                          
-                              "
-                              title="Facebook"
-                              width="125px"
-                            />
-                          </td>
-                        </tr>
-                      </table>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </tbody>
-      </table> 
-    </td>
-  </tr>
-</tbody>
-</table>
-</td>
-</tr>
-</tbody>
-</table>
-<!-- End -->
-</body>
-</html>`
+exports.footer = ` <tr>
+        <td
+          style="
+            padding-top: 40px;
+            font-family: 'Switzer', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            text-align: center;
+          "
+        >
+          Follow Us
+        </td>
+      </tr>
+      <tr>
+        <td style="padding-top: 10px; text-align: center">
+          <a href="#"
+            ><img
+              src="cid:facebook"
+              alt="Facebook"
+              style="width: 24px; margin-right: 10px"
+          /></a>
+          <a href="#"
+            ><img
+              src="cid:twitter"
+              alt="Twitter"
+              style="width: 24px; margin-right: 10px"
+          /></a>
+          <a href="#"
+            ><img
+              src="cid:instagram"
+              alt="Instagram"
+              style="width: 24px; margin-right: 10px"
+          /></a>
+          <a href="#"
+            ><img
+              src="cid:linkedin"
+              alt="LinkedIn"
+              style="width: 24px"
+          /></a>
+        </td>
+      </tr>
+      <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 20px;
+            font-family: 'Switzer', sans-serif;
+            font-size: 13px;
+            text-align: center;
+            color: #000000;
+          "
+        >
+          128 City Road, London, United Kingdom, EC1V 2NX
+        </td>
+      </tr>
+      <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 10px;
+            font-family: 'Switzer', sans-serif;
+            font-size: 13px;
+            text-align: center;
+            color: #000000;
+          "
+        >
+          📧 support@busybean.com | 📞 (123) 456-7890
+        </td>
+      </tr>
+      <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 10px;
+            font-family: 'Switzer', sans-serif;
+            font-size: 13px;
+            text-align: center;
+            color: #000000;
+          "
+        >
+          Copyright © 2024 Trim
+        </td>
+      </tr>
+      <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 10px;
+            font-family: 'Switzer', sans-serif;
+            font-size: 13px;
+            text-align: center;
+            color: #000000;
+          "
+        >
+          <a href="#" style="text-decoration: underline">Unsubscribe</a>
+        </td>
+      </tr>
+      <tr>
+        <td
+          style="
+            padding-top: 40px;
+            font-family: 'Work_Sans', sans-serif;
+            font-size: 14px;
+            text-align: center;
+            color: rgba(0, 0, 0, 0.6);
+          "
+        >
+          Powered by
+        </td>
+      </tr>
+      <tr>
+        <td align="center" style="padding-top: 20px">
+          <img
+            src="cid:logo"
+            alt="Powered by"
+            width="118"
+            height="55"
+            style="border-radius: 16px"
+          />
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 
 // <span
 //   style="color: #202053; margin-left: 5px"

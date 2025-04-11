@@ -4,6 +4,7 @@ const productController = require('../controllers/admin/productController');
 const authController = require('../controllers/admin/authController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
 const customerController = require('../controllers/admin/customerController');
+const supplierController = require('../controllers/admin/supplierController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -37,7 +38,7 @@ router
   .delete(productController.deleteProduct) // For deleting a product by ID
   .patch(upload.single('image'), productController.updateProduct); // For updating a product (including image upload)
 
-//! Order Management
+//! Category Management
 
 router
   .route('/category/')
@@ -64,5 +65,19 @@ router.get(
   '/customer-management/customer-list/:condition',
   customerController.customersList,
 );
+
+//! Supplier Management
+
+router
+  .route('/supplier/')
+  .get(supplierController.getAllSuppliers) // For fetching all categories
+  .post(supplierController.createSupplier); // For creating a new category
+
+// Category by ID routes
+router
+  .route('/supplier/:id')
+  .get(supplierController.getSupplier) // For fetching a category by ID
+  .patch(supplierController.updateSupplier) // For updating category by ID
+  .delete(supplierController.deleteSupplier); // For deleting a category by ID
 
 module.exports = router;
