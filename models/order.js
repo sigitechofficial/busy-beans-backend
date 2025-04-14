@@ -66,6 +66,10 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: 'pending',
       },
+      orderStatus: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
       orderFrequency: {
         type: DataTypes.ENUM(
           'just-onces',
@@ -110,6 +114,9 @@ module.exports = (sequelize) => {
   order.associate = (models) => {
     order.hasOne(models.item);
     models.item.belongsTo(order);
+
+    order.hasOne(models.orderHistory);
+    models.orderHistory.belongsTo(order);
   };
 
   return order;

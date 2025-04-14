@@ -55,6 +55,7 @@ router
 //! Order Management
 
 router.get('/orders', manageOrderController.allOrder);
+router.patch('/assign-supplier', manageOrderController.assignSupplier);
 
 //! Customer Management
 router.get(

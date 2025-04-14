@@ -1,0 +1,39 @@
+const { DataTypes } = require('sequelize');
+const bcrypt = require('bcryptjs');
+
+module.exports = (sequelize) => {
+  const statuses = sequelize.define(
+    'statuses',
+    {
+      orderStatus: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      discription: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+    },
+    {
+      tableName: 'statuses',
+      primaryKey: true,
+      autoIncrement: true,
+      paranoid: true,
+      timestamps: true,
+      indexes: [
+        {
+          fields: ['orderStatus'],
+          name: 'orderStatus_index',
+        },
+      ],
+    },
+  );
+
+  // Associations models
+  statuses.associate = (models) => {
+    statuses.hasOne(models.order);
+    models.order.belongsTo(statuses);
+  };
+
+  return statuses;
+};

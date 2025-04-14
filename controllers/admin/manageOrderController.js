@@ -67,3 +67,25 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     },
   });
 });
+
+exports.assignSupplier = catchAsync(async (req, res, next) => {
+  const { supplierId, orderId } = req.body;
+
+  const doc = await order.findOne({
+    where: { id: orderId },
+    attributes: ['id', 'supplierId'],
+  });
+
+  if (!doc) {
+    return next(new AppError('Order not found.', 404));
+  }
+  doc.supplierId = supplierId;
+  await doc.save();
+
+  return res.status(200).json({
+    status: 'success',
+    data: {
+      data: doc,
+    },
+  });
+});
