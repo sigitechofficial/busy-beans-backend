@@ -15,6 +15,7 @@ module.exports = (sequelize) => {
       on: {
         type: DataTypes.DATE,
         allowNull: true,
+        defaultValue: sequelize.NOW,
       },
     },
     {
@@ -25,7 +26,7 @@ module.exports = (sequelize) => {
       timestamps: true,
       indexes: [
         {
-          fields: ['orderHistories'],
+          fields: ['orderStatus'],
           name: 'orderHistories_index',
         },
       ],

@@ -1,5 +1,4 @@
 const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
 
 module.exports = (sequelize) => {
   const order = sequelize.define(
@@ -70,6 +69,14 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
+      trackingNumber: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      shippingCompany: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
       orderFrequency: {
         type: DataTypes.ENUM(
           'just-onces',
@@ -112,11 +119,14 @@ module.exports = (sequelize) => {
 
   // Associations models
   order.associate = (models) => {
-    order.hasOne(models.item);
+    order.hasMany(models.item);
     models.item.belongsTo(order);
 
-    order.hasOne(models.orderHistory);
+    order.hasMany(models.orderHistory);
     models.orderHistory.belongsTo(order);
+
+    order.hasOne(models.chequeDetail);
+    models.chequeDetail.belongsTo(order);
   };
 
   return order;

@@ -120,10 +120,10 @@ module.exports = (sequelize) => {
 
   // Associations models
   user.associate = (models) => {
-    user.hasOne(models.address);
+    user.hasMany(models.address);
     models.address.belongsTo(user);
 
-    user.hasOne(models.order);
+    user.hasMany(models.order);
     models.order.belongsTo(user);
   };
 

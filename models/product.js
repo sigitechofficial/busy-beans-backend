@@ -58,7 +58,7 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   product.associate = (models) => {
-    product.hasOne(models.item);
+    product.hasMany(models.item);
     models.item.belongsTo(product);
   };
   return product;

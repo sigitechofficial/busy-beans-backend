@@ -1,4 +1,12 @@
-const { order, item, user, address, product } = require('../../models');
+const {
+  order,
+  item,
+  user,
+  address,
+  product,
+  chequeDetail,
+  orderHistory,
+} = require('../../models');
 const { Op, literal, fn, col } = require('sequelize');
 
 const catchAsync = require('../../utils/catchAsync');
@@ -7,11 +15,15 @@ const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 
 exports.allOrder = catchAsync(async (req, res, next) => {
-  let filter = {};
-  if (req.params.id) filter.id = req.params.id;
+  let condition = {};
+  if (req.params.id) condition.id = req.params.id;
+  if (req.query.statusId) condition.statusId = req.query.statusId;
+  if (req.query.orderStatus) condition.orderStatus = req.query.orderStatus;
+  if (req.query.supplierId) condition.supplierId = req.query.supplierId;
+  if (req.query.userId) condition.userId = req.query.userId;
 
   const doc = await order.findAll({
-    where: {},
+    where: condition,
     include: [
       {
         model: address,
@@ -68,7 +80,40 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.assignSupplier = catchAsync(async (req, res, next) => {
+//* Assigin Supplier will Confirm order from admin side
+exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
+  const { orderId } = req.body;
+
+  const doc = await order.findOne({
+    where: { id: orderId },
+    attributes: ['id', 'supplierId'],
+  });
+
+  if (!doc) {
+    return next(new AppError('Order not found.', 404));
+  }
+
+  if (req.body?.orderData)
+    await order.update(req.body?.orderData, { where: { id: orderId } });
+
+  if (req.body?.cheque) {
+    req.body.cheque.orderId = orderId;
+    await order.create(req.body?.cheque);
+  }
+
+  if (req.body?.orderData?.statusId) {
+    await orderHistory.create({
+      statusId: req.body?.orderData?.statusId,
+      on: Date.now(),
+    });
+  }
+  return res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});
+
+exports.supplierAcknowledgement = catchAsync(async (req, res, next) => {
   const { supplierId, orderId } = req.body;
 
   const doc = await order.findOne({
@@ -79,6 +124,7 @@ exports.assignSupplier = catchAsync(async (req, res, next) => {
   if (!doc) {
     return next(new AppError('Order not found.', 404));
   }
+
   doc.supplierId = supplierId;
   await doc.save();
 

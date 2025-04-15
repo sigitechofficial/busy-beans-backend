@@ -31,8 +31,11 @@ module.exports = (sequelize) => {
 
   // Associations models
   statuses.associate = (models) => {
-    statuses.hasOne(models.order);
+    statuses.hasMany(models.order);
     models.order.belongsTo(statuses);
+
+    statuses.hasMany(models.orderHistory);
+    models.orderHistory.belongsTo(statuses);
   };
 
   return statuses;

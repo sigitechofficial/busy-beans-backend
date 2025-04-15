@@ -153,7 +153,7 @@ module.exports = (sequelize) => {
 
   // Associations models
   supplier.associate = (models) => {
-    supplier.hasOne(models.order);
+    supplier.hasMany(models.order);
     models.order.belongsTo(supplier);
   };
 

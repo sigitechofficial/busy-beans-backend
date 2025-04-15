@@ -12,7 +12,7 @@ const router = express.Router();
 // const protect = require('../middlewares/accessCheck');
 router.post('/login', authController.login);
 
-const serviceTypeImage = multer.diskStorage({
+const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
     const destinationPath = './public/products';
 
@@ -24,11 +24,31 @@ const serviceTypeImage = multer.diskStorage({
   },
 });
 
-const upload = multer({
-  storage: serviceTypeImage,
+const supplierImage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const destinationPath = './public/suppliers';
+
+    // Call the function to create the destination directory
+    createDestinationDirectory(destinationPath, cb);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `supplier-${Date.now()}${path.extname(file.originalname)}`);
+  },
 });
 
-router.post('/product', upload.single('image'), productController.addProduct);
+const uploadProductImage = multer({
+  storage: productsImage,
+});
+
+const uploadSupplierImage = multer({
+  storage: supplierImage,
+});
+
+router.post(
+  '/product',
+  uploadProductImage.single('image'),
+  productController.addProduct,
+);
 router.get('/product', productController.getAllProducts);
 
 // Category by ID routes
@@ -36,7 +56,7 @@ router
   .route('/product/:id')
   .get(productController.getProduct) // For fetching a product by ID
   .delete(productController.deleteProduct) // For deleting a product by ID
-  .patch(upload.single('image'), productController.updateProduct); // For updating a product (including image upload)
+  .patch(uploadProductImage.single('image'), productController.updateProduct); // For updating a product (including image upload)
 
 //! Category Management
 
@@ -55,7 +75,18 @@ router
 //! Order Management
 
 router.get('/orders', manageOrderController.allOrder);
-router.patch('/assign-supplier', manageOrderController.assignSupplier);
+
+router.patch('/assign-supplier', manageOrderController.orderJourneryComplete);
+
+router.patch(
+  '/supplier-acknowledgement',
+  manageOrderController.orderJourneryComplete,
+);
+
+router.patch(
+  '/supplier-acknowledgement',
+  manageOrderController.orderJourneryComplete,
+);
 
 //! Customer Management
 router.get(
@@ -72,13 +103,13 @@ router.get(
 router
   .route('/supplier/')
   .get(supplierController.getAllSuppliers) // For fetching all categories
-  .post(supplierController.createSupplier); // For creating a new category
+  .post(uploadSupplierImage.single('image'), supplierController.createSupplier); // For creating a new category
 
 // Category by ID routes
 router
   .route('/supplier/:id')
   .get(supplierController.getSupplier) // For fetching a category by ID
-  .patch(supplierController.updateSupplier) // For updating category by ID
+  .patch(uploadSupplierImage.single('image'), supplierController.updateSupplier) // For updating category by ID
   .delete(supplierController.deleteSupplier); // For deleting a category by ID
 
 module.exports = router;
