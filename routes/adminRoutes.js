@@ -75,6 +75,7 @@ router
 //! Order Management
 
 router.get('/orders', manageOrderController.allOrder);
+router.get('/order-details/:id', manageOrderController.orderDetails);
 
 router.patch('/assign-supplier', manageOrderController.orderJourneryComplete);
 
@@ -84,7 +85,18 @@ router.patch(
 );
 
 router.patch(
-  '/supplier-acknowledgement',
+  '/order-dispatch',
+  manageOrderController.orderJourneryComplete,
+);
+
+router.patch(
+  '/order-deliver',
+  manageOrderController.orderJourneryComplete,
+);
+
+
+router.patch(
+  '/order-cancel',
   manageOrderController.orderJourneryComplete,
 );
 

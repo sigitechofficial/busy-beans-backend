@@ -6,11 +6,11 @@ module.exports = (sequelize) => {
     {
       orderStatus: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       discription: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       on: {
         type: DataTypes.DATE,

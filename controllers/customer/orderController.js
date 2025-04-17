@@ -1,4 +1,4 @@
-const { order, item } = require('../../models');
+const { order, item,orderHistory } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -6,8 +6,17 @@ const { response } = require('../../utils/response');
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
-
+  if (input?.items?.length < 1 ) {
+    return next(new AppError('Cart is empty add products to place order', 404));
+  }
+  input.order.statusId = 1
   const newOrder = await order.create(input.order);
+
+  await orderHistory.create({
+    statusId:1,
+    orderId:newOrder.id,
+    on: Date.now(),
+  });
 
   input?.items.forEach((element) => {
     element.orderId = newOrder.id;
@@ -17,6 +26,6 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    data: {},
+    data: {id:newOrder?.id},
   });
 });

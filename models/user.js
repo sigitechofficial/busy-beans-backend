@@ -60,6 +60,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      companyName: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
       latestOtp: {
         type: DataTypes.INTEGER,
         allowNull: true,

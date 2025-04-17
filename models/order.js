@@ -62,20 +62,20 @@ module.exports = (sequelize) => {
       },
       paymentStaus: {
         type: DataTypes.ENUM('pending', 'done'),
-        allowNull: false,
+        allowNull: true,
         defaultValue: 'pending',
       },
       orderStatus: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       trackingNumber: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       shippingCompany: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       orderFrequency: {
         type: DataTypes.ENUM(
@@ -84,7 +84,7 @@ module.exports = (sequelize) => {
           'every-two-weeks',
           'every-four-weeks',
         ),
-        allowNull: false,
+        allowNull: true,
         defaultValue: 'just-onces',
       },
     },
