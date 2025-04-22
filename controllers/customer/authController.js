@@ -93,12 +93,6 @@ exports.login = catchAsync(async (req, res, next) => {
   // 2) Check if user exists && password is correct
   const customer = await user.findOne({
     where: { email },
-    include: {
-      model: address,
-      attributes: {
-        exclude: [`deleted`, `updatedAt`, `deletedAt`],
-      },
-    },
   });
   console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
 
@@ -106,8 +100,18 @@ exports.login = catchAsync(async (req, res, next) => {
     return next(new AppError('Incorrect email or password', 200));
   }
 
+  const customerAddress = await address.findOne({
+    where: { userId :customer?.id },
+    attributes: {
+      exclude: [`deleted`, `updatedAt`, `deletedAt`],
+    },
+  });
+
+  const input = JSON.parse(JSON.stringify(customer));
+  input.address = customerAddress;
   // 3) If everything ok, send token to client
-  createSendToken(customer, 200, req, res);
+
+  createSendToken(input, 200, req, res);
 });
 
 exports.otpVerification = catchAsync(async (req, res, next) => {

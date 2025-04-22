@@ -30,8 +30,10 @@ exports.updateOne = (Model) =>
       const tmpPath = req.file.path;
       const imagePath = tmpPath.replace(/\\/g, '/');
       input.image = imagePath;
+      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
     } else {
       input.image = undefined;
+      console.log("🚀 ~ c ~ input.image:", input.image)
     }
     const doc = await Model.update(input, {
       where: { id: req.params.id },
@@ -53,7 +55,19 @@ exports.updateOne = (Model) =>
 
 exports.createOne = (Model) =>
   catchAsync(async (req, res, next) => {
-    const doc = await Model.create(req.body);
+    const input = req.body
+    if (req.file) {
+      // throw new  'Image not uploaded', 'Please upload image';
+      const tmpPath = req.file.path;
+      const imagePath = tmpPath.replace(/\\/g, '/');
+      input.image = imagePath;
+      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
+    } else {
+      input.image = undefined;
+      console.log("🚀 ~ c ~ input.image:", input.image)
+    }
+
+    const doc = await Model.create(input);
 
     res.status(201).json({
       status: 'success',

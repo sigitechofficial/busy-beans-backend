@@ -5,12 +5,13 @@ const authController = require('../controllers/admin/authController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
 const customerController = require('../controllers/admin/customerController');
 const supplierController = require('../controllers/admin/supplierController');
+const salesRepController = require('../controllers/admin/salesRepController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
 const router = express.Router();
 // const protect = require('../middlewares/accessCheck');
-router.post('/login', authController.login);
+router.post('/login', authController.adminLogin);
 
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -36,12 +37,28 @@ const supplierImage = multer.diskStorage({
   },
 });
 
+const salesRepImage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const destinationPath = './public/sales-rep';
+
+    // Call the function to create the destination directory
+    createDestinationDirectory(destinationPath, cb);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `supplier-${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
+
 const uploadProductImage = multer({
   storage: productsImage,
 });
 
 const uploadSupplierImage = multer({
   storage: supplierImage,
+});
+
+const uploadSalesRepImage = multer({
+  storage: salesRepImage,
 });
 
 router.post(
@@ -110,6 +127,11 @@ router.get(
   customerController.customersList,
 );
 
+router.get(
+  '/customer-management/customer-list/sale-rep/:sr',
+  customerController.customersList,
+);
+
 //! Supplier Management
 
 router
@@ -123,5 +145,19 @@ router
   .get(supplierController.getSupplier) // For fetching a category by ID
   .patch(uploadSupplierImage.single('image'), supplierController.updateSupplier) // For updating category by ID
   .delete(supplierController.deleteSupplier); // For deleting a category by ID
+
+
+  
+router
+.route('/sales-rep/')
+.get(salesRepController.getAllSalesRep) // For fetching all categories
+.post(uploadSalesRepImage.single('image'), salesRepController.createSalesRep); // For creating a new category
+
+// Category by ID routes
+router
+.route('/sales-rep/:id')
+.get(salesRepController.getSalesRep)  
+.patch(uploadSalesRepImage.single('image'), salesRepController.updateSalesRep)  
+.delete(salesRepController.deleteSalesRep);  
 
 module.exports = router;

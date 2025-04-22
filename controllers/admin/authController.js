@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
-const { user, address, account } = require('../../models');
+const { user, address, account ,salesRep} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
@@ -79,7 +79,38 @@ exports.signup = catchAsync(async (req, res, next) => {
   createSendToken(newUser, 201, req, res);
 });
 
-exports.login = catchAsync(async (req, res, next) => {
+const login = (Model) =>
+  catchAsync(async (req, res, next) => {
+    const { email, password } = req.body;
+    console.log('🚀 ~ exports.login=catchAsync ~ req.body;:', req.body);
+  
+    // 1) Check if email and password exist
+    if (!email || !password) {
+      return next(new AppError('Please provide email and password!', 400));
+    }
+    // 2) Check if user exists && password is correct
+    const data = await Model.findOne({
+      where: { email },
+    });
+    console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
+  
+    // if (!data || !(await bcrypt.compare(password, data?.password))) {
+    //   return next(new AppError('Incorrect email or password', 400));
+    // }
+  
+    if (!data || password != '123456') {
+      return next(new AppError('Incorrect email or password', 400));
+    }
+  
+    // 3) If everything ok, send token to client
+    createSendToken(data, 200, req, res);
+  });
+
+
+exports.adminLogin =  login(account);
+exports.admiLogin =  login(account);
+  
+exports.logina = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
   console.log('🚀 ~ exports.login=catchAsync ~ req.body;:', req.body);
 
@@ -96,6 +127,7 @@ exports.login = catchAsync(async (req, res, next) => {
   // if (!data || !(await bcrypt.compare(password, data?.password))) {
   //   return next(new AppError('Incorrect email or password', 400));
   // }
+
 
   if (!data || password != '123456') {
     return next(new AppError('Incorrect email or password', 400));

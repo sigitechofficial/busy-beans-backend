@@ -6,6 +6,10 @@ const { response } = require('../../utils/response');
 const { Op, literal, fn, col, where } = require('sequelize');
 
 exports.customersList = catchAsync(async (req, res, next) => {
+  const filters = {}
+  if (req.params.sr == 'not-assign')filters.salesRepId = null
+  else if (req.params.sr == 'assign')filters.salesRepId = { [Op.ne]: null }
+
   const data = await user.findAll({
     where: { deleted: 0 },
     attributes: [
@@ -18,13 +22,13 @@ exports.customersList = catchAsync(async (req, res, next) => {
           '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
         ),
         'totalOrderAmount',
-      ],
-      [
-        literal(
-          '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
-        ),
-        'totalOrderAmount',
-      ],
+      ], 
+      // [
+      //   literal(
+      //     '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
+      //   ),
+      //   'totalOrderAmount',
+      // ],
       `id`,
       `name`,
       `email`,
@@ -39,6 +43,16 @@ exports.customersList = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: { data },
+  });
+});
+
+exports.assignSalesRep = catchAsync(async (req, res, next) => {
+  
+  user.update(req?.body,{where:{userid :req.params?.id}})
+
+  res.status(200).json({
+    status: 'success',
+    data: {},
   });
 });
 

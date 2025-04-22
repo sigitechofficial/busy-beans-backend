@@ -2,18 +2,18 @@ const { DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
 
 module.exports = (sequelize) => {
-  const supplier = sequelize.define(
-    'supplier',
+  const salesRep = sequelize.define(
+    'salesRep',
     {
-      supplierName: {
+      srName: {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
           notNull: {
-            msg: 'Supplier Name is Required',
+            msg: 'Sales Resentative Name is Required',
           },
           notEmpty: {
-            msg: 'Supplier Name cannot be empty',
+            msg: 'Sales Resentative Name cannot be empty',
           },
         },
       },
@@ -47,36 +47,26 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      territory: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       zipCode: {
         type: DataTypes.STRING,
         allowNull: true,
         defaultValue: true,
       },
-      phoneNum: {
+      phoneNumber: {
         type: DataTypes.STRING,
         allowNull: true,
         defaultValue: true,
       },
-      addressOne: {
-        type: DataTypes.STRING,
-        allowNull: true,
-        defaultValue: true,
-      },
-      addressTwo: {
-        type: DataTypes.STRING,
-        allowNull: true,
-        defaultValue: true,
-      },
-      businessWeb: {
+      address: {
         type: DataTypes.STRING,
         allowNull: true,
         defaultValue: true,
       },
       image: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      supplierType: {
         type: DataTypes.STRING,
         allowNull: true,
       },
@@ -95,10 +85,6 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: sequelize.NOW,
       },
-      bankAccount: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
       registerBy: {
         type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
         allowNull: false,
@@ -109,7 +95,6 @@ module.exports = (sequelize) => {
       },
     },
     {
-      tableName: 'supplier',
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
@@ -124,30 +109,30 @@ module.exports = (sequelize) => {
   );
 
   // Hook to exclude deletedAt and updatedAt from query results
-  supplier.addHook('beforeFind', (options) => {
+  salesRep.addHook('beforeFind', (options) => {
     if (options.attributes) {
       options.attributes.exclude = ['deletedAt', 'updatedAt'];
     }
   });
 
   // Hook to hash password before create or update
-  supplier.addHook('beforeCreate', async (input) => {
+  salesRep.addHook('beforeCreate', async (input) => {
     if (input.password) {
       input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
     }
   });
 
-  supplier.addHook('beforeUpdate', async (input) => {
+  salesRep.addHook('beforeUpdate', async (input) => {
     if (input.password) {
       input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
     }
   });
 
   // Associations models
-  supplier.associate = (models) => {
-    supplier.hasMany(models.order);
-    models.order.belongsTo(supplier);
+  salesRep.associate = (models) => {
+    salesRep.hasMany(models.user);
+    models.user.belongsTo(salesRep);
   };
 
-  return supplier;
+  return salesRep;
 };
