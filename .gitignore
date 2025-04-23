@@ -22,6 +22,7 @@ public/
 
 # Log files
 *.log
+*.zip
 
 # Package files
 *.jar

@@ -3,7 +3,7 @@ require('dotenv').config(); // Load environment variables from .env file
 
 const server = require('./app');
 
-const serverPort = 9011;
+const serverPort = 8011;
 
 const syncDb = 0; // Use environment variable for flexibility
 

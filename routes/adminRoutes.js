@@ -12,6 +12,8 @@ const { createDestinationDirectory } = require('../utils/customFunctions');
 const router = express.Router();
 // const protect = require('../middlewares/accessCheck');
 router.post('/login', authController.adminLogin);
+router.post('/login/sales-rep', authController.salesRepLogin);
+router.post('/login/supplier', authController.supplierLogin);
 
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -45,7 +47,7 @@ const salesRepImage = multer.diskStorage({
     createDestinationDirectory(destinationPath, cb);
   },
   filename: (req, file, cb) => {
-    cb(null, `supplier-${Date.now()}${path.extname(file.originalname)}`);
+    cb(null, `sales-rep-${Date.now()}${path.extname(file.originalname)}`);
   },
 });
 
@@ -130,6 +132,16 @@ router.get(
 router.get(
   '/customer-management/customer-list/sale-rep/:sr',
   customerController.customersList,
+);
+
+router.get(
+  '/customer-management/customer-list/sale-rep/:srId',
+  customerController.customersList,
+);
+
+router.get(
+  '/customer-management/assign-sale-rep/:id',
+  customerController.assignSalesRep,
 );
 
 //! Supplier Management

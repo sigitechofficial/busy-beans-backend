@@ -6,12 +6,14 @@ const { response } = require('../../utils/response');
 const { Op, literal, fn, col, where } = require('sequelize');
 
 exports.customersList = catchAsync(async (req, res, next) => {
-  const filters = {}
-  if (req.params.sr == 'not-assign')filters.salesRepId = null
-  else if (req.params.sr == 'assign')filters.salesRepId = { [Op.ne]: null }
+  const filters = {deleted: 0}
+  if (req.params?.sr == 'not-assign')filters.salesRepId = null
+  else if (req.params?.sr == 'assign')filters.salesRepId = { [Op.ne]: null }
+
+  if (req.params?.srId)filters.salesRepId = req.params?.srId
 
   const data = await user.findAll({
-    where: { deleted: 0 },
+    where: filters,
     attributes: [
       [
         literal('(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)'),
@@ -43,12 +45,13 @@ exports.customersList = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: { data },
+
   });
 });
 
 exports.assignSalesRep = catchAsync(async (req, res, next) => {
   
-  user.update(req?.body,{where:{userid :req.params?.id}})
+await user.update({salesRepId:req.params?.id},{where:{id :req.body?.id}})
 
   res.status(200).json({
     status: 'success',

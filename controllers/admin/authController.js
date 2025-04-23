@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
-const { user, address, account ,salesRep} = require('../../models');
+const { user, address, account ,salesRep, supplier} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
@@ -108,7 +108,8 @@ const login = (Model) =>
 
 
 exports.adminLogin =  login(account);
-exports.admiLogin =  login(account);
+exports.salesRepLogin =  login(salesRep);
+exports.supplierLogin =  login(supplier);
   
 exports.logina = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
