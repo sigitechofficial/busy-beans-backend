@@ -1,17 +1,20 @@
 <?php
 // Path to your working directory
-$workingDir = '/home/trimworldwide/backendbb.trimworldwide.com';
+$workingDir = '/home/trimworldwide/testingbb.trimworldwide.com';
 
 // Absolute path to node, npm, and PM2 binaries
 $nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin';
+
 
 // Set the PATH environment variable explicitly
 putenv("PATH=$nodeBinPath:" . getenv('PATH')); // Append nodeBinPath to system PATH
 
 // Define the process name
+
 $processName = 'bb.js';
 
 // Commands for PM2 management
+
 $pm2StopDeleteCommand = "pm2 stop $processName || true && pm2 delete $processName || true";
 $pm2CreateCommand = "npm install && pm2 start $processName";
 $pm2SaveCommand = "pm2 save";
