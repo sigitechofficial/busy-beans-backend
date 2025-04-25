@@ -2,7 +2,7 @@
 // Path to your working directory
 $workingDir = '/home/trimworldwide/stagebb.trimworldwide.com';
 
-// Absolute path to node and PM2 binaries
+// Absolute path to the folder containing node, npm, and pm2 binaries
 $nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin';
 
 // Set the PATH environment variable explicitly
