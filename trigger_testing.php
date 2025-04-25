@@ -1,4 +1,3 @@
-
 <?php
 // Path to your working directory
 $workingDir = '/home/trimworldwide/stagebb.trimworldwide.com';
