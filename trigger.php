@@ -1,6 +1,6 @@
 <?php
 // Path to your working directory
-$workingDir = '/home/trimworldwide/testingbb.trimworldwide.com';
+$workingDir = '/home/trimworldwide/backendbb.trimworldwide.com';
 
 // Absolute path to node, npm, and PM2 binaries
 $nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin';
