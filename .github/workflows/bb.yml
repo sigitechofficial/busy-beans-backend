@@ -17,8 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      # Removed npm ci since dependencies are installed on the server
-
   deploy_main:
     needs: build
     if: github.ref == 'refs/heads/main'
