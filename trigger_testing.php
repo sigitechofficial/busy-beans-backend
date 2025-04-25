@@ -1,37 +1,31 @@
+
 <?php
+// Path to your working directory
 $workingDir = '/home/trimworldwide/stagebb.trimworldwide.com';
-$nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin';
 
-// Set PATH and HOME for PHP shell_exec environment
-putenv("PATH=$nodeBinPath:" . getenv('PATH'));
-putenv("HOME=/home/trimworldwide");
+// Absolute path to node and PM2 binaries
+$nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin/node';
 
+// Set the PATH environment variable explicitly
+putenv("PATH=$nodeBinPath:" . getenv('PATH')); // Append nodeBinPath to system PATH
+
+// Define the process name
 $processName = 'thebb.js';
 
+// Commands for PM2 management
 $pm2StopDeleteCommand = "pm2 stop $processName || true && pm2 delete $processName || true";
 $pm2CreateCommand = "npm install && pm2 start $processName";
 $pm2SaveCommand = "pm2 save";
 
-// Combine everything into a single shell command
-$command = "
-  cd $workingDir &&
-  export PATH=$nodeBinPath:\$PATH &&
-  export HOME=/home/trimworldwide &&
-  $pm2StopDeleteCommand &&
-  $pm2CreateCommand &&
-  $pm2SaveCommand
-";
+// Combine all commands (fix order of save command)
+$command = "export PATH=$nodeBinPath:\$PATH && export HOME=/home/trimworldwide && cd $workingDir && $pm2StopDeleteCommand && $pm2CreateCommand && $pm2SaveCommand 2>&1";
 
-// Execute the command
+// Execute the command and capture the output
 $output = shell_exec($command);
 
-// Show debug output
+// Output the result for debugging
 echo "<pre>";
-echo "=== ENV PATH ===\n" . shell_exec("echo \$PATH");
-echo "=== which node ===\n" . shell_exec("which node");
-echo "=== which npm ===\n" . shell_exec("which npm");
-echo "=== which pm2 ===\n" . shell_exec("which pm2");
-echo "\n=== SCRIPT OUTPUT ===\n";
+echo "Command Output:\n";
 echo htmlspecialchars($output);
 echo "</pre>";
 ?>
