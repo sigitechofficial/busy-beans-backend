@@ -3,7 +3,7 @@
 $workingDir = '/home/trimworldwide/stagebb.trimworldwide.com';
 
 // Absolute path to node and PM2 binaries
-$nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin/node';
+$nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin';
 
 // Set the PATH environment variable explicitly
 putenv("PATH=$nodeBinPath:" . getenv('PATH')); // Append nodeBinPath to system PATH
