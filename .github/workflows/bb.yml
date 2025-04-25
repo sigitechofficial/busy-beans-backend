@@ -17,8 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      # Removed npm ci since dependencies are installed on the server
-
   deploy_main:
     needs: build
     if: github.ref == 'refs/heads/main'
@@ -65,7 +63,7 @@ jobs:
           server: ${{ secrets.PROD_FTP_HOST }}
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
-          timeout: 360
+          timeout: 420
 
       - name: Trigger npm install on server
         run: |
@@ -110,11 +108,11 @@ jobs:
           server: ${{ secrets.STAGE_FTP_HOST }}
           username: ${{ secrets.STAGE_FTP_USERNAME }}
           password: ${{ secrets.STAGE_FTP_PASSWORD }}
-          timeout: 360
+          timeout: 420
 
       - name: Trigger npm install on server
         run: |
               echo "Triggering npm install and pm2 start via PHP script..."
-              curl -X GET "https://stagebb.trimworldwide.com/trigger_testing.php"
+              curl -X GET "https://stagebb.trimworldwide.com/trigger.php"
         env:
             HOME: /home/trimworldwide
