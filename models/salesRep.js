@@ -127,11 +127,16 @@ module.exports = (sequelize) => {
       input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
     }
   });
+  
+  
 
   // Associations models
   salesRep.associate = (models) => {
     salesRep.hasMany(models.user);
     models.user.belongsTo(salesRep);
+
+    salesRep.hasMany(models.orderFrequency);
+    models.orderFrequency.belongsTo(salesRep);
   };
 
   return salesRep;

@@ -77,7 +77,7 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      orderFrequency: {
+      frequency: {
         type: DataTypes.ENUM(
           'just-onces',
           'weekly',
@@ -127,6 +127,9 @@ module.exports = (sequelize) => {
 
     order.hasOne(models.chequeDetail);
     models.chequeDetail.belongsTo(order);
+    
+    order.hasOne(models.orderFrequency);
+    models.orderFrequency.belongsTo(order);
   };
 
   return order;
