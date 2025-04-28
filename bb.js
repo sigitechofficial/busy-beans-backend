@@ -54,5 +54,5 @@ process.on('SIGINT', gracefulShutdown);
 // const host = '192.168.0.129';
 server.listen(serverPort, (err) => {
   if (err) throw err;
-  console.log(`Server is listening on http://${serverPort}`);
+  console.log(`Server is listening on http://:${serverPort}`);
 });
