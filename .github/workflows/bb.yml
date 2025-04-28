@@ -116,4 +116,3 @@ jobs:
               curl -X GET "https://testingbb.trimworldwide.com/trigger.php"
         env:
             HOME: /home/trimworldwide
-
