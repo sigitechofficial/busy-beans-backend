@@ -18,9 +18,6 @@ if (syncDb) {
     });
 }
 
-// Set the view engine (choose the one you want: ejs, pug, handlebars, etc.)
-app.set('view engine', 'ejs');  // You can change this to 'pug' or 'handlebars' if you prefer
-
 // Handle unhandled promise rejections and uncaught exceptions
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
