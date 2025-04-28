@@ -129,6 +129,9 @@ module.exports = (sequelize) => {
 
     user.hasMany(models.order);
     models.order.belongsTo(user);
+
+    user.hasMany(models.orderFrequency);
+    models.orderFrequency.belongsTo(user);
   };
 
   return user;

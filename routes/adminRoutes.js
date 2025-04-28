@@ -135,11 +135,12 @@ router.get(
 );
 
 router.get(
-  '/customer-management/customer-list/sale-rep/:srId',
+  '/customer-management/customer-list/sale-rep-id/:srId',
+  
   customerController.customersList,
 );
 
-router.get(
+router.patch(
   '/customer-management/assign-sale-rep/:id',
   customerController.assignSalesRep,
 );
