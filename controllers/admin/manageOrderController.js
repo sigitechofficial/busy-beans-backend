@@ -69,7 +69,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       'note',
       'paymentMethod',
       'poNumber',
-      'orderFrequency',
+      'frequency',
     ],
   });
 
@@ -172,7 +172,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'note',
       'paymentMethod',
       'poNumber',
-      'orderFrequency',
+      'frequency',
       'statusId',
       'trackingNumber'
     ],
