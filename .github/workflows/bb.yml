@@ -63,7 +63,7 @@ jobs:
           server: ${{ secrets.PROD_FTP_HOST }}
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
-          timeout: 420
+          timeout:  420
 
       - name: Trigger npm install on server
         run: |
@@ -116,3 +116,9 @@ jobs:
               curl -X GET "https://testingbb.trimworldwide.com/trigger.php"
         env:
             HOME: /home/trimworldwide
+
+
+
+
+            
+
