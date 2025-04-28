@@ -45,13 +45,14 @@ const gracefulShutdown = () => {
     );
     process.exit(1);
   }, 10000);
+
 };
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
 // Start the server
-const host = '192.168.0.159';
+const host = '192.168.1.136';
 server.listen(serverPort, host, (err) => {
   if (err) throw err;
   console.log(`Server is listening on http://${host}:${serverPort}`);
