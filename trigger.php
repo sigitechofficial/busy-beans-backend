@@ -3,8 +3,8 @@
 $workingDir = '/home/trimworldwide/testingbb.trimworldwide.com';
 
 // Absolute path to node, npm, and PM2 binaries
-$nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin';
->>>>>>> origin/main
+$nodeBinPath = '/home/trimworldwide/.nvm/versions/node/v18.20.4/bin/node';
+
 
 // Set the PATH environment variable explicitly
 putenv("PATH=$nodeBinPath:" . getenv('PATH')); // Append nodeBinPath to system PATH
@@ -12,7 +12,7 @@ putenv("PATH=$nodeBinPath:" . getenv('PATH')); // Append nodeBinPath to system P
 // Define the process name
 
 $processName = 'thebb.js';
->>>>>>> origin/main
+
 
 // Commands for PM2 management
 $pm2StopDeleteCommand = "pm2 stop $processName || true && pm2 delete $processName || true";
