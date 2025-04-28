@@ -29,7 +29,7 @@ jobs:
       - name: Check deployment flag
         id: check-flag
         run: |
-          DEPLOY_FLAG="yes" # Set the flag here. Change to "yes" to enable deployment.
+          DEPLOY_FLAG="no" # Set the flag here. Change to "yes" to enable deployment.
           echo "Deployment flag is set to: $DEPLOY_FLAG"
           if [ "$DEPLOY_FLAG" != "yes" ]; then
             echo "Deployment flag is not set to 'yes'. Skipping deployment."

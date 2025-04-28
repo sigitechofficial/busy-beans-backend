@@ -13,8 +13,8 @@ putenv("PATH=$nodeBinPath:" . getenv('PATH')); // Append nodeBinPath to system P
 
 $processName = 'bb.js';
 
-// Commands for PM2 management
 
+// Commands for PM2 management
 $pm2StopDeleteCommand = "pm2 stop $processName || true && pm2 delete $processName || true";
 $pm2CreateCommand = "npm install && pm2 start $processName";
 $pm2SaveCommand = "pm2 save";
