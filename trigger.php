@@ -29,9 +29,4 @@ $output = shell_exec($command);
 echo "<pre>";
 echo "Command Output:\n";
 echo htmlspecialchars($output);
-echo "</pre>";
-?>
-
-
-
-
+echo

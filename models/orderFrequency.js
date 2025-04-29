@@ -17,10 +17,6 @@ module.exports = (sequelize) => {
         type: DataTypes.DATEONLY,
         allowNull: true, 
       },
-      bankAccount: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
       frequency: {
         type: DataTypes.ENUM(
           'just-onces',
