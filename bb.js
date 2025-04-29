@@ -3,7 +3,11 @@ require('dotenv').config(); // Load environment variables from .env file
 
 const server = require('./app');
 
+<<<<<<< HEAD
 const serverPort = 9011;
+=======
+const serverPort = 8012;
+>>>>>>> 758adac4ad294804f3da6a2d69a0e954bd13af91
 
 const syncDb = 0; // Use environment variable for flexibility
 
@@ -51,7 +55,12 @@ const gracefulShutdown = () => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
+<<<<<<< HEAD
  
+=======
+// Start the server
+// const host = '192.168.0.129';
+>>>>>>> 758adac4ad294804f3da6a2d69a0e954bd13af91
 server.listen(serverPort, (err) => {
   if (err) throw err;
   console.log(`Server is listening on http://:${serverPort}`);
