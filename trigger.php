@@ -11,7 +11,7 @@ putenv("PATH=$nodeBinPath:" . getenv('PATH')); // Append nodeBinPath to system P
 
 // Define the process name
 
-$processName = 'bb.js';
+$processName = 'thebb.js';
 
 
 // Commands for PM2 management
