@@ -1,5 +1,4 @@
- 
-exports.nextFrequencyDate = ({ currentDate, frequency   }) => {
+exports.nextFrequencyDate = ({ currentDate, frequency }) => {
   const date = new Date(currentDate); // Ensure we work with a Date object
 
   switch (frequency) {
@@ -27,5 +26,12 @@ exports.nextFrequencyDate = ({ currentDate, frequency   }) => {
       throw new Error('Invalid frequency');
   }
 
-  return date;
+  // Calculate visibility date (3 days before next frequency date)
+  const visibilityDate = new Date(date);
+  visibilityDate.setDate(visibilityDate.getDate() - 3);
+
+  return {
+    nextOrderDate: date,
+    visibilityDate: visibilityDate
+  };
 }

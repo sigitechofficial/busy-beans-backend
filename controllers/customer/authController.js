@@ -51,6 +51,7 @@ const createSendToken = (input, statusCode, req, res) => {
 };
 
 exports.signup = catchAsync(async (req, res, next) => {
+  console.log("🚀 ~ exports.signup=catchAsync ~  req.body:",  req.body)
   const OTP = otpGenerator.generate(4, {
     lowerCaseAlphabets: false,
     upperCaseAlphabets: false,
@@ -65,6 +66,7 @@ exports.signup = catchAsync(async (req, res, next) => {
 
   req.body.address.userId = newUser?.id;
   const defaultAddress = await address.create(req.body?.address);
+  console.log("🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:", defaultAddress)
 
   const input = JSON.parse(JSON.stringify(newUser));
   input.address = defaultAddress;
@@ -137,7 +139,10 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
   }
 
   if (customer.latestOtp == otp && on == 'signup') {
-    createSendToken(customer, 200, req, res);
+    const data =  JSON.parse(JSON.stringify(customer))
+    data.addresses = undefined
+    data.address = customer?.addresses[0]
+    createSendToken(data, 200, req, res);
     customer.verifiedAt = Date.now();
     await customer.save();
   } else if (customer.latestOtp == otp) {

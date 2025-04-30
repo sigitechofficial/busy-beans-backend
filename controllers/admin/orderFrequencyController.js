@@ -4,15 +4,17 @@ const AppError = require('../../utils/appError');
 const {nextFrequencyDate} = require('../../utils/nextFrequencyDate');
 const factory = require('../handlerFactory');
 
-exports.setOrderFrequency = async (orderData) => { //orderData is 
+exports.setOrderFrequency = async ({orderData}) => { //orderData is 
   try {
     if(!orderData) return false 
    const input  = JSON.parse(JSON.stringify(orderData))
 
+  const {nextOrderDate,visibilityDate} =  nextFrequencyDate({currentDate:new Date(),frequency:input.frequency}); 
    input.orderId = orderData.id
    input.orderId = orderData.id
    input.orderDate = new Date()
-   input.nextOrderDate = nextFrequencyDate({currentDate:new Date(),frequency:input.frequency})
+   input.nextOrderDate = nextOrderDate
+   input.visibilityDate = visibilityDate
  
     const frequency = await orderFrequency.create(input);
     order.update({orderFrequencyId : frequency?.id},{where:{id:orderData?.id}})
@@ -23,5 +25,4 @@ exports.setOrderFrequency = async (orderData) => { //orderData is
     console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ error:', error)
   }
 }
-exports.getAllSuppliers = factory.getAll(supplier);
  

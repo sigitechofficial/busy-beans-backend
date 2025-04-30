@@ -17,6 +17,10 @@ module.exports = (sequelize) => {
         type: DataTypes.DATEONLY,
         allowNull: true, 
       },
+      visibilityDate: {
+        type: DataTypes.DATEONLY,
+        allowNull: true, 
+      },
       frequency: {
         type: DataTypes.ENUM(
           'just-onces',

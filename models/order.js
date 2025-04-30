@@ -60,7 +60,7 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      paymentStaus: {
+      paymentStatus: {
         type: DataTypes.ENUM('pending', 'done'),
         allowNull: true,
         defaultValue: 'pending',

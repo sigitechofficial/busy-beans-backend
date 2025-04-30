@@ -119,6 +119,21 @@ router.patch(
   manageOrderController.orderJourneryComplete,
 );
 
+router.patch(
+  '/edit-order',
+  manageOrderController.orderJourneryComplete,
+);
+
+router.patch(
+  '/add-cheque',
+  manageOrderController.orderJourneryComplete,
+);
+
+router.patch(
+  '/edit-cheque',
+  manageOrderController.eidtCheque,
+);
+
 //! Customer Management
 router.get(
   '/customer-management/dahboard-cards',
@@ -144,6 +159,13 @@ router.patch(
   '/customer-management/assign-sale-rep/:id',
   customerController.assignSalesRep,
 );
+
+router.get(
+  '/customer-management/invoice-customers-balance',
+  customerController.InvoiceCustomers
+);
+
+ 
 
 //! Supplier Management
 

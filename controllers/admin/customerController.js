@@ -49,6 +49,39 @@ exports.customersList = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
+  const filters = {deleted: 0}
+  if (req.params?.sr == 'not-assign')filters.salesRepId = null
+  else if (req.params?.sr == 'assign')filters.salesRepId = { [Op.ne]: null }
+
+  if (req.params?.srId)filters.salesRepId = req.params?.srId
+
+  const data = await user.findAll({
+    where: filters,
+    attributes: [
+      [
+        literal(
+          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
+        ),
+        'totalBalance',
+      ], 
+      `id`,
+      `name`,
+      `email`, 
+      `image`,
+      `phoneNumber`,
+      `saleTaxNumber`,
+      `emailToSendInvoices`,
+    ],
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { data },
+
+  });
+});
+
 exports.assignSalesRep = catchAsync(async (req, res, next) => {
   
 await user.update({salesRepId:req.params?.id},{where:{id :req.body?.id}})

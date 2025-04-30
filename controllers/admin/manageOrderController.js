@@ -6,7 +6,8 @@ const {
   product,
   chequeDetail,
   orderHistory,
-  supplier
+  supplier,
+  statuses
 } = require('../../models');
 const { Op, literal, fn, col } = require('sequelize');
 
@@ -14,6 +15,8 @@ const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
+
+exports.getAllSalesRep = factory.getAll(statuses);
 
 exports.allOrder = catchAsync(async (req, res, next) => {
   let condition = {};
@@ -59,6 +62,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
         ),
         'customerName',
       ],
+      [
+        literal( 
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+        ),
+        'orderCurrentStatus',
+      ],
       'totalBill',
       'subTotal',
       'discountPrice',
@@ -70,6 +79,8 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       'paymentMethod',
       'poNumber',
       'frequency',
+      'paymentStatus',
+      'statusId',
     ],
   });
 
@@ -102,6 +113,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
         model: supplier,
         attributes: {
           exclude: ['createdAt', 'updatedAt',  'deleted', 'deletedAt','password'],
+        },
+      },
+      {
+        model: chequeDetail,
+        attributes: {
+          exclude: ['createdAt', 'updatedAt', 'deletedAt'],
         },
       },
       {
@@ -174,10 +191,13 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'poNumber',
       'frequency',
       'statusId',
-      'trackingNumber'
+      'trackingNumber',
+      'paymentStatus',
     ],
   });
-
+  if (!doc) {
+    return next(new AppError('Data not found!', 400));
+  }
   res.status(200).json({
     status: 'success',
     data: {
@@ -204,7 +224,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
   if (req.body?.cheque) {
     req.body.cheque.orderId = orderId;
-    await order.create(req.body?.cheque);
+    await chequeDetail.create(req.body?.cheque);
   }
 
   if (req.body?.orderData?.statusId) {
@@ -242,4 +262,16 @@ exports.supplierAcknowledgement = catchAsync(async (req, res, next) => {
       data: doc,
     },
   });
+});
+
+//* Edit Cheque Information
+exports.eidtCheque = catchAsync(async (req, res, next) => {
+  const { cheque, chequeId } = req.body;
+  await chequeDetail.update(cheque, { where: { id: chequeId } });
+ 
+  return res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+
 });
