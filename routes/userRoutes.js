@@ -1,7 +1,9 @@
 const express = require('express');
 const authController = require('../controllers/customer/authController');
 const orderController = require('../controllers/customer/orderController');
+const profileController = require('../controllers/customer/profileController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
+const user = require('../models/user');
 
 const router = express.Router();
 
@@ -15,5 +17,8 @@ router.post('/reset-password', authController.resetPassword);
 router.post('/book-order', orderController.bookOrder);
 router.get('/orders', manageOrderController.allOrder);
 router.get('/order-details/:id', manageOrderController.orderDetails);
+
+
+router.put('/drawer/update-profile', profileController.updateProfile);
 
 module.exports = router;

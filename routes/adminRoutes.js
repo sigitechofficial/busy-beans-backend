@@ -4,6 +4,7 @@ const productController = require('../controllers/admin/productController');
 const authController = require('../controllers/admin/authController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
 const customerController = require('../controllers/admin/customerController');
+const orderFrequencyController = require('../controllers/admin/orderFrequencyController');
 const supplierController = require('../controllers/admin/supplierController');
 const salesRepController = require('../controllers/admin/salesRepController');
 const multer = require('multer');
@@ -166,6 +167,11 @@ router.get(
 );
 
  
+
+router.get(
+  '/order-frequency/upcomming-orders',
+  orderFrequencyController.orderAccordingToFrequency
+);
 
 //! Supplier Management
 

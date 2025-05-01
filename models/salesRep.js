@@ -83,7 +83,7 @@ module.exports = (sequelize) => {
       registerDate: {
         type: DataTypes.DATEONLY,
         allowNull: true,
-        defaultValue: sequelize.NOW,
+        defaultValue: new Date(),
       },
       registerBy: {
         type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),

@@ -88,7 +88,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       results: doc.length,
-      data: doc,
+      data: doc.reverse(),
     },
   });
 });

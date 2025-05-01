@@ -1,8 +1,10 @@
-const { orderFrequency,order,item } = require('../../models');
+const { orderFrequency,order,item,address } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const {nextFrequencyDate} = require('../../utils/nextFrequencyDate');
 const factory = require('../handlerFactory');
+const { Op, literal, fn, col } = require('sequelize');
+
 
 exports.setOrderFrequency = async ({orderData}) => { //orderData is 
   try {
@@ -26,3 +28,61 @@ exports.setOrderFrequency = async ({orderData}) => { //orderData is
   }
 }
  
+ 
+//* Pending order according to their frequency cycle
+
+exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
+  let condition = {};
+  if (req.params.id) condition.id = req.params.id;
+  
+  console.log("🚀 ~ exports.allOrder=catchAsync ~ condition:", condition)
+
+  const doc = await orderFrequency.findAll({
+    where: condition,
+    include: [
+
+      {
+        model: item,
+        attributes: [
+          [
+            literal(
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'product',
+          ],
+          [
+            literal(
+              `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'price',
+          ],
+          'qty',  
+          'productId',
+        ],
+      },
+       
+    ],
+    attributes: [
+      'id',
+      [
+        literal(
+          `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
+        ),
+        'customerName',
+      ],
+      [
+        literal(
+          `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
+        ),
+        'email',
+      ],
+     `status`, `orderDate`, `nextOrderDate`, `frequency`,`visibilityDate`
+    ],
+  });
+  res.status(200).json({
+    status: 'success',
+    data: {
+      order: doc,
+    },
+  });
+});
