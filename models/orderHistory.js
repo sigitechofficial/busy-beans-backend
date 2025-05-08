@@ -15,7 +15,7 @@ module.exports = (sequelize) => {
       on: {
         type: DataTypes.DATE,
         allowNull: true,
-        defaultValue: sequelize.NOW,
+        defaultValue: new Date(),
       },
     },
     {

@@ -1,10 +1,9 @@
-const { order, item,orderHistory } = require('../../models');
+const { order, item,orderHistory,orderFrequency } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
-
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -26,10 +25,9 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   await item.bulkCreate(input?.items);
   
   if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder})
-  res.status(200).json({
-    status: 'success',
+  return res.status(200).json({
+    status: 'success',   
     data: {id:newOrder?.id},
   });
 });
-
 

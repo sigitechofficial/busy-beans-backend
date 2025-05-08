@@ -59,6 +59,9 @@ module.exports = (sequelize, DataTypes) => {
   address.associate = (models) => {
     address.hasMany(models.order);
     models.order.belongsTo(address);
+
+    address.hasMany(models.orderFrequency);
+    models.orderFrequency.belongsTo(address);
   };
 
   return address;

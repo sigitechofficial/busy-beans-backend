@@ -18,7 +18,6 @@ router.post('/book-order', orderController.bookOrder);
 router.get('/orders', manageOrderController.allOrder);
 router.get('/order-details/:id', manageOrderController.orderDetails);
 
-
 router.put('/drawer/update-profile', profileController.updateProfile);
 
 module.exports = router;

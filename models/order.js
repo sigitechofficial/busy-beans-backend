@@ -87,6 +87,11 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 'just-onces',
       },
+      on: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+        defaultValue: new Date(),
+      },
     },
     {
       tableName: 'orders',

@@ -166,12 +166,25 @@ router.get(
   customerController.InvoiceCustomers
 );
 
- 
-
 router.get(
   '/order-frequency/upcomming-orders',
   orderFrequencyController.orderAccordingToFrequency
 );
+
+router.get(
+  '/order-frequency/upcomming-orders/sale-rep/:srId',
+  orderFrequencyController.orderAccordingToFrequency
+);
+
+router.post(
+  '/order-frequency/book-orders',
+  orderFrequencyController.bookOrderAccordingToFrequency,
+);
+
+router.post(
+  '/order-frequency/book-orders/sale-rep/:srId',
+  orderFrequencyController.bookOrderAccordingToFrequency,
+)
 
 //! Supplier Management
 
@@ -187,8 +200,6 @@ router
   .patch(uploadSupplierImage.single('image'), supplierController.updateSupplier) // For updating category by ID
   .delete(supplierController.deleteSupplier); // For deleting a category by ID
 
-
-  
 router
 .route('/sales-rep/')
 .get(salesRepController.getAllSalesRep) // For fetching all categories

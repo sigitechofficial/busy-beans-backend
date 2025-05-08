@@ -25,6 +25,12 @@ exports.customersList = catchAsync(async (req, res, next) => {
         ),
         'totalOrderAmount',
       ], 
+      [
+        literal( 
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepName',
+      ],
       // [
       //   literal(
       //     '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
@@ -83,9 +89,7 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
 });
 
 exports.assignSalesRep = catchAsync(async (req, res, next) => {
-  
 await user.update({salesRepId:req.params?.id},{where:{id :req.body?.id}})
-
   res.status(200).json({
     status: 'success',
     data: {},
@@ -103,7 +107,6 @@ exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
     attributes: [
       // Count the total customers
       [fn('COUNT', col('id')), 'totalCustomer'],
-
       // Count the new customers (verified in the last 30 days)
       [
         fn(
@@ -114,13 +117,11 @@ exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
         ),
         'newCustomer',
       ],
-
       // Count active customers (status is true)
       [
         fn('COUNT', literal('CASE WHEN "status" = true THEN 1 ELSE NULL END')),
         'activeCustomer',
       ],
-
       // Count inactive customers (status is false)
       [
         fn('COUNT', literal('CASE WHEN "status" = false THEN 1 ELSE NULL END')),
