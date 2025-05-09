@@ -1,5 +1,6 @@
 const express = require('express');
 const categoryController = require('../controllers/admin/categoriesController');
+const addressController = require('../controllers/admin/addressController');
 const productController = require('../controllers/admin/productController');
 const authController = require('../controllers/admin/authController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
@@ -211,5 +212,75 @@ router
 .get(salesRepController.getSalesRep)  
 .patch(uploadSalesRepImage.single('image'), salesRepController.updateSalesRep)  
 .delete(salesRepController.deleteSalesRep);  
+
+//! Country Management
+router
+  .route('/address-management/country/')
+  .get(addressController.getAllCountries) // For fetching all  
+  .post(addressController.createCountry); // For creating a new  
+
+// Category by ID routes
+router
+  .route('/address-management/country/:id')
+  .get(addressController.getCountry) // For fetching a   by ID
+  .patch(addressController.updateCountry) // For updating   by ID
+  .delete(addressController.deleteCountry); // For deleting a   by ID
+
+
+  //! State Management
+router
+.route('/address-management/state/')
+.get(addressController.getAllStates) //  
+.post(addressController.createState); // 
+ 
+// Category by ID routes
+router
+.route('/address-management/state/:id')
+.get(addressController.getState)  
+.patch(addressController.updateState)  
+.delete(addressController.deleteState);  
+
+ //! City Management
+
+router
+.route('/address-management/city/')
+.get(addressController.getAllCities) //  
+.post(addressController.createCity); // 
+
+// Category by ID routes
+router
+.route('/address-management/city/:id')
+.get(addressController.getCity)  
+.patch(addressController.updateCity)  
+.delete(addressController.deleteCity);  
+
+ //! City Management
+
+ router
+ .route('/address-management/city/')
+ .get(addressController.getAllCities) //  
+ .post(addressController.createCity); // 
+ 
+ // Category by ID routes
+ router
+ .route('/address-management/city/:id')
+ .get(addressController.getCity)  
+ .patch(addressController.updateCity)  
+ .delete(addressController.deleteCity);  
+ 
+ //! City Management
+
+ router
+ .route('/address-management/territory/')
+ .get(addressController.getAllTerritory) //  
+ .post(addressController.createTerritory); // 
+ 
+ // Category by ID routes
+ router
+ .route('/address-management/territory/:id')
+ .get(addressController.getTerritory)  
+ .patch(addressController.updateTerritory)  
+ .delete(addressController.deleteTerritory);  
+ 
 
 module.exports = router;

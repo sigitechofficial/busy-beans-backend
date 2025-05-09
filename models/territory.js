@@ -1,0 +1,40 @@
+const { DataTypes } = require('sequelize');
+const bcrypt = require('bcryptjs');
+
+module.exports = (sequelize) => {
+  const territory = sequelize.define(
+    'territory',
+    {
+      name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: {
+          args: true,
+          msg: 'Territory already exist.',
+        },
+      },
+    },
+    { 
+      primaryKey: true,
+      autoIncrement: true,
+      paranoid: true,
+      timestamps: true,
+      indexes: [
+        {
+          fields: ['name'],
+          name: 'name_index',
+        },
+      ],
+    },
+  );
+ 
+  territory.associate = (models) => {
+    territory.hasMany(models.cityInSystem);
+    models.cityInSystem.belongsTo(territory);
+
+    territory.hasMany(models.address);
+    models.address.belongsTo(territory);
+  };
+
+  return territory;
+};

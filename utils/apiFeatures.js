@@ -6,36 +6,33 @@ class APIFeatures {
     this.queryString = queryString;
     this.queryOptions = {}; // Store query options here
   }
+ 
 
   filter() {
     const queryObj = { ...this.queryString };
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
     excludedFields.forEach((el) => delete queryObj[el]);
-
-    // Advanced filtering
+  
     const filterConditions = {};
+  
+    // Handle advanced filtering like ?price[gte]=100
     Object.keys(queryObj).forEach((key) => {
-      if (
-        queryObj[key].startsWith('gte') ||
-        queryObj[key].startsWith('gt') ||
-        queryObj[key].startsWith('lte') ||
-        queryObj[key].startsWith('lt')
-      ) {
-        const operator = key.match(/(gte|gt|lte|lt)/)[0];
-        filterConditions[key] = {
-          [Op[operator]]: queryObj[key],
-        };
+      if (key.includes('[')) {
+        const [field, operator] = key.replace(']', '').split('[');
+        if (!filterConditions[field]) {
+          filterConditions[field] = {};
+        }
+        filterConditions[field][Op[operator]] = queryObj[key];
       } else {
         filterConditions[key] = queryObj[key];
       }
     });
-
-    // Apply filter conditions to the query options
+  
     this.queryOptions.where = filterConditions;
-
+  
     return this;
   }
-
+  
   sort() {
     if (this.queryString.sort) {
       const sortBy = this.queryString.sort

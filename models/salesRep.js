@@ -47,7 +47,7 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      territory: {
+      territoryName: {
         type: DataTypes.STRING,
         allowNull: true,
       },
