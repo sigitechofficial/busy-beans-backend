@@ -13,6 +13,10 @@ module.exports = (sequelize) => {
           msg: 'State already exist.',
         },
       },
+      isoCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
     },
     { 
       primaryKey: true,

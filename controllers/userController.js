@@ -59,9 +59,11 @@ exports.login = catchAsync(async (req, res, next) => {
 
   const user = await account.findOne({ where: { email } });
 
-  if (!user || !(await user.correctPassword(password, user.password))) {
-    return next(new AppError('Incorrect email or password', 401));
-  }
+  const isMatch = password == user.password
+if (!user || !isMatch) {
+  return next(new AppError('Incorrect email or password', 401));
+}
+
 
   createSendToken(user, 200, req, res);
 });

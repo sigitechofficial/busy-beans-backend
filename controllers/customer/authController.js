@@ -97,9 +97,12 @@ exports.login = catchAsync(async (req, res, next) => {
     where: { email },
   });
   console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
-
-  if (!customer || !(await bcrypt.compare(password, customer?.password))) {
-    return next(new AppError('Incorrect email or password', 200));
+if (!customer) {
+    return next(new AppError('User Not found!', 200));
+  }
+const isMatch = await bcrypt.compare(password, customer.password);
+  if (!user || !isMatch) {
+    return next(new AppError('Incorrect email or password', 401));
   }
 
   const customerAddress = await address.findOne({
@@ -252,7 +255,6 @@ exports.restrictTo =
         new AppError('You do not have permission to perform this action', 403),
       );
     }
-
     next();
   };
 

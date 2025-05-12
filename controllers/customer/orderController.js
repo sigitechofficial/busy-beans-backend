@@ -28,7 +28,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder})
 
 
-  OrderEmailToCustomer(input,'Confirmed')
+  // OrderEmailToCustomer(input,'Confirmed')
   return res.status(200).json({
     status: 'success',   
     data: {id:newOrder?.id},

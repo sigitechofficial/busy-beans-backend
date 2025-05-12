@@ -282,5 +282,10 @@ router
  .patch(addressController.updateTerritory)  
  .delete(addressController.deleteTerritory);  
  
+router.patch(
+  '/address-management/add-cities-in-territory/:t_id',
+  addressController.addCitiesInTerritory,
+)
 
+ 
 module.exports = router;
