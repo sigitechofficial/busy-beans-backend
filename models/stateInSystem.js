@@ -19,10 +19,6 @@ module.exports = (sequelize) => {
       },
     },
     { 
-      primaryKey: true,
-      autoIncrement: true,
-      paranoid: true,
-      timestamps: true,
       indexes: [
         {
           fields: ['name'],

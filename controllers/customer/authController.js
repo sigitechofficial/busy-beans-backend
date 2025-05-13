@@ -8,6 +8,7 @@ const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
 const otpGenerator = require('otp-generator');
 const EmailResetPasswordOtpToAll = require('../../helper/ResetPasswordOtpToAll');
+const Event = require('../events/userAccountRelatedEvents');
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
@@ -71,7 +72,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   const input = JSON.parse(JSON.stringify(newUser));
   input.address = defaultAddress;
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
-    EmailResetPasswordOtpToAll(OTP, newUser, 'verification');
+    Event.otpToUsersEvent({email:newUser?.email,name:newUser.name,otp:OTP});
     return res.status(200).json(
       response({
         data: {
@@ -80,7 +81,9 @@ exports.signup = catchAsync(async (req, res, next) => {
         },
       }),
     );
-  }
+  } 
+  
+  Event.userAccountCreatedEvent({email:newUser?.email,name:newUser.name})
 
   createSendToken(newUser, 201, req, res);
 });
@@ -100,7 +103,7 @@ exports.login = catchAsync(async (req, res, next) => {
 if (!customer) {
     return next(new AppError('User Not found!', 200));
   }
-const isMatch = await bcrypt.compare(password, customer.password);
+const isMatch = password == customer?.password
   if (!user || !isMatch) {
     return next(new AppError('Incorrect email or password', 401));
   }
@@ -148,6 +151,7 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
     createSendToken(data, 200, req, res);
     customer.verifiedAt = Date.now();
     await customer.save();
+    Event.userAccountApproveEvent({email:customer?.email,name:customer.name})
   } else if (customer.latestOtp == otp) {
     return res.status(200).json(
       response({

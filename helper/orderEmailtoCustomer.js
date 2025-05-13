@@ -5,13 +5,15 @@ const { attachments } = require('./attactments')
 const attachment = attachments()
 const { transporter } = require('./transpoter')
 const { footer } = require('./footer')
+const { emailDateFormate } = require('../utils/emailDateFormate')
 
-module.exports = function ({ data, satge = 'Confirmed'}) {
+module.exports = function ({ email,data, satge = 'Confirmed'}) {
  
  let orderNote = `Your order has been confirmed and will be prepared according to the
                 instructions.`
-  let hiCustomer = `Hi ${data?.customerame}!`
-   const items = data?.items.forEach((ele) => {
+  let hiCustomer = `Hi ${data?.customerName}!`
+   const items = [] 
+  data?.items.forEach((ele) => {
     let temp = `<tr>
                     <td
                       style="
@@ -33,7 +35,7 @@ module.exports = function ({ data, satge = 'Confirmed'}) {
                       $${ele.price}
                     </td>
             </tr>`
-    temp = jobs.push(temp);
+    temp = items.push(temp);
     return temp;
   });
 
@@ -42,11 +44,10 @@ module.exports = function ({ data, satge = 'Confirmed'}) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', `${data.email}`], // list of receivers
-      subject: subject, // Subject line
-      attachments: attachment.footer.concat(attachment.trim),
+      to: ['sigidevelopers@gmail.com', ], //`${email}` list of receivers
+      subject: `Order Confirmed ${data.id}`, // Subject line
+      attachments: attachment.footer,
       html: `
-
       <!DOCTYPE html>
       <html lang="en">
         <head>

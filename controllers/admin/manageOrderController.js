@@ -15,6 +15,7 @@ const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
+const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
 
 exports.getAllSalesRep = factory.getAll(statuses);
 
@@ -227,6 +228,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   }
 
   if (req.body?.orderData?.statusId) {
+    if(req.body?.orderData?.statusId == 2)supplierNewOrderEvent({orderId:orderId})
     await orderHistory.create({
       statusId: req.body?.orderData?.statusId,
       orderId: orderId,

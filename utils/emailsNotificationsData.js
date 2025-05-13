@@ -8,9 +8,9 @@ const {
 const { literal } = require('sequelize')
 const { emailDateFormate } = require('./emailDateFormate')
 
-exports.bookingDataForEmailAndNotifications = async (bookingId) => {
+exports.dataForEmailAndNotifications = async (orderId) => {
   const doc = await order.findOne({
-    where: condition,
+    where: { id : orderId },
     include: [
       {
         model: address,
@@ -56,6 +56,12 @@ exports.bookingDataForEmailAndNotifications = async (bookingId) => {
         ),
         'orderCurrentStatus',
       ],
+      [
+        literal(
+          `(SELECT suppliers.name FROM suppliers WHERE suppliers.id = order.supplierId LIMIT 1)`,
+        ),
+        'supplierName',
+      ],
       'totalBill',
       'subTotal',
       'discountPrice',
@@ -74,5 +80,5 @@ exports.bookingDataForEmailAndNotifications = async (bookingId) => {
     ],
   });
   const output = JSON.parse(JSON.stringify(doc))
-  return { appointment: output,email:output?.email }
+  return { appointment: output, email:output?.email }
 }

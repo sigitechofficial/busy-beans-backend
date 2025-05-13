@@ -4,7 +4,7 @@ const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
-const OrderEmailToCustomer = require('../../helper/orderEmailtoCustomer')
+const {orderEvents} = require('../events/orderEvents')
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -28,7 +28,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder})
 
 
-  // OrderEmailToCustomer(input,'Confirmed')
+  orderEvents({orderId:newOrder?.id})
   return res.status(200).json({
     status: 'success',   
     data: {id:newOrder?.id},

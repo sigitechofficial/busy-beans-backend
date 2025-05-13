@@ -26,7 +26,7 @@ exports.createTerritory = catchAsync(async (req, res, next) => {
  
   const t = await territory.create(req.body);
 
-  cityInSystem.update({territoryId:t.id},{where:{id:req.body.cities}})
+  cityInSystem.update({territoryId:t?.id},{where:{id:req.body?.cities}})
 
 
   res.status(200).json({
@@ -59,7 +59,7 @@ exports.addCitiesInTerritory = catchAsync(async (req, res, next) => {
  
   res.status(200).json({
     status: 'success',
-    data: {results:t},
+    data: {},
   });
 });
 
