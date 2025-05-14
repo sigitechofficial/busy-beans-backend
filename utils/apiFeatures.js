@@ -13,7 +13,7 @@ class APIFeatures {
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
     excludedFields.forEach((el) => delete queryObj[el]);
   
-    const filterConditions = {};
+    const filterConditions = { deleted : 0 };
   
     // Handle advanced filtering like ?price[gte]=100
     Object.keys(queryObj).forEach((key) => {

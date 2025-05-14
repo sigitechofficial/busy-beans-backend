@@ -5,6 +5,6 @@ const factory = require('../handlerFactory');
 
 exports.getAllCatagories = factory.getAll(category);
 exports.getCatagory = factory.getOne(category);
-exports.createCatagory = factory.createOne(category);
+exports.createCatagory = factory.createOne(category,['name']);
 exports.updateCatagory = factory.updateOne(category);
-exports.deleteCatagory = factory.deleteOne(category);
+exports.deleteCatagory = factory.softdelete(category);

@@ -5,30 +5,69 @@ const factory = require('../handlerFactory');
 
 exports.getAllCountries = factory.getAll(countryInSystem);
 exports.getCountry = factory.getOne(countryInSystem);
-exports.createCountry = factory.createOne(countryInSystem);
+exports.createCountry = factory.createOne(countryInSystem,['name']);
 exports.updateCountry = factory.updateOne(countryInSystem);
-exports.deleteCountry = factory.deleteOne(countryInSystem);
+// exports.deleteCountry = factory.softdelete(countryInSystem);
+
+exports.deleteCountry = catchAsync(async (req, res, next) => {
+   await countryInSystem.update({deleted:true},{
+      where: { id: req.params.id },
+    });
+
+    await stateInSystem.update({deleted:true},{
+      where: { countryInSystemId: req.params.id },
+    });
+
+    await cityInSystem.update({deleted:true},{
+      where: { countryInSystemId: req.params.id },
+    });
+
+    await territory.update({deleted:true},{
+      where: { countryInSystemId: req.params.id },
+    });
+  res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});
 
 exports.getAllStates = factory.getAll(stateInSystem);
 exports.getState = factory.getOne(stateInSystem);
-exports.createState = factory.createOne(stateInSystem);
+exports.createState = factory.createOne(stateInSystem,['name']);
 exports.updateState = factory.updateOne(stateInSystem);
-exports.deleteState = factory.deleteOne(stateInSystem);
+// exports.deleteState = factory.softdelete(stateInSystem);
+
+exports.deleteState = catchAsync(async (req, res, next) => {
+
+    await stateInSystem.update({deleted:true},{
+      where: { id: req.params.id },
+    });
+
+    await cityInSystem.update({deleted:true},{
+      where: { stateInSystemId: req.params.id },
+    });
+
+    await territory.update({deleted:true},{
+      where: { stateInSystemId: req.params.id },
+    });
+  res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});
+
 
 exports.getAllCities = factory.getAll(cityInSystem);
 exports.getCity = factory.getOne(cityInSystem);
-exports.createCity = factory.createOne(cityInSystem);
+exports.createCity = factory.createOne(cityInSystem,['name']);
 exports.updateCity = factory.updateOne(cityInSystem);
-exports.deleteCity = factory.deleteOne(cityInSystem);
+exports.deleteCity = factory.softdelete(cityInSystem);
+
 
 
 exports.createTerritory = catchAsync(async (req, res, next) => {
- 
   const t = await territory.create(req.body);
-
   cityInSystem.update({territoryId:t?.id},{where:{id:req.body?.cities}})
-
-
   res.status(200).json({
     status: 'success',
     data: {},
@@ -37,19 +76,14 @@ exports.createTerritory = catchAsync(async (req, res, next) => {
 
 
 exports.getAllTerritory = catchAsync(async (req, res, next) => {
- 
-  console.log("🚀 ~ exports.getAllTerritory=catchAsync ~ getAllTerritory:")
-  console.log("🚀 ~ exports.getAllTerritory=catchAsync ~ getAllTerritory:")
-  console.log("🚀 ~ exports.getAllTerritory=catchAsync ~ getAllTerritory:")
-  console.log("🚀 ~ exports.getAllTerritory=catchAsync ~ getAllTerritory:")
-  console.log("🚀 ~ exports.getAllTerritory=catchAsync ~ getAllTerritory:")
-  console.log("🚀 ~ exports.getAllTerritory=catchAsync ~ getAllTerritory:")
-  const t = await territory.findAll({where:{stateInSystemId:req.query?.stateInSystemId},include:{model:cityInSystem}});
+  
+  const t = await territory.findAll({where:{stateInSystemId:req.query?.stateInSystemId},include:{model:cityInSystem,where:{deleted:false}}});
  
   res.status(200).json({
     status: 'success',
     data: {results:t},
   });
+
 });
 
 
@@ -67,6 +101,21 @@ exports.addCitiesInTerritory = catchAsync(async (req, res, next) => {
 // exports.getAllTerritory = factory.getAll(territory);
 
 exports.getTerritory = factory.getOne(territory);
-// exports.createTerritory = factory.createOne(territory);
+// exports.createTerritory = factory.createOne(territory,['name']);
 exports.updateTerritory = factory.updateOne(territory);
-exports.deleteTerritory = factory.deleteOne(territory);
+// exports.deleteTerritory = factory.deleteOne(territory);
+
+exports.deleteTerritory = catchAsync(async (req, res, next) => {
+ 
+    await territory.update({deleted:true},{
+      where: { id: req.params.id },
+    });
+
+    await cityInSystem.update({deleted:true},{
+      where: { stateInSystemId: req.params.id },
+    });
+  res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});

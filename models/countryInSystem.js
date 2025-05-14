@@ -8,16 +8,16 @@ module.exports = (sequelize) => {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: {
-          args: true,
-          msg: 'Country already exist.',
-        },
       },
       isoCode: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-    
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
     },
     { 
       indexes: [

@@ -5,10 +5,6 @@ module.exports = (sequelize, DataTypes) => {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: {
-          args: true,
-          msg: 'This product is already exist.',
-        },
       },
       quantity: {
         type: DataTypes.STRING,

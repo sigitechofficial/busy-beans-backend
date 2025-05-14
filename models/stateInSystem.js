@@ -8,14 +8,15 @@ module.exports = (sequelize) => {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: {
-          args: true,
-          msg: 'State already exist.',
-        },
       },
       isoCode: {
         type: DataTypes.STRING,
         allowNull: true,
+      },
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
       },
     },
     { 

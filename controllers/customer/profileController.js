@@ -4,7 +4,6 @@ const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response'); 
  
-
 exports.updateProfile = catchAsync(async (req, res, next) => {
 
   if (req.body?.userId && req.body?.userData){ 
@@ -24,4 +23,5 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {},
   });
+
 });

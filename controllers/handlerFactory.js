@@ -22,6 +22,23 @@ exports.deleteOne = (Model) =>
     });
   });
 
+exports.softdelete = (Model,changes) =>
+  catchAsync(async (req, res, next) => {
+    const input = changes || {};
+    input.deleted = false
+
+    const doc = await Model.update(input,{
+      where: { id: req.params.id },
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        data: doc[1],
+      },
+    });
+});
+
 exports.updateOne = (Model) =>
   catchAsync(async (req, res, next) => {
     const input = req.body;
@@ -53,9 +70,20 @@ exports.updateOne = (Model) =>
     });
   });
 
-exports.createOne = (Model) =>
+exports.createOne = (Model,checks) =>
   catchAsync(async (req, res, next) => {
-    const input = req.body
+  if (checks && checks.length > 0) {
+    const condition = {deleted :0};
+      checks.forEach(field => {
+        if (req.body[field]) {
+          condition[field] = req.body[field];
+        }
+      });
+    const exist = await Model.findOne({ where: condition, attributes: ['id'] });
+    if (exist) {
+      return next(new AppError('Already Exist', 400));
+    }
+  }
     if (req.file) {
       // throw new  'Image not uploaded', 'Please upload image';
       const tmpPath = req.file.path;

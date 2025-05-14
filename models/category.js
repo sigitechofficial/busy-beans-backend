@@ -5,10 +5,6 @@ module.exports = (sequelize, DataTypes) => {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: {
-          args: true,
-          msg: 'This category is already exist.',
-        },
       },
       deleted: {
         type: DataTypes.BOOLEAN,
