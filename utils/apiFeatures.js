@@ -46,7 +46,7 @@ class APIFeatures {
       });
       this.queryOptions.order = sortConditions;
     } else {
-      this.queryOptions.order = [['createdAt', 'DESC']]; // Default sort by createdAt descending
+      this.queryOptions.order = [['id', 'DESC']]; // Default sort by createdAt descending
     }
 
     return this;

@@ -7,8 +7,8 @@ const { transporter } = require('./transpoter')
 const { footer } = require('./footer')
 const { emailDateFormate } = require('../utils/emailDateFormate')
 
-module.exports = function ({ email,data,}) {
-  let hiSupplierName = `Hi ${data.supplierName}`
+module.exports = function ({ email,data}) {
+  let hiSupplierName = `Hope you're doing well,`
  
   let items = [] 
   data?.items.forEach((ele) => {
@@ -16,6 +16,8 @@ module.exports = function ({ email,data,}) {
             <tr>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
+              <td style="padding: 10px;">$${ele.price}</td>
+              <td style="padding: 10px;">$${(parseFloat(ele?.price) * ele?.qty).toFixed(2)}</td>
             </tr>
             `
     temp = items.push(temp);
@@ -27,7 +29,7 @@ module.exports = function ({ email,data,}) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: ['sigidevelopers@gmail.com', ], //`${email}` list of receivers
-      subject: `${hiSupplierName}! A new order has been placed on Busy Bean..`, // Subject line
+      subject: `We’re excited to share with you a customized quotation for our premium coffee blends`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>
 <html lang="en">
@@ -71,20 +73,6 @@ module.exports = function ({ email,data,}) {
       </tr>
       <tr>
         <td
-          align="center"
-          style="
-            padding: 20px;
-            font-family: 'Chivo', sans-serif;
-            color: #000000;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1.5;
-          "
-        >
-          New Order Received – Order #${data.id}</td>
-      </tr>
-      <tr>
-        <td
           style="
             padding-left: 37px;
             padding-right: 37px;
@@ -110,45 +98,7 @@ module.exports = function ({ email,data,}) {
             line-height: 1.5;
           "
         >
-          A new order has been placed on <strong>Busy Bean</strong>. Below are
-          the order details:
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 20px;
-            font-family: 'Chivo', sans-serif;
-            color: rgba(0, 0, 0, 0.8);
-            font-size: 18px;
-            font-weight: bold;
-          "
-        >
-          Order Details:
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 6px;
-            font-family: 'Chivo', sans-serif;
-            color: rgba(0, 0, 0, 0.8);
-            font-size: 16px;
-            line-height: 1.5;
-          "
-        >
-          <span style="font-weight: 600">Order ID:</span>
-          <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
-          <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
-          <span style="font-weight: 600">Customer Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.customerName}</span><br />
-          <span style="font-weight: 600">Delivery Address:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">{{DeliveryAddress}}</span>
+         I hope this message finds you well. We’re excited to share with you a customized quotation for our premium coffee blends, curated to suit your taste and business needs.<br>Please find below the details of our offer:
         </td>
       </tr>
       <tr>
@@ -157,8 +107,16 @@ module.exports = function ({ email,data,}) {
             <tr style="background-color: #e0e0e0;">
               <th style="text-align: left; padding: 10px; font-weight: bold;">Item</th>
               <th style="text-align: left; padding: 10px; font-weight: bold;">Quantity</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Unit Price</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Amount</th>
             </tr>
            ${items}
+           <tr style="background-color: #e0e0e0;">
+              <td style="text-align: left; padding: 10px; font-weight: bold;">Total</td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;">$${data.itemsPrice}</td>
+            </tr>
           </table>
         </td>
       </tr>
@@ -174,13 +132,7 @@ module.exports = function ({ email,data,}) {
             line-height: 1.5;
           "
         >
-          Please process this order at your earliest convenience. If you have
-          any questions or need further details, feel free to contact us at
-          <a
-            href="mailto:info@busybeancoffee.com"
-            style="color: #ef250b; text-decoration: underline"
-            >info@busybeancoffee.com</a
-          >.
+          If you'd like to place an order or need a customized package, feel free to contact us directly. We're happy to serve you quality coffee, delivered fresh.<br>Looking forward to your response!
         </td>
       </tr>
        ${footer}

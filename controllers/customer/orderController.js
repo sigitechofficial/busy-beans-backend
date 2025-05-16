@@ -5,6 +5,7 @@ const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
 const {orderEvents} = require('../events/orderEvents')
+const {createPaymentIntent} = require('../stripe')
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -32,6 +33,14 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: 'success',   
     data: {id:newOrder?.id},
+  });
+});
+
+exports.paymentIntent = catchAsync(async (req, res, next) => {
+  const output = await createPaymentIntent(req.body.amount)
+  return res.status(200).json({
+    status: 'success',   
+    data: output,
   });
 });
 

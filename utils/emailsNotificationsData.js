@@ -58,7 +58,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       ],
       [
         literal(
-          `(SELECT suppliers.name FROM suppliers WHERE suppliers.id = order.supplierId LIMIT 1)`,
+          `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
         ),
         'supplierName',
       ],

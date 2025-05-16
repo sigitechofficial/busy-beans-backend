@@ -8,12 +8,12 @@ exports.supplierNewOrderEvent = async ({orderId}) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId)
     if (!orderData) return false
-    const { detail } = orderData
+    const { details } = orderData
 
     if (orderData?.email) {
       supplierNewOrder({
        email: orderData?.email,
-       data: detail,
+       data: details,
        stage: 'Confirmed',
       })
     }

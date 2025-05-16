@@ -10,6 +10,7 @@ const {
   statuses
 } = require('../../models');
 const { Op, literal, fn, col } = require('sequelize');
+const APIFeatures = require('../../utils/apiFeatures');
 
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -20,79 +21,93 @@ const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
 exports.getAllSalesRep = factory.getAll(statuses);
 
 exports.allOrder = catchAsync(async (req, res, next) => {
+  // Build manual conditions based on query/params
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
-  if (req.query.statusId) condition.statusId = req.query.statusId;
-  if (req.query.orderStatus) condition.orderStatus = req.query.orderStatus;
-  if (req.query.supplierId) condition.supplierId = req.query.supplierId;
-  if (req.query.userId) condition.userId = req.query.userId;
-  
-  console.log("🚀 ~ exports.allOrder=catchAsync ~ condition:", condition)
-  const doc = await order.findAll({
-    where: condition,
-    include: [
-      {
-        model: address,
-        attributes: {
-          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
-        },
-      },
-      {
-        model: item,
-        attributes: [
-          'id',
-          [
-            literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'product',
-          ],
-          'qty',
-          'price',
-          'discount',
-          'orderId',
-          'productId',
-        ],
-      },
-    ],
-    attributes: [
-      'id',
-      [
-        literal(
-          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
-        ),
-        'customerName',
-      ],
-      [
-        literal( 
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
-        ),
-        'orderCurrentStatus',
-      ],
-      'totalBill',
-      'subTotal',
-      'discountPrice',
-      'discountPercentage',
-      'itemsPrice',
-      'vat',
-      'totalWeight',
-      'note',
-      'paymentMethod',
-      'poNumber',
-      'frequency',
-      'paymentStatus',
-      'statusId',
-    ],
-  });
+  // Build API features (filter, sort, fields, pagination)
+  const features = new APIFeatures(order, req.query)
+    .filter()
+    .sort()
+    .limitFields()
+    .paginate();
 
+  // Get the base query options (where, limit, offset, order, etc.)
+  const queryOptions = features.getQuery();
+
+  // Merge manual filter conditions
+  queryOptions.where = { ...(queryOptions.where || {}), ...condition };
+
+  // Add your custom includes
+  queryOptions.include = [
+    {
+      model: address,
+      attributes: {
+        exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
+      },
+    },
+    {
+      model: item,
+      attributes: [
+        'id',
+        [
+          literal(
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+          ),
+          'product',
+        ],
+        'qty',
+        'price',
+        'discount',
+        'orderId',
+        'productId',
+      ],
+    },
+  ];
+
+  // Custom attributes with literal fields
+
+  queryOptions.attributes = [
+    'id',
+    [
+      literal(
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+      ),
+      'customerName',
+    ],
+    [
+      literal(
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+      ),
+      'orderCurrentStatus',
+    ],
+    'totalBill',
+    'subTotal',
+    'discountPrice',
+    'discountPercentage',
+    'itemsPrice',
+    'vat',
+    'totalWeight',
+    'note',
+    'paymentMethod',
+    'poNumber',
+    'frequency',
+    'paymentStatus',
+    'statusId',
+  ];
+
+  // Execute the query
+  const doc = await order.findAll(queryOptions);
+
+  // Return response
   res.status(200).json({
     status: 'success',
+    results: doc.length,
     data: {
-      results: doc.length,
       data: doc.reverse(),
     },
   });
 });
+
 
 exports.orderDetails = catchAsync(async (req, res, next) => {
   let condition = {};
@@ -240,6 +255,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {},
   });
+  
 });
 
 //* Assigin Supplier will Confirm order from admin side

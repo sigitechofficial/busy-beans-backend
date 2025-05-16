@@ -153,6 +153,7 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
     await customer.save();
     Event.userAccountApproveEvent({email:customer?.email,name:customer.name})
   } else if (customer.latestOtp == otp) {
+  
     return res.status(200).json(
       response({
         data: {
@@ -279,12 +280,10 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
     upperCaseAlphabets: false,
     specialChars: false,
   });
-
-  EmailResetPasswordOtpToAll(OTP, customer, 'forgot-password');
-
   customer.latestOtp = OTP;
   await customer.save();
-
+  
+  Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
   res.status(200).json({
     status: 'success',
     data: customer,

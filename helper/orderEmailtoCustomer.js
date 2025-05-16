@@ -12,7 +12,7 @@ module.exports = function ({ email,data, satge = 'Confirmed'}) {
  let orderNote = `Your order has been confirmed and will be prepared according to the
                 instructions.`
   let hiCustomer = `Hi ${data?.customerName}!`
-   const items = [] 
+   let items = [] 
   data?.items.forEach((ele) => {
     let temp = `<tr>
                     <td
@@ -39,8 +39,8 @@ module.exports = function ({ email,data, satge = 'Confirmed'}) {
     return temp;
   });
 
+  items = items.join('');  
 
- 
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
@@ -175,9 +175,9 @@ module.exports = function ({ email,data, satge = 'Confirmed'}) {
                 "
               >
                 <span style="font-weight: bold">Order No:</span>
-                <span style="font-weight: bold; color: #86644c">333526454</span><br />
-                <span style="font-weight: bold">Payment method: </span>Visa Card<br />
-                Order Date: 02/02/2025
+                <span style="font-weight: bold; color: #86644c">${data.id}</span><br />
+                <span style="font-weight: bold">Payment method: </span>${data.paymentMethod}<br />
+                Order Date: ${data.on}
               </td>
             </tr>
             <tr>

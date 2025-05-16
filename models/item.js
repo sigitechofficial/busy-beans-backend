@@ -19,6 +19,11 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 0,
       },
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
     },
     {
       tableName: 'items',

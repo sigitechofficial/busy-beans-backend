@@ -25,7 +25,7 @@ exports.deleteOne = (Model) =>
 exports.softdelete = (Model,changes) =>
   catchAsync(async (req, res, next) => {
     const input = changes || {};
-    input.deleted = false
+    input.deleted = true
 
     const doc = await Model.update(input,{
       where: { id: req.params.id },
@@ -72,6 +72,7 @@ exports.updateOne = (Model) =>
 
 exports.createOne = (Model,checks) =>
   catchAsync(async (req, res, next) => {
+    const input = req.body;
   if (checks && checks.length > 0) {
     const condition = {deleted :0};
       checks.forEach(field => {

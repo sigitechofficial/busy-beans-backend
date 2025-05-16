@@ -15,6 +15,7 @@ router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 
 router.post('/book-order', orderController.bookOrder);
+router.post('/create-payment-intent', orderController.paymentIntent);
 router.get('/orders', manageOrderController.allOrder);
 router.get('/order-details/:id', manageOrderController.orderDetails);
 
