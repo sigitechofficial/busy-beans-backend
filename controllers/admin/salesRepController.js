@@ -11,7 +11,7 @@ exports.updateSalesRep = factory.updateOne(salesRep);
 exports.deleteSalesRep = factory.deleteOne(salesRep);
 
 
-exports.paymentIntent = catchAsync(async (req, res, next) => {
+exports.sendQuotation = catchAsync(async (req, res, next) => {
   sendQuotationEvent({email:req.body?.email,data:req.body?.order})
   return res.status(200).json({
     status: 'success',   

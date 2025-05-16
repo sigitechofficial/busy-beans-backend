@@ -187,6 +187,14 @@ router.post(
   orderFrequencyController.bookOrderAccordingToFrequency,
 )
 
+router.post(
+  '/send-quotation',
+  salesRepController.sendQuotation,
+)
+
+
+
+
 //! Supplier Management
 
 router

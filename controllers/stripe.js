@@ -2,12 +2,16 @@ const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env
 const stripe = require('stripe')(STRIPE_SECRET_KEY)
 const AppError = require('../utils/appError') 
 
+function convertToCents(amount) {
+  return Math.round(amount * 100)
+}
+
 
 async function createPaymentIntent(amount) {
   try {
-    const { amount } = req.body;
+    const cents = convertToCents(amount);
     const paymentIntent = await stripe.paymentIntents.create({
-      amount,
+      amount:cents,
       currency: "usd",
     });
     return { clientSecret: paymentIntent.client_secret }
