@@ -8,7 +8,22 @@ exports.getAllSalesRep = factory.getAll(salesRep);
 exports.getSalesRep = factory.getOne(salesRep);
 exports.createSalesRep = factory.createOne(salesRep);
 exports.updateSalesRep = factory.updateOne(salesRep);
-exports.deleteSalesRep = factory.deleteOne(salesRep);
+
+exports.deleteSalesRep = catchAsync(async (req, res, next) => {
+ 
+    await salesRep.update({deleted:true},{
+      where: { id: req.params.id },
+    });
+
+    await user.update({salesRepId:null},{
+      where: { salesRepId: req.params.id },
+    });
+    
+  res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});
 
 
 exports.sendQuotation = catchAsync(async (req, res, next) => {
