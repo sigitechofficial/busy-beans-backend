@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
 const cors = require('cors');
+const bodyParser = require('body-parser')
 
 const app = express();
 const server = require('http').createServer(app);
@@ -13,6 +14,7 @@ const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
 const userRouter = require('./routes/userRoutes');
 const adminRouter = require('./routes/adminRoutes');
+const webhookRoute = require('./routes/webhooks')
 
 dotenv.config({ path: './.env' });
 // Start express app
@@ -58,6 +60,14 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser());
 
 app.use(compression());
+ 
+
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'BusyBeans backend is live!',
+  });
+});
 
 // Test middleware
 app.use((req, res, next) => {
@@ -69,6 +79,8 @@ app.use((req, res, next) => {
 // 3) ROUTES
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/admin', adminRouter);
+
+app.use('/webhook', bodyParser.raw({ type: 'application/json' }), webhookRoute)
 
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

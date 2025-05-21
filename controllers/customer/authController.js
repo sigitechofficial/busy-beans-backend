@@ -12,6 +12,7 @@ const Event = require('../events/userAccountRelatedEvents');
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
+const Stripe = require('../stripe');
 
 const signToken = (data) =>
   jwt.sign(
@@ -69,6 +70,9 @@ exports.signup = catchAsync(async (req, res, next) => {
   const defaultAddress = await address.create(req.body?.address);
   console.log("🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:", defaultAddress)
 
+  const stripeCustomerId = await Stripe.addCustomer({email:newUser?.email,name:newUser?.name})
+  newUser.stripeCustomerId = stripeCustomerId
+  await newUser.save()
   const input = JSON.parse(JSON.stringify(newUser));
   input.address = defaultAddress;
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
@@ -83,8 +87,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     );
   } 
   
-  Event.userAccountCreatedEvent({email:newUser?.email,name:newUser.name})
-
+  Event.userAccountCreatedEvent({email:newUser?.email,name:newUser?.name})
   createSendToken(newUser, 201, req, res);
 });
 

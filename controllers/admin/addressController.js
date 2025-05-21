@@ -63,8 +63,6 @@ exports.createCity = factory.createOne(cityInSystem,['name']);
 exports.updateCity = factory.updateOne(cityInSystem);
 exports.deleteCity = factory.softdelete(cityInSystem);
 
-
-
 exports.createTerritory = catchAsync(async (req, res, next) => {
   const t = await territory.create(req.body);
   cityInSystem.update({territoryId:t?.id},{where:{id:req.body?.cities}})
@@ -74,10 +72,9 @@ exports.createTerritory = catchAsync(async (req, res, next) => {
   });
 });
 
-
 exports.getAllTerritory = catchAsync(async (req, res, next) => {
   
-  const t = await territory.findAll({where:{stateInSystemId:req.query?.stateInSystemId},include:{model:cityInSystem,where:{deleted:false}}});
+  const t = await territory.findAll({where:{stateInSystemId:req.query?.stateInSystemId,deleted:false},include:{model:cityInSystem,where:{deleted:false}}});
  
   res.status(200).json({
     status: 'success',
@@ -101,8 +98,11 @@ exports.addCitiesInTerritory = catchAsync(async (req, res, next) => {
 // exports.getAllTerritory = factory.getAll(territory);
 
 exports.getTerritory = factory.getOne(territory);
+
 // exports.createTerritory = factory.createOne(territory,['name']);
+
 exports.updateTerritory = factory.updateOne(territory);
+
 // exports.deleteTerritory = factory.deleteOne(territory);
 
 exports.deleteTerritory = catchAsync(async (req, res, next) => {
@@ -114,6 +114,7 @@ exports.deleteTerritory = catchAsync(async (req, res, next) => {
     await cityInSystem.update({deleted:true},{
       where: { stateInSystemId: req.params.id },
     });
+    
   res.status(200).json({
     status: 'success',
     data: {},

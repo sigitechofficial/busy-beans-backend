@@ -5,7 +5,36 @@ const AppError = require('../utils/appError')
 function convertToCents(amount) {
   return Math.round(amount * 100)
 }
+/*
+ *  1:  Create Customer ________________________
+ */
+async function addCustomer({name, email}) {
+  try {
+    const customer = await stripe.customers.create({ name, email })
+    console.log('ðŸš€ ~ addCustomer ~ customer:', customer.id)
+    return customer.id
+  } catch (error) {
+    console.error(error)
+    throw new AppError(`${error.message} `, 200)
+  }
+}
 
+async function financialConnectionsSession({customerId}) {
+  try {
+  
+    const session = await stripe.financialConnections.sessions.create({
+      account_holder: {
+        type: 'customer',
+        customer: customerId,
+      },
+      permissions: ['payment_method'],
+    }); 
+    return { url: session.url }   
+  } catch (error) {
+    console.error(error)
+    throw new AppError(`${error.message}`, 200)
+  }
+}
 
 async function createPaymentIntent(amount) {
   try {
@@ -21,7 +50,9 @@ async function createPaymentIntent(amount) {
   }
 }
 module.exports = {
-  createPaymentIntent
+  createPaymentIntent,
+  addCustomer,
+  financialConnectionsSession
 }
 // sessionCheckoutPaymnet --- check payment destination
 // sessionCheckoutPaymnet --- check payment destination

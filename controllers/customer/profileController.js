@@ -25,3 +25,18 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
   });
 
 });
+
+
+exports.addAddress = catchAsync(async (req, res, next) => {
+ 
+ req.body.address.userId =  req.params.id
+ const data = await address.create(req.body?.address)
+
+  return res.status(200).json({
+    status: 'success',
+    data: {data},
+  });
+
+});
+
+exports.getAllAddress = factory.getAll(address);

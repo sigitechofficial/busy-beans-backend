@@ -20,5 +20,7 @@ router.get('/orders', manageOrderController.allOrder);
 router.get('/order-details/:id', manageOrderController.orderDetails);
 
 router.put('/drawer/update-profile', profileController.updateProfile);
+router.post('/address/add-new/:id', profileController.addAddress);
+router.get('/address/view-all', profileController.getAllAddress);
 
 module.exports = router;

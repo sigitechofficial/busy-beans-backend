@@ -81,6 +81,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(),
         allowNull: true,
       },
+      defaultPaymentMethod: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
       registerBy: {
         type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
         allowNull: false,
