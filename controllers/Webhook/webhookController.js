@@ -3,7 +3,7 @@ const stripe = require('stripe')(STRIPE_SECRET_KEY)
  
 const { user } = require('../../models');
  
-const endpointSecret = `whsec_4UTYsBGVUlQ2Ej4TKuvdNxGn0lvcuOxu`
+const endpointSecret = `whsec_IfLq0Y34XAcdWihxkUrLojybI80kOUE5`
 
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature']

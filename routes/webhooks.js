@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const Controller = require('../controllers/Webhook/webhookController') 
+const Controller = require('../controllers/webhook/webhookController') 
 
 const catchAsync = require('../utils/catchAsync') 
 

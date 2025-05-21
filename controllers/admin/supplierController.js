@@ -1,7 +1,8 @@
-const { supplier } = require('../../models');
+const { supplier,order } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
+const { Op, literal, where } = require('sequelize')
 
 exports.getAllSuppliers = factory.getAll(supplier);
 exports.getSupplier = factory.getOne(supplier);
@@ -10,7 +11,7 @@ exports.updateSupplier = factory.updateOne(supplier);
  
 exports.deleteSupplier = catchAsync(async (req, res, next) => {
 
-    const exist = await Model.findOne({
+    const exist = await order.findOne({
       where: {
         supplierId: req.params?.id,
         statusId: {
@@ -24,7 +25,7 @@ exports.deleteSupplier = catchAsync(async (req, res, next) => {
      return next(new AppError('Pending work prevents supplier from being deleted.', 400));
     }
    
-    await salesRep.update({deleted:true},{
+    await supplier.update({deleted:true},{
       where: { id: req.params.id },
     });
  
