@@ -23,6 +23,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: 0,
       },
+      wholesalePrice: {
+        type: DataTypes.DECIMAL(20, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
       desc: {
         type: DataTypes.STRING,
         allowNull: true,

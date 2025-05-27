@@ -108,7 +108,6 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   });
 });
 
-
 exports.orderDetails = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
@@ -255,7 +254,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {},
   });
-  
+            
 });
 
 //* Assigin Supplier will Confirm order from admin side

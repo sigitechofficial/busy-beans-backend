@@ -85,7 +85,12 @@ const sendErrorProd = (err, req, res) => {
 };
 module.exports = (err, req, res, next) => {
   // console.log(err.stack);
-
+  if (err.name === 'SequelizeConnectionRefusedError') {
+    return res.status(503).json({
+      status: 'fail',
+      error: 'database not connected -- start server'
+    });
+  }
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 

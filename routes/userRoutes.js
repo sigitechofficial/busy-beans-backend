@@ -13,6 +13,7 @@ router.post('/logout', authController.logout);
 router.post('/otp/verfication', authController.otpVerification);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
+router.post('/financial-connections-session/:id', authController.stripeAchPayment);
 
 router.post('/book-order', orderController.bookOrder);
 router.post('/create-payment-intent', orderController.paymentIntent);

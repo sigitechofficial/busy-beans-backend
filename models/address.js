@@ -8,27 +8,35 @@ module.exports = (sequelize, DataTypes) => {
       },
       addressLineOne: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       addressLineTwo: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       town: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       zipCode: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       country: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       state: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
+      },
+      lat: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      lng: {
+        type: DataTypes.STRING,
+        allowNull: true,
       },
       status: {
         type: DataTypes.BOOLEAN,

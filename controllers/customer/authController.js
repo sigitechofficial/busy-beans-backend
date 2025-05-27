@@ -125,6 +125,20 @@ const isMatch = password == customer?.password
   createSendToken(input, 200, req, res);
 });
 
+exports.stripeAchPayment = catchAsync(async (req, res, next) => {
+  const result = await user.findOne({where:{id:req.params?.id},attributes:['stripeCustomerId']})
+  if(!result) return next(new AppError('User not Found', 200));
+  const data = await Stripe.financialConnectionsSession({customerId:result?.stripeCustomerId})
+    return res.status(200).json(
+      response({
+        data: {
+          message: 'Success',
+          data: data,
+        },
+      }),
+    );
+});
+
 exports.otpVerification = catchAsync(async (req, res, next) => {
   const { otp, id, on } = req.body;
 

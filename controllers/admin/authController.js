@@ -19,7 +19,7 @@ const signToken = (data) =>
     {
       expiresIn: '7d',
     },
-  );
+);
 
 const createSendToken = (input, statusCode, req, res) => {
   console.log('🚀 ~ createSendToken ~ input:', input);
@@ -90,7 +90,7 @@ const login = (Model) =>
     }
     // 2) Check if user exists && password is correct
     const data = await Model.findOne({
-      where: { email },
+      where: { email,delete:0 },
     });
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
   

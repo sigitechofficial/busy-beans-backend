@@ -1,5 +1,4 @@
 const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
 
 module.exports = (sequelize) => {
   const item = sequelize.define(
@@ -14,7 +13,17 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 0,
       },
+      salerCommission: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
       discount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
+      wholesalePrice: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
         defaultValue: 0,
