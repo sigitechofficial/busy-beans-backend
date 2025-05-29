@@ -192,6 +192,16 @@ router.post(
   salesRepController.sendQuotation,
 )
 
+router.post(
+  'sales-rep/book-new-order',
+  salesRepController.sendQuotation,
+)
+
+router.post(
+  '/add-customer/sales-rep/:srId',
+  salesRepController.addCustomer,
+)
+
 
 
 

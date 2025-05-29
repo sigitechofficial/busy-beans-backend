@@ -8,13 +8,14 @@ const { footer } = require('./footer')
 const { emailDateFormate } = require('../utils/emailDateFormate')
 
 module.exports = function ({ email,data}) {
-  let hiSupplierName = `Hope you're doing well,`
+  console.log("🚀 ~ data:", data)
+  let hiSupplierName = `Hope you're doing well`
  
   let items = [] 
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
-              <td style="padding: 10px;">${ele.product}</td>
+              <td style="padding: 10px;">${ele.name}</td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${ele.price}</td>
               <td style="padding: 10px;">$${(parseFloat(ele?.price) * ele?.qty).toFixed(2)}</td>

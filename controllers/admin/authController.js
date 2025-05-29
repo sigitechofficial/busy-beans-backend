@@ -90,7 +90,7 @@ const login = (Model) =>
     }
     // 2) Check if user exists && password is correct
     const data = await Model.findOne({
-      where: { email,delete:0 },
+      where: { email,deleted:0 },
     });
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
   

@@ -137,6 +137,7 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.orderFrequency);
     models.orderFrequency.belongsTo(salesRep);
+    
   };
 
   return salesRep;

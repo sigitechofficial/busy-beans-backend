@@ -90,6 +90,11 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: 'email',
       },
+      createdBy: {
+        type: DataTypes.ENUM('registration', 'sales-rep', 'admin'),
+        allowNull: false,
+        defaultValue: 'registration',
+      },
     },
     {
       tableName: 'users',

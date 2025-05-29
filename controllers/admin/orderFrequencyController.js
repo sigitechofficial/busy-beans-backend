@@ -4,7 +4,8 @@ const AppError = require('../../utils/appError');
 const {nextFrequencyDate} = require('../../utils/nextFrequencyDate'); 
 const factory = require('../handlerFactory');
 const { Op, literal, fn, col } = require('sequelize');
-
+const { setOrderFrequency } = require('../admin/orderFrequencyController');
+const {orderEvents} = require('../events/orderEvents')
 
 exports.setOrderFrequency = async ({orderData}) => { //orderData is 
   try {
@@ -33,7 +34,7 @@ exports.setOrderFrequency = async ({orderData}) => { //orderData is
 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   let condition = {};
-  if (req.params.id) condition.id = req.params.id;
+  if (req.params.srId) condition.salesRepId = req.params.srId;
 
   // Add visibilityDate condition
   condition.visibilityDate = {
@@ -51,6 +52,25 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     },
     include: [
       {
+        model: item,
+        attributes: [
+          [
+            literal(
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+            ),
+            'product',
+          ],
+          [
+            literal(
+              `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
+            ),
+            'price',
+          ],
+          'qty',
+          'productId',
+        ],
+      },
+              {
         model: item,
         attributes: [
           [
@@ -90,6 +110,7 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       'frequency',
       'visibilityDate',
     ],
+
   });
 
   res.status(200).json({
@@ -97,6 +118,37 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     data: {
       order: doc,
     },
+  });
+});
+
+
+
+exports.bookNewOrder = catchAsync(async (req, res, next) => {
+  const input = req.body;
+  if (input?.items?.length < 1 ) {
+   throw new AppError('Cart is empty add products to place order', 404);
+  }
+  input.order.statusId = 1
+  const newOrder = await order.create(input?.order);
+
+  await orderHistory.create({
+    statusId:1,
+    orderId:newOrder.id,
+    on: Date.now(),
+  });
+
+  input?.items.forEach((element) => {
+    element.orderId = newOrder.id;
+  });
+  await item.bulkCreate(input?.items);
+  
+  if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder})
+
+
+  orderEvents({orderId:newOrder?.id})
+  return res.status(200).json({
+    status: 'success',   
+    data: {id:newOrder?.id},
   });
 });
 
