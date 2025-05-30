@@ -97,6 +97,11 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: new Date(),
       },
+      createdBy: {
+        type: DataTypes.ENUM('customer', 'sales-rep', 'admin'),
+        allowNull: false,
+        defaultValue: 'customer',
+      },
     },
     {
       tableName: 'orders',

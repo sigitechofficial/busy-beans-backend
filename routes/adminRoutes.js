@@ -193,8 +193,13 @@ router.post(
 )
 
 router.post(
-  'sales-rep/book-new-order',
-  salesRepController.sendQuotation,
+  'sales-rep/book-new-order/:srId',
+  orderFrequencyController.bookNewOrder,
+)
+
+router.post(
+  '/add-customer/sales-rep/:srId',
+  salesRepController.addCustomer,
 )
 
 router.post(
@@ -203,7 +208,10 @@ router.post(
 )
 
 
-
+router.get(
+  '/sales-rep/sales/:srId',
+  salesRepController.salersMoney,
+)
 
 //! Supplier Management
 
@@ -305,5 +313,4 @@ router.patch(
   addressController.addCitiesInTerritory,
 )
 
- 
 module.exports = router;

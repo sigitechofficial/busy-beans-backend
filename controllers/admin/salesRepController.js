@@ -1,10 +1,11 @@
-const { salesRep,user,address} = require('../../models');
+const { salesRep,user,address,order,item,salesFromPatners} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Stripe = require('../stripe');
 const factory = require('../handlerFactory');
 const { sendQuotationEvent } = require('../events/sendQuotationEvents');
 const { response } = require('../../utils/response');
+const { Op, literal, fn, col } = require('sequelize');
 
 exports.getAllSalesRep = factory.getAll(salesRep);
 exports.getSalesRep = factory.getOne(salesRep);
@@ -68,3 +69,43 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
   });
 });
 
+
+
+exports.salersMoney = catchAsync(async (req, res, next) => {
+const doc = await item.findOne({
+  attributes: [
+    [literal('SUM(`Item`.`price`)'), 'totalSales'],
+    [literal('SUM(`Item`.`salerCommission`)'), 'salerCommission'],
+    [literal('SUM(`Item`.`wholesalePrice`)'), 'wholesalePrice'],
+    [literal('SUM(`Item`.`qty`)'), 'numberOfSoldProducts']
+  ],
+  include: [
+    {
+      model: order,
+      where: { salesRepId: req.params.srId },
+      attributes: []
+    }
+  ],
+  raw: true,
+});
+
+   if (!doc) {
+      return next(new AppError('Data not Found!', 404));
+    }
+const result = JSON.parse(JSON.stringify(doc))
+const paidToAdmin = await salesFromPatners.sum('amount', {
+  where: {
+    salesRepId: req.params.srId,
+  },
+});
+
+const toBePaid = parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0)
+
+
+  // Return response
+  res.status(200).json({
+    status: 'success',
+    data: {...doc,toBePaid , paidToAdmin : paidToAdmin||0},
+  });
+
+});

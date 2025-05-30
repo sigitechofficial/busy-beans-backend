@@ -124,11 +124,14 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
 
 
 exports.bookNewOrder = catchAsync(async (req, res, next) => {
+
   const input = req.body;
   if (input?.items?.length < 1 ) {
    throw new AppError('Cart is empty add products to place order', 404);
   }
   input.order.statusId = 1
+  input.order.salesRepId = req.params?.srId
+  input.order.createdBy = "sales-rep"
   const newOrder = await order.create(input?.order);
 
   await orderHistory.create({
@@ -144,8 +147,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   
   if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder})
 
-
   orderEvents({orderId:newOrder?.id})
+  
   return res.status(200).json({
     status: 'success',   
     data: {id:newOrder?.id},

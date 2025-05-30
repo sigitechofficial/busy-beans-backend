@@ -80,6 +80,20 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       ),
       'orderCurrentStatus',
     ],
+    [
+        literal(`COALESCE(
+         (SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'totalSalerCommission',
+    ],
+    [
+        literal(`COALESCE(
+         (SELECT SUM(wholesalePrice)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'adminEarnings',
+    ],
     'totalBill',
     'subTotal',
     'discountPrice',
@@ -192,6 +206,20 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         'orderCurrentStatus',
+      ],
+      [
+        literal(`COALESCE(
+         (SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'totalSalerCommission',
+      ],
+      [
+        literal(`COALESCE(
+         (SELECT SUM(wholesalePrice)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'adminEarnings',
       ],
       'totalBill',
       'subTotal',
