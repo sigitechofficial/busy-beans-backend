@@ -58,6 +58,50 @@ exports.addCustomer = catchAsync(async (req, res, next) => {
 });
 
 
+exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
+  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  if (!sr) {
+    return next(new AppError('Data not Found!', 404));
+  }
+    
+  const connectAccount = await Stripe.createConnectAccount({email:sr.email,returnUrl : req.body.returnUrl})
+
+  sr.connectAccountId = connectAccount.accountId
+
+  await sr.save()
+  return res.status(200).json(
+      response({
+        data: {
+          message: 'Connect Account.',
+          data: connectAccount,
+        },
+      }),
+  );
+  
+});
+
+exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
+  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  if (!sr) {
+      return next(new AppError('Data not Found!', 404));
+  } 
+   console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
+
+  const connectAccount = await Stripe.createStripeAccountLink({accountId:sr.connectAccountId,returnUrl : req.body.returnUrl})
+ 
+
+  return res.status(200).json(
+      response({
+        data: {
+          message: 'Connect Account.',
+          data: {connectAccount},
+        },
+      }),
+  );
+  
+});
+
+
 exports.sendQuotation = catchAsync(async (req, res, next) => {
   console.log(req.body);
   
@@ -72,32 +116,33 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
 
 
 exports.salersMoney = catchAsync(async (req, res, next) => {
-const doc = await item.findOne({
-  attributes: [
-    [literal('SUM(`Item`.`price`)'), 'totalSales'],
-    [literal('SUM(`Item`.`salerCommission`)'), 'salerCommission'],
-    [literal('SUM(`Item`.`wholesalePrice`)'), 'wholesalePrice'],
-    [literal('SUM(`Item`.`qty`)'), 'numberOfSoldProducts']
-  ],
-  include: [
-    {
-      model: order,
-      where: { salesRepId: req.params.srId },
-      attributes: []
-    }
-  ],
-  raw: true,
-});
+  const doc = await item.findOne({
+    attributes: [
+      [literal('SUM(`Item`.`price`)'), 'totalSales'],
+      [literal('SUM(`Item`.`salerCommission`)'), 'salerCommission'],
+      [literal('SUM(`Item`.`wholesalePrice`)'), 'wholesalePrice'],
+      [literal('SUM(`Item`.`qty`)'), 'numberOfSoldProducts']
+    ],
+    include: [
+      {
+        model: order,
+        where: { salesRepId: req.params.srId },
+        attributes: []
+      }
+    ],
+    raw: true,
+  });
 
-   if (!doc) {
+  if (!doc) {
       return next(new AppError('Data not Found!', 404));
-    }
-const result = JSON.parse(JSON.stringify(doc))
-const paidToAdmin = await salesFromPatners.sum('amount', {
-  where: {
-    salesRepId: req.params.srId,
-  },
-});
+  }
+
+  const result = JSON.parse(JSON.stringify(doc))
+  const paidToAdmin = await salesFromPatners.sum('amount', {
+    where: {
+      salesRepId: req.params.srId,
+    },
+  });
 
 const toBePaid = parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0)
 

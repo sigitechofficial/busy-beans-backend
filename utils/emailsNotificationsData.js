@@ -46,6 +46,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       ],
       [
         literal(
+          `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'stripeCustomerId',
+      ],
+      [
+        literal(
           `(SELECT users.email FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         'email',
@@ -76,7 +82,8 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'statusId',
       'trackingNumber',
       'paymentStatus',
-      'on'
+      'on',
+      'salesRepId'
     ],
   });
   const output = JSON.parse(JSON.stringify(doc))

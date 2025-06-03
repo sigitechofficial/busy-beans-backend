@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       weight: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       unit: {
         type: DataTypes.STRING,

@@ -1,4 +1,4 @@
-const { user } = require('../../models');
+const { user,address } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -14,7 +14,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
 
   const data = await user.findAll({
     where: filters,
-    attributes: [
+    attributes: [     
       [
         literal('(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)'),
         'totalOrderPlaced',
@@ -46,6 +46,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
       `saleTaxNumber`,
       `emailToSendInvoices`,
     ],
+    include:[{model:address}]
   });
 
   res.status(200).json({

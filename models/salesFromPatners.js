@@ -27,8 +27,6 @@ module.exports = (sequelize) => {
       timestamps: true,
     },
   );
-
- 
-
+  
   return salesFromPatners;
 };

@@ -55,7 +55,7 @@ async function createPaymentIntent(amount) {
 }
 
 
-async function createConnectAccount(email, country) {
+async function createConnectAccount({email, country = 'US', returnUrl }) {
     try {
   const account = await stripe.accounts.create({
     type: 'express', // You can use 'express', 'standard', or 'custom' depending on your needs
@@ -71,7 +71,7 @@ async function createConnectAccount(email, country) {
   const accountLink = await stripe.accountLinks.create({
     account: account.id,
     refresh_url: 'https://example.com/reauth',
-    return_url:
+    return_url:returnUrl ||
       'https://google.com',
     type: 'account_onboarding',
   })
@@ -104,16 +104,67 @@ async function createCheckoutSession(line_items, accountId, applicationFee) {
   }
 }
 
-async function createStripeAccountLink(accountId) {
+async function createStripeAccountLink({accountId,returnUrl}) {
   const accountLink = await stripe.accountLinks.create({
     account: accountId,
     refresh_url: 'https://example.com/reauth',
-    return_url:
+    return_url:returnUrl ||
       'https://google.com',
     type: 'account_onboarding',
   })
   return accountLink.url
 }
+
+
+async function createInvoiceWithItems({ customerId, order, currency = 'usd', dueInDays = 7 }) {
+  try {
+    // Step 1: Create invoice items
+    const {vat , items} = order
+    for (const item of items) {
+      const { product, qty, price } = item;
+      await stripe.invoiceItems.create({
+        customer: customerId,
+        amount: convertToCents(price), // Stripe requires integer cents
+        currency,
+        description: `${product} x ${qty}`,
+      });
+    }
+
+    await stripe.invoiceItems.create({
+        customer: customerId,
+        amount: convertToCents(vat), // Stripe requires integer cents
+        currency,
+        description: `Vat`,
+    });
+
+    // Step 2: Create the invoice
+    const invoice = await stripe.invoices.create({
+      customer: customerId,
+      collection_method: 'send_invoice',
+      days_until_due: dueInDays,
+      auto_advance: true,
+      metadata: {
+        orderId: order?.id, 
+        salesRepId: order?.salesRepId, 
+      }
+    });
+
+    // Step 3: Finalize the invoice
+    const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
+
+    return {
+      invoiceId: finalizedInvoice?.id,
+      hostedInvoiceUrl: finalizedInvoice?.hosted_invoice_url,
+      invoicePdf: finalizedInvoice?.invoice_pdf,
+      status: finalizedInvoice?.status,
+      total: finalizedInvoice?.amount_due,
+    };
+  } catch (error) {
+    console.error('Invoice creation failed:', error);
+     throw new AppError(`${error?.message}`, 200)
+  }
+}
+
 
 module.exports = {
   createPaymentIntent,
@@ -121,7 +172,8 @@ module.exports = {
   financialConnectionsSession, 
   createConnectAccount,
   createCheckoutSession,
-  createStripeAccountLink
+  createStripeAccountLink,
+  createInvoiceWithItems
 }
 // sessionCheckoutPaymnet --- check payment destination
 // sessionCheckoutPaymnet --- check payment destination

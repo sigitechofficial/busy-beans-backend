@@ -193,7 +193,7 @@ router.post(
 )
 
 router.post(
-  'sales-rep/book-new-order/:srId',
+  '/sales-rep/book-new-order/:srId',
   orderFrequencyController.bookNewOrder,
 )
 
@@ -211,6 +211,17 @@ router.post(
 router.get(
   '/sales-rep/sales/:srId',
   salesRepController.salersMoney,
+)
+
+router.post(
+  '/create-stripe-connect-account/:srId',
+  salesRepController.stripeConnectAccount,
+)
+
+
+router.post(
+  '/stripe-connect-account-url/:srId',
+  salesRepController.stripeConnectAccountLink,
 )
 
 //! Supplier Management

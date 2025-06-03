@@ -90,6 +90,14 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: 'email',
       },
+      connectAccountId: {
+        type: DataTypes.STRING(),
+        allowNull: true
+      },
+      isAccountConnected: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
       password: {
         type: DataTypes.STRING,
       },
