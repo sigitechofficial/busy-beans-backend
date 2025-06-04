@@ -68,6 +68,18 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         ),
         'supplierName',
       ],
+      [
+        literal(
+          `(SELECT salesReps.srName FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
+        ),
+        'srName',
+      ],
+      [
+        literal(
+          `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
+        ),
+        'connectAccountId',
+      ],
       'totalBill',
       'subTotal',
       'discountPrice',

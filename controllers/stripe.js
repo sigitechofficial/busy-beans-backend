@@ -145,6 +145,7 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
       auto_advance: true,
       metadata: {
         orderId: order?.id, 
+        localPatnerAccount: order?.connectAccountId, 
         salesRepId: order?.salesRepId, 
       }
     });
@@ -159,12 +160,28 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
       status: finalizedInvoice?.status,
       total: finalizedInvoice?.amount_due,
     };
+
   } catch (error) {
     console.error('Invoice creation failed:', error);
      throw new AppError(`${error?.message}`, 200)
   }
 }
 
+
+async function transferToLocalPatners({amount,localPartnerAccountId,invoice}) {
+  try{
+    const transfer = await stripe.transfers.create({
+      amount: convertToCents(amount),
+      currency: 'usd',
+      destination: localPartnerAccountId,
+      description: `Payout for invoice ${invoice.id}, order ${invoice.metadata.orderId}`,
+   });
+  return transfer
+  } catch (error) {
+    console.error('Invoice creation failed:', error);
+     throw new AppError(`${error?.message}`, 200)
+  }
+}
 
 module.exports = {
   createPaymentIntent,
@@ -173,7 +190,8 @@ module.exports = {
   createConnectAccount,
   createCheckoutSession,
   createStripeAccountLink,
-  createInvoiceWithItems
+  createInvoiceWithItems,
+  transferToLocalPatners
 }
 // sessionCheckoutPaymnet --- check payment destination
 // sessionCheckoutPaymnet --- check payment destination

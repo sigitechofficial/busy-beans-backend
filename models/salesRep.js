@@ -152,6 +152,8 @@ module.exports = (sequelize) => {
     salesRep.hasMany(models.salesFromPatners);
     models.salesFromPatners.belongsTo(salesRep);
     
+    salesRep.hasOne(models.transfersToSalesRep);
+    models.transfersToSalesRep.belongsTo(salesRep);
   };
 
   return salesRep;

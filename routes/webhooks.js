@@ -5,7 +5,7 @@ const Controller = require('../controllers/webhook/webhookController')
 const catchAsync = require('../utils/catchAsync') 
 
 router.post(
-  '/financial-connections',
+  '/busy-beans-coffee',
   catchAsync(Controller.stripeSubscriptionWebhookEventHandler),
 )
 

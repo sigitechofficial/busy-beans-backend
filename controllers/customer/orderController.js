@@ -12,6 +12,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   if (input?.items?.length < 1 ) {
    throw new AppError('Cart is empty add products to place order', 404);
   }
+  const customer = await user.findOne({where:{id:input?.order?.userId},attributes:['salesRepId']})
   input.order.statusId = 1
   const newOrder = await order.create(input?.order);
 
@@ -26,7 +27,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   });
   await item.bulkCreate(input?.items);
   
-  if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder})
+  if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
 
 
   orderEvents({orderId:newOrder?.id})

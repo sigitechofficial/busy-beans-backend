@@ -7,7 +7,7 @@ const { Op, literal, fn, col } = require('sequelize');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
 const {orderEvents} = require('../events/orderEvents')
 
-exports.setOrderFrequency = async ({orderData}) => { //orderData is 
+exports.setOrderFrequency = async ({orderData,salesRepId}) => { //orderData is 
   try {
     if(!orderData) return false 
    const input  = JSON.parse(JSON.stringify(orderData))
@@ -15,6 +15,7 @@ exports.setOrderFrequency = async ({orderData}) => { //orderData is
   const {nextOrderDate,visibilityDate} =  nextFrequencyDate({currentDate:new Date(),frequency:input.frequency}); 
    input.orderId = orderData.id
    input.orderId = orderData.id
+   input.salesRepId = salesRepId
    input.orderDate = new Date()
    input.nextOrderDate = nextOrderDate
    input.visibilityDate = visibilityDate
@@ -121,8 +122,6 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   });
 });
 
-
-
 exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   const input = req.body;
@@ -145,7 +144,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   });
   await item.bulkCreate(input?.items);
   
-  if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder})
+  if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:req.params?.srId})
 
   orderEvents({orderId:newOrder?.id})
   

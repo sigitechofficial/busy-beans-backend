@@ -96,6 +96,8 @@ router
 //! Order Management
 
 router.get('/orders', manageOrderController.allOrder);
+router.post('/order-management/send-invoice/:orderId', manageOrderController.sendInvoice);
+
 router.get('/order-details/:id', manageOrderController.orderDetails);
 
 router.patch('/assign-supplier', manageOrderController.orderJourneryComplete);
@@ -141,6 +143,7 @@ router.get(
   '/customer-management/dahboard-cards',
   customerController.viewCustomersManagement,
 );
+
 router.get(
   '/customer-management/customer-list/:condition',
   customerController.customersList,
@@ -153,7 +156,6 @@ router.get(
 
 router.get(
   '/customer-management/customer-list/sale-rep-id/:srId',
-  
   customerController.customersList,
 );
 

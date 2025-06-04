@@ -14,9 +14,26 @@ const APIFeatures = require('../../utils/apiFeatures');
 
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
+const Stripe = require('../stripe');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
+const {
+dataForEmailAndNotifications
+} = require('../../utils/emailsNotificationsData')
+
+exports.sendInvoice = catchAsync(async (req, res, next) => {
+  const {appointment} = await dataForEmailAndNotifications(req.params.orderId)
+  const orderData = appointment
+  const invoice = await Stripe.createInvoiceWithItems({customerId:orderData.stripeCustomerId , order:orderData})
+  await order.update(invoice,{where:{id:orderData.id}})
+  res.status(200).json({
+    status: 'success',
+    data: {
+      order: invoice,
+    },
+  });
+});
 
 exports.getAllSalesRep = factory.getAll(statuses);
 
@@ -318,5 +335,4 @@ exports.eidtCheque = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {},
   });
-
 });

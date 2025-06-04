@@ -1,9 +1,12 @@
 const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env
 const stripe = require('stripe')(STRIPE_SECRET_KEY)
+const Stripe = require('../stripe');
+
  
-const { user } = require('../../models');
+const { user, salesRep, transfersToSalesRep ,Item } = require('../../models');
+const order = require('../../models/order');
  
-const endpointSecret = `whsec_IfLq0Y34XAcdWihxkUrLojybI80kOUE5`
+const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN`
 
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature']
@@ -28,19 +31,58 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
         event
       )
       break
+    case 'invoice.paid':
+      await invoicePaid(
+        event
+      )
+      break
     default:
       console.log(`Unhandled event type ${event.type}`)
   }
  
   res.json({ received: true })
 }
+const invoicePaid = async (event) => {
+  try {
+ const invoice = event.data.object;
+  const localPartnerId = invoice.metadata?.salesRepId;
+  const localPatnerAccount = invoice.metadata?.localPatnerAccount;
+  const orderId = invoice.metadata?.orderId;
+  if(!localPartnerId) {
+  await order.update({paymentStatus:'done'},{where:{orderId}})
+  return true
+  }
+ if(localPatnerAccount){
+    const totalWholesalePrice = await Item.sum('wholeSalePrice', {
+      where: {
+        orderId: orderId, 
+      },
+    });
+      const transfer =  await Stripe.transferToLocalPatners({amount:totalWholesalePrice,localPartnerAccountId:localPatnerAccount,invoice})
+
+      await transfersToSalesRep.create({
+        amount: totalWholesalePrice, // as string, e.g. cents in USD
+        tranferId: transfer?.id, // Stripe transfer ID
+        salesRepId:localPartnerId,
+        orderId:orderId
+      });
+      await order.update({paymentStatus:'done',localPatnerCommission:totalWholesalePrice},{where:{orderId}})
+  }
+  return true
+  } catch (error) {
+    console.error('Error handling invoice.paid:', error)
+  }
+}
+
 const paymentMethodAttch = async (event) => {
   try {
     const paymentMethod = event.data.object;
     const customerId = paymentMethod.customer;
     await user.update({defaultPaymentMethod:paymentMethod?.id},{stripeCustomerId:customerId})
+    return true
   } catch (error) {
     console.error('Error handling payment_method.attached:', error)
+    return false
   }
 }
  

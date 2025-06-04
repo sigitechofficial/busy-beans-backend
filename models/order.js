@@ -97,11 +97,30 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: new Date(),
       },
+      
       createdBy: {
         type: DataTypes.ENUM('customer', 'sales-rep', 'admin'),
         allowNull: false,
         defaultValue: 'customer',
       },
+      invoiceId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      hostedInvoiceUrl: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      invoicePdf: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      localPatnerCommission: {
+        type: DataTypes.DECIMAL(20, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
+
     },
     {
       tableName: 'orders',
@@ -145,6 +164,9 @@ module.exports = (sequelize) => {
     
     order.hasOne(models.orderFrequency);
     models.orderFrequency.belongsTo(order);
+
+    order.hasOne(models.transfersToSalesRep);
+    models.transfersToSalesRep.belongsTo(order);
   };
 
   return order;
