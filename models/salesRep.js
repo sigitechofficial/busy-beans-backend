@@ -98,6 +98,10 @@ module.exports = (sequelize) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      creditLimit: {
+        type: DataTypes.INTEGER,
+        defaultValue: 2000,
+      },
       password: {
         type: DataTypes.STRING,
       },

@@ -1,42 +1,43 @@
-const { orderFrequency,order,item,address,orderHistory } = require('../../models');
+const { orderFrequency,order,item,address,orderHistory,user } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const {nextFrequencyDate} = require('../../utils/nextFrequencyDate'); 
 const factory = require('../handlerFactory');
 const { Op, literal, fn, col } = require('sequelize');
-const { setOrderFrequency } = require('../admin/orderFrequencyController');
 const {orderEvents} = require('../events/orderEvents')
 
 exports.setOrderFrequency = async ({orderData,salesRepId}) => { //orderData is 
   try {
     if(!orderData) return false 
-   const input  = JSON.parse(JSON.stringify(orderData))
-
-  const {nextOrderDate,visibilityDate} =  nextFrequencyDate({currentDate:new Date(),frequency:input.frequency}); 
-   input.orderId = orderData.id
-   input.orderId = orderData.id
-   input.salesRepId = salesRepId
-   input.orderDate = new Date()
-   input.nextOrderDate = nextOrderDate
-   input.visibilityDate = visibilityDate
- 
+    const input  = JSON.parse(JSON.stringify(orderData))
+    
+    const {nextOrderDate,visibilityDate} =  nextFrequencyDate({currentDate:new Date(),frequency:input.frequency}); 
+    input.orderId = orderData.id
+    input.orderId = orderData.id
+    input.salesRepId = salesRepId
+    input.orderDate = new Date()
+    input.nextOrderDate = nextOrderDate
+    input.visibilityDate = visibilityDate
+    
     const frequency = await orderFrequency.create(input);
     order.update({orderFrequencyId : frequency?.id},{where:{id:orderData?.id}})
     item.update({orderFrequencyId : frequency?.id},{where:{orderId:orderData?.id}})
-
+    
     return true
   } catch (error) {
     console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ error:', error)
   }
 }
- 
- 
+
+
 //* Pending order according to their frequency cycle
 
+const { setOrderFrequency } = require('../admin/orderFrequencyController');
+console.log(typeof setOrderFrequency); 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.srId) condition.salesRepId = req.params.srId;
-
+  
   // Add visibilityDate condition
   condition.visibilityDate = {
     [Op.lte]: new Date(), // or moment().toDate()
@@ -144,7 +145,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   });
   await item.bulkCreate(input?.items);
   
-  if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:req.params?.srId})
+  if(newOrder?.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:req.params?.srId})
 
   orderEvents({orderId:newOrder?.id})
   

@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
-const { user, address } = require('../../models');
+const { user, address,salesRep } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
@@ -62,14 +62,16 @@ exports.signup = catchAsync(async (req, res, next) => {
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
     req.body.info.verifiedAt = Date.now();
   }
-
+  
+  const sr = await salesRep.findOne({where:{city:req.body?.address?.town}})
+  console.log("🚀 ~ exports.signup=catchAsync ~ sr:", sr?.id)
   req.body.info.latestOtp = OTP;
+  req.body.info.salesRepId = sr?.id;
   const newUser = await user.create(req.body?.info);
 
   req.body.address.userId = newUser?.id;
   const defaultAddress = await address.create(req.body?.address);
   console.log("🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:", defaultAddress)
-
   const stripeCustomerId = await Stripe.addCustomer({email:newUser?.email,name:newUser?.name})
   newUser.stripeCustomerId = stripeCustomerId
   await newUser.save()

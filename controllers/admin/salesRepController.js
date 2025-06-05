@@ -118,10 +118,10 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
 exports.salersMoney = catchAsync(async (req, res, next) => {
   const doc = await item.findOne({
     attributes: [
-      [literal('SUM(`Item`.`price`)'), 'totalSales'],
-      [literal('SUM(`Item`.`salerCommission`)'), 'salerCommission'],
-      [literal('SUM(`Item`.`wholesalePrice`)'), 'wholesalePrice'],
-      [literal('SUM(`Item`.`qty`)'), 'numberOfSoldProducts']
+      [literal('SUM(`item`.`price`)'), 'totalSales'],
+      [literal('SUM(`item`.`salerCommission`)'), 'salerCommission'],
+      [literal('SUM(`item`.`wholesalePrice`)'), 'wholesalePrice'],
+      [literal('SUM(`item`.`qty`)'), 'numberOfSoldProducts']
     ],
     include: [
       {
@@ -145,8 +145,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
   });
 
 const toBePaid = parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0)
-
-
   // Return response
   res.status(200).json({
     status: 'success',

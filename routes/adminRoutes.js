@@ -8,6 +8,7 @@ const customerController = require('../controllers/admin/customerController');
 const orderFrequencyController = require('../controllers/admin/orderFrequencyController');
 const supplierController = require('../controllers/admin/supplierController');
 const salesRepController = require('../controllers/admin/salesRepController');
+const adminReportsController = require('../controllers/admin/adminReportsController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -324,6 +325,28 @@ router
 router.patch(
   '/address-management/add-cities-in-territory/:t_id',
   addressController.addCitiesInTerritory,
+)
+
+router.get(
+  '/admin-reports/partner-commission',
+  adminReportsController.partnerCommissionReport,
+)
+
+
+
+router.get(
+  '/admin-reports/partner-commission',
+  adminReportsController.partnerCommissionReport,
+)
+
+router.get(
+  '/admin-reports/partner-creadit-limit',
+  adminReportsController.partnerCreaditLimit,
+)
+
+router.get(
+  '/admin-reports/unpaid-partner-balance',
+  adminReportsController.unpaidPartnerbalanceReport,
 )
 
 module.exports = router;

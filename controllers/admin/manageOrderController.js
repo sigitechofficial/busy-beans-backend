@@ -18,15 +18,17 @@ const Stripe = require('../stripe');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
+const { sentPaymentInvoiceEvent } = require('../events/sentPaymentInvoiceEvent');
 const {
 dataForEmailAndNotifications
 } = require('../../utils/emailsNotificationsData')
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
-  const {appointment} = await dataForEmailAndNotifications(req.params.orderId)
-  const orderData = appointment
-  const invoice = await Stripe.createInvoiceWithItems({customerId:orderData.stripeCustomerId , order:orderData})
+  const { details,email } = await dataForEmailAndNotifications(req.params.orderId)
+  const orderData = details
+  const invoice = details.invoiceId ?await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }):await Stripe.createInvoiceWithItems({customerId:orderData.stripeCustomerId , order:orderData}) 
   await order.update(invoice,{where:{id:orderData.id}})
+  sentPaymentInvoiceEvent({email,data:orderData,invoice})
   res.status(200).json({
     status: 'success',
     data: {
@@ -124,6 +126,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     'frequency',
     'paymentStatus',
     'statusId',
+      'adminReceivableStatus',
+      'adminReceivableAmount',
+      'localPatnerCommission',
+      'invoicePdf',
+      'invoiceId',
+      'createdBy'
   ];
 
   // Execute the query
@@ -252,6 +260,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'statusId',
       'trackingNumber',
       'paymentStatus',
+      'adminReceivableStatus',
+      'adminReceivableAmount',
+      'localPatnerCommission',
+      'invoicePdf',
+      'invoiceId',
+      'createdBy'
     ],
   });
   if (!doc) {

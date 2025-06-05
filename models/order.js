@@ -120,6 +120,15 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 0,
       },
+      adminReceivableAmount: {
+        type: DataTypes.DECIMAL(20, 2),
+        allowNull: true,
+      },
+      adminReceivableStatus: {
+         type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
 
     },
     {

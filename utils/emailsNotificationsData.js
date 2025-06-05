@@ -95,9 +95,15 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'trackingNumber',
       'paymentStatus',
       'on',
-      'salesRepId'
+      'salesRepId',
+      'adminReceivableStatus',
+      'adminReceivableAmount',
+      'localPatnerCommission',
+      'invoicePdf',
+      'invoiceId',
+      'createdBy'
     ],
   });
   const output = JSON.parse(JSON.stringify(doc))
-  return { appointment: output, email:output?.email }
+  return { details: output, email:output?.email }
 }

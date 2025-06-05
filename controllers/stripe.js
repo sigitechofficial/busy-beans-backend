@@ -13,7 +13,13 @@ function convertToCents(amount) {
  */
 async function addCustomer({name, email}) {
   try {
-    const customer = await stripe.customers.create({ name, email })
+    const customer = await stripe.customers.create({
+      name,
+      email,
+      address: {
+        country: 'US', // 👈 Sets default country
+      },
+    });
     console.log('ðŸš€ ~ addCustomer ~ customer:', customer.id)
     return customer.id
   } catch (error) {
@@ -119,46 +125,76 @@ async function createStripeAccountLink({accountId,returnUrl}) {
 async function createInvoiceWithItems({ customerId, order, currency = 'usd', dueInDays = 7 }) {
   try {
     // Step 1: Create invoice items
-    const {vat , items} = order
+        console.log('🚀 ~ exports.order= ~ order:', order)
+
+    const { vat, items} = order
     for (const item of items) {
       const { product, qty, price } = item;
       await stripe.invoiceItems.create({
-        customer: customerId,
-        amount: convertToCents(price), // Stripe requires integer cents
-        currency,
-        description: `${product} x ${qty}`,
+        customer: order?.stripeCustomerId,
+        amount: convertToCents(price*qty), // Stripe requires integer cents
+        currency, 
+        description:  qty > 1
+      ? `${product} – Pack of ${qty}`
+      : `${product} – 1 Unit`,
       });
+      console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ item:', convertToCents(price))
+     
     }
-
-    await stripe.invoiceItems.create({
-        customer: customerId,
-        amount: convertToCents(vat), // Stripe requires integer cents
+ 
+    if (vat && vat > 0 ) {
+      const vatAmount = convertToCents(vat);
+      console.log(`Creating VAT invoice item, amount: ${vatAmount} cents`);
+     const vatItem =  await stripe.invoiceItems.create({
+        customer: order?.stripeCustomerId,
+        amount: vatAmount,
         currency,
-        description: `Vat`,
-    });
-
+        description: 'VAT',
+      });
+            console.log(`Creating VAT invoice item, amount: $} cents`,vatItem.id);
+    }
+    
     // Step 2: Create the invoice
     const invoice = await stripe.invoices.create({
-      customer: customerId,
-      collection_method: 'send_invoice',
-      days_until_due: dueInDays,
-      auto_advance: true,
+      customer: order?.stripeCustomerId,
+      collection_method: 'charge_automatically', // ✅ REQUIRED
+      auto_advance: true, // Let Stripe attempt to collect payment
       metadata: {
-        orderId: order?.id, 
-        localPatnerAccount: order?.connectAccountId, 
-        salesRepId: order?.salesRepId, 
-      }
+        orderId: order?.id,
+        localPatnerAccount: order?.connectAccountId,
+        salesRepId: order?.salesRepId,
+      },
+      pending_invoice_items_behavior: 'include',
     });
+    
+    // const session = await stripe.checkout.sessions.create({
+    //   payment_method_types: ['card', 'us_bank_account'], // Apple Pay & GPay are covered by 'card'
+    //   line_items: [{
+    //     price_data: {
+    //       currency: 'usd',
+    //       product_data: {
+    //         name: 'Your Product',
+    //       },
+    //       unit_amount: 1000,
+    //     },
+    //     quantity: 1,
+    //   }],
+    //   mode: 'payment',
+    //   customer: order?.stripeCustomerId,
+    //   success_url: 'https://google.com',
+    //   cancel_url: 'https://youtube.com',
+    // });
+
 
     // Step 3: Finalize the invoice
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
-
-    return {
+ 
+    return { 
       invoiceId: finalizedInvoice?.id,
       hostedInvoiceUrl: finalizedInvoice?.hosted_invoice_url,
       invoicePdf: finalizedInvoice?.invoice_pdf,
       status: finalizedInvoice?.status,
-      total: finalizedInvoice?.amount_due,
+      total: finalizedInvoice?.amount_due, 
     };
 
   } catch (error) {
@@ -183,6 +219,23 @@ async function transferToLocalPatners({amount,localPartnerAccountId,invoice}) {
   }
 }
 
+async function getInvoiceDetails ({invoiceId}) {
+  console.log("🚀 ~ getInvoiceDetails ~ getInvoiceDetails:",  )
+  try{
+   const invoice = await stripe.invoices.retrieve(invoiceId);
+    return {
+      invoiceId: invoice.id,
+      hostedInvoiceUrl: invoice.hosted_invoice_url,
+      invoicePdf: invoice.invoice_pdf,
+      status: invoice.status,
+      total: invoice.amount_due,
+    };
+  } catch (error) {
+    console.error('Invoice getInvoiceDetails failed:', error);
+     throw new AppError(`${error?.message}`, 200)
+  }
+}
+
 module.exports = {
   createPaymentIntent,
   addCustomer,
@@ -191,7 +244,8 @@ module.exports = {
   createCheckoutSession,
   createStripeAccountLink,
   createInvoiceWithItems,
-  transferToLocalPatners
+  transferToLocalPatners,
+  getInvoiceDetails
 }
 // sessionCheckoutPaymnet --- check payment destination
 // sessionCheckoutPaymnet --- check payment destination
