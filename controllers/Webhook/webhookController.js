@@ -53,7 +53,7 @@ const invoicePaid = async (event) => {
   return true
   }
  if(localPatnerAccount){
-    const totalWholesalePrice = await Item.sum('wholeSalePrice', {
+    const totalWholesalePrice = await Item.sum('salerCommission', {
       where: {
         orderId: orderId, 
       },
