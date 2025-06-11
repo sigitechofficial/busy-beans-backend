@@ -1,18 +1,17 @@
 const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env
 const stripe = require('stripe')(STRIPE_SECRET_KEY)
-const Stripe = require('../stripe');
-
- 
-const { user, salesRep, transfersToSalesRep ,Item } = require('../../models');
+const Stripe = require('../stripe'); 
+const { user, salesRep, transfersToSalesRep ,item } = require('../../models');
 const order = require('../../models/order');
  
-const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN`
-
+const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN` 
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature']
+ 
   let event
-  console.log('⚠️⚠️⚠️ Webhook signature verification.')
-
+   console.log(
+      '🚀 ~~~~~~~~~~~ exportts.sripeSubscriptionWebhookEventHandler= ~ event:'
+    )
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret)
     console.log(
@@ -46,18 +45,30 @@ const invoicePaid = async (event) => {
   try {
  const invoice = event.data.object;
   const localPartnerId = invoice.metadata?.salesRepId;
-  const localPatnerAccount = invoice.metadata?.localPatnerAccount;
+  let localPatnerAccount = invoice.metadata?.localPatnerAccount;
   const orderId = invoice.metadata?.orderId;
+  
   if(!localPartnerId) {
   await order.update({paymentStatus:'done'},{where:{orderId}})
   return true
   }
+  
+  const srAccount = await salesRep.findOne({where:{id:localPartnerId}})
+  localPatnerAccount = srAccount?.connectAccountId
  if(localPatnerAccount){
-    const totalWholesalePrice = await Item.sum('salerCommission', {
+     console.log(
+      '🚀 ~~~~~ localPatnerAccount ~ event:',
+      localPatnerAccount,
+    )
+    const totalWholesalePrice = await item.sum('salerCommission', {
       where: {
         orderId: orderId, 
       },
     });
+    console.log(
+      '🚀 ~~~~~ localPatnerAccount ~ event:',
+      totalWholesalePrice,
+    )
       const transfer =  await Stripe.transferToLocalPatners({amount:totalWholesalePrice,localPartnerAccountId:localPatnerAccount,invoice})
 
       await transfersToSalesRep.create({

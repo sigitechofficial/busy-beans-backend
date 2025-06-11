@@ -101,6 +101,47 @@ exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
   
 });
 
+exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
+  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  if (!sr) {
+      return next(new AppError('Data not Found!', 404));
+  } 
+   console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
+
+  const connectAccount = await Stripe.createStripeLoginLink({accountId:sr.connectAccountId})
+ 
+
+  return res.status(200).json(
+      response({
+        data: {
+          message: 'Connect Account.',
+          data: {connectAccount},
+        },
+      }),
+  );
+  
+});
+
+exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
+  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  if (!sr) {
+      return next(new AppError('Data not Found!', 404));
+  } 
+   console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
+
+  const connectAccount = await Stripe.retrieveConnectAccount({accountId:sr.connectAccountId})
+ 
+
+  return res.status(200).json(
+      response({
+        data: {
+          message: 'Connect Account.',
+          data: {connectAccount},
+        },
+      }),
+  );
+  
+});
 
 exports.sendQuotation = catchAsync(async (req, res, next) => {
   console.log(req.body);

@@ -86,6 +86,7 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
     status: 'success',
     data: { data },
   });
+
 });
 
 exports.assignSalesRep = catchAsync(async (req, res, next) => {

@@ -15,6 +15,7 @@ const globalErrorHandler = require('./controllers/errorController');
 const userRouter = require('./routes/userRoutes');
 const adminRouter = require('./routes/adminRoutes');
 const webhookRoute = require('./routes/webhooks')
+app.use('/webhook', bodyParser.raw({ type: 'application/json' }), webhookRoute)
 
 dotenv.config({ path: './.env' });
 // Start express app
@@ -80,7 +81,6 @@ app.use((req, res, next) => {
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/admin', adminRouter);
 
-app.use('/webhook', bodyParser.raw({ type: 'application/json' }), webhookRoute)
 
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

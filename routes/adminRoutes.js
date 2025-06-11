@@ -227,6 +227,16 @@ router.post(
   salesRepController.stripeConnectAccountLink,
 )
 
+router.get(
+  '/stripe-connect-account-dashboard/:srId',
+  salesRepController.stripeConnectAccountDashboard,
+)
+
+router.get(
+  '/stripe-connect-account-retrieve/:srId',
+  salesRepController.stripeConnectAccountRetrive,
+)
+
 //! Supplier Management
 
 router
@@ -332,8 +342,16 @@ router.get(
   adminReportsController.partnerCommissionReport,
 )
 
+router.get(
+  '/admin-reports/customer-report',
+  adminReportsController.customerReport,
+)
 
-
+router.get(
+  '/admin-reports/product-sales',
+  adminReportsController.productSalesReport,
+)
+ 
 router.get(
   '/admin-reports/partner-commission',
   adminReportsController.partnerCommissionReport,

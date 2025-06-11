@@ -132,14 +132,13 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
       const { product, qty, price } = item;
       await stripe.invoiceItems.create({
         customer: order?.stripeCustomerId,
-        amount: convertToCents(price*qty), // Stripe requires integer cents
+        amount: convertToCents(price * qty), // Stripe requires integer cents
         currency, 
         description:  qty > 1
       ? `${product} – Pack of ${qty}`
       : `${product} – 1 Unit`,
       });
       console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ item:', convertToCents(price))
-     
     }
  
     if (vat && vat > 0 ) {
@@ -236,7 +235,28 @@ async function getInvoiceDetails ({invoiceId}) {
   }
 }
 
+async function retrieveConnectAccount({accountId}) {
+  try {
+    const account = await stripe.accounts.retrieve(accountId)
+    return account
+  } catch (error) {
+    console.error(error)
+    throw new AppError(`${error.message}`, 200)
+  }
+}
+
+async function createStripeLoginLink({accountId}) {
+  try {
+    const loginLink = await stripe.accounts.createLoginLink(accountId)
+    return loginLink.url
+  } catch (error) {
+    console.error('Error creating login link:', error)
+    return null
+  }
+}
 module.exports = {
+    createStripeLoginLink,
+  retrieveConnectAccount,
   createPaymentIntent,
   addCustomer,
   financialConnectionsSession, 
