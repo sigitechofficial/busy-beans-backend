@@ -44,14 +44,14 @@ const gracefulShutdown = () => {
       'Could not close connections in time, forcefully shutting down.',
     );
     process.exit(1);
-  }, 10000);
+  }, 10000); 
   
 };
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
  
-server.listen(serverPort, (err) => {
+server.listen(serverPort,  (err) => {
   if (err) throw err
   console.log(`Server is listening on :${serverPort}`)
 })

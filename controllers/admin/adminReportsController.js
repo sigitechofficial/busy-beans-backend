@@ -277,6 +277,80 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
 
 });
 
+exports.productSalesReport = catchAsync(async (req, res, next) => {
+
+  const doc = await product.findAll({
+  
+      attributes: [
+        'id', 
+        'name',
+        [
+            literal(`
+              (
+                SELECT SUM(qty)
+                FROM items WHERE items.productId = product.id
+              )
+            `), 
+          'unitsSold',
+        ],
+        [
+            literal(`
+              (
+                SELECT SUM(price)
+                FROM items WHERE items.productId = product.id  AND items.wholesalePrice < 1
+              )
+            `), 
+          'customerPriceTotal',
+        ],
+        [
+            literal(`
+              (
+                SELECT SUM(wholesalePrice)
+                FROM items WHERE items.productId = product.id AND items.wholesalePrice > 0
+              )
+            `), 
+          'wholesalePriceTotal',
+        ],
+        [
+        literal(`
+          (
+            SELECT SUM(
+              CASE 
+                WHEN wholesalePrice > 0 THEN wholesalePrice 
+                ELSE price 
+              END
+            )
+            FROM items 
+            WHERE items.productId = product.id
+          )
+        `), 
+        'revenue',
+      ],
+      [
+        literal(`(
+          SELECT srName
+          FROM salesreps
+          WHERE salesreps.id = (
+            SELECT orders.salesRepId
+            FROM items
+            JOIN orders ON orders.id = items.orderId
+            WHERE items.productId = product.id
+            GROUP BY orders.salesRepId
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+          )
+        )`),
+        'topSalesRepName',
+      ],
+      ],
+  }); 
+
+  res.status(200).json({
+    status: 'success',
+    data: doc,
+  });
+
+});
 
       //   [
       //     literal(

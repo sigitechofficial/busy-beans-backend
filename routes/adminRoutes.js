@@ -9,6 +9,7 @@ const orderFrequencyController = require('../controllers/admin/orderFrequencyCon
 const supplierController = require('../controllers/admin/supplierController');
 const salesRepController = require('../controllers/admin/salesRepController');
 const adminReportsController = require('../controllers/admin/adminReportsController');
+const supplierReportsController = require('../controllers/admin/supplierReportsController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -366,5 +367,18 @@ router.get(
   '/admin-reports/unpaid-partner-balance',
   adminReportsController.unpaidPartnerbalanceReport,
 )
+
+//! SUPPLIER REPORTS SECTION 
+
+router.get(
+  '/supplier-reports/assigned-orders-report/:supId',
+  supplierReportsController.assignedOrdersReport,
+)
+
+router.get(
+  '/supplier-reports/top-products-ordered-report/:supId',
+  supplierReportsController.topProductsOrderedReport,
+)
+
 
 module.exports = router;
