@@ -14,6 +14,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   }
   const customer = await user.findOne({where:{id:input?.order?.userId},attributes:['salesRepId']})
   input.order.statusId = 1
+  input.order.salesRepId = customer?.salesRepId
   const newOrder = await order.create(input?.order);
 
   await orderHistory.create({

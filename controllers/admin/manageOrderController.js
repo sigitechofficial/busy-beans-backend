@@ -74,6 +74,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
           ),
           'product',
         ],
+        [
+          literal(
+            `(SELECT products.image FROM products WHERE products.id = items.productId LIMIT 1)`
+          ),
+          'image',
+        ],
         'qty',
         'price',
         'discount',

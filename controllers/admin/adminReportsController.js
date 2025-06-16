@@ -152,7 +152,7 @@ exports.customerReport = catchAsync(async (req, res, next) => {
         EXISTS (
           SELECT 1
           FROM orders 
-          WHERE orders.userID = user.id
+          WHERE orders.userId = user.id
         )
       `),
       attributes: [

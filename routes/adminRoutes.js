@@ -10,6 +10,7 @@ const supplierController = require('../controllers/admin/supplierController');
 const salesRepController = require('../controllers/admin/salesRepController');
 const adminReportsController = require('../controllers/admin/adminReportsController');
 const supplierReportsController = require('../controllers/admin/supplierReportsController');
+const salesRepReportsController = require('../controllers/admin/salesRepReportsController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -379,6 +380,34 @@ router.get(
   '/supplier-reports/top-products-ordered-report/:supId',
   supplierReportsController.topProductsOrderedReport,
 )
+
+router.get(
+  '/supplier-reports/top-products-ordered-report/:supId',
+  supplierReportsController.topProductsOrderedReport,
+)
+
+//! SALESREP REPORTS SECTION 
+
+router.get(
+  '/sales-rep-reports/orders-placed-report/:supId',
+  salesRepReportsController.ordersPlacedReport,
+)
+
+router.get(
+  '/sales-rep-reports/commission-summary-report/:srId',
+  salesRepReportsController.commissionSummaryReport,
+)
+
+router.get(
+  '/sales-rep-reports/customer-report/:srId',
+  salesRepReportsController.customerReport,
+)
+
+router.get(
+  '/sales-rep-reports/partner-creadit-limit/:srId',
+  salesRepReportsController.partnerCreaditLimit,
+)
+
 
 
 module.exports = router;

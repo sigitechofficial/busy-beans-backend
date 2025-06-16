@@ -102,7 +102,7 @@ exports.topProductsOrderedReport = catchAsync(async (req, res, next) => {
           'dispatchedItems',
         ],
       //   [
-      //   literal(`       
+      //   literal(`         
       //     (
       //       SELECT SUM(
       //         CASE 

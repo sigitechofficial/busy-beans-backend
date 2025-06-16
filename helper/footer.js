@@ -19,25 +19,25 @@ exports.footer = ` <tr>
       </tr>
       <tr>
         <td style="padding-top: 10px; text-align: center">
-          <a href="#"
+          <a href="https://www.facebook.com/busybeancoffeeinc/"
             ><img
               src="cid:facebook"
               alt="Facebook"
               style="width: 24px; margin-right: 10px"
           /></a>
-          <a href="#"
+          <a href="https://x.com/busybean_coffee"
             ><img
               src="cid:twitter"
               alt="Twitter"
               style="width: 24px; margin-right: 10px"
           /></a>
-          <a href="#"
+          <a href="https://www.instagram.com/busybean_coffee/"
             ><img
               src="cid:instagram"
               alt="Instagram"
               style="width: 24px; margin-right: 10px"
           /></a>
-          <a href="#"
+          <a href="https://www.linkedin.com/in/thecoffeeman/"
             ><img
               src="cid:linkedin"
               alt="LinkedIn"
@@ -57,7 +57,7 @@ exports.footer = ` <tr>
             color: #000000;
           "
         >
-          128 City Road, London, United Kingdom, EC1V 2NX
+          PO Box 350, Mount Pleasant, SC 29464
         </td>
       </tr>
       <tr>
@@ -72,7 +72,7 @@ exports.footer = ` <tr>
             color: #000000;
           "
         >
-          📧 support@busybean.com | 📞 (123) 456-7890
+          ðŸ“§ support@busybean.com | ðŸ“ž (123) 456-7890
         </td>
       </tr>
       <tr>
@@ -87,7 +87,7 @@ exports.footer = ` <tr>
             color: #000000;
           "
         >
-          Copyright © 2024 Trim
+          Copyright Â© 2025 BusyBeans
         </td>
       </tr>
       <tr>
@@ -224,3 +224,4 @@ exports.footer = ` <tr>
 
 // <br /><br />
 //                   Thank you for choosing our services!
+``

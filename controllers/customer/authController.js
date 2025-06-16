@@ -299,16 +299,52 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
     upperCaseAlphabets: false,
     specialChars: false,
   });
+
   customer.latestOtp = OTP;
   await customer.save();
   
   Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
+
   res.status(200).json({
     status: 'success',
     data: customer,
     message: 'OTP sent to email!',
   });
 });
+
+exports.resendOtp = catchAsync(async (req, res, next) => {
+  // 1) Get user based on POSTed email
+  const customer = await user.findOne({
+    where: { email: req.body.email },
+    attributes: {
+      exclude: ['userId', 'updatedAt', 'deleted', 'deletedAt', 'password','latestOtp'],
+    },
+  });
+  if (!customer) {
+    return next(new AppError('There is no user with email address.', 404));
+  }
+
+  const OTP = otpGenerator.generate(4, {
+    lowerCaseAlphabets: false,
+    upperCaseAlphabets: false,
+    specialChars: false,
+  });
+ 
+  await user.update({latestOtp:OTP},{where:{id:customer?.id}})
+  
+  if(req.params.type == 'verification')
+    {
+      Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
+    }else{
+      Event.otpToUsersEvent({email:customer?.email,name:customer.name,otp:OTP});
+    }
+  res.status(200).json({
+    status: 'success',
+    data: customer,
+    message: 'OTP sent to email!',
+  });
+});
+
 
 exports.resetPassword = catchAsync(async (req, res, next) => {
   // 1) Get user based on the token
