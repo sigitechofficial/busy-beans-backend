@@ -7,12 +7,13 @@ const { transporter } = require('./transpoter')
 const { footer } = require('./footer')
 const { emailDateFormate } = require('../utils/emailDateFormate')
 
-module.exports = function ({ email,data, satge = 'Confirmed'}) {
+module.exports = function ({ email,data, satge = 'Confirmed',invoice}) {
  
  let orderNote = `Your order has been confirmed and will be prepared according to the
                 instructions.`
   let hiCustomer = `Hi ${data?.customerName}!`
    let items = [] 
+   console.log("data?.itemsdata?.itemsdata?.itemsdata?.items",data?.items)
   data?.items.forEach((ele) => {
     let temp = `<tr>
                     <td
@@ -44,7 +45,7 @@ module.exports = function ({ email,data, satge = 'Confirmed'}) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', ], //`${email}` list of receivers
+      to: email, //`${email}` list of receivers
       subject: `Order Confirmed ${data.id}`, // Subject line
       attachments: attachment.footer,
       html: `
@@ -117,6 +118,51 @@ module.exports = function ({ email,data, satge = 'Confirmed'}) {
                 Thank you for your order!
               </td>
             </tr>
+                 <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 20px;
+            font-family: 'Chivo', sans-serif;
+            color: rgba(0, 0, 0, 0.8);
+            font-size: 16px;
+            line-height: 1.5;
+          "
+        >
+         You have placed an order on Busy Bean. Please review the details below and click the button to pay your invoice.
+        </td>
+      </tr>
+       <tr align="center">
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 20px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+          "
+        >
+          <a
+            href="${invoice?.hostedInvoiceUrl}"
+            style="
+              padding: 10px 20px;
+              background-color: #86644c;
+              color: #ffffff;
+              text-decoration: none;
+              border-radius: 5px;
+              font-family: 'Chivo', sans-serif;
+              font-size: 16px;
+            "
+          >
+            Pay Invoice
+          </a>
+          
+        </td>
+      </tr>
             <tr align="center">
               <td
                 style="

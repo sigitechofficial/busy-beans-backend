@@ -88,6 +88,7 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
             'price',
           ],
           'qty',
+          // 'weight',
           'productId',
         ],
       },
@@ -178,8 +179,14 @@ const frequencyBookOrder = async ({id}) => { //orderData is
               'price',
             ],
             [
+              literal(
+                `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`
+              ),
+              'wholesalePrice',
+            ],
+            [
              literal(
-               `(SELECT products.quantity FROM products WHERE products.id = items.productId LIMIT 1)`
+               `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
              ),
              'weight',
            ],
@@ -196,12 +203,12 @@ const frequencyBookOrder = async ({id}) => { //orderData is
          ),
          'addressId',
        ], 
-       [
-         literal(
-           `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-         ),
-         'orderFrequencyId',
-       ], 
+      //  [
+      //    literal(
+      //      `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
+      //    ),
+      //    'orderFrequencyId',
+      //  ], 
         [
          literal(
            `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
@@ -229,6 +236,7 @@ const frequencyBookOrder = async ({id}) => { //orderData is
         ['nextOrderDate','on'],
         'frequency',
         'userId',
+        'salesRepId',
       ],
     });
  
@@ -240,14 +248,20 @@ const frequencyBookOrder = async ({id}) => { //orderData is
     result?.items.forEach(item => {
       itemsPrice += parseFloat(item?.price) * item?.qty; // Multiply price by quantity
       totalWeight += parseFloat(item?.weight) * item?.qty; // Multiply weight by quantity
+     if(result?.salesRepId){
+      item.salerCommission = (parseFloat(item?.price) * item?.qty) - (parseFloat(item?.wholesalePrice) * item?.qty) ; // Multiply weight by quantity
+     }else{
+      item.wholesalePrice = 0
+     }
     });
 
     result.itemsPrice = itemsPrice
     result.subTotal = itemsPrice + parseFloat(result?.vat)
     result.totalBill = itemsPrice + parseFloat(result?.vat)
     result.totalWeight = totalWeight
-    result.totalWeight = totalWeight
     result.statusId = 1
+    result.salesRepId = 
+    result.createdBy = 'sales-rep'
     
     const newOrder= await order.create(result)
     

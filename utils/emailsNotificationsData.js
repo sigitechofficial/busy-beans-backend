@@ -57,6 +57,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         'email',
       ],
       [
+        literal(
+          `(SELECT users.emailToSendInvoices FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'emailToSendInvoices',
+      ],
+      [
         literal( 
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),

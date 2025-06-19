@@ -31,12 +31,18 @@ exports.customersList = catchAsync(async (req, res, next) => {
         ),
         'salesRepName',
       ],
-      // [
-      //   literal(
-      //     '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
-      //   ),
-      //   'totalOrderAmount',
-      // ],
+       [
+        literal( 
+          `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepState',
+      ],
+      [
+        literal( 
+          `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`,
+        ),
+        'preferredPaymentMethod',
+      ],
       `id`,
       `name`,
       `email`,

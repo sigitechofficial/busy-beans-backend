@@ -25,6 +25,11 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
   input?.items.forEach((element) => {
     element.orderId = newOrder.id;
+    if(customer?.salesRepId){
+      element.salerCommission = parseFloat(element.price)- parseFloat(element.wholesalePrice)
+    }else{
+      element.wholesalePrice = 0
+    }
   });
   await item.bulkCreate(input?.items);
   

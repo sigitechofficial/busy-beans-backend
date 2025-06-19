@@ -26,9 +26,17 @@ dataForEmailAndNotifications
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const { details,email } = await dataForEmailAndNotifications(req.params.orderId)
   const orderData = details
-  const invoice = details.invoiceId ?await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }):await Stripe.createInvoiceWithItems({customerId:orderData.stripeCustomerId , order:orderData}) 
-  await order.update(invoice,{where:{id:orderData.id}})
-  sentPaymentInvoiceEvent({email,data:orderData,invoice})
+  const invoice = details.invoiceId ? await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }): await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
+  await order.update(invoice,{where:{id:details.id}})
+
+  let to = [email]
+   if (email) {
+      if(details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
+        to.push(details?.emailToSendInvoices)
+      }
+    }
+
+  sentPaymentInvoiceEvent({to,data:details,invoice})
   res.status(200).json({
     status: 'success',
     data: {
@@ -85,6 +93,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
         'discount',
         'orderId',
         'productId',
+        'wholesalePrice'
       ],
     },
   ];
@@ -118,6 +127,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'adminEarnings',
+    ],
+    [
+        literal(`COALESCE(
+         (SELECT SUM(wholesalePrice)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'wholesalePrice',
     ],
     'totalBill',
     'subTotal',
@@ -201,6 +217,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           'discount',
           'orderId',
           'productId',
+          'wholesalePrice'
         ],
       },
       {
@@ -251,6 +268,13 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'adminEarnings',
+      ],
+         [
+        literal(`COALESCE(
+         (SELECT SUM(wholesalePrice)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'wholesalePrice',
       ],
       'totalBill',
       'subTotal',

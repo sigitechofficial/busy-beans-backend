@@ -95,6 +95,10 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: 'registration',
       },
+      preferredPaymentMethod: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
     },
     {
       tableName: 'users',

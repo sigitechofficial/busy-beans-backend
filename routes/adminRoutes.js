@@ -11,6 +11,7 @@ const salesRepController = require('../controllers/admin/salesRepController');
 const adminReportsController = require('../controllers/admin/adminReportsController');
 const supplierReportsController = require('../controllers/admin/supplierReportsController');
 const salesRepReportsController = require('../controllers/admin/salesRepReportsController');
+const dashboardsController = require('../controllers/admin/dashboardsController');
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -404,10 +405,15 @@ router.get(
 )
 
 router.get(
-  '/sales-rep-reports/partner-creadit-limit/:srId',
+  '/sales-rep-reports/partner-creadit-limit/1',
   salesRepReportsController.partnerCreaditLimit,
 )
 
+//! DashBoard SECTION 
 
+router.get(
+  '/dashboard',
+  dashboardsController.adminDashboard
+)
 
 module.exports = router;

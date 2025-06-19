@@ -29,7 +29,7 @@ module.exports = function ({ email,data}) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', ], //`${email}` list of receivers
+      to: [`${email}`], //`${email}` list of receivers
       subject: `We’re excited to share with you a customized quotation for our premium coffee blends`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>

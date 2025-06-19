@@ -25,7 +25,7 @@ module.exports = function (OTP, data, type) {
   }
   let subject = preOtpText;
   const name = `${data.name}`;
-  const to = [data.email, 'sigidevelopers@gmail.com'];
+  const to = [data.email];
   console.log(
     '🚀 ~ sigidevelopers:',
     attachment.footer.concat(attachment.security),

@@ -12,7 +12,7 @@ module.exports = function ({ email, name = '', otp= '' }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', ], //`${email}` list of receivers
+      to: [`${email}`], //`${email}` list of receivers
       subject: `${hiCustomer}! Welcome to Busy Bean. We are thrilled to have you on board.`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>
@@ -47,7 +47,7 @@ module.exports = function ({ email, name = '', otp= '' }) {
       <tr>
         <td align="center" style="padding: 5px 0">
           <img
-            src=".cid:logo"
+            src="cid:logo"
             alt="Image"
             width="316"
             height="147"

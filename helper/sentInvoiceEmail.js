@@ -25,11 +25,11 @@ module.exports = function ({ email,data, invoice}) {
     return temp;
   });
 
-    items = items.join('');  
+  items = items.join('');  
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      to: email, //`${email}` list of receivers
       subject: `Your Order ${data.id} – Please Complete Your Payment`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>

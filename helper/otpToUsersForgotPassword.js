@@ -12,7 +12,7 @@ module.exports = function ({ email, name = '', otp= '' }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', ], //`${email}` list of receivers
+      to: [`${email}`], //`${email}` list of receivers
       subject: `${hiCustomer}! We found a request for forgot password.
        Its okay! its happens. Use this OTP for reset your password.`, // Subject line
       attachments: attachment.footer,

@@ -61,6 +61,11 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: true,
       },
+      countryCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: true,
+      },
       address: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -158,6 +163,9 @@ module.exports = (sequelize) => {
     
     salesRep.hasOne(models.transfersToSalesRep);
     models.transfersToSalesRep.belongsTo(salesRep);
+
+    salesRep.hasOne(models.stateInSystem);
+    models.stateInSystem.belongsTo(salesRep);
   };
 
   return salesRep;

@@ -26,7 +26,7 @@ module.exports = function ({ email,data,}) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', ], //`${email}` list of receivers
+      to: [`${email}`], //`${email}` list of receivers
       subject: `${hiSupplierName}! A new order has been placed on Busy Bean..`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>

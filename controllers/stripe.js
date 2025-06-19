@@ -81,7 +81,9 @@ async function createConnectAccount({email, country = 'US', returnUrl }) {
       'https://google.com',
     type: 'account_onboarding',
   })
+
   return { accountLink, accountId: account.id }
+
   } catch (error) {
     console.error(error)
     throw new AppError(`${error.message}`, 200)
@@ -235,15 +237,39 @@ async function getInvoiceDetails ({invoiceId}) {
   }
 }
 
-async function retrieveConnectAccount({accountId}) {
+async function retrieveConnectAccount({ accountId }) {
   try {
-    const account = await stripe.accounts.retrieve(accountId)
-    return account
+    const account = await stripe.accounts.retrieve(accountId);
+
+    // Check if the account can handle charges
+    if (!account.charges_enabled) {
+      throw new AppError('Charges are not enabled for this account.', 400);
+    }
+
+    // Check if the account can handle payouts
+    if (!account.payouts_enabled) {
+      throw new AppError('Payouts are not enabled for this account.', 400);
+    }
+
+    // Check if the account details have been fully submitted
+    if (!account.details_submitted) {
+      throw new AppError('Account details are not fully submitted.', 400);
+    }
+
+    // Check if there are any requirements pending (errors or verification)
+    if (account.requirements.errors.length > 0 || account.requirements.pending_verification.length > 0) {
+      throw new AppError('There are pending verification or requirements errors.', 400);
+    }
+
+    // If all checks pass, return the account information
+    return account 
+
   } catch (error) {
-    console.error(error)
-    throw new AppError(`${error.message}`, 200)
+    console.error(error);
+    throw new AppError(`${error.message}`, 200); // Customize error message if necessary
   }
 }
+
 
 async function createStripeLoginLink({accountId}) {
   try {
@@ -254,8 +280,9 @@ async function createStripeLoginLink({accountId}) {
     return null
   }
 }
+
 module.exports = {
-    createStripeLoginLink,
+  createStripeLoginLink,
   retrieveConnectAccount,
   createPaymentIntent,
   addCustomer,

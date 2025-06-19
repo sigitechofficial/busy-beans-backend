@@ -1,4 +1,4 @@
-const { salesRep,user,address,order,item,salesFromPatners} = require('../../models');
+const { salesRep,user,address,order,item,salesFromPatners,stateInSystem} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Stripe = require('../stripe');
@@ -8,9 +8,49 @@ const { response } = require('../../utils/response');
 const { Op, literal, fn, col } = require('sequelize');
 
 exports.getAllSalesRep = factory.getAll(salesRep);
+
 exports.getSalesRep = factory.getOne(salesRep);
-exports.createSalesRep = factory.createOne(salesRep);
+
+// exports.createSalesRep = factory.createOne(salesRep);
+
 exports.updateSalesRep = factory.updateOne(salesRep);
+
+exports.createSalesRep = catchAsync(async (req, res, next) => {
+ 
+    const input = req.body;
+ 
+    const condition = {deleted :0};
+    condition.email = input?.email
+    condition.state = input?.state
+    const exist = await salesRep.findOne({ where: condition, attributes: ['id'] });
+    if (exist) {
+      if(exist.email == input.email){return next(new AppError('Email already exist', 400));
+      }else{
+        return next(new AppError('State already has a local Patner', 400));
+      }
+    }
+  
+    if (req.file) {
+      // throw new  'Image not uploaded', 'Please upload image';
+      const tmpPath = req.file.path;
+      const imagePath = tmpPath.replace(/\\/g, '/');
+      input.image = imagePath;
+      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
+    } else {
+      input.image = undefined;
+      console.log("🚀 ~ c ~ input.image:", input.image)
+    }
+
+    const doc = await salesRep.create(input);
+    await stateInSystem.update({salesRepId:doc?.id},{where:{name:input?.state}})
+
+   return res.status(201).json({
+      status: 'success',
+      data: {
+        data: doc,
+      },
+    });
+});
 
 exports.deleteSalesRep = catchAsync(async (req, res, next) => {
  
@@ -22,13 +62,12 @@ exports.deleteSalesRep = catchAsync(async (req, res, next) => {
       where: { salesRepId: req.params.id },
     });
     
-  res.status(200).json({
+ return res.status(200).json({
     status: 'success',
     data: {},
   });
 });
 
-    
 exports.addCustomer = catchAsync(async (req, res, next) => {
  
   req.body.info.verifiedAt = new Date();
@@ -56,7 +95,6 @@ exports.addCustomer = catchAsync(async (req, res, next) => {
   );
   
 });
-
 
 exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
   const sr = await salesRep.findOne({where:{id:req.params.srId}});
@@ -130,17 +168,13 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
    console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
 
   const connectAccount = await Stripe.retrieveConnectAccount({accountId:sr.connectAccountId})
- 
-
+ if(connectAccount)await salesRep.update({isAccountConnected:true},{where:{id:req.params.srId}})
   return res.status(200).json(
       response({
-        data: {
-          message: 'Connect Account.',
-          data: {connectAccount},
-        },
+         message: 'Connect Account.',
+        data: {isAccountConnected:true,connectAccount:connectAccount.id},
       }),
   );
-  
 });
 
 exports.sendQuotation = catchAsync(async (req, res, next) => {
@@ -153,8 +187,6 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
     data: {},
   });
 });
-
-
 
 exports.salersMoney = catchAsync(async (req, res, next) => {
   const doc = await item.findOne({
@@ -184,12 +216,36 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       salesRepId: req.params.srId,
     },
   });
+      
+    const credit = await salesRep.findOne({
+    where: {
+      id: req.params.srId,
+    },
+    attributes:[ 
+      'creditLimit',
+      [
+          fn(
+            'FORMAT',
+            literal(`
+              (
+                SELECT SUM(items.wholesalePrice)
+                FROM orders
+                JOIN items ON items.orderId = orders.id
+                WHERE orders.salesRepId = salesRep.id
+                  AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+              )
+            `),
+            1
+          ),
+          'creditUsed',
+        ],]
+  });
 
 const toBePaid = parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0)
   // Return response
   res.status(200).json({
     status: 'success',
-    data: {...doc,toBePaid , paidToAdmin : paidToAdmin||0},
+    data: {...doc,toBePaid , paidToAdmin : paidToAdmin||0, credit},
   });
 
 });

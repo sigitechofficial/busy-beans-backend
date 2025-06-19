@@ -3,45 +3,34 @@ const orderEmailtoCustomer = require('../../helper/orderEmailtoCustomer')
 const {
 dataForEmailAndNotifications
 } = require('../../utils/emailsNotificationsData')
+const {order} = require('../../models');
+const Stripe = require('../stripe');
+const { sentPaymentInvoiceEvent } = require('../events/sentPaymentInvoiceEvent');
 
 exports.orderEvents = async ({orderId}) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId)
     if (!orderData) return false
-    const { details } = orderData
+    const { details,email } = orderData
+      const invoice = details.invoiceId ?await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }):await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
 
-    if (orderData?.email) {
+      await order.update(invoice,{where:{id:details.id}})
+      // sentPaymentInvoiceEvent({email,data:details,invoice})
+
+    if (details?.email) {
+      let to = [details?.email]
+     
+      if(details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
+        to.push(details?.emailToSendInvoices)
+      }
+
       orderEmailtoCustomer({
-       email: orderData?.email,
+       email: to,
        data: details,
        stage: 'Confirmed',
+       invoice
       })
     }
-   
-
-    // const customerNotification = {
-    //   title: `Appointment Cancellation`,
-    //   body: `We regret to inform you that your appointment on ${dateTime} has been cancelled. Please contact us to reschedule.`,
-    // }
-
-    // const fullName = `${appointment.user.firstName} ${appointment.user.lastName}`
-
-    // const salonNotification = {
-    //   title: `Booking Cancellation Alert`,
-    //   body: `The appointment with ${fullName} on ${dateTime} has been cancelled.`,
-    // }
- 
-    // ThrowNotification(
-    //   customerTokens,
-    //   customerNotification,
-    //   {
-    //     appointment: appointment.id,
-    //     name: orderData.salon.salonName,
-    //     image: orderData.salon.image,
-    //   },
-    //   orderData?.client?.userId,
-    // )
-
     console.log('🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀')
     return true
   } catch (error) {
