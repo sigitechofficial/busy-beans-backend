@@ -110,6 +110,103 @@ const ordersSummary = await order.findOne({
 
 });
 
+exports.salesRepDashboard = catchAsync(async (req, res, next) => {
+
+const salesSummary = await item.findOne({
+  attributes: [
+    // Revenue
+    [
+      literal(`
+        SUM(
+          CASE 
+            WHEN item.wholesalePrice > 0 THEN item.wholesalePrice
+            ELSE item.price
+          END
+        )
+      `),
+      'sales',
+    ],
+    // Wholesale Total
+    [
+      literal(`
+        SUM(
+          CASE 
+            WHEN item.wholesalePrice > 0 THEN item.wholesalePrice
+            ELSE 0
+          END
+        )
+      `),
+      'wholesalePriceTotal',
+    ],
+    // Customer Price Total
+    [
+      literal(`
+        SUM(
+          CASE 
+            WHEN item.wholesalePrice < 1 THEN item.price
+            ELSE 0
+          END
+        )
+      `),
+      'customerPriceTotal',
+    ], 
+  ],
+  include: [
+    {
+      model: order, // make sure your association is set: items.belongsTo(orders)
+      attributes: [],
+      where: {
+        statusId: { [Op.lt]: 6 },
+        salesRepId:req.params.srId
+      },
+    },
+  ],
+  raw: true,
+});
+
+const revenueSummary = await order.findOne({
+  where:{paymentStatus: 'done', salesRepId:req.params.srId},
+  attributes: [
+    [
+      literal(`
+        SUM(
+          CASE 
+            WHEN salesRepId IS NULL THEN totalBill
+            ELSE totalBill - (
+              SELECT COALESCE(SUM(price - wholesalePrice), 0)
+              FROM items 
+              WHERE items.orderId = order.id
+            )
+          END
+        )
+      `),
+      'revenueCollected'
+    ]
+  ],
+  raw: true,
+});
+
+const ordersSummary = await order.findOne({
+   where:{salesRepId:req.params.srId},
+  attributes: [
+    [literal(`SUM(CASE WHEN statusId = 1 THEN 1 ELSE 0 END)`), 'orderPlaced'],
+    [literal(`SUM(CASE WHEN statusId = 2 THEN 1 ELSE 0 END)`), 'assignedToSupplier'],
+    [literal(`SUM(CASE WHEN statusId = 3 THEN 1 ELSE 0 END)`), 'supplierAcknowledged'],
+    [literal(`SUM(CASE WHEN statusId = 4 THEN 1 ELSE 0 END)`), 'dispatchedOrders'],
+    [literal(`SUM(CASE WHEN statusId = 5 THEN 1 ELSE 0 END)`), 'deliveredOrders'],
+    [literal(`SUM(CASE WHEN statusId = 6 THEN 1 ELSE 0 END)`), 'CanceledOrders'],
+    [literal(`SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`), 'paymentPending'],
+    [literal(`SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`), 'paymentDone'],
+  ],
+  raw: true,
+});
+  res.status(200).json({
+    status: 'success',
+    data: {salesSummary,ordersSummary,revenueSummary},
+  });
+
+});
+
 
       //   [
       //     literal(

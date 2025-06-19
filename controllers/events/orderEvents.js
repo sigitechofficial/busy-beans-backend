@@ -12,14 +12,15 @@ exports.orderEvents = async ({orderId}) => {
     const orderData = await dataForEmailAndNotifications(orderId)
     if (!orderData) return false
     const { details,email } = orderData
-      const invoice = details.invoiceId ?await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }):await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
-
-      await order.update(invoice,{where:{id:details.id}})
-      // sentPaymentInvoiceEvent({email,data:details,invoice})
+     let to = email?[email]:[]
+     let invoice = null
+     if(!details?.paymentIntentId){
+       invoice = details.invoiceId ?await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }):await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
+       await order.update(invoice,{where:{id:details.id}})
+       // sentPaymentInvoiceEvent({email,data:details,invoice})
+     }
 
     if (details?.email) {
-      let to = [details?.email]
-     
       if(details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
         to.push(details?.emailToSendInvoices)
       }

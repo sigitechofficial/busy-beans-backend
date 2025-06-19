@@ -23,8 +23,17 @@ const {
 dataForEmailAndNotifications
 } = require('../../utils/emailsNotificationsData')
 
+const {
+processTransferToLocalPartner
+} = require('../../utils/localPatnerCommissionTranfer')
+
 exports.sendInvoice = catchAsync(async (req, res, next) => {
-  const { details,email } = await dataForEmailAndNotifications(req.params.orderId)
+  const { details,email } = await dataForEmailAndNotifications(req.params.orderId);
+
+  if(details?.paymentIntentId || details?.paymentStatus == 'done'){
+    return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
+  }
+  
   const orderData = details
   const invoice = details.invoiceId ? await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }): await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
   await order.update(invoice,{where:{id:details.id}})
@@ -36,7 +45,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
       }
     }
 
-  sentPaymentInvoiceEvent({to,data:details,invoice})
+  sentPaymentInvoiceEvent({email:to,data:details,invoice})
   res.status(200).json({
     status: 'success',
     data: {
@@ -332,6 +341,8 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
   if (req.body?.orderData?.statusId) {
     if(req.body?.orderData?.statusId == 2)supplierNewOrderEvent({orderId:orderId})
+    if(req.body?.orderData?.statusId == 5)processTransferToLocalPartner({orderId:orderId})
+      
     await orderHistory.create({
       statusId: req.body?.orderData?.statusId,
       orderId: orderId,

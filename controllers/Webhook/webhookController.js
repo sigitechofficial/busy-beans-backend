@@ -30,7 +30,7 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
         event
       )
       break
-    case 'invoice.paid':
+    case 'invoice.paid_': //not needed yet  "_" add underscore to prevent tranfers for now  
       await invoicePaid(
         event
       )

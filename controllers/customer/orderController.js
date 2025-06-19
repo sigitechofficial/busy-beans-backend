@@ -25,8 +25,10 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
   input?.items.forEach((element) => {
     element.orderId = newOrder.id;
+    element.price = element.price * element.qty
+    element.wholesalePrice = element.wholesalePrice * element.qty
     if(customer?.salesRepId){
-      element.salerCommission = parseFloat(element.price)- parseFloat(element.wholesalePrice)
+      element.salerCommission = parseFloat(element.price) - parseFloat(element.wholesalePrice)
     }else{
       element.wholesalePrice = 0
     }
@@ -34,7 +36,6 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   await item.bulkCreate(input?.items);
   
   if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
-
 
   orderEvents({orderId:newOrder?.id})
   return res.status(200).json({

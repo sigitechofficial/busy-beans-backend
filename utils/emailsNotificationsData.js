@@ -74,6 +74,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         ),
         'supplierName',
       ],
+       [
+        literal(
+          `(SELECT supplier.email FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
+        ),
+        'supplierEmail',
+      ],
       [
         literal(
           `(SELECT salesReps.srName FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
@@ -107,7 +113,9 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'localPatnerCommission',
       'invoicePdf',
       'invoiceId',
-      'createdBy'
+      'createdBy',
+      'paymentMethodId',
+      'paymentIntentId'
     ],
   });
   const output = JSON.parse(JSON.stringify(doc))

@@ -134,7 +134,7 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
       const { product, qty, price } = item;
       await stripe.invoiceItems.create({
         customer: order?.stripeCustomerId,
-        amount: convertToCents(price * qty), // Stripe requires integer cents
+        amount: convertToCents(price), // Stripe requires integer cents
         currency, 
         description:  qty > 1
       ? `${product} – Pack of ${qty}`
@@ -205,13 +205,13 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
 }
 
 
-async function transferToLocalPatners({amount,localPartnerAccountId,invoice}) {
+async function transferToLocalPatners({amount,localPartnerAccountId,orderId}) {
   try{
     const transfer = await stripe.transfers.create({
       amount: convertToCents(amount),
       currency: 'usd',
       destination: localPartnerAccountId,
-      description: `Payout for invoice ${invoice.id}, order ${invoice.metadata.orderId}`,
+      description: `Commission of order ${orderId}`,
    });
   return transfer
   } catch (error) {

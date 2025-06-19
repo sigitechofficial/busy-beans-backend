@@ -8,7 +8,80 @@ const { footer } = require('./footer')
 const { emailDateFormate } = require('../utils/emailDateFormate')
 
 module.exports = function ({ email,data, satge = 'Confirmed',invoice}) {
- 
+ const  invoiceSection = invoice?`   <tr>
+              <td
+                style="
+                  padding-left: 37px;
+                  padding-right: 37px;
+                  font-family: 'Chivo', sans-serif;
+                  color: #000000;
+                  font-size: 24px;
+                  font-weight: bold;
+                  line-height: 1.5;
+                "
+              >
+                ${hiCustomer}
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  padding-left: 37px;
+                  padding-right: 37px;
+                  font-family: 'Chivo', sans-serif;
+                  color: rgba(0, 0, 0, 0.8);
+                  font-size: 16px;
+                  line-height: 1.5;
+                "
+              >
+                Thank you for your order!
+              </td>
+            </tr>
+                 <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 20px;
+            font-family: 'Chivo', sans-serif;
+            color: rgba(0, 0, 0, 0.8);
+            font-size: 16px;
+            line-height: 1.5;
+          "
+        >
+         You have placed an order on Busy Bean. Please review the details below and click the button to pay your invoice.
+        </td>
+      </tr>
+       <tr align="center">
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 20px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+          "
+        >
+          <a
+            href="${invoice?.hostedInvoiceUrl}"
+            style="
+              padding: 10px 20px;
+              background-color: #86644c;
+              color: #ffffff;
+              text-decoration: none;
+              border-radius: 5px;
+              font-family: 'Chivo', sans-serif;
+              font-size: 16px;
+            "
+          >
+            Pay Invoice
+          </a>
+          
+        </td>
+      </tr>`:``; 
  let orderNote = `Your order has been confirmed and will be prepared according to the
                 instructions.`
   let hiCustomer = `Hi ${data?.customerName}!`
@@ -89,80 +162,7 @@ module.exports = function ({ email,data, satge = 'Confirmed',invoice}) {
                 />
               </td>
             </tr>
-            <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  font-family: 'Chivo', sans-serif;
-                  color: #000000;
-                  font-size: 24px;
-                  font-weight: bold;
-                  line-height: 1.5;
-                "
-              >
-                ${hiCustomer}
-              </td>
-            </tr>
-            <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  font-family: 'Chivo', sans-serif;
-                  color: rgba(0, 0, 0, 0.8);
-                  font-size: 16px;
-                  line-height: 1.5;
-                "
-              >
-                Thank you for your order!
-              </td>
-            </tr>
-                 <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 20px;
-            font-family: 'Chivo', sans-serif;
-            color: rgba(0, 0, 0, 0.8);
-            font-size: 16px;
-            line-height: 1.5;
-          "
-        >
-         You have placed an order on Busy Bean. Please review the details below and click the button to pay your invoice.
-        </td>
-      </tr>
-       <tr align="center">
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 20px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-          "
-        >
-          <a
-            href="${invoice?.hostedInvoiceUrl}"
-            style="
-              padding: 10px 20px;
-              background-color: #86644c;
-              color: #ffffff;
-              text-decoration: none;
-              border-radius: 5px;
-              font-family: 'Chivo', sans-serif;
-              font-size: 16px;
-            "
-          >
-            Pay Invoice
-          </a>
-          
-        </td>
-      </tr>
+         ${invoiceSection}
             <tr align="center">
               <td
                 style="

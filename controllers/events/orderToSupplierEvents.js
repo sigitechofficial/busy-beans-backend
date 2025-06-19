@@ -12,7 +12,7 @@ exports.supplierNewOrderEvent = async ({orderId}) => {
 
     if (orderData?.email) {
       supplierNewOrder({
-       email: orderData?.email,
+       email: orderData?.supplierEmail,
        data: details,
        stage: 'Confirmed',
       })
