@@ -8,7 +8,7 @@ const { footer } = require('./footer')
 const { emailDateFormate } = require('../utils/emailDateFormate')
 
 module.exports = function ({ email,data, invoice}) {
-  console.log("🚀 ~ data:", data)
+  console.log("ðŸš€ ~ data:", data)
   let hiSupplierName = `Hope you're doing well`
  
   let items = [] 
@@ -17,8 +17,8 @@ module.exports = function ({ email,data, invoice}) {
             <tr>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
-              <td style="padding: 10px;">$${ele.price}</td>
-              <td style="padding: 10px;">$${(parseFloat(ele?.price) * ele?.qty).toFixed(2)}</td>
+              <td style="padding: 10px;">$${ele.price/ele.qty}</td>
+              <td style="padding: 10px;">$${ele?.price}</td>
             </tr>
             `
     temp = items.push(temp);
@@ -30,7 +30,7 @@ module.exports = function ({ email,data, invoice}) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
-      subject: `Your Order ${data.id} – Please Complete Your Payment`, // Subject line
+      subject: `Your Order ${data.id} â€“ Please Complete Your Payment`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>
 <html lang="en">

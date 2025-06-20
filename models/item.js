@@ -13,6 +13,16 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 0,
       },
+      weight: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
+      unit: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: '',
+      },
       salerCommission: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,

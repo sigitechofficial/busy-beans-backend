@@ -189,23 +189,92 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
 });
 
 exports.salersMoney = catchAsync(async (req, res, next) => {
-  const doc = await item.findOne({
-    attributes: [
-      [literal('SUM(`item`.`price`)'), 'totalSales'],
-      [literal('SUM(`item`.`salerCommission`)'), 'salerCommission'],
-      [literal('SUM(`item`.`wholesalePrice`)'), 'wholesalePrice'],
-      [literal('SUM(`item`.`qty`)'), 'numberOfSoldProducts']
-    ],
-    include: [
-      {
-        model: order,
-        where: { salesRepId: req.params.srId },
-        attributes: []
-      }
-    ],
-    raw: true,
-  });
+//   const doc = await item.findOne({
+//     attributes: [
+//       [literal('SUM(`item`.`price`)'), 'totalSales'],
+//       [literal('SUM(`item`.`salerCommission`)'), 'salerCommission'],
+//       [literal('SUM(`item`.`wholesalePrice`)'), 'wholesalePrice'],
+//       [literal('SUM(`item`.`qty`)'), 'numberOfSoldProducts']
+//     ],
+//     include: [
+//       {
+//         model: order,
+//         where: { salesRepId: req.params.srId },
+//         attributes: []
+//       }
+//     ],
+//     raw: true,
+//   });
 
+    const doc = await salesRep.findOne({
+    where: {
+      id: req.params.srId,
+    },
+    attributes:[ 
+      [
+          fn(
+            'FORMAT',
+            literal(`
+              (
+                SELECT SUM(items.price)
+                FROM orders
+                JOIN items ON items.orderId = orders.id
+                WHERE orders.salesRepId = salesRep.id
+                  AND orders.createdBy = 'sales-rep'
+              )
+            `),
+            1
+          ),
+          'totalSales',
+        ],
+         [
+            literal(`
+              (
+                SELECT SUM(items.wholesalePrice)
+                FROM orders
+                JOIN items ON items.orderId = orders.id
+                WHERE orders.salesRepId = salesRep.id
+                  AND orders.createdBy = 'sales-rep'
+              )
+            `),
+           
+          'wholesalePrice',
+        ],
+          [
+          fn(
+            'FORMAT',
+            literal(`
+              (
+                SELECT SUM(items.price - items.wholesalePrice)
+                FROM orders
+                JOIN items ON items.orderId = orders.id
+                WHERE orders.salesRepId = salesRep.id
+                  AND orders.createdBy = 'sales-rep'
+              )
+            `),
+            1
+          ),
+          'salerCommission',
+        ],
+          [
+          fn(
+            'FORMAT',
+            literal(`
+              (
+                SELECT SUM(items.qty)
+                FROM orders
+                JOIN items ON items.orderId = orders.id
+                WHERE orders.salesRepId = salesRep.id
+                  AND orders.createdBy = 'sales-rep'
+              )
+            `),
+            1
+          ),
+          'numberOfSoldProducts',
+        ],
+        
+        ]
+  });
   if (!doc) {
       return next(new AppError('Data not Found!', 404));
   }
@@ -228,7 +297,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
             'FORMAT',
             literal(`
               (
-                SELECT SUM(items.wholesalePrice)
+                SELECT SUM(items.price)
                 FROM orders
                 JOIN items ON items.orderId = orders.id
                 WHERE orders.salesRepId = salesRep.id
@@ -245,7 +314,7 @@ const toBePaid = parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0
   // Return response
   res.status(200).json({
     status: 'success',
-    data: {...doc,toBePaid , paidToAdmin : paidToAdmin||0, credit},
+    data: {...result,toBePaid , paidToAdmin : paidToAdmin||0, credit},
   });
 
 });

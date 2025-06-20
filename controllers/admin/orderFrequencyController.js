@@ -1,4 +1,4 @@
-const { orderFrequency,order,item,address,orderHistory,user } = require('../../models');
+const { orderFrequency,order,item,address,orderHistory,user,salesRep } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const {nextFrequencyDate} = require('../../utils/nextFrequencyDate'); 
@@ -130,6 +130,37 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   if (input?.items?.length < 1 ) {
    throw new AppError('Cart is empty add products to place order', 404);
   }
+
+   const credit = await salesRep.findOne({
+    where: {
+      id: req.params.srId,
+    },
+    attributes:[ 
+      'creditLimit',
+      [
+          fn(
+            'FORMAT',
+            literal(`
+              (
+                SELECT SUM(items.price)
+                FROM orders
+                JOIN items ON items.orderId = orders.id
+                WHERE orders.salesRepId = salesRep.id
+                  AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+              )
+            `),
+            1
+          ),
+          'creditUsed',
+        ],]
+  });
+
+  let percentage = (credit.dataValues.creditUsed / credit.creditLimit) * 100
+  console.log("---------------------------------creaditUed",credit.dataValues.creditUsed)
+  console.log("---------------------------------creditLimit",credit.creditLimit)
+  if(percentage >= 80) {
+     throw new AppError('You have reached 80% of your credit limit. Continue placing orders please clear your balace first. ', 404);
+  }
   input.order.statusId = 1
   input.order.salesRepId = req.params?.srId
   input.order.createdBy = "sales-rep"
@@ -143,6 +174,12 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   input?.items.forEach((element) => {
     element.orderId = newOrder.id;
+    element.price = element.price * element.qty
+    element.wholesalePrice = element.wholesalePrice * element.qty
+    element.weight = element.weight * element.qty
+ 
+      element.salerCommission = parseFloat(element.price) - parseFloat(element.wholesalePrice)
+
   });
   await item.bulkCreate(input?.items);
   

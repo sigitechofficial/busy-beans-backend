@@ -132,6 +132,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     ],
     [
         literal(`COALESCE(
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'totalQuantity',
+    ],
+    [
+        literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
@@ -144,6 +151,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
           WHERE items.orderId = order.id ), 0)`),
         'wholesalePrice',
     ],
+      [
+        literal( 
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepName',
+      ],
     'totalBill',
     'subTotal',
     'discountPrice',
@@ -162,7 +175,9 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       'localPatnerCommission',
       'invoicePdf',
       'invoiceId',
-      'createdBy'
+      'createdBy',
+      'on',
+      'createdAt'
   ];
 
   // Execute the query
@@ -182,7 +197,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
   
-  console.log("🚀 ~ exports.allOrder=catchAsync ~ condition:", condition)
+  console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition)
 
   const doc = await order.findOne({
     where: condition,
@@ -280,10 +295,23 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       ],
          [
         literal(`COALESCE(
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'totalQuantity',
+    ],
+         [
+        literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'wholesalePrice',
+      ],
+           [
+        literal( 
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepName',
       ],
       'totalBill',
       'subTotal',
@@ -304,7 +332,9 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'localPatnerCommission',
       'invoicePdf',
       'invoiceId',
-      'createdBy'
+      'createdBy',
+      'on',
+        'createdAt'
     ],
   });
   if (!doc) {
@@ -379,6 +409,7 @@ exports.supplierAcknowledgement = catchAsync(async (req, res, next) => {
       data: doc,
     },
   });
+
 });
 
 //* Edit Cheque Information

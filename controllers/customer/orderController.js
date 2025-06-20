@@ -1,4 +1,4 @@
-const { order, item,orderHistory,orderFrequency,user } = require('../../models');
+const { order, item,orderHistory,orderFrequency,user,product } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -15,6 +15,46 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({where:{id:input?.order?.userId},attributes:['salesRepId']})
   input.order.statusId = 1
   input.order.salesRepId = customer?.salesRepId
+  let itemsPrice  = 0
+  let totalWeight  = 0
+  let productIds = input?.items.map(item => item.productId);
+  const  products  = await product.findAll({where:{id:productIds}})
+ 
+const finalItems = products.map((obj) => {
+    const element = {};
+    element.productId = obj.id;
+
+    // Find the matching product in input.items based on productId
+    let prod = input?.items.find(item => item.productId == obj.id);
+
+    // Set the qty from input.items or default to 1 if not found
+    let qty = prod ? parseInt(prod.qty, 10) : 1;
+element.qty =  qty;
+    // Calculate price, wholesalePrice, and weight for the item
+    element.price = obj.price * qty;
+    element.wholesalePrice = obj.wholesalePrice * qty;
+    element.weight = obj.weight * qty;
+
+    // Accumulate the total weight and price
+    itemsPrice += element.price;
+    totalWeight += element.weight;
+
+    // Handle salesRep commission if applicable
+    if (customer?.salesRepId) {
+        element.salerCommission = parseFloat(obj.price) - parseFloat(obj.wholesalePrice);
+    } else {
+        element.wholesalePrice = 0;
+    }
+
+    return element; // Return the transformed element
+});
+
+  
+  input.order.itemsPrice = itemsPrice
+  input.order.totalWeight = totalWeight
+  input.order.subTotal = itemsPrice + input.order.vat
+  input.order.totalBill = itemsPrice + input.order.vat
+ 
   const newOrder = await order.create(input?.order);
 
   await orderHistory.create({
@@ -22,18 +62,13 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     orderId:newOrder.id,
     on: Date.now(),
   });
-
-  input?.items.forEach((element) => {
+ 
+  
+  finalItems.forEach((element) => {
     element.orderId = newOrder.id;
-    element.price = element.price * element.qty
-    element.wholesalePrice = element.wholesalePrice * element.qty
-    if(customer?.salesRepId){
-      element.salerCommission = parseFloat(element.price) - parseFloat(element.wholesalePrice)
-    }else{
-      element.wholesalePrice = 0
-    }
   });
-  await item.bulkCreate(input?.items);
+
+  await item.bulkCreate(finalItems);
   
   if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
 

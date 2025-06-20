@@ -2,7 +2,7 @@ const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env
 const stripe = require('stripe')(STRIPE_SECRET_KEY)
 const Stripe = require('../stripe'); 
 const { user, salesRep, transfersToSalesRep ,item } = require('../../models');
-const order = require('../../models/order');
+const {order} = require('../../models');
  
 const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN` 
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
@@ -10,27 +10,27 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
  
   let event
    console.log(
-      '🚀 ~~~~~~~~~~~ exportts.sripeSubscriptionWebhookEventHandler= ~ event:'
+      'ЁЯЪА ~~~~~~~~~~~ exportts.sripeSubscriptionWebhookEventHandler= ~ event:'
     )
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret)
     console.log(
-      '🚀 ~~~~~~~~~~~ exports.stripeSubscriptionWebhookEventHandler= ~ event:',
+      'ЁЯЪА ~~~~~~~~~~~ exports.stripeSubscriptionWebhookEventHandler= ~ event:',
       JSON.stringify(event),
     )
   } catch (err) {
-    console.error('⚠️⚠️⚠️ Webhook signature verification failed.', err.message)
+    console.error('тЪая╕ПтЪая╕ПтЪая╕П Webhook signature verification failed.', err.message)
     return res.status(400).send(`Webhook Error: ${err.message}`)
   }
  
-  console.log('🚀🚀🚀 ~~~~~~~~~~ >  EVENT TYPE }:', event.type)
+  console.log('ЁЯЪАЁЯЪАЁЯЪА ~~~~~~~~~~ >  EVENT TYPE }:', event.type)
   switch (event.type) {
     case 'payment_method.attached':
       await paymentMethodAttch(
         event
       )
       break
-    case 'invoice.paid_': //not needed yet  "_" add underscore to prevent tranfers for now  
+    case 'invoice.paid': //not needed yet  "_" add underscore to prevent tranfers for now  
       await invoicePaid(
         event
       )
@@ -44,41 +44,41 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
 const invoicePaid = async (event) => {
   try {
  const invoice = event.data.object;
-  const localPartnerId = invoice.metadata?.salesRepId;
-  let localPatnerAccount = invoice.metadata?.localPatnerAccount;
+//   const localPartnerId = invoice.metadata?.salesRepId;
+//   let localPatnerAccount = invoice.metadata?.localPatnerAccount;
   const orderId = invoice.metadata?.orderId;
   
-  if(!localPartnerId) {
-  await order.update({paymentStatus:'done'},{where:{orderId}})
-  return true
-  }
+  await order.update({paymentStatus:'done'},{where:{id:orderId}})
+//   if(!localPartnerId) {
+//   return true
+//   }
   
-  const srAccount = await salesRep.findOne({where:{id:localPartnerId}})
-  localPatnerAccount = srAccount?.connectAccountId
- if(localPatnerAccount){
-     console.log(
-      '🚀 ~~~~~ localPatnerAccount ~ event:',
-      localPatnerAccount,
-    )
-    const totalWholesalePrice = await item.sum('salerCommission', {
-      where: {
-        orderId: orderId, 
-      },
-    });
-    console.log(
-      '🚀 ~~~~~ localPatnerAccount ~ event:',
-      totalWholesalePrice,
-    )
-      const transfer =  await Stripe.transferToLocalPatners({amount:totalWholesalePrice,localPartnerAccountId:localPatnerAccount,invoice})
+//   const srAccount = await salesRep.findOne({where:{id:localPartnerId}})
+//   localPatnerAccount = srAccount?.connectAccountId
+//  if(localPatnerAccount){
+//      console.log(
+//       'ЁЯЪА ~~~~~ localPatnerAccount ~ event:',
+//       localPatnerAccount,
+//     )
+//     const totalWholesalePrice = await item.sum('salerCommission', {
+//       where: {
+//         orderId: orderId, 
+//       },
+//     });
+//     console.log(
+//       'ЁЯЪА ~~~~~ localPatnerAccount ~ event:',
+//       totalWholesalePrice,
+//     )
+//       const transfer =  await Stripe.transferToLocalPatners({amount:totalWholesalePrice,localPartnerAccountId:localPatnerAccount,invoice})
 
-      await transfersToSalesRep.create({
-        amount: totalWholesalePrice, // as string, e.g. cents in USD
-        tranferId: transfer?.id, // Stripe transfer ID
-        salesRepId:localPartnerId,
-        orderId:orderId
-      });
-      await order.update({paymentStatus:'done',localPatnerCommission:totalWholesalePrice},{where:{orderId}})
-  }
+//       await transfersToSalesRep.create({
+//         amount: totalWholesalePrice, // as string, e.g. cents in USD
+//         tranferId: transfer?.id, // Stripe transfer ID
+//         salesRepId:localPartnerId,
+//         orderId:orderId
+//       });
+//       await order.update({paymentStatus:'done',localPatnerCommission:totalWholesalePrice},{where:{orderId}})
+//   }
   return true
   } catch (error) {
     console.error('Error handling invoice.paid:', error)

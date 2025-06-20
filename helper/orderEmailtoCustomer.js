@@ -8,6 +8,7 @@ const { footer } = require('./footer')
 const { emailDateFormate } = require('../utils/emailDateFormate')
 
 module.exports = function ({ email,data, satge = 'Confirmed',invoice}) {
+let hiCustomer = `Hi ${data?.customerName}!`
  const  invoiceSection = invoice?`   <tr>
               <td
                 style="
@@ -84,7 +85,7 @@ module.exports = function ({ email,data, satge = 'Confirmed',invoice}) {
       </tr>`:``; 
  let orderNote = `Your order has been confirmed and will be prepared according to the
                 instructions.`
-  let hiCustomer = `Hi ${data?.customerName}!`
+ 
    let items = [] 
    console.log("data?.itemsdata?.itemsdata?.itemsdata?.items",data?.items)
   data?.items.forEach((ele) => {
