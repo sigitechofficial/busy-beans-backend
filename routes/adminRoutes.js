@@ -21,6 +21,10 @@ router.post('/login', authController.adminLogin);
 router.post('/login/sales-rep', authController.salesRepLogin);
 router.post('/login/supplier', authController.supplierLogin);
 
+router.post('/forgot-password', authController.adminForgotPassword);
+router.post('/forgot-password/sales-rep', authController.salesRepForgotPassword);
+router.post('/forgot-password/supplier', authController.supplierForgotPassword);
+
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
     const destinationPath = './public/products';

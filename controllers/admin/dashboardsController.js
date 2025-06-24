@@ -1,4 +1,7 @@
-const { supplier,order,salesRep,user,item,product } = require('../../models');
+const { supplier,order,salesRep,user,item,product,stateInSystem ,cityInSystem
+,countryInSystem,
+
+} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
  
@@ -67,6 +70,12 @@ const salesSummary = await item.findOne({
   ],
   raw: true,
 });
+const totalCities = await cityInSystem.count({where:{deleted:0}})
+const totalStates = await stateInSystem.count({where:{deleted:0}})
+const totalCountries = await countryInSystem.count({where:{deleted:0}})
+const totalUser = await user.count({where:{deleted:0}})
+const totalSupplier = await supplier.count({where:{deleted:0}})
+const totalPatners = await salesRep.count({where:{deleted:0}})
 
 const revenueSummary = await order.findOne({
   where:{paymentStatus: 'done'},
@@ -103,9 +112,10 @@ const ordersSummary = await order.findOne({
   ],
   raw: true,
 });
+
   res.status(200).json({
     status: 'success',
-    data: {salesSummary,ordersSummary,revenueSummary},
+    data: {salesSummary,ordersSummary,revenueSummary,totalPatners,totalUser,totalSupplier,totalCities,totalCountries,totalStates},
   });
 
 });
@@ -200,6 +210,7 @@ const ordersSummary = await order.findOne({
   ],
   raw: true,
 });
+
   res.status(200).json({
     status: 'success',
     data: {salesSummary,ordersSummary,revenueSummary},

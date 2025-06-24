@@ -8,6 +8,8 @@ const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
 const otpGenerator = require('otp-generator');
 const EmailResetPasswordOtpToAll = require('../../helper/ResetPasswordOtpToAll');
+const Event = require('../events/userAccountRelatedEvents');
+
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
@@ -106,10 +108,45 @@ const login = (Model) =>
     createSendToken(data, 200, req, res);
   });
 
+const forgotPassword = (Model) =>
+    catchAsync(async (req, res, next) => {
+      const entity = await Model.findOne({
+        where: { email: req.body.email },
+        attributes: {
+          exclude: ['updatedAt', 'deleted', 'deletedAt', 'password'],
+        },
+      });
+      if (!entity) {
+        return next(new AppError('There is no user with email address.', 404));
+      }
+
+      const OTP = otpGenerator.generate(4, {
+        lowerCaseAlphabets: false,
+        upperCaseAlphabets: false,
+        specialChars: false,
+      });
+
+      entity.latestOtp = OTP;
+      await entity.save();
+      
+      Event.otpToUsersForgotPasswordEvent({email:entity?.email,otp:OTP,name:entity?.name});
+
+    res.status(200).json({
+      status: 'success',
+      data: {id:entity.id, email:entity.email},
+      message: 'OTP sent to email!',
+    });
+});
+
 
 exports.adminLogin =  login(account);
 exports.salesRepLogin =  login(salesRep);
 exports.supplierLogin =  login(supplier);
+ 
+
+exports.adminForgotPassword =  forgotPassword(account);
+exports.salesRepForgotPassword =  forgotPassword(salesRep);
+exports.supplierForgotPassword =  forgotPassword(supplier);
   
 exports.logina = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;

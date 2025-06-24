@@ -59,6 +59,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     upperCaseAlphabets: false,
     specialChars: false,
   });
+
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
     req.body.info.verifiedAt = Date.now();
   }
@@ -289,7 +290,7 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({
     where: { email: req.body.email },
     attributes: {
-      exclude: ['userId', 'updatedAt', 'deleted', 'deletedAt', 'password'],
+      exclude: ['updatedAt', 'deleted', 'deletedAt', 'password'],
     },
   });
   if (!customer) {
@@ -334,15 +335,15 @@ exports.resendOtp = catchAsync(async (req, res, next) => {
  
   await user.update({latestOtp:OTP},{where:{id:customer?.id}})
   
-  if(req.params.type == 'verification')
+  if(req.params.type == 'signup')
     {
-      Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
     }else{
+      Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
       Event.otpToUsersEvent({email:customer?.email,name:customer.name,otp:OTP});
     }
   res.status(200).json({
     status: 'success',
-    data: customer,
+    data: {id:customer?.id , email: customer.email},
     message: 'OTP sent to email!',
   });
 });
