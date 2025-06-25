@@ -1,8 +1,8 @@
 function attachments() {
   const attachment = {
     logo: {
-      filename: 'logo.png',
-      path: `${__dirname}/images/logo.png`,
+      filename: 'logo.webp',
+      path: `${__dirname}/images/logo.webp`,
       cid: 'logo',
     },
     cancel: {
@@ -65,6 +65,11 @@ function attachments() {
       path: __dirname + '/images/star.png',
       cid: 'star',
     },
+    youtube: {
+      filename: 'youtube.png',
+      path: __dirname + '/images/youtube.png',
+      cid: 'youtube',
+    },
   }
 
   return {
@@ -81,6 +86,7 @@ function attachments() {
       attachment.twitter,
       attachment.instagram,
       attachment.linkedin,
+      attachment.youtube,
     ],
     // in-case we have other emails
     attachment,

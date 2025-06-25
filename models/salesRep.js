@@ -110,6 +110,10 @@ module.exports = (sequelize) => {
       password: {
         type: DataTypes.STRING,
       },
+      latestOtp: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
     },
     {
       primaryKey: true,

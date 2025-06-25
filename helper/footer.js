@@ -43,6 +43,12 @@ exports.footer = ` <tr>
               alt="LinkedIn"
               style="width: 24px"
           /></a>
+          <a href="https://www.youtube.com"
+            ><img
+              src="cid:youtube"
+              alt="Youtube"
+              style="width: 24px"
+          /></a>
         </td>
       </tr>
       <tr>

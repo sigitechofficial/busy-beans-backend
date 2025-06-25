@@ -25,7 +25,7 @@ exports.setOrderFrequency = async ({orderData,salesRepId}) => { //orderData is
     
     return true
   } catch (error) {
-    console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ error:', error)
+    console.log('ðŸš€ ~ exports.onlineAppointmentConfirm= ~ error:', error)
   }
 }
 
@@ -138,8 +138,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     attributes:[ 
       'creditLimit',
       [
-          fn(
-            'FORMAT',
+          
             literal(`
               (
                 SELECT SUM(items.price)
@@ -149,8 +148,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-            1
-          ),
+          
           'creditUsed',
         ],]
   });
@@ -159,7 +157,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   console.log("---------------------------------creaditUed",credit.dataValues.creditUsed)
   console.log("---------------------------------creditLimit",credit.creditLimit)
   if(percentage >= 80) {
-     throw new AppError('You have reached 80% of your credit limit. Continue placing orders please clear your balace first. ', 404);
+     throw new AppError(`You've used over 80% of your credit limit. Please clear your balance before placing further orders.`, 404);
   }
   input.order.statusId = 1
   input.order.salesRepId = req.params?.srId
@@ -324,10 +322,10 @@ const frequencyBookOrder = async ({id}) => { //orderData is
     
     orderFrequency.update(updateFrequencyData,{where:{id:id}})
     
-    console.log("🚀 ~ frequencyBookOrder ~ result:", result)
+    console.log("ðŸš€ ~ frequencyBookOrder ~ result:", result)
  
   } catch (error) {
-   console.log("🚀 ~ exports.frequencyBookOrder = ~ error:", error)
+   console.log("ðŸš€ ~ exports.frequencyBookOrder = ~ error:", error)
   }
  };
  

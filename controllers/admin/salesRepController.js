@@ -18,6 +18,7 @@ exports.updateSalesRep = factory.updateOne(salesRep);
 exports.createSalesRep = catchAsync(async (req, res, next) => {
  
     const input = req.body;
+    console.log("🚀 ~ exports.createSalesRep=catchAsync ~ input:", input)
  
     const condition = {deleted :0};
     condition.email = input?.email

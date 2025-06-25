@@ -25,6 +25,20 @@ router.post('/forgot-password', authController.adminForgotPassword);
 router.post('/forgot-password/sales-rep', authController.salesRepForgotPassword);
 router.post('/forgot-password/supplier', authController.supplierForgotPassword);
 
+
+router.post('/resend-otp', authController.adminResendOtp);
+router.post('/resend-otp/sales-rep', authController.salesRepResendOtp);
+router.post('/resend-otp/supplier', authController.supplierResendOtp);
+
+router.post('/otp-verification', authController.adminOtpVerification);
+router.post('/otp-verification/sales-rep', authController.salesRepOtpVerification);
+router.post('/otp-verification/supplier', authController.supplierOtpVerification);
+
+router.post('/reset-password', authController.adminResetPassword) 
+router.post('/reset-password/sales-rep', authController.salesRepResendOtp) 
+router.post('/reset-password/supplier', authController.supplierResetPassword);
+
+
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
     const destinationPath = './public/products';

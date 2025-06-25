@@ -211,9 +211,11 @@ const ordersSummary = await order.findOne({
   raw: true,
 });
 
-  res.status(200).json({
+const totalUser = await user.count({where:{deleted:0, salesRepId:req.params.srId}})
+
+res.status(200).json({
     status: 'success',
-    data: {salesSummary,ordersSummary,revenueSummary},
+    data: {salesSummary,ordersSummary,revenueSummary,totalUser},
   });
 
 });

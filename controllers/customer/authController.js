@@ -320,7 +320,7 @@ exports.resendOtp = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({
     where: { email: req.body.email },
     attributes: {
-      exclude: ['userId', 'updatedAt', 'deleted', 'deletedAt', 'password','latestOtp'],
+      exclude: [ 'updatedAt', 'deleted', 'deletedAt', 'password','latestOtp'],
     },
   });
   if (!customer) {
@@ -337,9 +337,9 @@ exports.resendOtp = catchAsync(async (req, res, next) => {
   
   if(req.params.type == 'signup')
     {
+      Event.otpToUsersEvent({email:customer?.email,name:customer.name,otp:OTP});
     }else{
       Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
-      Event.otpToUsersEvent({email:customer?.email,name:customer.name,otp:OTP});
     }
   res.status(200).json({
     status: 'success',
