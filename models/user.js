@@ -115,30 +115,30 @@ module.exports = (sequelize) => {
     },
   );
 
-  // Hook to exclude deletedAt and updatedAt from query results
-  user.addHook('beforeFind', (options) => {
-    if (options.attributes) {
-      options.attributes.exclude = ['deletedAt', 'updatedAt'];
-    }
-  });
+  // // Hook to exclude deletedAt and updatedAt from query results
+  // user.addHook('beforeFind', (options) => {
+  //   if (options.attributes) {
+  //     options.attributes.exclude = ['deletedAt', 'updatedAt'];
+  //   }
+  // });
 
-  // Hook to hash password before create or update
-  user.addHook('beforeCreate', async (input) => {
-    if (input.password) {
-      console.log("🚀 ~ user.addHook ~ input.password:", input.password)
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-      console.log("🚀 ~ user.addHook ~ After.password:", input.password)
-    }
-  });
+  // // Hook to hash password before create or update
+  // user.addHook('beforeCreate', async (input) => {
+  //   if (input.password) {
+  //     console.log("🚀 ~ user.addHook ~ input.password:", input.password)
+  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  //     console.log("🚀 ~ user.addHook ~ After.password:", input.password)
+  //   }
+  // });
 
-  user.addHook('beforeUpdate', async (input) => {
-    if (input.password) {
-      console.log("🚀 ~ user.addHook ~ input.password:", input.password)
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-      console.log("🚀 ~ user.addHook ~ After.password:", input.password)
+  // user.addHook('beforeUpdate', async (input) => {
+  //   if (input.password) {
+  //     console.log("🚀 ~ user.addHook ~ input.password:", input.password)
+  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  //     console.log("🚀 ~ user.addHook ~ After.password:", input.password)
     
-    }
-  });
+  //   }
+  // });
 
   // Associations models
   user.associate = (models) => {

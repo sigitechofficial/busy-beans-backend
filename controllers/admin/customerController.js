@@ -144,5 +144,5 @@ exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
 
 // exports.getAllProducts = factory.getAll(product);
 // exports.getProduct = factory.getOne(product);
-// exports.updateProduct = factory.updateOne(product);
+exports.updateCutomer = factory.updateOne(user);
 // exports.deleteProduct = factory.deleteOne(product);

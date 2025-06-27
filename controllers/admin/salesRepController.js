@@ -24,6 +24,7 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
     condition.email = input?.email
     condition.state = input?.state
     const exist = await salesRep.findOne({ where: condition, attributes: ['id'] });
+
     if (exist) {
       if(exist.email == input.email){return next(new AppError('Email already exist', 400));
       }else{
@@ -42,6 +43,9 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
       console.log("🚀 ~ c ~ input.image:", input.image)
     }
 
+    const stripeCustomer = await Stripe.addCustomer({name:input.srName,email:input.email})
+    input.stripeCustomerId = stripeCustomer
+
     const doc = await salesRep.create(input);
     await stateInSystem.update({salesRepId:doc?.id},{where:{name:input?.state}})
 
@@ -51,6 +55,43 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
         data: doc,
       },
     });
+});
+
+exports.createFinancialConnectionsSession = catchAsync(async (req, res, next) => {
+   
+  const patner = await salesRep.findOne({where:{id:req.params.srId}});
+   if(patner?.defaultBankAccount){
+      return next(new AppError(`Your bank account is connected. You're all set`, 400));
+   }
+
+   if(patner?.stripeCustomerId){
+      
+   }
+  const session =  await Stripe.financialConnectionsSession({customerId:patner?.stripeCustomerId})
+
+  console.log("🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ session:", session)
+
+  return res.status(200).json({
+    status: 'success',   
+    data: {clientSecret: session?.client_secret , sessionId: session.id},
+  });
+});
+
+exports.attachBankAccount = catchAsync(async (req, res, next) => {
+  console.log();
+  const {sessionId} = req.body
+  const patner = await salesRep.findOne({where:{id:req.params.srId}});
+   
+  const {paymentMethodId} =  await Stripe.attachBankAccountPaymentMethod({customerId:patner.stripeCustomerId,sessionId})
+
+  console.log("🚀 ~ exports.paymentMethodId=catchAsync ~ session:", paymentMethodId)
+  patner.defaultBankAccount = paymentMethodId
+  await patner.save()
+  
+  return res.status(200).json({
+    status: 'success',   
+    data: {defaultBankAccount:paymentMethodId},
+  });
 });
 
 exports.deleteSalesRep = catchAsync(async (req, res, next) => {

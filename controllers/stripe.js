@@ -33,13 +33,44 @@ async function financialConnectionsSession({customerId}) {
   
     const session = await stripe.financialConnections.sessions.create({
       account_holder: {
-        type: 'customer',
-        customer: customerId,
+        type: "customer",
+        customer: customerId
       },
-      permissions: ['payment_method'],
-      return_url: 'https://yourdomain.com/bank-connected',
-    }); 
+      permissions: ["payment_method", "balances"],
+      filters: {
+        countries: ["US"]
+      }
+    });
+    
     return session   
+  } catch (error) {
+    console.error(error)
+    throw new AppError(`${error.message}`, 200)
+  }
+}
+
+// Retrieve and attach bank account PaymentMethod
+async function attachBankAccountPaymentMethod({ sessionId, customerId }) {
+  try {
+     const session = await stripe.financialConnections.sessions.retrieve(sessionId);
+    const bankAccountId = session.accounts[0].id;
+
+    // Stripe creates PaymentMethod automatically
+    const bankAccount = await stripe.financialConnections.account.retrieve(bankAccountId);
+
+    const paymentMethodId = bankAccount.payment_method;
+
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+
+    // Optionally set as default
+    await stripe.customers.update(customerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId
+      }
+    });
+
+    return { paymentMethodId }   
+
   } catch (error) {
     console.error(error)
     throw new AppError(`${error.message}`, 200)
@@ -282,6 +313,7 @@ async function createStripeLoginLink({accountId}) {
 }
 
 module.exports = {
+  attachBankAccountPaymentMethod,
   createStripeLoginLink,
   retrieveConnectAccount,
   createPaymentIntent,

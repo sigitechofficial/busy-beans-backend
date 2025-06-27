@@ -11,8 +11,9 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       weight: {
-        type: DataTypes.STRING,
+        type: DataTypes.DECIMAL(20, 2),
         allowNull: true,
+        defaultValue: 0,
       },
       unit: {
         type: DataTypes.STRING,

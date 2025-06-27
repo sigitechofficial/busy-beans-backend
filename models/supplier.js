@@ -137,25 +137,25 @@ module.exports = (sequelize) => {
     },
   );
 
-  // Hook to exclude deletedAt and updatedAt from query results
-  supplier.addHook('beforeFind', (options) => {
-    if (options.attributes) {
-      options.attributes.exclude = ['deletedAt', 'updatedAt'];
-    }
-  });
+  // // Hook to exclude deletedAt and updatedAt from query results
+  // supplier.addHook('beforeFind', (options) => {
+  //   if (options.attributes) {
+  //     options.attributes.exclude = ['deletedAt', 'updatedAt'];
+  //   }
+  // });
 
-  // Hook to hash password before create or update
-  supplier.addHook('beforeCreate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-    }
-  });
+  // // Hook to hash password before create or update
+  // supplier.addHook('beforeCreate', async (input) => {
+  //   if (input.password) {
+  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  //   }
+  // });
 
-  supplier.addHook('beforeUpdate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-    }
-  });
+  // supplier.addHook('beforeUpdate', async (input) => {
+  //   if (input.password) {
+  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  //   }
+  // });
 
   // Associations models
   supplier.associate = (models) => {

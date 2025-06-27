@@ -49,18 +49,18 @@ module.exports = (sequelize, DataTypes) => {
     },
   );
 
-    // Hook to hash password before create or update
-    account.addHook('beforeCreate', async (input) => {
-      if (input.password) {
-        input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-      }
-    });
+    // // Hook to hash password before create or update
+    // account.addHook('beforeCreate', async (input) => {
+    //   if (input.password) {
+    //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+    //   }
+    // });
   
-    account.addHook('beforeUpdate', async (input) => {
-      if (input.password) {
-        input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-      }
-    });
+    // account.addHook('beforeUpdate', async (input) => {
+    //   if (input.password) {
+    //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+    //   }
+    // });
     
   return account;
 };

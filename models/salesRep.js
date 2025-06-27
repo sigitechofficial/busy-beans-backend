@@ -99,6 +99,14 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(),
         allowNull: true
       },
+      stripeCustomerId: {
+        type: DataTypes.STRING(),
+        allowNull: true
+      },
+      defaultBankAccount: {
+        type: DataTypes.STRING(),
+        allowNull: true
+      },
       isAccountConnected: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
@@ -129,25 +137,25 @@ module.exports = (sequelize) => {
     },
   );
 
-  // Hook to exclude deletedAt and updatedAt from query results
-  salesRep.addHook('beforeFind', (options) => {
-    if (options.attributes) {
-      options.attributes.exclude = ['deletedAt', 'updatedAt'];
-    }
-  });
+  // // Hook to exclude deletedAt and updatedAt from query results
+  // salesRep.addHook('beforeFind', (options) => {
+  //   if (options.attributes) {
+  //     options.attributes.exclude = ['deletedAt', 'updatedAt'];
+  //   }
+  // });
 
-  // Hook to hash password before create or update
-  salesRep.addHook('beforeCreate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-    }
-  });
+  // // Hook to hash password before create or update
+  // salesRep.addHook('beforeCreate', async (input) => {
+  //   if (input.password) {
+  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  //   }
+  // });
 
-  salesRep.addHook('beforeUpdate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-    }
-  });
+  // salesRep.addHook('beforeUpdate', async (input) => {
+  //   if (input.password) {
+  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  //   }
+  // });
   
   
 

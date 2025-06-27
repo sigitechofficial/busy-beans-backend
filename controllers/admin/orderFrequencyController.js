@@ -195,6 +195,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
 
 const frequencyBookOrder = async ({id}) => { //orderData is 
+  let productsPrice = 0;
   try {
     const doc = await orderFrequency.findByPk(id,{
       include: [
@@ -277,12 +278,14 @@ const frequencyBookOrder = async ({id}) => { //orderData is
  
     const result = JSON.parse(JSON.stringify(doc));
 
-    let itemsPrice = 0;
+    // let productsPrice = 0;
     let totalWeight = 0;
 
     result?.items.forEach(item => {
-      itemsPrice += parseFloat(item?.price) * item?.qty; // Multiply price by quantity
-      totalWeight += parseFloat(item?.weight) * item?.qty; // Multiply weight by quantity
+      productsPrice += parseFloat(item?.price) * item?.qty; // Multiply price by quantity
+      totalWeight += parseFloat(item?.weight) * (item?.qty*1); // Multiply weight by 
+      item.weight = parseFloat(item?.weight||0) * (item?.qty*1);
+      item.price = parseFloat(item?.price) * (item?.qty*1);
      if(result?.salesRepId){
       item.salerCommission = (parseFloat(item?.price) * item?.qty) - (parseFloat(item?.wholesalePrice) * item?.qty) ; // Multiply weight by quantity
      }else{
@@ -290,12 +293,14 @@ const frequencyBookOrder = async ({id}) => { //orderData is
      }
     });
 
-    result.itemsPrice = itemsPrice
-    result.subTotal = itemsPrice + parseFloat(result?.vat)
-    result.totalBill = itemsPrice + parseFloat(result?.vat)
+    console.log("🚀 ~ frequencyBookOrder ~ productsPrice:", productsPrice)
+    console.log("🚀 ~ frequencyBookOrder ~ result:", result)
+    // result.itemsPrice = productsPrice
+    result.subTotal = productsPrice + parseFloat(result?.vat)
+    result.totalBill = productsPrice + parseFloat(result?.vat)
     result.totalWeight = totalWeight
     result.statusId = 1
-    result.salesRepId = 
+    result.salesRepId = result?.salesRepId
     result.createdBy = 'sales-rep'
     
     const newOrder= await order.create(result)
@@ -336,7 +341,15 @@ exports.bookOrderAccordingToFrequency = catchAsync(async (req, res, next) => {
   if (!ids || ids.length === 0) {
     return next(new AppError('No IDs provided!', 400));
   }
- 
+  //!USED IN LAMDA FUNCTION
+//  const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+
+// const pendingOrder = await orderFrequency.findAll({
+//   where: { nextOrderDate: today },
+//   attributes:['id']
+// });
+
+
   ids.forEach(id => {
     frequencyBookOrder({ id }) 
   }); 

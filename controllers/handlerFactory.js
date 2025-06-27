@@ -42,6 +42,7 @@ exports.softdelete = (Model,changes) =>
 exports.updateOne = (Model) =>
   catchAsync(async (req, res, next) => {
     const input = req.body;
+    input.password = undefined;
     if (req.file) {
       // throw new  'Image not uploaded', 'Please upload image';
       const tmpPath = req.file.path;

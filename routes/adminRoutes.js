@@ -166,6 +166,11 @@ router.get(
   customerController.viewCustomersManagement,
 );
 
+router.patch(
+  '/customer-update/:id',
+  customerController.updateCutomer,
+);
+
 router.get(
   '/customer-management/customer-list/:condition',
   customerController.customersList,
@@ -227,8 +232,13 @@ router.post(
 )
 
 router.post(
-  '/add-customer/sales-rep/:srId',
-  salesRepController.addCustomer,
+  '/create-financial-connection-session/sales-rep/:srId',
+  salesRepController.createFinancialConnectionsSession,
+)
+
+router.post(
+  '/attach-bank-account/sales-rep/:srId',
+  salesRepController.attachBankAccount,
 )
 
 
@@ -432,6 +442,11 @@ router.get(
 router.get(
   '/dashboard',
   dashboardsController.adminDashboard
+)
+
+router.get(
+  '/sales-rep-dashboard/:srId',
+  dashboardsController.salesRepDashboard
 )
 
 module.exports = router;
