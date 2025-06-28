@@ -6,7 +6,7 @@ const { response } = require('../../utils/response');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
 const {orderEvents} = require('../events/orderEvents')
 const {createPaymentIntent} = require('../stripe')
-
+const { Op } = require("sequelize");
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   if (input?.items?.length < 1 ) {
@@ -18,18 +18,28 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   let itemsPrice  = 0
   let totalWeight  = 0
   let productIds = input?.items.map(item => item.productId);
-  const  products  = await product.findAll({where:{id:productIds}})
- 
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds)
+  const products = await product.findAll({
+  where: {
+    id: {
+      [Op.in]: productIds
+    }
+  }
+});
+// return res.json(products)
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products.length)
 const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
+    // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
     let prod = input?.items.find(item => item.productId == obj.id);
 
     // Set the qty from input.items or default to 1 if not found
-    let qty = prod ? parseInt(prod.qty, 10) : 1;
-element.qty =  qty;
+    let qty = prod ? parseInt(prod.qty) : 1;
+    console.log("🚀 ~ finalItems ~ qty:", qty)
+    element.qty =  qty;
     // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
     element.wholesalePrice = obj.wholesalePrice * qty;
@@ -41,11 +51,10 @@ element.qty =  qty;
 
     // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
-        element.salerCommission = parseFloat(obj.price) - parseFloat(obj.wholesalePrice);
+        element.salerCommission = parseFloat(element.price) - parseFloat(element.wholesalePrice );
     } else {
         element.wholesalePrice = 0;
     }
-
     return element; // Return the transformed element
 });
 
@@ -70,9 +79,9 @@ element.qty =  qty;
 
   await item.bulkCreate(finalItems);
   
-  if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
+  // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
 
-  orderEvents({orderId:newOrder?.id})
+  // orderEvents({orderId:newOrder?.id})
   return res.status(200).json({
     status: 'success',   
     data: {id:newOrder?.id},

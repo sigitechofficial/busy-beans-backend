@@ -157,8 +157,8 @@ let hiCustomer = `Hi ${data?.customerName}!`
                 <img
                   src="cid:logo"
                   alt="Image"
-                  width="316"
-                  height="147"
+                  width="250"
+                  height="100"
                   style="border-radius: 16px"
                 />
               </td>

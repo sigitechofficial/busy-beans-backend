@@ -107,7 +107,6 @@ const login = (Model) =>
       return next(new AppError('You are blocked by admin!', 400));
     }
   
-  
     // 3) If everything ok, send token to client
     createSendToken(data, 200, req, res);
   });

@@ -12,6 +12,9 @@ const adminReportsController = require('../controllers/admin/adminReportsControl
 const supplierReportsController = require('../controllers/admin/supplierReportsController');
 const salesRepReportsController = require('../controllers/admin/salesRepReportsController');
 const dashboardsController = require('../controllers/admin/dashboardsController');
+
+const pulloutPaymentsController = require('../controllers/admin/pulloutPaymentsController');
+
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
@@ -232,15 +235,14 @@ router.post(
 )
 
 router.post(
-  '/create-financial-connection-session/sales-rep/:srId',
+  '/create-bank-setup-intent/sales-rep/:srId',
   salesRepController.createFinancialConnectionsSession,
 )
 
 router.post(
-  '/attach-bank-account/sales-rep/:srId',
+  '/attach-bank-account-setup/sales-rep/:srId',
   salesRepController.attachBankAccount,
 )
-
 
 router.get(
   '/sales-rep/sales/:srId',
@@ -449,4 +451,13 @@ router.get(
   dashboardsController.salesRepDashboard
 )
 
+router.get(
+  '/orders-pending-pullouts/:srId',
+  manageOrderController.ordersPendingPullouts
+)
+
+router.post(
+  '/pull-payments-from-patners-banka-account/:srId',
+  pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts
+) 
 module.exports = router;

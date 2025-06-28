@@ -47,7 +47,7 @@ exports.footer = ` <tr>
             ><img
               src="cid:youtube"
               alt="Youtube"
-              style="width: 24px"
+              style="width: 32px"
           /></a>
         </td>
       </tr>
@@ -78,7 +78,7 @@ exports.footer = ` <tr>
             color: #000000;
           "
         >
-          ðŸ“§ support@busybean.com | ðŸ“ž (123) 456-7890
+          info@busybeancoffee.com 833-843-2326
         </td>
       </tr>
       <tr>
@@ -93,7 +93,7 @@ exports.footer = ` <tr>
             color: #000000;
           "
         >
-          Copyright Â© 2025 BusyBeans
+          Copyright © 2025 BusyBean
         </td>
       </tr>
       <tr>
@@ -108,7 +108,6 @@ exports.footer = ` <tr>
             color: #000000;
           "
         >
-          <a href="#" style="text-decoration: underline">Unsubscribe</a>
         </td>
       </tr>
       <tr>
@@ -138,6 +137,7 @@ exports.footer = ` <tr>
     </table>
   </body>
 </html>`;
+          // <a href="#" style="text-decoration: underline">Unsubscribe</a>
 
 // <span
 //   style="color: #202053; margin-left: 5px"

@@ -30,7 +30,7 @@ module.exports = function ({ email,data, invoice}) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
-      subject: `Your Order ${data.id} â€“ Please Complete Your Payment`, // Subject line
+      subject: `Your Order ${data.id} Please Complete Your Payment`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>
 <html lang="en">
@@ -63,13 +63,13 @@ module.exports = function ({ email,data, invoice}) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-          <img
-            src="cid:logo"
-            alt="Image"
-            width="316"
-            height="147"
-            style="border-radius: 16px"
-          />
+         <img
+                  src="cid:logo"
+                  alt="Image"
+                  width="250"
+                  height="100"
+                  style="border-radius: 16px"
+                />
         </td>
       </tr>
       <tr>

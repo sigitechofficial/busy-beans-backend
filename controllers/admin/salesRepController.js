@@ -4,6 +4,7 @@ const AppError = require('../../utils/appError');
 const Stripe = require('../stripe');
 const factory = require('../handlerFactory');
 const { sendQuotationEvent } = require('../events/sendQuotationEvents');
+const { connectStripeAccountEvent } = require('../events/connectStripeAccountEvent');
 const { response } = require('../../utils/response');
 const { Op, literal, fn, col } = require('sequelize');
 
@@ -48,7 +49,8 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
 
     const doc = await salesRep.create(input);
     await stateInSystem.update({salesRepId:doc?.id},{where:{name:input?.state}})
-
+    
+    connectStripeAccountEvent({patner:doc})
    return res.status(201).json({
       status: 'success',
       data: {
@@ -61,37 +63,48 @@ exports.createFinancialConnectionsSession = catchAsync(async (req, res, next) =>
    
   const patner = await salesRep.findOne({where:{id:req.params.srId}});
    if(patner?.defaultBankAccount){
-      return next(new AppError(`Your bank account is connected. You're all set`, 400));
+ 
+    return res.status(200).json({
+    status: 'success',   
+    message:`Your bank account is connected. You're all set`,
+    data: {clientSecret:null , setputIntendId: null },
+  });
    }
+  let stripeCustomerId = patner?.stripeCustomerId
+   if(!patner?.stripeCustomerId){
+    const stripeCustomer = await Stripe.addCustomer({name:patner.srName,email:patner.email})
+    patner.stripeCustomerId = stripeCustomer
+    await patner.save()
+    stripeCustomerId = stripeCustomer
+  }
+  console.log("🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ stripeCustomerId:", stripeCustomerId)
 
-   if(patner?.stripeCustomerId){
-      
-   }
-  const session =  await Stripe.financialConnectionsSession({customerId:patner?.stripeCustomerId})
+  const session =  await Stripe.financialConnectionsSession({customerId:stripeCustomerId})
 
   console.log("🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ session:", session)
 
   return res.status(200).json({
     status: 'success',   
-    data: {clientSecret: session?.client_secret , sessionId: session.id},
+    data: {clientSecret: session?.client_secret , setputIntendId: session.id },
   });
+  
 });
 
 exports.attachBankAccount = catchAsync(async (req, res, next) => {
-  console.log();
-  const {sessionId} = req.body
-  const patner = await salesRep.findOne({where:{id:req.params.srId}});
-   
-  const {paymentMethodId} =  await Stripe.attachBankAccountPaymentMethod({customerId:patner.stripeCustomerId,sessionId})
 
-  console.log("🚀 ~ exports.paymentMethodId=catchAsync ~ session:", paymentMethodId)
-  patner.defaultBankAccount = paymentMethodId
+  const {paymentMethodId} = req.body
+  const patner = await salesRep.findOne({where:{id:req.params.srId }});
+   
+  const attach =  await Stripe.attachBankAccountPaymentMethod({paymentMethodId,customerId:patner.stripeCustomerId})
+ 
+  patner.defaultBankAccount = attach.success? attach.paymentMethodId:null
   await patner.save()
   
   return res.status(200).json({
     status: 'success',   
-    data: {defaultBankAccount:paymentMethodId},
+    data: {attach},
   });
+
 });
 
 exports.deleteSalesRep = catchAsync(async (req, res, next) => {

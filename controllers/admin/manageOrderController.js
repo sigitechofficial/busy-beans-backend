@@ -193,6 +193,127 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
+  let  condition = {
+  paymentStatus: 'done',
+  invoiceId: null,
+  paymentMethodId: null,
+  adminReceivableStatus: false,
+  localPatnerCommission: 0.00,
+  salesRepId: req.params.srId,
+  statusId: {
+    [Op.in]: [4, 5]
+  }
+};
+  
+  console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition)
+
+  const doc = await order.findAll({
+    where: condition,
+    include: [
+      {
+        model: item,
+        attributes: [
+          'id',
+          [
+            literal(
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'product',
+          ],
+          'qty',
+          'price',
+          'discount',
+          'orderId',
+          'productId',
+          'wholesalePrice'
+        ],
+      },
+    ],
+    attributes: [
+      'id',
+      [
+        literal(
+          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'customerName',
+      ],
+      [
+        literal( 
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+        ),
+        'orderCurrentStatus',
+      ],
+      [
+        literal(`COALESCE(
+         (SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'localPatnerCommission',
+      ],
+        [
+      literal(`
+        COALESCE(order.totalBill, 0) - COALESCE((
+          SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id
+        ), 0)
+      `),
+      'adminReceivableAmount'
+        ],
+       [
+        literal(`COALESCE(
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'totalQuantity',
+    ],
+         [
+        literal(`COALESCE(
+         (SELECT SUM(wholesalePrice)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'wholesalePrice',
+      ],
+           [
+        literal( 
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepName',
+      ],
+      'totalBill',
+      'subTotal',
+      'discountPrice',
+      'discountPercentage',
+      'itemsPrice',
+      'vat',
+      'totalWeight',
+      'note',
+      'paymentMethod',
+      'poNumber',
+      'frequency',
+      'statusId',
+      'trackingNumber',
+      'paymentStatus',
+      'adminReceivableStatus',
+      'invoicePdf',
+      'invoiceId',
+      'createdBy',
+      'on',
+      'createdAt'
+    ],
+  });
+  if (!doc) {
+    return next(new AppError('Data not found!', 400));
+  }
+  res.status(200).json({
+    status: 'success',
+    data: {
+      order: doc,
+    },
+  });
+});
+
 exports.orderDetails = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.id) condition.id = req.params.id;

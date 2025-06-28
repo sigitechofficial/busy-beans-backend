@@ -1,7 +1,8 @@
 const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env
 const Stripe = require('stripe');
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2022-11-15', // ✅ Add this line
+  apiVersion: '2022-11-15',
+  // beta: ["financial_connections_sessions_beta"] // ✅ Add this line
 });
 const AppError = require('../utils/appError') 
 
@@ -31,16 +32,18 @@ async function addCustomer({name, email}) {
 async function financialConnectionsSession({customerId}) {
   try {
   
-    const session = await stripe.financialConnections.sessions.create({
-      account_holder: {
-        type: "customer",
-        customer: customerId
-      },
-      permissions: ["payment_method", "balances"],
-      filters: {
-        countries: ["US"]
+   const session = await stripe.setupIntents.create({
+  customer: customerId,
+  payment_method_types: ['us_bank_account'],
+  usage:"off_session",
+  payment_method_options: {
+    us_bank_account: {
+      financial_connections: {
+        permissions: ['payment_method', 'balances']
       }
-    });
+    }
+  }
+});
     
     return session   
   } catch (error) {
@@ -50,32 +53,36 @@ async function financialConnectionsSession({customerId}) {
 }
 
 // Retrieve and attach bank account PaymentMethod
-async function attachBankAccountPaymentMethod({ sessionId, customerId }) {
-  try {
-     const session = await stripe.financialConnections.sessions.retrieve(sessionId);
-    const bankAccountId = session.accounts[0].id;
+ 
 
-    // Stripe creates PaymentMethod automatically
-    const bankAccount = await stripe.financialConnections.account.retrieve(bankAccountId);
+async function attachBankAccountPaymentMethod({ paymentMethodId, customerId }) {
+try {
+ 
+    if (!paymentMethodId) {
+      throw new Error("No payment method found on SetupIntent. Did the user finish connecting the bank?");
+    }
 
-    const paymentMethodId = bankAccount.payment_method;
-
+    // 2. Attach to customer (if not already attached)
     await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
 
-    // Optionally set as default
+    // 3. (Optional) Set as default for invoices/payments
     await stripe.customers.update(customerId, {
       invoice_settings: {
         default_payment_method: paymentMethodId
       }
     });
 
-    return { paymentMethodId }   
+    return {
+      success: true,
+      paymentMethodId
+    };
 
   } catch (error) {
-    console.error(error)
-    throw new AppError(`${error.message}`, 200)
+    console.error("❌ attachBankAccountPaymentMethod error:", error);
+    throw new Error(`Bank account linking failed: ${error.message}`);
   }
 }
+
 
 async function createPaymentIntent(amount) {
   try {
@@ -288,7 +295,7 @@ async function retrieveConnectAccount({ accountId }) {
     }
 
     // Check if there are any requirements pending (errors or verification)
-    if (account.requirements.errors.length > 0 || account.requirements.pending_verification.length > 0) {
+    if (account?.requirements?.errors?.length > 0 || account?.requirements?.pending_verification?.length > 0) {
       throw new AppError('There are pending verification or requirements errors.', 400);
     }
 
@@ -312,7 +319,34 @@ async function createStripeLoginLink({accountId}) {
   }
 }
 
+async function pullAmountPaymentIntentFromBankAccount({ amount, savedPaymentMethodId, customerId }) {
+  try {
+    const cents = convertToCents(amount);
+    console.log("🚀 ~ pullAmountPaymentIntentFromBankAccount ~ amount:", amount)
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: cents,
+      currency: "usd",
+      customer: customerId,
+      payment_method: savedPaymentMethodId,
+      payment_method_types: ["us_bank_account"],
+      off_session: true,
+      confirm: true
+    });
+
+    return {
+      success: true,
+      paymentIntentId: paymentIntent.id,
+      status: paymentIntent.status // will likely be "processing"
+    };
+  } catch (error) {
+    console.error("❌ ACH pull failed:", error);
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
 module.exports = {
+  pullAmountPaymentIntentFromBankAccount,
   attachBankAccountPaymentMethod,
   createStripeLoginLink,
   retrieveConnectAccount,
