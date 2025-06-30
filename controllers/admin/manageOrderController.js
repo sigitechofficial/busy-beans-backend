@@ -7,7 +7,8 @@ const {
   chequeDetail,
   orderHistory,
   supplier,
-  statuses
+  statuses,
+  shippingCompanies
 } = require('../../models');
 const { Op, literal, fn, col } = require('sequelize');
 const APIFeatures = require('../../utils/apiFeatures');
@@ -35,7 +36,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   }
   
   const orderData = details
-  const invoice = details.invoiceId ? await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }): await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
+  const invoice = details?.invoiceId ? await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }): await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
   await order.update(invoice,{where:{id:details.id}})
 
   let to = [email]
@@ -177,7 +178,8 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       'invoiceId',
       'createdBy',
       'on',
-      'createdAt'
+      'createdAt',
+      'shippingCharges'
   ];
 
   // Execute the query
@@ -300,7 +302,8 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'invoiceId',
       'createdBy',
       'on',
-      'createdAt'
+      'createdAt',
+      'shippingCharges'
     ],
   });
   if (!doc) {
@@ -455,7 +458,8 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'invoiceId',
       'createdBy',
       'on',
-        'createdAt'
+        'createdAt',
+        'shippingCharges'
     ],
   });
   if (!doc) {
@@ -541,5 +545,32 @@ exports.eidtCheque = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: 'success',
     data: {},
+  });
+});
+
+
+exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
+   const weight = req.body.weight; // Weight from req.body
+
+    // Find the shipping company where the weight is between weightFrom and weightTo
+    const shippingCompany = await shippingCompanies.findOne({
+      where: {
+        weightFrom: {
+          [Op.lte]: weight, // Less than or equal to the weight
+        },
+        weightTo: {
+          [Op.gte]: weight, // Greater than or equal to the weight
+        },
+      },
+      attributes:['charges']
+    });
+
+    if (!shippingCompany) {
+       return next(new AppError('Not dealing in such weights. Contact customer support for this order.', 400));
+    }
+
+  return res.status(200).json({
+    status: 'success',
+    data: shippingCompany,
   });
 });

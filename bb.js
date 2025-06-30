@@ -5,8 +5,7 @@ const server = require('./app');
 
 const serverPort = 8011;
 
-const syncDb = 0
-; // Use environment variable for flexibility
+const syncDb = 0; // Use environment variable for flexibility
 
 if (syncDb) {
   db.sequelize
@@ -51,7 +50,7 @@ const gracefulShutdown = () => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
  
-server.listen(serverPort,'192.168.1.107', (err) => {
+server.listen(serverPort,'192.168.1.2', (err) => {
   if (err) throw err
-  console.log(`Server is listening on 192.168.1.107 :${serverPort}`)
+  console.log(`Server is listening on 192.168.1.2 :${serverPort}`)
 })

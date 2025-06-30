@@ -35,7 +35,7 @@ module.exports = (sequelize) => {
         defaultValue: 0,
       },
       totalWeight: {
-        type: DataTypes.DECIMAL(10, 1),
+        type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
         defaultValue: true,
       },
@@ -129,7 +129,19 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: false,
       },
-
+      shippingCharges: {
+        type: DataTypes.DECIMAL(20, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
+      shippedBy: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      billingAddress: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
     },
     {
       tableName: 'orders',

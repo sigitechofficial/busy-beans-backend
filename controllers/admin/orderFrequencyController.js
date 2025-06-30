@@ -1,4 +1,4 @@
-const { orderFrequency,order,item,address,orderHistory,user,salesRep } = require('../../models');
+const { orderFrequency,order,item,address,orderHistory,user,salesRep,shippingCompanies } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const {nextFrequencyDate} = require('../../utils/nextFrequencyDate'); 
@@ -127,6 +127,7 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
 exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   const input = req.body;
+  console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ input:", input)
   if (input?.items?.length < 1 ) {
    throw new AppError('Cart is empty add products to place order', 404);
   }
@@ -162,6 +163,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.statusId = 1
   input.order.salesRepId = req.params?.srId
   input.order.createdBy = "sales-rep"
+  input.order.totalBill = parseFloat(input.order.totalBill) + parseFloat(input.order.shippingCharges)
   const newOrder = await order.create(input?.order);
 
   await orderHistory.create({

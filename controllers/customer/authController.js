@@ -64,10 +64,13 @@ exports.signup = catchAsync(async (req, res, next) => {
     req.body.info.verifiedAt = Date.now();
   }
   
-  const sr = await salesRep.findOne({where:{state:req.body?.address?.state}})
+  const sr = await salesRep.findAll({where:{state:req.body?.address?.state}})
+
+  if(sr && sr.length === 1){
+    req.body.info.salesRepId = sr[0]?.id;
+  }
   console.log("🚀 ~ exports.signup=catchAsync ~ sr:", sr?.id)
   req.body.info.latestOtp = OTP;
-  req.body.info.salesRepId = sr?.id;
   const newUser = await user.create(req.body?.info);
 
   

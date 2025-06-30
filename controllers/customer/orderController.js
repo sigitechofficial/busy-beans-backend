@@ -9,6 +9,7 @@ const {createPaymentIntent} = require('../stripe')
 const { Op } = require("sequelize");
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
   if (input?.items?.length < 1 ) {
    throw new AppError('Cart is empty add products to place order', 404);
   }
@@ -62,7 +63,7 @@ const finalItems = products.map((obj) => {
   input.order.itemsPrice = itemsPrice
   input.order.totalWeight = totalWeight
   input.order.subTotal = itemsPrice + input.order.vat
-  input.order.totalBill = itemsPrice + input.order.vat
+  input.order.totalBill = itemsPrice +  parseFloat(input.order.vat) + parseFloat(input.order.shippingCharges||0)
  
   const newOrder = await order.create(input?.order);
 

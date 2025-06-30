@@ -52,6 +52,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+       countryCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       saleTaxNumber: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -96,6 +100,10 @@ module.exports = (sequelize) => {
         defaultValue: 'registration',
       },
       preferredPaymentMethod: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
+      billingAddress: {
         type: DataTypes.STRING(),
         allowNull: true,
       },

@@ -460,4 +460,10 @@ router.post(
   '/pull-payments-from-patners-banka-account/:srId',
   pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts
 ) 
+
+router.post(
+  '/shipping-charges-on-weight',
+  manageOrderController.findShippingCompanyForWeight
+) 
+
 module.exports = router;

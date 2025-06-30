@@ -58,6 +58,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       ],
       [
         literal(
+          `(SELECT users.billingAddress FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'billingAddress',
+      ],
+      [
+        literal(
           `(SELECT users.emailToSendInvoices FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         'emailToSendInvoices',
@@ -115,7 +121,8 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'invoiceId',
       'createdBy',
       'paymentMethodId',
-      'paymentIntentId'
+      'shippingCharges',
+      'poNumber',
     ],
   });
   const output = JSON.parse(JSON.stringify(doc))

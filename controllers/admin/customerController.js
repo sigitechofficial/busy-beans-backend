@@ -49,6 +49,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
       `status`,
       `image`,
       `phoneNumber`,
+      `countryCode`,
       `saleTaxNumber`,
       `emailToSendInvoices`,
     ],
@@ -136,6 +137,7 @@ exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
       ],
     ],
   });
+  
   res.status(200).json({
     status: 'success',
     data: { data },

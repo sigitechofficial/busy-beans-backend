@@ -167,7 +167,30 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
     // Step 1: Create invoice items
         console.log('🚀 ~ exports.order= ~ order:', order)
 
-    const { vat, items} = order
+    const { shippingCharges,billingAddress,vat, items} = order
+    console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
+    console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
+    console.log("🚀 ~ createInvoiceWithItems ~ order?.stripeCustomerId:", order?.stripeCustomerId)
+    
+    if (billingAddress) {
+      console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
+      console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
+      console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
+      await stripe.customers.update(order?.stripeCustomerId, {
+       address: {
+    line1: '123 Main Street',
+    city: 'Toba Tek Singh',
+    state: 'Punjab',
+    postal_code: '36050',
+    country: 'PK', // Must be ISO 2-letter code
+  },
+  
+        name: order?.customerName || undefined, // Optional if available
+        email: order?.email || undefined, // Optional if available
+      });
+    }
+
+
     for (const item of items) {
       const { product, qty, price } = item;
       await stripe.invoiceItems.create({
@@ -181,9 +204,22 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
       console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ item:', convertToCents(price))
     }
  
-    if (vat && vat > 0 ) {
+    if (shippingCharges && (shippingCharges*1) > 0 ) {
+      const shippingChargesAmount = convertToCents(shippingCharges);
+      console.log(`Creating shipping charges invoice item, amount: ${shippingChargesAmount} cents`);
+     const shippingChargesItem =  await stripe.invoiceItems.create({
+        customer: order?.stripeCustomerId,
+        amount: shippingChargesAmount,
+        currency,
+        description: 'Shipping Charges',
+      });
+            console.log(`Creating shipping charges invoice item, amount: $} cents`,shippingChargesItem.id);
+    }
+
+
+     if (vat && vat > 0 ) {
       const vatAmount = convertToCents(vat);
-      console.log(`Creating VAT invoice item, amount: ${vatAmount} cents`);
+      console.log(`Creating  invoice item, amount: ${vatAmount} cents`);
      const vatItem =  await stripe.invoiceItems.create({
         customer: order?.stripeCustomerId,
         amount: vatAmount,
@@ -203,6 +239,10 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
         localPatnerAccount: order?.connectAccountId,
         salesRepId: order?.salesRepId,
       },
+      custom_fields: order?.poNumber ? [{
+          name: "PO Number",
+          value: order.poNumber,
+        }] : undefined,
       pending_invoice_items_behavior: 'include',
     });
     

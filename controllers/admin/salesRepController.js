@@ -23,14 +23,15 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
  
     const condition = {deleted :0};
     condition.email = input?.email
-    condition.state = input?.state
+    // condition.state = input?.state
     const exist = await salesRep.findOne({ where: condition, attributes: ['id'] });
 
     if (exist) {
       if(exist.email == input.email){return next(new AppError('Email already exist', 400));
-      }else{
-        return next(new AppError('State already has a local Patner', 400));
       }
+      // else{
+      //   return next(new AppError('State already has a local Patner', 400));
+      // }
     }
   
     if (req.file) {
@@ -51,7 +52,8 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
     await stateInSystem.update({salesRepId:doc?.id},{where:{name:input?.state}})
     
     connectStripeAccountEvent({patner:doc})
-   return res.status(201).json({
+   
+    return res.status(201).json({
       status: 'success',
       data: {
         data: doc,
