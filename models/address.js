@@ -4,7 +4,8 @@ module.exports = (sequelize, DataTypes) => {
     {
       companyaddress: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
+        defaultValue: '',
       },
       addressLineOne: {
         type: DataTypes.STRING,

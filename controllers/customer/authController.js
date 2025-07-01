@@ -1,3 +1,6 @@
+const dotenv = require('dotenv')
+dotenv.config({ path: '../.env' })
+
 const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
@@ -17,9 +20,9 @@ const Stripe = require('../stripe');
 const signToken = (data) =>
   jwt.sign(
     data,
-    'd4cec3a48d07bcc52c3de15cBusyBeansCoffee60d03989ed0d638daa5677d7b', // Hardcoded JWT Secret
+    process.env.JWT_SECRET, // Hardcoded JWT Secret
     {
-      expiresIn: '7d',
+      expiresIn:process.env.JWT_EXPIRES_IN ,
     },
   );
 
@@ -53,7 +56,9 @@ const createSendToken = (input, statusCode, req, res) => {
 };
 
 exports.signup = catchAsync(async (req, res, next) => {
+  
   console.log("🚀 ~ exports.signup=catchAsync ~  req.body:",  req.body)
+
   const OTP = otpGenerator.generate(4, {
     lowerCaseAlphabets: false,
     upperCaseAlphabets: false,

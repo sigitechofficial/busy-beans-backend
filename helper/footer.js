@@ -41,9 +41,9 @@ exports.footer = ` <tr>
             ><img
               src="cid:linkedin"
               alt="LinkedIn"
-              style="width: 24px"
+              style="width: 24px; margin-right: 10px"
           /></a>
-          <a href="https://www.youtube.com"
+          <a href="https://www.youtube.com/channel/UC4b4PYax5H3jRSyw4r0MCjQ/featured"
             ><img
               src="cid:youtube"
               alt="Youtube"

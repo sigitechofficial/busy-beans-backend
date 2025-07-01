@@ -6,7 +6,9 @@ const { response } = require('../../utils/response');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
 const {orderEvents} = require('../events/orderEvents')
 const {createPaymentIntent} = require('../stripe')
-const { Op } = require("sequelize");
+const Stripe = require('../stripe')
+const { Op, where } = require("sequelize");
+
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
@@ -97,3 +99,37 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
   });
 });
 
+async function syncStripeCustomers({usersWithoutCustomerId}) {
+  try {
+  
+    for (const item of usersWithoutCustomerId) {
+      try {
+        const customer = await Stripe.addCustomer({ email: item.email,name:item.name });
+
+        if (customer) {
+          await user.update({ stripeCustomerId: customer },{where:{id:item.id}});
+          console.log(`✅ Stripe customer created for ${item.email}`);
+        } else {
+          console.log(`⚠️ No customer ID returned for ${item.email}`);
+        }
+      } catch (innerErr) {
+        console.error(`❌ Error creating Stripe customer for ${item.email}:`, innerErr.message);
+      }
+    }
+
+  } catch (err) {
+    console.error("❌ Failed to fetch users:", err.message);
+  }
+}
+
+exports.createStripeCustomers = catchAsync(async (req, res, next) => {
+  const output = await user.findAll({where:{stripeCustomerId:null}})
+
+ if(output && output?.length > 0) syncStripeCustomers({usersWithoutCustomerId:output})
+  
+ 
+  return res.status(200).json({
+    status: 'success',   
+    data: {userCount: output.length},
+  });
+});

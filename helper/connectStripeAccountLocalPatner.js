@@ -6,7 +6,7 @@ const attachment = attachments()
 const { transporter } = require('./transpoter')
 const { footer } = require('./footer') 
 
-module.exports = function ({ email, name = '', boardingLink= '' }) {
+module.exports = function ({ email, name = '', boardingLink= '',password }) {
   console.log("🚀 ~ boardingLink:", boardingLink)
   console.log("🚀 ~ boardingLink:", boardingLink)
   console.log("🚀 ~ boardingLink:", boardingLink)
@@ -93,14 +93,41 @@ module.exports = function ({ email, name = '', boardingLink= '' }) {
           transactions.
         </td>
       </tr>
-
       <!-- Insert below the "To start receiving online payments..." paragraph and above "If you have any questions..." -->
+   <br>
+       <tr>
+  <td
+    style="
+      padding-left: 37px;
+      padding-right: 37px;
+      font-family: 'Chivo', sans-serif;
+      font-size: 16px;
+    "
+  >
+    <a
+      href="${boardingLink}"
+      style="
+        display: inline-block;
+        background-color: #905E47;
+        color: #ffffff !important;
+        text-decoration: none;
+        padding: 12px 24px;
+        border-radius: 4px;
+        font-weight: bold;
+      "
+    >
+      Connect Your Stripe Account
+    </a>
+  </td>
+</tr>
+
+      </tr>
       <tr>
         <td
           style="
             padding-left: 37px;
             padding-right: 37px;
-            padding-top: 40px;
+            padding-top: 30px;
             font-family: 'Chivo', sans-serif;
             font-size: 18px;
             font-weight: bold;
@@ -131,66 +158,7 @@ module.exports = function ({ email, name = '', boardingLink= '' }) {
         </td>
       </tr>
 
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 40px;
-            font-family: 'Chivo', sans-serif;
-            font-size: 18px;
-            font-weight: bold;
-            color: #000000;
-          "
-        >
-          Ready to get started?
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            font-family: 'Chivo', sans-serif;
-            font-size: 16px;
-            color: rgba(0, 0, 0, 0.8);
-            line-height: 1.5;
-          "
-        >
-          It only takes a few minutes to connect your account.
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 10px;
-            font-family: 'Chivo', sans-serif;
-            font-size: 16px;
-            font-weight: 500;
-            color: #000000;
-          "
-        >
-          Connect Your Stripe Account
-        </td>
-      </tr>
-        <tr>
-          <td
-            style="
-              padding-left: 37px;
-              padding-right: 37px;
-              font-family: 'Chivo', sans-serif;
-              font-size: 16px;
-              color: #ff543e;
-              padding-bottom: 20px;
-            "
-          >
-            <a href="${boardingLink}" style="color: #ff543e; text-decoration: none;">
-               Click here to connect your Stripe account
-            </a>
-        </td>
-      </tr>
+      
       <tr>
         <td
           style="

@@ -37,6 +37,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      sku: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      productCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       deleted: {
         type: DataTypes.BOOLEAN,
         allowNull: true,

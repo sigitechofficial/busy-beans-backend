@@ -24,5 +24,6 @@ router.get('/order-details/:id', manageOrderController.orderDetails);
 router.put('/drawer/update-profile', profileController.updateProfile);
 router.post('/address/add-new/:id', profileController.addAddress);
 router.get('/address/view-all', profileController.getAllAddress);
+router.post('/sync-customer-to-stripe', orderController.createStripeCustomers);
 
 module.exports = router;

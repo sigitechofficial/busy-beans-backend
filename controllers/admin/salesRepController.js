@@ -225,7 +225,10 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
    console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
 
   const connectAccount = await Stripe.retrieveConnectAccount({accountId:sr.connectAccountId})
- if(connectAccount)await salesRep.update({isAccountConnected:true},{where:{id:req.params.srId}})
+ if(connectAccount)
+
+  await salesRep.update({isAccountConnected:true},{where:{id:req.params.srId}})
+
   return res.status(200).json(
       response({
          message: 'Connect Account.',
@@ -239,6 +242,7 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
   
   req.body.order.items = req.body?.items
   sendQuotationEvent({email:req.body?.email,data:req.body?.order})
+  
   return res.status(200).json({
     status: 'success',   
     data: {},

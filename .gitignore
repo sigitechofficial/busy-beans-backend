@@ -13,6 +13,9 @@ config/
 
 public/
 
+
+.vscode/
+
 .env
 # Compiled Java class files
 *.class

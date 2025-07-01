@@ -68,11 +68,11 @@ class APIFeatures {
 
   paginate() {
     const page = this.queryString.page * 1 || 1;
-    const limit = this.queryString.limit * 1 || 100;
+    const limit = this.queryString.limit * 1 || undefined;
     const offset = (page - 1) * limit;
 
-    this.queryOptions.limit = limit;
-    this.queryOptions.offset = offset;
+    // this.queryOptions.limit = limit;
+    // this.queryOptions.offset = offset;
 
     return this;
   }

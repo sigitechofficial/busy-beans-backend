@@ -114,7 +114,7 @@ async function createConnectAccount({email, country = 'US', returnUrl }) {
 
   const accountLink = await stripe.accountLinks.create({
     account: account.id,
-    refresh_url: 'https://example.com/reauth',
+    refresh_url: 'https://admin.busybeancoffee.com/sign-in',
     return_url:returnUrl ||
       'https://google.com',
     type: 'account_onboarding',
@@ -283,14 +283,46 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
 }
 
 
-async function transferToLocalPatners({amount,localPartnerAccountId,orderId}) {
+async function transferToLocalPatners({amount,localPartnerAccountId,orderId,invoiceId,paymentIntentId}) {
   try{
+      // Step 1: Retrieve the invoice
+    const invoice =invoiceId? await stripe.invoices.retrieve(invoiceId):null;
+    const piId = invoice && paymentIntentId? invoice.payment_intent:paymentIntentId 
+    
+    // Step 2: Get the PaymentIntent from the invoice
+    const paymentIntent = await stripe.paymentIntents.retrieve(piId);
+
+    // Step 3: Get the Charge
+       const charge = paymentIntent.charges.data[0];
+
+    // Step 4: Retrieve the balance transaction (to get Stripe fee)
+    const balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction);
+
+    // Step 5: Extract Stripe values (already in cents)
+    const totalAmountCents = balanceTransaction.amount;
+    const stripeFeeCents = balanceTransaction.fee;
+
+    // Step 6: Convert commission amount from dollars to cents
+    const commissionCents = convertToCents(amount);
+
+    // Step 7: Calculate proportional Stripe fee based on commission
+    const proportionalStripeFee = Math.round((commissionCents / totalAmountCents) * stripeFeeCents);
+
+    // Step 8: Calculate net partner amount
+    const netPartnerAmount = commissionCents - proportionalStripeFee;
+
+    // Step 9: Create readable description
+    const description = `Partner Commission: $${commissionAmount.toFixed(2)} - Stripe Fee: $${(proportionalStripeFee / 100).toFixed(2)} = Net: $${(netPartnerAmount / 100).toFixed(2)}`;
+
+    // Step 10: Create the transfer
     const transfer = await stripe.transfers.create({
-      amount: convertToCents(amount),
+      amount: netPartnerAmount,               // in cents
       currency: 'usd',
-      destination: localPartnerAccountId,
-      description: `Commission of order ${orderId}`,
-   });
+      destination: connectAccountId,          // Connect account ID
+      transfer_group: invoice.id,             // Optional tracking
+      description,
+    });
+
   return transfer
   } catch (error) {
     console.error('Invoice creation failed:', error);
@@ -344,7 +376,7 @@ async function retrieveConnectAccount({ accountId }) {
 
   } catch (error) {
     console.error(error);
-    throw new AppError(`${error.message}`, 200); // Customize error message if necessary
+    throw new AppError(`${error.message}`, 400); // Customize error message if necessary
   }
 }
 
@@ -361,6 +393,7 @@ async function createStripeLoginLink({accountId}) {
 
 async function pullAmountPaymentIntentFromBankAccount({ amount, savedPaymentMethodId, customerId }) {
   try {
+
     const cents = convertToCents(amount);
     console.log("🚀 ~ pullAmountPaymentIntentFromBankAccount ~ amount:", amount)
 
@@ -379,6 +412,7 @@ async function pullAmountPaymentIntentFromBankAccount({ amount, savedPaymentMeth
       paymentIntentId: paymentIntent.id,
       status: paymentIntent.status // will likely be "processing"
     };
+
   } catch (error) {
     console.error("❌ ACH pull failed:", error);
     throw new AppError(`${error.message}`, 200);
