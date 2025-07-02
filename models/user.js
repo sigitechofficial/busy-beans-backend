@@ -150,6 +150,7 @@ module.exports = (sequelize) => {
 
   // Associations models
   user.associate = (models) => {
+    
     user.hasMany(models.address);
     models.address.belongsTo(user);
 
@@ -158,6 +159,9 @@ module.exports = (sequelize) => {
 
     user.hasMany(models.orderFrequency);
     models.orderFrequency.belongsTo(user);
+
+    user.hasMany(models.billingAddress);
+    models.billingAddress.belongsTo(user);
   };
 
   return user;

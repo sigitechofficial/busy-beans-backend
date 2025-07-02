@@ -222,6 +222,9 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
   if (!sr) {
       return next(new AppError('Data not Found!', 404));
   } 
+  if (!sr.connectAccountId) {
+      return next(new AppError('Stripe Account not connect!', 404));
+  } 
    console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
 
   const connectAccount = await Stripe.retrieveConnectAccount({accountId:sr.connectAccountId})

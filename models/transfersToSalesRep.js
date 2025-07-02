@@ -12,6 +12,14 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
+      grossPartnerAmount: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      proportionalStripeFee: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       deleted: {
         type: DataTypes.BOOLEAN,
         allowNull: true,

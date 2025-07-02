@@ -22,7 +22,7 @@ const signToken = (data) =>
     data,
     process.env.JWT_SECRET, // Hardcoded JWT Secret
     {
-      expiresIn:process.env.JWT_EXPIRES_IN ,
+      expiresIn:"7d" ,
     },
   );
 

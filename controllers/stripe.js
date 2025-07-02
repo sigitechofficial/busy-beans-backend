@@ -283,52 +283,80 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
 }
 
 
-async function transferToLocalPatners({amount,localPartnerAccountId,orderId,invoiceId,paymentIntentId}) {
-  try{
-      // Step 1: Retrieve the invoice
-    const invoice =invoiceId? await stripe.invoices.retrieve(invoiceId):null;
-    const piId = invoice && paymentIntentId? invoice.payment_intent:paymentIntentId 
-    
-    // Step 2: Get the PaymentIntent from the invoice
-    const paymentIntent = await stripe.paymentIntents.retrieve(piId);
+async function transferToLocalPatners({ amount, localPartnerAccountId, orderId, invoiceId, paymentIntentId }) {
+  try {
+    // Step 1: Retrieve the invoice if provided
+    const invoice = invoiceId ? await stripe.invoices.retrieve(invoiceId) : null;
+    console.log("🚀 ~ transferToLocalPatners ~ invoice:", invoice)
+    const piId = invoice ? invoice?.payment_intent : paymentIntentId;
 
-    // Step 3: Get the Charge
-       const charge = paymentIntent.charges.data[0];
+    if (!piId) throw new Error("No valid PaymentIntent ID found.");
 
-    // Step 4: Retrieve the balance transaction (to get Stripe fee)
+    // Step 2: Retrieve PaymentIntent with expanded charges
+    const paymentIntent = await stripe.paymentIntents.retrieve(piId, {
+      expand: ['charges'],
+    });
+
+    console.log("🚀 ~ transferToLocalPatners ~ paymentIntent:", paymentIntent);
+
+    // Step 3: Retrieve the charge (either from expanded charges or using latest_charge fallback)
+    let charge;
+    if (paymentIntent?.charges?.data?.length) {
+      charge = paymentIntent.charges.data[0];
+    } else if (paymentIntent?.latest_charge) {
+      charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
+    } else {
+      throw new Error("No charge found in PaymentIntent");
+    }
+
+   
+
+    // Step 4: Retrieve the balance transaction to get Stripe fee
     const balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction);
 
-    // Step 5: Extract Stripe values (already in cents)
+    // Step 5: Stripe values are in cents
     const totalAmountCents = balanceTransaction.amount;
+    console.log("🚀 ~ transferToLocalPatners ~ totalAmountCents:", totalAmountCents)
     const stripeFeeCents = balanceTransaction.fee;
+    console.log("🚀 ~ transferToLocalPatners ~ stripeFeeCents:", stripeFeeCents)
 
-    // Step 6: Convert commission amount from dollars to cents
+    // Step 6: Convert commission amount to cents
     const commissionCents = convertToCents(amount);
+    console.log("🚀 ~ transferToLocalPatners ~ amount:", amount)
+    console.log("🚀 ~ transferToLocalPatners ~ commissionCents:", commissionCents)
 
-    // Step 7: Calculate proportional Stripe fee based on commission
-    const proportionalStripeFee = Math.round((commissionCents / totalAmountCents) * stripeFeeCents);
+    // Step 7: Calculate proportional Stripe fee
+    const proportionalStripeFee = stripeFeeCents
+    console.log("🚀 ~ transferToLocalPatners ~ proportionalStripeFee:", proportionalStripeFee)
 
     // Step 8: Calculate net partner amount
     const netPartnerAmount = commissionCents - proportionalStripeFee;
+    console.log("🚀 ~ transferToLocalPatners ~ netPartnerAmount:", netPartnerAmount)
 
-    // Step 9: Create readable description
-    const description = `Partner Commission: $${commissionAmount.toFixed(2)} - Stripe Fee: $${(proportionalStripeFee / 100).toFixed(2)} = Net: $${(netPartnerAmount / 100).toFixed(2)}`;
+    // Step 9: Create description for audit/debug
+    const description = `For ${orderId} Partner Commission: $${(commissionCents / 100).toFixed(2)} - Stripe Fee: $${(proportionalStripeFee / 100).toFixed(2)} = Net: $${(netPartnerAmount / 100).toFixed(2)}`;
 
     // Step 10: Create the transfer
     const transfer = await stripe.transfers.create({
-      amount: netPartnerAmount,               // in cents
+      amount: netPartnerAmount,
       currency: 'usd',
-      destination: connectAccountId,          // Connect account ID
-      transfer_group: invoice.id,             // Optional tracking
+      destination: localPartnerAccountId,
+      transfer_group: invoice?.id || undefined,
       description,
     });
 
-  return transfer
+    return {
+      transfer,
+      netPartnerAmount: netPartnerAmount / 100,
+      proportionalStripeFee: proportionalStripeFee / 100,
+    };
+
   } catch (error) {
-    console.error('Invoice creation failed:', error);
-     throw new AppError(`${error?.message}`, 200)
+    console.error('Transfer to local partner failed:', error);
+    throw new AppError(`${error?.message}`, 200);
   }
 }
+
 
 async function getInvoiceDetails ({invoiceId}) {
   console.log("🚀 ~ getInvoiceDetails ~ getInvoiceDetails:",  )

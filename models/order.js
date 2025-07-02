@@ -142,6 +142,14 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(),
         allowNull: true,
       },
+      grossPartnerAmount: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      proportionalStripeFee: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
     },
     {
       tableName: 'orders',

@@ -494,8 +494,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     await chequeDetail.create(req.body?.cheque);
   }
 
+  console.log("🚀 ~ exports.orderJourneryComplete ~ req.body?.orderData?.statusId :", req.body?.orderData?.statusId )
   if (req.body?.orderData?.statusId) {
     if(req.body?.orderData?.statusId == 2)supplierNewOrderEvent({orderId:orderId})
+      
     if(req.body?.orderData?.statusId == 5)processTransferToLocalPartner({orderId:orderId})
       
     await orderHistory.create({

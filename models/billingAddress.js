@@ -1,83 +1,69 @@
 module.exports = (sequelize, DataTypes) => {
-  const product = sequelize.define(
-    'product',
-    {
-      name: {
+  const billingAddress = sequelize.define(
+    'billingAddress',
+      {
+      companyaddress: {
         type: DataTypes.STRING,
-        allowNull: false,
-      },
-      quantity: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      weight: {
-        type: DataTypes.DECIMAL(20, 2),
         allowNull: true,
-        defaultValue: 0,
+        defaultValue: '',
       },
-      unit: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      image: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      price: {
-        type: DataTypes.DECIMAL(20, 2),
-        allowNull: true,
-        defaultValue: 0,
-      },
-      wholesalePrice: {
-        type: DataTypes.DECIMAL(20, 2),
-        allowNull: true,
-        defaultValue: 0,
-      },
-      desc: {
+      addressLineOne: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      sku: {
+      addressLineTwo: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      grind: {
+      town: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      productCode: {
+      zipCode: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      deleted: {
-        type: DataTypes.BOOLEAN,
+      country: {
+        type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: false,
+      },
+      state: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      lat: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      lng: {
+        type: DataTypes.STRING,
+        allowNull: true,
       },
       status: {
         type: DataTypes.BOOLEAN,
         allowNull: true,
         defaultValue: true,
       },
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
     },
     {
-      tableName: 'products',
+      tableName: 'billingAddresses',
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['name'],
-          name: 'name_index',
+          fields: ['town'],
+          name: 'town_index',
         },
       ],
     },
   );
 
-  product.associate = (models) => {
-    product.hasMany(models.item);
-    models.item.belongsTo(product);
-  };
-  return product;
+  return billingAddress;
 };

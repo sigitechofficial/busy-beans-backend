@@ -1,4 +1,4 @@
-const { order, item,orderHistory,orderFrequency,user,product } = require('../../models');
+const { order, item,orderHistory,orderFrequency,user,product,address,billingAddress } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -11,6 +11,7 @@ const { Op, where } = require("sequelize");
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
   if (input?.items?.length < 1 ) {
    throw new AppError('Cart is empty add products to place order', 404);
@@ -66,6 +67,9 @@ const finalItems = products.map((obj) => {
   input.order.totalWeight = totalWeight
   input.order.subTotal = itemsPrice + input.order.vat
   input.order.totalBill = itemsPrice +  parseFloat(input.order.vat) + parseFloat(input.order.shippingCharges||0)
+  
+  input.order.totalBill = itemsPrice +  parseFloat(input.order.vat) + parseFloat(input.order.shippingCharges||0)
+
  
   const newOrder = await order.create(input?.order);
 
@@ -122,11 +126,16 @@ async function syncStripeCustomers({usersWithoutCustomerId}) {
   }
 }
 
-exports.createStripeCustomers = catchAsync(async (req, res, next) => {
-  const output = await user.findAll({where:{stripeCustomerId:null}})
 
- if(output && output?.length > 0) syncStripeCustomers({usersWithoutCustomerId:output})
-  
+
+exports.createStripeCustomers = catchAsync(async (req, res, next) => {
+  // const output = await address.findAll({where:{stripeCustomerId:null}})
+  const output = await address.findAll()
+ const input = JSON.parse(JSON.stringify(output))
+
+//  if(output && output?.length > 0) syncStripeCustomers({usersWithoutCustomerId:output})
+//  if(output && output?.length > 0) syncStripeCustomers({usersWithoutCustomerId:output})
+  billingAddress.bulkCreate(input)
  
   return res.status(200).json({
     status: 'success',   
