@@ -23,6 +23,7 @@ exports.view = catchAsync(async (req, res, next) => {
     data: {},
   });
 });
+
 exports.getAllProducts = factory.getAll(product);
 exports.getProduct = factory.getOne(product);
 exports.updateProduct = factory.updateOne(product);

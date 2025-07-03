@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
-const { user, address,salesRep,stateInSystem } = require('../../models');
+const { user, address,salesRep,stateInSystem,billingAddress } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
@@ -80,7 +80,9 @@ exports.signup = catchAsync(async (req, res, next) => {
 
   
   req.body.address.userId = newUser?.id;
+  req.body.billingAddress.userId = newUser?.id;
   const defaultAddress = await address.create(req.body?.address);
+  billingAddress.create(req.body?.billingAddress);
   console.log("🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:", defaultAddress)
   
   const stripeCustomerId = await Stripe.addCustomer({email:newUser?.email,name:newUser?.name})

@@ -30,6 +30,8 @@ exports.setOrderFrequency = async ({orderData,salesRepId}) => { //orderData is
 }
 
 
+
+
 //* Pending order according to their frequency cycle
 
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
@@ -68,30 +70,12 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
             ),
             'price',
           ],
+          
           'qty',
           'productId',
         ],
       },
-              {
-        model: item,
-        attributes: [
-          [
-            literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
-            ),
-            'product',
-          ],
-          [
-            literal(
-              `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
-            ),
-            'price',
-          ],
-          'qty',
-          // 'weight',
-          'productId',
-        ],
-      },
+            
     ],
     attributes: [
       'id',
@@ -295,15 +279,29 @@ const frequencyBookOrder = async ({id}) => { //orderData is
      }
     });
 
+    const shippingCompany = await shippingCompanies.findOne({
+      where: {
+        weightFrom: {
+          [Op.lte]: totalWeight, // Less than or equal to the weight
+        },
+        weightTo: {
+          [Op.gte]: totalWeight, // Greater than or equal to the weight
+        },
+      },
+      attributes:['charges']
+    });
+    result.shippingCharges =  shippingCompany?.charges || 0
+    
     console.log("🚀 ~ frequencyBookOrder ~ productsPrice:", productsPrice)
     console.log("🚀 ~ frequencyBookOrder ~ result:", result)
     // result.itemsPrice = productsPrice
     result.subTotal = productsPrice + parseFloat(result?.vat)
-    result.totalBill = productsPrice + parseFloat(result?.vat)
+    result.totalBill = productsPrice + parseFloat(result?.vat || 0) + parseFloat(shippingCompany?.charges|| 0)
     result.totalWeight = totalWeight
     result.statusId = 1
     result.salesRepId = result?.salesRepId
     result.createdBy = 'sales-rep'
+    
     
     const newOrder= await order.create(result)
     

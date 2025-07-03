@@ -326,11 +326,11 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
         `), 
         'revenue',
       ],
-      [
+          [
         literal(`(
           SELECT srName
-          FROM salesreps
-          WHERE salesreps.id = (
+          FROM salesReps
+          WHERE salesReps.id = (
             SELECT orders.salesRepId
             FROM items
             JOIN orders ON orders.id = items.orderId

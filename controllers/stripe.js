@@ -4,7 +4,11 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2022-11-15',
   // beta: ["financial_connections_sessions_beta"] // ✅ Add this line
 });
-const AppError = require('../utils/appError') 
+
+const { billingAddress } = require('../models');
+
+const AppError = require('../utils/appError'); 
+ 
 
 function convertToCents(amount) {
   return Math.round(amount * 100)
@@ -167,24 +171,22 @@ async function createInvoiceWithItems({ customerId, order, currency = 'usd', due
     // Step 1: Create invoice items
         console.log('🚀 ~ exports.order= ~ order:', order)
 
-    const { shippingCharges,billingAddress,vat, items} = order
-    console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
-    console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
+    const { shippingCharges,vat, items} = order 
     console.log("🚀 ~ createInvoiceWithItems ~ order?.stripeCustomerId:", order?.stripeCustomerId)
     
-    if (billingAddress) {
-      console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
-      console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
-      console.log("🚀 ~ createInvoiceWithItems ~ billingAddress:", billingAddress)
+    const billAddress  = await billingAddress.findOne({where:{userId:order.userId}})
+
+    if (billAddress) { 
+      console.log("🚀 ~ createInvoiceWithItems ~ billAddress:", billAddress)
+      const userAddress = {
+        line1: billAddress?.addressLineOne|| undefined,
+        city: billAddress?.town|| undefined,
+        state: billAddress?.state|| undefined,
+        postal_code: billAddress?.zipCode|| undefined,
+        country: billAddress.country|| undefined, // Must be ISO 2-letter code
+      }
       await stripe.customers.update(order?.stripeCustomerId, {
-       address: {
-    line1: '123 Main Street',
-    city: 'Toba Tek Singh',
-    state: 'Punjab',
-    postal_code: '36050',
-    country: 'PK', // Must be ISO 2-letter code
-  },
-  
+       address:userAddress,
         name: order?.customerName || undefined, // Optional if available
         email: order?.email || undefined, // Optional if available
       });

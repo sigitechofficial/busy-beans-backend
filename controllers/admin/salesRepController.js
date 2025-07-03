@@ -1,4 +1,4 @@
-const { salesRep,user,address,order,item,salesFromPatners,stateInSystem} = require('../../models');
+const { salesRep,user,address,order,item,salesFromPatners,stateInSystem,billingAddress} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Stripe = require('../stripe');
@@ -134,7 +134,9 @@ exports.addCustomer = catchAsync(async (req, res, next) => {
   const newUser = await user.create(req.body?.info);
 
   req.body.address.userId = newUser?.id;
+  req.body.billingAddress.userId = newUser?.id;
   const defaultAddress = await address.create(req.body?.address);
+  await billingAddress.create(req.body?.billingAddress);
   
   console.log("🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:", defaultAddress)
 

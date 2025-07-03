@@ -120,6 +120,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'invoicePdf',
       'invoiceId',
       'createdBy',
+      'userId',
       'paymentMethodId',
       'shippingCharges',
       'poNumber',

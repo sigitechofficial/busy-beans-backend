@@ -45,7 +45,7 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        `(SELECT createdAt FROM orderhistories WHERE orderhistories.orderId = order.id AND orderhistories.statusId = order.statusId LIMIT 1)`
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.orderId = order.id AND orderHistories.statusId = order.statusId LIMIT 1)`
       ),
       'assignedAt',
     ],

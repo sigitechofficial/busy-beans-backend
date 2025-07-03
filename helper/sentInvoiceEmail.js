@@ -4,9 +4,12 @@ dotenv.config({ path: '../.env' })
 const { attachments } = require('./attactments')
 const attachment = attachments()
 const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
+const { footer } = require('./footer') 
 const { emailDateFormate } = require('../utils/emailDateFormate')
-
+async function downloadPDF(pdfUrl, outputPath) {
+  const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+  fs.writeFileSync(outputPath, response.data);
+}
 module.exports = function ({ email,data, invoice}) {
   console.log("ðŸš€ ~ data:", data)
   let hiSupplierName = `Hope you're doing well`
@@ -161,6 +164,8 @@ module.exports = function ({ email,data, invoice}) {
         >
           <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
+          <span style="font-weight: 600">PoNumebr:</span>
+          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
           <span style="font-weight: 600">Customer Name:</span>

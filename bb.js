@@ -50,7 +50,7 @@ const gracefulShutdown = () => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
  
-server.listen(serverPort, '192.168.1.112', (err) => {
+server.listen(serverPort, '192.168.1.130', (err) => {
   if (err) throw err
-  console.log(`Server is listening on192.168.1.112 :${serverPort}`)
+  console.log(`Server is listening on 192.168.1.130:${serverPort}`)
 })

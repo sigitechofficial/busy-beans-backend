@@ -80,6 +80,7 @@ const finalItems = products.map((obj) => {
   });
  
   
+  
   finalItems.forEach((element) => {
     element.orderId = newOrder.id;
   });

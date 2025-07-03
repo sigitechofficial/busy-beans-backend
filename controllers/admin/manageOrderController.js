@@ -195,11 +195,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   });
 });
 
+
 exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
   let  condition = {
   paymentStatus: 'done',
   invoiceId: null,
   paymentMethodId: null,
+
   adminReceivableStatus: false,
   localPatnerCommission: 0.00,
   salesRepId: req.params.srId,
