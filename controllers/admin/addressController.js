@@ -57,24 +57,24 @@ exports.deleteState = catchAsync(async (req, res, next) => {
 });
 
 
-exports.createCity = catchAsync(async (req, res, next) => {
-  const  {name,countryInSystemId,stateInSystemId} = req.body
+// exports.createCity = catchAsync(async (req, res, next) => {
+//   const  {name,countryInSystemId,stateInSystemId} = req.body
 
-  const input = name.map((ele) => ({
-  name: ele,
-  countryInSystemId,
-  stateInSystemId,
-}));
-  const t = await cityInSystem.bulkCreate(input);
-  res.status(200).json({
-    status: 'success',  
-    data: {},
-  });
-});
+//   const input = name.map((ele) => ({
+//   name: ele,
+//   countryInSystemId,
+//   stateInSystemId,
+// }));
+//   const t = await cityInSystem.bulkCreate(input);
+//   res.status(200).json({
+//     status: 'success',  
+//     data: {},
+//   });
+// });
 
 exports.getAllCities = factory.getAll(cityInSystem);
 exports.getCity = factory.getOne(cityInSystem);
-// exports.createCity = factory.createOne(cityInSystem,['name']);
+exports.createCity = factory.createOne(cityInSystem,['name']);
 exports.updateCity = factory.updateOne(cityInSystem);
 exports.deleteCity = factory.softdelete(cityInSystem);
 

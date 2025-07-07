@@ -1,4 +1,4 @@
-const { order, item,orderHistory,orderFrequency,user,product,address,billingAddress } = require('../../models');
+const { order, item,orderHistory,orderFrequency,user,product,address,billingAddress,shippingCompanies } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -7,12 +7,11 @@ const { setOrderFrequency } = require('../admin/orderFrequencyController');
 const {orderEvents} = require('../events/orderEvents')
 const {createPaymentIntent} = require('../stripe')
 const Stripe = require('../stripe')
-const { Op, where } = require("sequelize");
+const { Op, literal } = require("sequelize");
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
+  console.log("🚀 ~ exports.bookOrderbookOrderbookOrderbookOrderbookOrderbookOrder=catchAsync ~ input:", input) 
   if (input?.items?.length < 1 ) {
    throw new AppError('Cart is empty add products to place order', 404);
   }
@@ -97,10 +96,121 @@ const finalItems = products.map((obj) => {
 });
 
 exports.paymentIntent = catchAsync(async (req, res, next) => {
-  const output = await createPaymentIntent(req.body.amount)
+   const input = req.body;
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)
+  if (input?.items?.length < 1 ) {
+   throw new AppError('Cart is empty add products to place order', 404);
+  }
+  const customer = await user.findOne({
+    where:{id:input?.order?.userId},
+    attributes:['salesRepId', 
+      [
+          literal( 
+            `(SELECT salesReps.connectAccountId FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+          ),
+          'connectAccountId',
+      ],
+    ]
+  }
+)
+  input.order.statusId = 1
+  input.order.salesRepId = customer?.salesRepId
+  let itemsPrice  = 0
+  let productIds = input?.items.map(item => item.productId);
+  let totalWeight  = 0
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds)
+  const products = await product.findAll({
+  where: {
+    id: {
+      [Op.in]: productIds
+    }
+  }
+});
+// return res.json(products)
+
+ // Find the shipping company where the weight is between weightFrom and weightTo
+
+
+const hasLocalPatner =customer?.salesRepId ?true:false;
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products.length)
+const finalItems = products.map((obj) => {
+    const element = {};
+    element.productId = obj.id;
+    // console.log("🚀 ~ finalItems ~ obj:", obj)
+
+    // Find the matching product in input.items based on productId
+    let prod = input?.items.find(item => item.productId == obj.id);
+
+    // Set the qty from input.items or default to 1 if not found
+    let qty = prod ? parseInt(prod.qty) : 1;
+    console.log("🚀 ~ finalItems ~ qty:", qty)
+    element.qty =  qty;
+    // Calculate price, wholesalePrice, and weight for the item
+    element.price = obj.price * qty;
+    element.wholesalePrice = obj.wholesalePrice * qty;
+    element.weight = obj.weight * qty;
+
+    // Accumulate the total weight and price
+    itemsPrice += element.price;
+    totalWeight += element.weight;
+
+    // Handle salesRep commission if applicable
+    if (customer?.salesRepId) {
+        element.salerCommission = parseFloat(element.price) - parseFloat(element.wholesalePrice );
+    } else {
+        element.wholesalePrice = 0;
+        element.salerCommission  =0
+    }
+    return element; // Return the transformed element
+  });
+  
+  console.log("🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:", totalWeight)
+  const shippingCompany = await shippingCompanies.findOne({
+      where: {
+        weightFrom: {
+          [Op.lte]: totalWeight, // Less than or equal to the weight
+        },
+        weightTo: {
+          [Op.gte]: totalWeight, // Greater than or equal to the weight
+        },
+      },
+      attributes:['charges']
+  });
+
+  input.order.itemsPrice = itemsPrice
+  input.order.totalWeight = totalWeight
+  input.order.subTotal = itemsPrice + input.order.vat
+  input.order.totalBill = itemsPrice +  parseFloat(input?.order?.vat) + parseFloat(shippingCompany?.charges|0)
+  console.log("🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:", shippingCompany?.charges)
+ 
+
+
+  let adminReceivableAmount = input.order.totalBill
+  const localPatnerCommission = finalItems.reduce((sum, item) => {
+    return sum + (item.salerCommission || 0);
+  },0)
+  let adminReceivableStatus = false
+  let localPartnerAccountId  = customer.dataValues.connectAccountId
+  console.log("🚀 ~ exports.paymentIntent=catchAsync ~ localPartnerAccountId:", localPartnerAccountId)
+
+  if( hasLocalPatner && localPatnerCommission > 0 ){
+    adminReceivableAmount = adminReceivableAmount - localPatnerCommission
+    adminReceivableStatus = true 
+  }
+  
+  console.log(`🚀 ~ exports.paymentIntent=catchAsync ~ {adminReceivableAmount,hasLocalPatner,localPartnerAccountId,localPatnerCommission}:`, {adminReceivableAmount,hasLocalPatner,localPartnerAccountId,localPatnerCommission})
+  const output = await createPaymentIntent({adminReceivableAmount,hasLocalPatner,localPartnerAccountId,localPatnerCommission :input.order.totalBill })
+
   return res.status(200).json({
     status: 'success',   
-    data: output,
+    data: {
+      shippingChanges:shippingCompany?.charges,
+      adminReceivableAmount,
+      adminReceivableStatus,
+      localPatnerCommission,
+      ...output
+    },
   });
 });
 
@@ -131,6 +241,7 @@ async function syncStripeCustomers({usersWithoutCustomerId}) {
 
 exports.createStripeCustomers = catchAsync(async (req, res, next) => {
   // const output = await address.findAll({where:{stripeCustomerId:null}})
+  
   const output = await address.findAll()
  const input = JSON.parse(JSON.stringify(output))
 

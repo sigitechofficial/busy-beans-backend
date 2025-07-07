@@ -74,6 +74,23 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         ),
         'orderCurrentStatus',
       ],
+       [
+        literal(`COALESCE(
+         (SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'localPatnerCommission',
+      ],
+        [
+          literal(`
+            COALESCE(order.totalBill, 0) - COALESCE((
+              SELECT SUM(salerCommission)
+              FROM items
+              WHERE items.orderId = order.id
+            ), 0)
+          `),
+          'adminReceivableAmount'
+        ],
       [
         literal(
           `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
@@ -127,5 +144,10 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     ],
   });
   const output = JSON.parse(JSON.stringify(doc))
+  console.log("🚀 ~ exports.dataForEmailAndNotifications= ~ output:", output.totalBill)
+
+  output.localPatnerCommission = await item.sum('salerCommission', { where: { orderId: output.id } });
+  output.adminReceivableAmount = parseFloat(output?.totalBill || 0) - parseFloat(output.localPatnerCommission||0);
+
   return { details: output, email:output?.email }
 }

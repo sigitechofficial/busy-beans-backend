@@ -4,7 +4,9 @@ const Stripe = require('../stripe');
 const { user, salesRep, transfersToSalesRep ,item } = require('../../models');
 const {order} = require('../../models');
  
-const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN` 
+
+const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8` //LIVE
+// const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN` //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature']
  
@@ -25,8 +27,8 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
  
   console.log('ЁЯЪАЁЯЪАЁЯЪА ~~~~~~~~~~ >  EVENT TYPE }:', event.type)
   switch (event.type) {
-    case 'payment_method.attached':
-      await paymentMethodAttch(
+    case 'checkout.session.completed':
+      await invoicePaid(
         event
       )
       break
@@ -47,8 +49,9 @@ const invoicePaid = async (event) => {
 //   const localPartnerId = invoice.metadata?.salesRepId;
 //   let localPatnerAccount = invoice.metadata?.localPatnerAccount;
   const orderId = invoice.metadata?.orderId;
+  console.log("🚀 ~ invoicePaid ~ orderId:", orderId)
   
-  await order.update({paymentStatus:'done'},{where:{id:orderId}})
+  await order.update({paymentMethod:'card',paymentStatus:'done'},{where:{id:orderId}})
 //   if(!localPartnerId) {
 //   return true
 //   }

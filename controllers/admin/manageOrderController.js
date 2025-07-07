@@ -36,7 +36,8 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   }
   
   const orderData = details
-  const invoice = details?.invoiceId ? await Stripe.getInvoiceDetails({invoiceId:details.invoiceId }): await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
+  const invoice =  await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
+
   await order.update(invoice,{where:{id:details.id}})
 
   let to = [email]
@@ -199,7 +200,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
   let  condition = {
   paymentStatus: 'done',
-  invoiceId: null,
+  // invoiceId: null,
   paymentMethodId: null,
 
   adminReceivableStatus: false,
@@ -210,6 +211,130 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
   }
 };
   
+  console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition)
+
+  const doc = await order.findAll({
+    where: condition,
+    include: [
+      {
+        model: item,
+        attributes: [
+          'id',
+          [
+            literal(
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'product',
+          ],
+          'qty',
+          'price',
+          'discount',
+          'orderId',
+          'productId',
+          'wholesalePrice'
+        ],
+      },
+    ],
+    attributes: [
+      'id',
+      [
+        literal(
+          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'customerName',
+      ],
+      [
+        literal( 
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+        ),
+        'orderCurrentStatus',
+      ],
+      [
+        literal(`COALESCE(
+         (SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'localPatnerCommission',
+      ],
+        [
+      literal(`
+        COALESCE(order.totalBill, 0) - COALESCE((
+          SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id
+        ), 0)
+      `),
+      'adminReceivableAmount'
+        ],
+       [
+        literal(`COALESCE(
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'totalQuantity',
+    ],
+         [
+        literal(`COALESCE(
+         (SELECT SUM(wholesalePrice)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'wholesalePrice',
+      ],
+           [
+        literal( 
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepName',
+      ],
+      'totalBill',
+      'subTotal',
+      'discountPrice',
+      'discountPercentage',
+      'itemsPrice',
+      'vat',
+      'totalWeight',
+      'note',
+      'paymentMethod',
+      'poNumber',
+      'frequency',
+      'statusId',
+      'trackingNumber',
+      'paymentStatus',
+      'adminReceivableStatus',
+      'invoicePdf',
+      'invoiceId',
+      'createdBy',
+      'on',
+      'createdAt',
+      'shippingCharges'
+    ],
+  });
+  if (!doc) {
+    return next(new AppError('Data not found!', 400));
+  }
+  res.status(200).json({
+    status: 'success',
+    data: {
+      order: doc,
+    },
+  });
+});
+
+exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
+  let condition = {
+    paymentStatus: 'done',
+    adminReceivableStatus: false,
+    localPatnerCommission: 0.00,
+    salesRepId: req.params.srId,
+    statusId: {
+      [Op.in]: [4, 5]
+    },
+    [Op.or]: [
+      { paymentMethodId: { [Op.not]: null } },
+      { invoiceId: { [Op.not]: null } }
+    ]
+  };
+    
   console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition)
 
   const doc = await order.findAll({
@@ -476,6 +601,8 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
 });
 
 //* Assigin Supplier will Confirm order from admin side
+//! dont need this now
+// if(req.body?.orderData?.statusId == 4)processTransferToLocalPartner({orderId:orderId})
 exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const { orderId } = req.body;
 
@@ -499,8 +626,6 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   console.log("🚀 ~ exports.orderJourneryComplete ~ req.body?.orderData?.statusId :", req.body?.orderData?.statusId )
   if (req.body?.orderData?.statusId) {
     if(req.body?.orderData?.statusId == 2)supplierNewOrderEvent({orderId:orderId})
-      
-    if(req.body?.orderData?.statusId == 5)processTransferToLocalPartner({orderId:orderId})
       
     await orderHistory.create({
       statusId: req.body?.orderData?.statusId,

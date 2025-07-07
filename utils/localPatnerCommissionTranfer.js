@@ -69,7 +69,9 @@ exports.processTransferToLocalPartner  = async ({orderId}) => {
   const output = JSON.parse(JSON.stringify(doc))
         
   console.log("🚀 ~ exports.processTransferToLocalPartner= ~ output?.paymentIntentId :", output?.invoiceId )
+  console.log("🚀 ~ exports.processTransferToLocalPartner= ~ output?.paymentIntentId:", output?.paymentIntentId)
   // Retrieve the connected account ID for the local partner
+  console.log("🚀 ~ exports.processTransferToLocalPartner= ~ output.paymentStatus:", output.paymentStatus)
   if(output?.paymentIntentId || (output?.invoiceId && output.paymentStatus == 'done')) {
    
     const localPartnerAccount = output?.connectAccountId;
@@ -118,6 +120,7 @@ exports.processTransferToLocalPartner  = async ({orderId}) => {
 
     return true; 
   } catch (error) {
+    console.error('Error processing transfer to local partner:', error);
     console.error('Error processing transfer to local partner:', error);
     return false;
   }

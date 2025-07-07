@@ -88,14 +88,31 @@ try {
 }
 
 
-async function createPaymentIntent(amount) {
+async function createPaymentIntent({adminReceivableAmount,localPartnerAccountId ,localPatnerCommission,hasLocalPatner}) {
   try {
-    const cents = convertToCents(amount);
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount:cents,
-      currency: "usd",
-    });
-    return { clientSecret: paymentIntent.client_secret }
+  const input = {
+        amount: convertToCents(adminReceivableAmount),
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true, // enables card, bank, Apple Pay, etc.
+        },
+      }
+
+      if(localPartnerAccountId && hasLocalPatner && localPatnerCommission > 0 ){
+         input.transfer_data =  {
+          destination: localPartnerAccountId, // Your connected account ID (acct_...)
+        }
+        input.application_fee_amount = convertToCents(adminReceivableAmount)
+        input.amount = convertToCents(localPatnerCommission)
+      }
+    
+      console.log("🚀 ~ createPaymentIntent ~ input:", input)
+      const paymentIntent = await stripe.paymentIntents.create(input);
+
+      return {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+      };
   } catch (error) {
     console.error(error)
     throw new AppError(`${error.message}`, 200)
@@ -166,123 +183,237 @@ async function createStripeAccountLink({accountId,returnUrl}) {
 }
 
 
-async function createInvoiceWithItems({ customerId, order, currency = 'usd', dueInDays = 7 }) {
+// async function createInvoiceWithItems({ customerId, order, currency = 'usd', dueInDays = 7 }) {
+//   try {
+//     // Step 1: Create invoice items
+//         console.log('🚀 ~ exports.order= ~ order:', order)
+
+//     const { shippingCharges,vat, items} = order 
+//     console.log("🚀 ~ createInvoiceWithItems ~ order?.stripeCustomerId:", order?.stripeCustomerId)
+    
+//     const billAddress  = await billingAddress.findOne({where:{userId:order.userId}})
+
+//     if (billAddress) { 
+//       console.log("🚀 ~ createInvoiceWithItems ~ billAddress:", billAddress)
+//       const userAddress = {
+//         line1: billAddress?.addressLineOne|| undefined,
+//         city: billAddress?.town|| undefined,
+//         state: billAddress?.state|| undefined,
+//         postal_code: billAddress?.zipCode|| undefined,
+//         country: billAddress.country|| undefined, // Must be ISO 2-letter code
+//       }
+//       await stripe.customers.update(order?.stripeCustomerId, {
+//        address:userAddress,
+//         name: order?.customerName || undefined, // Optional if available
+//         email: order?.email || undefined, // Optional if available
+//       });
+//     }
+
+
+//     for (const item of items) {
+//       const { product, qty, price } = item;
+//       await stripe.invoiceItems.create({
+//         customer: order?.stripeCustomerId,
+//         amount: convertToCents(price), // Stripe requires integer cents
+//         currency, 
+//         description:  qty > 1
+//       ? `${product} – Pack of ${qty}`
+//       : `${product} – 1 Unit`,
+//       });
+//       console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ item:', convertToCents(price))
+//     }
+ 
+//     if (shippingCharges && (shippingCharges*1) > 0 ) {
+//       const shippingChargesAmount = convertToCents(shippingCharges);
+//       console.log(`Creating shipping charges invoice item, amount: ${shippingChargesAmount} cents`);
+//      const shippingChargesItem =  await stripe.invoiceItems.create({
+//         customer: order?.stripeCustomerId,
+//         amount: shippingChargesAmount,
+//         currency,
+//         description: 'Shipping Charges',
+//       });
+//             console.log(`Creating shipping charges invoice item, amount: $} cents`,shippingChargesItem.id);
+//     }
+
+
+//      if (vat && vat > 0 ) {
+//       const vatAmount = convertToCents(vat);
+//       console.log(`Creating  invoice item, amount: ${vatAmount} cents`);
+//      const vatItem =  await stripe.invoiceItems.create({
+//         customer: order?.stripeCustomerId,
+//         amount: vatAmount,
+//         currency,
+//         description: 'VAT',
+//       });
+//             console.log(`Creating VAT invoice item, amount: $} cents`,vatItem.id);
+//     }
+    
+//     // Step 2: Create the invoice
+
+//     const invoice = await stripe.invoices.create({
+//       customer: order?.stripeCustomerId,
+//       collection_method: 'charge_automatically', // ✅ REQUIRED
+//       auto_advance: false, // Let Stripe attempt to collect payment
+//       metadata: {
+//         orderId: order?.id,
+//         localPatnerAccount: order?.connectAccountId,
+//         salesRepId: order?.salesRepId,
+//       },
+//       custom_fields: order?.poNumber ? [{
+//           name: "PO Number",
+//           value: order.poNumber,
+//         }] : undefined,
+//       pending_invoice_items_behavior: 'include',
+
+//     });
+    
+
+//     // await stripe.invoices.update(invoice.id, {
+//     //   number: `INV-000${order?.id}`,
+//     // });
+
+    
+//     // const session = await stripe.checkout.sessions.create({
+//     //   payment_method_types: ['card', 'us_bank_account'], // Apple Pay & GPay are covered by 'card'
+//     //   line_items: [{
+//     //     price_data: {
+//     //       currency: 'usd',
+//     //       product_data: {
+//     //         name: 'Your Product',
+//     //       },
+//     //       unit_amount: 1000,
+//     //     },
+//     //     quantity: 1,
+//     //   }],
+//     //   mode: 'payment',
+//     //   customer: order?.stripeCustomerId,
+//     //   success_url: 'https://google.com',
+//     //   cancel_url: 'https://youtube.com',
+//     // });
+
+
+//     // Step 3: Finalize the invoice
+//     console.log("🚀 ~ order?.connectAccountId:", order?.connectAccountId)
+    
+//     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
+
+//     const originalPiId = finalizedInvoice.payment_intent;
+//     await stripe.paymentIntents.cancel(originalPiId);
+
+//      const newPaymentIntent = await stripe.paymentIntents.create({
+//         amount: convertToCents(order.totalBill), // $120 in cents
+//         currency: 'usd',
+//         customer: order?.stripeCustomerId,
+//         confirm: true,
+//         application_fee_amount: convertToCents(order.adminReceivableAmount), // e.g. $90
+//         transfer_data: {
+//           destination: order.connectAccountId // local partner
+//         },
+//         automatic_payment_methods: { enabled: true }
+//       });
+
+//     await stripe.invoices.pay(invoice.id, {
+//       payment_intent: newPaymentIntent.id
+//     });
+
+//     return { 
+//       invoiceId: finalizedInvoice?.id,
+//       hostedInvoiceUrl: finalizedInvoice?.hosted_invoice_url,
+//       invoicePdf: finalizedInvoice?.invoice_pdf,
+//       status: finalizedInvoice?.status,
+//       total: finalizedInvoice?.amount_due, 
+//     };
+
+//   } catch (error) {
+//     console.error('Invoice creation failed:', error);
+//      throw new AppError(`${error?.message}`, 200)
+//   }
+// }
+ 
+async function createInvoiceWithItems({ order, currency = 'usd' }) {
+  console.log("🚀 ~ createInvoiceWithItems ~ order:", order.totalBill)
   try {
-    // Step 1: Create invoice items
-        console.log('🚀 ~ exports.order= ~ order:', order)
+    const { items, shippingCharges, vat } = order;
+    let totalAmount = 0;
+    const line_items = [];
 
-    const { shippingCharges,vat, items} = order 
-    console.log("🚀 ~ createInvoiceWithItems ~ order?.stripeCustomerId:", order?.stripeCustomerId)
-    
-    const billAddress  = await billingAddress.findOne({where:{userId:order.userId}})
-
-    if (billAddress) { 
-      console.log("🚀 ~ createInvoiceWithItems ~ billAddress:", billAddress)
-      const userAddress = {
-        line1: billAddress?.addressLineOne|| undefined,
-        city: billAddress?.town|| undefined,
-        state: billAddress?.state|| undefined,
-        postal_code: billAddress?.zipCode|| undefined,
-        country: billAddress.country|| undefined, // Must be ISO 2-letter code
-      }
-      await stripe.customers.update(order?.stripeCustomerId, {
-       address:userAddress,
-        name: order?.customerName || undefined, // Optional if available
-        email: order?.email || undefined, // Optional if available
-      });
-    }
-
-
+    // Step 1: Create line items and calculate total
     for (const item of items) {
-      const { product, qty, price } = item;
-      await stripe.invoiceItems.create({
-        customer: order?.stripeCustomerId,
-        amount: convertToCents(price), // Stripe requires integer cents
-        currency, 
-        description:  qty > 1
-      ? `${product} – Pack of ${qty}`
-      : `${product} – 1 Unit`,
+      const amount = parseFloat(item.price/item.qty);
+      totalAmount += amount;
+      line_items.push({
+        price_data: {
+          currency,
+          product_data: { name: item.product },
+          unit_amount: convertToCents(amount)
+        },
+        quantity: item.qty
       });
-      console.log('🚀 ~ exports.onlineAppointmentConfirm= ~ item:', convertToCents(price))
-    }
- 
-    if (shippingCharges && (shippingCharges*1) > 0 ) {
-      const shippingChargesAmount = convertToCents(shippingCharges);
-      console.log(`Creating shipping charges invoice item, amount: ${shippingChargesAmount} cents`);
-     const shippingChargesItem =  await stripe.invoiceItems.create({
-        customer: order?.stripeCustomerId,
-        amount: shippingChargesAmount,
-        currency,
-        description: 'Shipping Charges',
-      });
-            console.log(`Creating shipping charges invoice item, amount: $} cents`,shippingChargesItem.id);
     }
 
-
-     if (vat && vat > 0 ) {
-      const vatAmount = convertToCents(vat);
-      console.log(`Creating  invoice item, amount: ${vatAmount} cents`);
-     const vatItem =  await stripe.invoiceItems.create({
-        customer: order?.stripeCustomerId,
-        amount: vatAmount,
-        currency,
-        description: 'VAT',
+    if (shippingCharges && parseFloat(shippingCharges) > 0) {
+      totalAmount += parseFloat(shippingCharges);
+      line_items.push({
+        price_data: {
+          currency,
+          product_data: { name: 'Shipping Charges' },
+          unit_amount: convertToCents(shippingCharges)
+        },
+        quantity: 1
       });
-            console.log(`Creating VAT invoice item, amount: $} cents`,vatItem.id);
     }
-    
-    // Step 2: Create the invoice
-    const invoice = await stripe.invoices.create({
+
+    if (vat && parseFloat(vat) > 0) {
+      totalAmount += parseFloat(vat);
+      line_items.push({
+        price_data: {
+          currency,
+          product_data: { name: 'VAT' },
+          unit_amount: convertToCents(vat)
+        },
+        quantity: 1
+      });
+    }
+
+    const platformFeeInCents = convertToCents(order.adminReceivableAmount);
+    console.log("🚀 ~ createInvoiceWithItems ~ order.adminReceivableAmount:", order.adminReceivableAmount)
+
+    // Step 2: Create Checkout Session with split
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
       customer: order?.stripeCustomerId,
-      collection_method: 'charge_automatically', // ✅ REQUIRED
-      auto_advance: true, // Let Stripe attempt to collect payment
-      metadata: {
-        orderId: order?.id,
-        localPatnerAccount: order?.connectAccountId,
-        salesRepId: order?.salesRepId,
+      line_items,
+      success_url: 'https://orders.busybeancoffee.com/product?status=success',
+      cancel_url: `https://orders.busybeancoffee.com/product?status=cancel`,
+      payment_intent_data: {
+        application_fee_amount: platformFeeInCents, // e.g. $90 to platform
+        transfer_data: {
+          destination: order.connectAccountId // e.g. $30 to partner
+        },
+        metadata: {
+          orderId: order?.id,
+          partnerId: order?.connectAccountId,
+          salesRepId: order?.salesRepId
+        }
       },
-      custom_fields: order?.poNumber ? [{
-          name: "PO Number",
-          value: order.poNumber,
-        }] : undefined,
-      pending_invoice_items_behavior: 'include',
+      metadata: {
+        orderId: order?.id
+      }
     });
-    
-    // const session = await stripe.checkout.sessions.create({
-    //   payment_method_types: ['card', 'us_bank_account'], // Apple Pay & GPay are covered by 'card'
-    //   line_items: [{
-    //     price_data: {
-    //       currency: 'usd',
-    //       product_data: {
-    //         name: 'Your Product',
-    //       },
-    //       unit_amount: 1000,
-    //     },
-    //     quantity: 1,
-    //   }],
-    //   mode: 'payment',
-    //   customer: order?.stripeCustomerId,
-    //   success_url: 'https://google.com',
-    //   cancel_url: 'https://youtube.com',
-    // });
 
-
-    // Step 3: Finalize the invoice
-    const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
- 
-    return { 
-      invoiceId: finalizedInvoice?.id,
-      hostedInvoiceUrl: finalizedInvoice?.hosted_invoice_url,
-      invoicePdf: finalizedInvoice?.invoice_pdf,
-      status: finalizedInvoice?.status,
-      total: finalizedInvoice?.amount_due, 
+    return {
+      invoiceId: session.id,
+      hostedInvoiceUrl: session.url,
+      invoicePdf:""
     };
-
   } catch (error) {
-    console.error('Invoice creation failed:', error);
-     throw new AppError(`${error?.message}`, 200)
+    console.error('❌ Checkout Session creation failed:', error);
+    throw new Error(error.message);
   }
 }
+
+ 
 
 
 async function transferToLocalPatners({ amount, localPartnerAccountId, orderId, invoiceId, paymentIntentId }) {

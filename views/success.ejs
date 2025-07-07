@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Payment Successful</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding-top: 100px;
+      color: #3E342C;
+    }
+  </style>
+</head>
+<body>
+  <h1>✅ Payment Successful!</h1>
+  <p>Thank you for your payment for Order <strong><span id="order-id"></span></strong>.</p>
+
+  <script>
+    const orderId = new URLSearchParams(window.location.search).get("orderId");
+    document.getElementById("order-id").innerText = orderId;
+  </script>
+</body>
+</html>
