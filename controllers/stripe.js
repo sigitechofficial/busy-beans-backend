@@ -7,8 +7,16 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
 
 const { billingAddress } = require('../models');
 
-const AppError = require('../utils/appError'); 
- 
+const AppError = require('../utils/appError');
+
+
+function estimateStripeFeeFromDollars(amountInDollars) {
+  const parsed = parseFloat(amountInDollars);
+  if (isNaN(parsed)) throw new Error("Invalid dollar amount");
+
+  const fee = (parsed * 0.029) + 0.30; // 2.9% + $0.30
+  return fee;  // Return in dollars with 2 decimals
+}
 
 function convertToCents(amount) {
   return Math.round(amount * 100)
@@ -87,7 +95,6 @@ try {
   }
 }
 
-
 async function createPaymentIntent({adminReceivableAmount,localPartnerAccountId ,localPatnerCommission,hasLocalPatner}) {
   try {
   const input = {
@@ -102,7 +109,9 @@ async function createPaymentIntent({adminReceivableAmount,localPartnerAccountId 
          input.transfer_data =  {
           destination: localPartnerAccountId, // Your connected account ID (acct_...)
         }
-        input.application_fee_amount = convertToCents(adminReceivableAmount)
+        const stripeFee = estimateStripeFeeFromDollars(localPatnerCommission)
+        const adminProfitCents =  convertToCents(adminReceivableAmount) + convertToCents(stripeFee)
+        input.application_fee_amount = adminProfitCents
         input.amount = convertToCents(localPatnerCommission)
       }
     
@@ -119,7 +128,6 @@ async function createPaymentIntent({adminReceivableAmount,localPartnerAccountId 
   }
 }
 
-
 async function createConnectAccount({email, country = 'US', returnUrl }) {
     try {
   const account = await stripe.accounts.create({
@@ -129,6 +137,7 @@ async function createConnectAccount({email, country = 'US', returnUrl }) {
     capabilities: {
       card_payments: { requested: true },
       transfers: { requested: true },
+      us_bank_account_payments: { requested: true },
     },
     
   })
@@ -149,6 +158,32 @@ async function createConnectAccount({email, country = 'US', returnUrl }) {
   }
 }
 
+
+async function createStandardConnectAccount({ email, returnUrl }) {
+  try {
+    // Step 1: Create an account (optional – most often not needed for Standard)
+    const account = await stripe.accounts.create({
+      type: 'standard',
+      email,
+    });
+
+    // Step 2: Create an OAuth link
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id:'ca_SQfrJvPViMRyHtkd9guC3v7lEWYDzQdq', // From Stripe dashboard (Connect > Settings)
+      scope: 'read_write',
+      redirect_uri: returnUrl || 'https://yourapp.com/stripe/onboarding-complete',
+      'stripe_user[email]': email,
+    });
+
+    const accountLink = `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
+
+    return { accountLink, accountId: account.id };
+  } catch (error) {
+    console.error(error);
+    throw new AppError(`${error.message}`, 200);
+  }
+}
 async function createCheckoutSession(line_items, accountId, applicationFee) {
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ['card'],
@@ -330,6 +365,86 @@ async function createStripeAccountLink({accountId,returnUrl}) {
 //   }
 // }
  
+// async function createInvoiceWithItems({ order, currency = 'usd' }) {
+//   console.log("🚀 ~ createInvoiceWithItems ~ order:", order.totalBill)
+//   try {
+//     const { items, shippingCharges, vat } = order;
+//     let totalAmount = 0;
+//     const line_items = [];
+
+//     // Step 1: Create line items and calculate total
+//     for (const item of items) {
+//       const amount = parseFloat(item.price/item.qty);
+//       totalAmount += amount;
+//       line_items.push({
+//         price_data: {
+//           currency,
+//           product_data: { name: item.product },
+//           unit_amount: convertToCents(amount)
+//         },
+//         quantity: item.qty
+//       });
+//     }
+
+//     if (shippingCharges && parseFloat(shippingCharges) > 0) {
+//       totalAmount += parseFloat(shippingCharges);
+//       line_items.push({
+//         price_data: {
+//           currency,
+//           product_data: { name: 'Shipping Charges' },
+//           unit_amount: convertToCents(shippingCharges)
+//         },
+//         quantity: 1
+//       });
+//     }
+
+//     if (vat && parseFloat(vat) > 0) {
+//       totalAmount += parseFloat(vat);
+//       line_items.push({
+//         price_data: {
+//           currency,
+//           product_data: { name: 'VAT' },
+//           unit_amount: convertToCents(vat)
+//         },
+//         quantity: 1
+//       });
+//     }
+
+//     const platformFeeInCents = convertToCents(order.adminReceivableAmount);
+//     console.log("🚀 ~ createInvoiceWithItems ~ order.adminReceivableAmount:", order.adminReceivableAmount)
+
+//     // Step 2: Create Checkout Session with split
+//     const session = await stripe.checkout.sessions.create({
+//       payment_method_types: ['card'],
+//       mode: 'payment',
+//       line_items,
+//       success_url: 'https://orders.busybeancoffee.com/product?status=success',
+//       cancel_url: 'https://orders.busybeancoffee.com/product?status=cancel',
+
+//       // No customer passed (Stripe auto-creates one in connected account)
+//       // No application_fee
+//       // No transfer_data
+
+//       metadata: {
+//         orderId: order.id,
+//         partnerId: order.connectAccountId,
+//         salesRepId: order.salesRepId,
+//       },
+//     }, {
+//       stripeAccount: order.connectAccountId, // ✅ tells Stripe to act on behalf of partner
+//     });
+
+//     return {
+//       invoiceId: session.id,
+//       hostedInvoiceUrl: session.url,
+//       invoicePdf:""
+//     };
+//   } catch (error) {
+//     console.error('❌ Checkout Session creation failed:', error);
+//     throw new Error(error.message);
+//   }
+// }
+
 async function createInvoiceWithItems({ order, currency = 'usd' }) {
   console.log("🚀 ~ createInvoiceWithItems ~ order:", order.totalBill)
   try {
@@ -375,45 +490,53 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       });
     }
 
-    const platformFeeInCents = convertToCents(order.adminReceivableAmount);
+    const platformFeeInCents = convertToCents(order.adminReceivableAmount|| 0);
+    const stripeFee = estimateStripeFeeFromDollars(order.totalBill)
+    const stripeFeeInCents = convertToCents(stripeFee)
+
+    const adminProfitCents = platformFeeInCents + stripeFeeInCents
     console.log("🚀 ~ createInvoiceWithItems ~ order.adminReceivableAmount:", order.adminReceivableAmount)
 
     // Step 2: Create Checkout Session with split
-    const session = await stripe.checkout.sessions.create({
+    const input = {
       payment_method_types: ['card'],
       mode: 'payment',
       customer: order?.stripeCustomerId,
       line_items,
       success_url: 'https://orders.busybeancoffee.com/product?status=success',
       cancel_url: `https://orders.busybeancoffee.com/product?status=cancel`,
-      payment_intent_data: {
-        application_fee_amount: platformFeeInCents, // e.g. $90 to platform
+      metadata: {
+        orderId: order?.id
+      }
+    }
+
+    if(order.connectAccountId){
+      input.payment_intent_data = {
+        application_fee_amount: adminProfitCents, // e.g. $90 to platform
         transfer_data: {
           destination: order.connectAccountId // e.g. $30 to partner
         },
         metadata: {
           orderId: order?.id,
           partnerId: order?.connectAccountId,
-          salesRepId: order?.salesRepId
+          salesRepId: order?.salesRepId,
+          stripeFee : `${stripeFee}`
         }
-      },
-      metadata: {
-        orderId: order?.id
       }
-    });
+    }
+    const session = await stripe.checkout.sessions.create(input);
 
     return {
       invoiceId: session.id,
       hostedInvoiceUrl: session.url,
+      stripeFee,
       invoicePdf:""
     };
   } catch (error) {
     console.error('❌ Checkout Session creation failed:', error);
     throw new Error(error.message);
   }
-}
-
- 
+} 
 
 
 async function transferToLocalPatners({ amount, localPartnerAccountId, orderId, invoiceId, paymentIntentId }) {
@@ -533,6 +656,7 @@ async function retrieveConnectAccount({ accountId }) {
     }
 
     // If all checks pass, return the account information
+    console.log("🚀 ~ retrieveConnectAccount ~ account:", account)
     return account 
 
   } catch (error) {
@@ -593,7 +717,9 @@ module.exports = {
   createStripeAccountLink,
   createInvoiceWithItems,
   transferToLocalPatners,
-  getInvoiceDetails
+  getInvoiceDetails,
+
+  createStandardConnectAccount
 }
 // sessionCheckoutPaymnet --- check payment destination
 // sessionCheckoutPaymnet --- check payment destination

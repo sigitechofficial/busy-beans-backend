@@ -21,12 +21,14 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(async (req, res, next) 
   if(!patner.defaultBankAccount){
     return next(new AppError('Payments can’t be pulled because the partner has no default bank account attached.', 400));
   }
-
+  
   const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount(
     {amount,customerId:patner?.stripeCustomerId,savedPaymentMethodId:patner?.defaultBankAccount}
   )
-    
+  
+  console.log("🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:", pullouts)
   if(pullouts){
+    console.log("🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:", pullouts)
     order.update({adminReceivableStatus:true},{where:{id:orderIds}}) 
     for (const ele of orderList) {
       await order.update(
@@ -38,6 +40,8 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(async (req, res, next) 
       );
     }
 
+  }else{
+    return next(new AppError('Something Want so wrong Payments can’t be pulled.', 400));
   }
 
   res.status(200).json({
@@ -110,7 +114,7 @@ async function getOrdersForLocalPartner({localPatner}) {
     localPatnerCommission: 0.00,
     salesRepId: localPatner.id,
     statusId: {
-      [Op.in]: [1,2,3,4, 5],
+      [Op.in]: [1,2,3,4,5],
     },
     on: {
       [Op.lte]: oneMonthAgo, // only include orders from the past 1 month

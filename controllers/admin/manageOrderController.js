@@ -8,7 +8,8 @@ const {
   orderHistory,
   supplier,
   statuses,
-  shippingCompanies
+  shippingCompanies,
+  billingAddress
 } = require('../../models');
 const { Op, literal, fn, col } = require('sequelize');
 const APIFeatures = require('../../utils/apiFeatures');
@@ -195,7 +196,6 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     },
   });
 });
-
 
 exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
   let  condition = {
@@ -476,6 +476,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
         attributes: {
           exclude: ['createdAt', 'updatedAt', 'latestOtp','password', 'deleted', 'deletedAt', 'stripeCustomerId' , 'verifiedAt', 'status'],
         },
+        include:{
+        model: billingAddress,
+        attributes: {
+          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
+        },
+      },
       },
       {
         model: item,
@@ -544,21 +550,21 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           WHERE items.orderId = order.id ), 0)`),
         'adminEarnings',
       ],
-         [
+      [
         literal(`COALESCE(
          (SELECT SUM(qty)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'totalQuantity',
-    ],
-         [
+      ], 
+      [
         literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'wholesalePrice',
       ],
-           [
+      [
         literal( 
           `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
@@ -585,8 +591,8 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'invoiceId',
       'createdBy',
       'on',
-        'createdAt',
-        'shippingCharges'
+      'createdAt',
+      'shippingCharges'
     ],
   });
   if (!doc) {
@@ -680,6 +686,7 @@ exports.eidtCheque = catchAsync(async (req, res, next) => {
 
 exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
    const weight = req.body.weight; // Weight from req.body
+   console.log("🚀 ~ exports.findShippingCompanyForWeight=catchAsync ~ weight:", weight)
 
     // Find the shipping company where the weight is between weightFrom and weightTo
     const shippingCompany = await shippingCompanies.findOne({
@@ -702,4 +709,107 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     status: 'success',
     data: shippingCompany,
   });
+});
+
+//* UPDATE ORDER
+exports.updateOrder = catchAsync(async (req, res, next) => {
+  
+  const placedOrder = await order.findOne({
+    where: { id: req.params.orderId },
+    attributes: ['id', 'supplierId','paymentStatus','salesRepId'],
+  });
+
+  console.log("🚀 ~ exports.updateOrder=catchAsync ~ body.items:", req.body)
+  if (!placedOrder) {
+    return next(new AppError('Order not found.', 404));
+  }
+  else if(placedOrder.paymentStatus == 'done'){
+    return next(new AppError('The order payment has already been made. You may proceed with the update.', 404));
+  }
+
+   const input = {order:{}}
+   input.items = req.body.items
+ 
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)  
+
+  if (input?.items?.length < 1 ) {
+   throw new AppError('Update possible, but no changes were made.', 404);
+  }
+  
+  let productIds = input?.items.map(item => item.productId);
+  let totalWeight  = 0
+  let itemsPrice =0
+
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds)
+  const products = await product.findAll({
+    where: {
+      id: {
+        [Op.in]: productIds
+      }
+    }
+  });
+ 
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products.length)
+  const finalItems = products.map((obj) => {
+      const element = {};
+      element.productId = obj.id;
+      // console.log("🚀 ~ finalItems ~ obj:", obj)
+
+      // Find the matching product in input.items based on productId
+      let prod = input?.items.find(item => item.productId == obj.id);
+
+      // Set the qty from input.items or default to 1 if not found
+      let qty = prod ? parseInt(prod.qty) : 1;
+      console.log("🚀 ~ finalItems ~ qty:", qty)
+      element.qty =  qty;
+      // Calculate price, wholesalePrice, and weight for the item
+      element.price = obj.price * qty;
+      element.wholesalePrice = obj.wholesalePrice * qty;
+      element.weight = obj.weight * qty;
+      element.orderId = placedOrder?.id;
+
+      // Accumulate the total weight and price
+      itemsPrice += element.price;
+      totalWeight += element.weight;
+
+      // Handle salesRep commission if applicable
+      if (placedOrder?.salesRepId) {
+          element.salerCommission = parseFloat(element.price) - parseFloat(element.wholesalePrice );
+      } else {
+          element.wholesalePrice = 0;
+          element.salerCommission  =0
+      }
+
+      return element; // Return the transformed element
+    });
+    
+  console.log("🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:", totalWeight)
+  const shippingCompany = await shippingCompanies.findOne({
+      where: {
+        weightFrom: {
+          [Op.lte]: totalWeight, // Less than or equal to the weight
+        },
+        weightTo: {
+          [Op.gte]: totalWeight, // Greater than or equal to the weight
+        },
+      },
+      attributes:['charges']
+  });
+
+  input.order.itemsPrice = itemsPrice
+  input.order.totalWeight = totalWeight
+  input.order.shippingCharges = shippingCompany?.charges
+  input.order.subTotal = itemsPrice + input.order.vat
+  input.order.totalBill = itemsPrice +  parseFloat(input?.order?.vat) + parseFloat(shippingCompany?.charges|0)
+  console.log("🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:", shippingCompany?.charges)
+
+  await order.update(input?.order,{where:{id:placedOrder?.id}})
+  await item.destroy({where: {orderId: placedOrder?.id}});
+  await item.bulkCreate(finalItems)
+ 
+  return res.status(200).json({
+    status: 'success',   
+    data: {id: req.params.orderId },
+  });
+  
 });

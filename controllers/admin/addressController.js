@@ -1,4 +1,4 @@
-const { countryInSystem,stateInSystem,territory,cityInSystem } = require('../../models');
+const { countryInSystem,stateInSystem,territory,cityInSystem,address,billingAddress } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -56,6 +56,8 @@ exports.deleteState = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.updateAddress = factory.updateOne(address);
+exports.updateBillingAddress = factory.updateOne(billingAddress);
 
 // exports.createCity = catchAsync(async (req, res, next) => {
 //   const  {name,countryInSystemId,stateInSystemId} = req.body

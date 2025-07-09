@@ -122,6 +122,7 @@ router
 
 router.get('/orders', manageOrderController.allOrder);
 router.post('/order-management/send-invoice/:orderId', manageOrderController.sendInvoice);
+router.patch('/order-management/update-order/:orderId', manageOrderController.updateOrder);
 
 router.get('/order-details/:id', manageOrderController.orderDetails);
 
@@ -296,6 +297,18 @@ router
 .patch(uploadSalesRepImage.single('image'), salesRepController.updateSalesRep)  
 .delete(salesRepController.deleteSalesRep);  
 
+//! Address Management 
+ 
+router.patch(
+  '/address-management/update-address/:id',
+  addressController.updateAddress,
+)
+
+router.patch(
+  '/address-management/update-billing-address/:id',
+  addressController.updateBillingAddress,
+)
+
 //! Country Management
 router
   .route('/address-management/country/')
@@ -399,6 +412,8 @@ router.get(
   '/admin-reports/unpaid-partner-balance',
   adminReportsController.unpaidPartnerbalanceReport,
 )
+
+
 
 //! SUPPLIER REPORTS SECTION 
 

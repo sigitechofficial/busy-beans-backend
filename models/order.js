@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes,Sequelize } = require('sequelize');
 
 module.exports = (sequelize) => {
   const order = sequelize.define(
@@ -95,9 +95,8 @@ module.exports = (sequelize) => {
       on: {
         type: DataTypes.DATEONLY,
         allowNull: true,
-        defaultValue: new Date(),
+        defaultValue: Sequelize.NOW,
       },
-      
       createdBy: {
         type: DataTypes.ENUM('customer', 'sales-rep', 'admin'),
         allowNull: false,
@@ -108,11 +107,11 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       hostedInvoiceUrl: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: true,
       },
       invoicePdf: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: true,
       },
       localPatnerCommission: {

@@ -7,7 +7,7 @@ const { setOrderFrequency } = require('../admin/orderFrequencyController');
 const {orderEvents} = require('../events/orderEvents')
 const {createPaymentIntent} = require('../stripe')
 const Stripe = require('../stripe')
-const { Op, literal } = require("sequelize");
+const { Op, literal } = require("sequelize"); 
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -61,8 +61,20 @@ const finalItems = products.map((obj) => {
     return element; // Return the transformed element
 });
 
-  
+ const shippingCompany = await shippingCompanies.findOne({
+      where: {
+        weightFrom: {
+          [Op.lte]: totalWeight, // Less than or equal to the weight
+        },
+        weightTo: {
+          [Op.gte]: totalWeight, // Greater than or equal to the weight
+        },
+      },
+      attributes:['charges']
+  });
+
   input.order.itemsPrice = itemsPrice
+  input.order.shippingCharges = shippingCompany?.charges
   input.order.totalWeight = totalWeight
   input.order.subTotal = itemsPrice + input.order.vat
   input.order.totalBill = itemsPrice +  parseFloat(input.order.vat) + parseFloat(input.order.shippingCharges||0)
@@ -113,8 +125,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
       ],
     ]
   }
-)
-  input.order.statusId = 1
+) 
   input.order.salesRepId = customer?.salesRepId
   let itemsPrice  = 0
   let productIds = input?.items.map(item => item.productId);
@@ -205,7 +216,7 @@ const finalItems = products.map((obj) => {
   return res.status(200).json({
     status: 'success',   
     data: {
-      shippingChanges:shippingCompany?.charges,
+      shippingCharges:shippingCompany?.charges,
       adminReceivableAmount,
       adminReceivableStatus,
       localPatnerCommission,
@@ -242,15 +253,15 @@ async function syncStripeCustomers({usersWithoutCustomerId}) {
 exports.createStripeCustomers = catchAsync(async (req, res, next) => {
   // const output = await address.findAll({where:{stripeCustomerId:null}})
   
-  const output = await address.findAll()
- const input = JSON.parse(JSON.stringify(output))
+//   const output = await address.findAll()
+//  const input = JSON.parse(JSON.stringify(output))
 
 //  if(output && output?.length > 0) syncStripeCustomers({usersWithoutCustomerId:output})
 //  if(output && output?.length > 0) syncStripeCustomers({usersWithoutCustomerId:output})
-  billingAddress.bulkCreate(input)
- 
+  // billingAddress.bulkCreate(input)
+ const StripeAccount =  await Stripe.createStandardConnectAccount({email:req.body.email})
   return res.status(200).json({
     status: 'success',   
-    data: {userCount: output.length},
+    data: {userCount: StripeAccount},
   });
 });
