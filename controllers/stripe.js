@@ -529,7 +529,7 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
     return {
       invoiceId: session.id,
       hostedInvoiceUrl: session.url,
-      stripeFee,
+      proportionalStripeFee:stripeFee,
       invoicePdf:""
     };
   } catch (error) {
@@ -704,7 +704,47 @@ async function pullAmountPaymentIntentFromBankAccount({ amount, savedPaymentMeth
   }
 }
 
+
+async function checkCheckoutSessionStatus(sessionId) {
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    expand: ['payment_intent']
+  });
+    console.log("🚀 ~ checkCheckoutSessionStatus ~ session:", session)
+
+    const expiresAt = session.expires_at * 1000; // Convert to milliseconds
+    const now = Date.now();
+    const paymentStatus = session.payment_status;
+
+    if (paymentStatus === 'paid') {
+      return 'paid';
+    }
+
+    if (expiresAt < now) {
+      return 'expired';
+    }
+
+    return 'open'; // Still within valid time, not paid yet
+  } catch (err) {
+    console.error('❌ Stripe error:', err.message);
+    return 'unknown';
+  }
+}
+
+
+async function blockCheckoutSession(sessionId) {
+  try {
+   await stripe.checkout.sessions.expire(sessionId);
+    return true
+  } catch (err) {
+    console.error('❌ Stripe error:', err.message); 
+  }
+}
+
+
 module.exports = {
+  blockCheckoutSession,
+  checkCheckoutSessionStatus,
   pullAmountPaymentIntentFromBankAccount,
   attachBankAccountPaymentMethod,
   createStripeLoginLink,

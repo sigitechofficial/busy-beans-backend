@@ -9,7 +9,8 @@ const {
   supplier,
   statuses,
   shippingCompanies,
-  billingAddress
+  billingAddress,
+  salesRep
 } = require('../../models');
 const { Op, literal, fn, col } = require('sequelize');
 const APIFeatures = require('../../utils/apiFeatures');
@@ -36,10 +37,31 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
   }
   
-  const orderData = details
-  const invoice =  await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) 
 
-  await order.update(invoice,{where:{id:details.id}})
+  //   let checkSession = false
+    
+  //   if(details?.invoiceId){
+  //     const session = await Stripe.checkCheckoutSessionStatus(details?.invoiceId)
+
+  //     if(session== "paid"){
+  //         await order.update({paymentMethod:'card',paymentStatus:'done'},{where:{id:req.params.orderId}})
+  //         return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
+
+  //     }else if(session == 'open'){
+  //        checkSession = true
+  //     }
+
+  //   }
+
+  //     const preSession = {
+  //           "invoiceId": details.invoiceId,
+  //           "hostedInvoiceUrl":details.hostedInvoiceUrl, 
+  //           "invoicePdf": ""
+  //       }
+
+  //     const invoice = !checkSession ? await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) : preSession
+
+  //     if(!checkSession)await order.update(invoice,{where:{id:details.id}})
 
   let to = [email]
    if (email) {
@@ -48,7 +70,52 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
       }
     }
 
-  sentPaymentInvoiceEvent({email:to,data:details,invoice})
+  sentPaymentInvoiceEvent({email:to,data:details})
+  res.status(200).json({
+    status: 'success',
+    data: {
+    },
+  });
+});
+
+
+exports.fetchInvoice = catchAsync(async (req, res, next) => {
+  const { details,email } = await dataForEmailAndNotifications(req.params.orderId);
+
+  if(details?.paymentIntentId || details?.paymentStatus == 'done'){
+    return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
+  }
+  
+
+    let checkSession = false
+    
+    if(details?.invoiceId){
+      const session = await Stripe.checkCheckoutSessionStatus(details?.invoiceId)
+      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session)
+
+      if(session== "paid"){
+          await order.update({paymentMethod:'card',paymentStatus:'done'},{where:{id:req.params.orderId}})
+          return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
+
+      }else if(session == 'open'){
+         checkSession = true
+      }
+
+    }
+
+      const preSession = {
+            "invoiceId": details.invoiceId,
+            "hostedInvoiceUrl":details.hostedInvoiceUrl, 
+            "invoicePdf": ""
+        }
+
+      const invoice = !checkSession ? await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) : preSession
+
+      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:", invoice)
+      if(!checkSession)await order.update(invoice,{where:{id:details.id}})
+      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:", checkSession)
+ 
+  // sentPaymentInvoiceEvent({email:to,data:details,invoice})
   res.status(200).json({
     status: 'success',
     data: {
@@ -56,7 +123,6 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     },
   });
 });
-
 exports.getAllSalesRep = factory.getAll(statuses);
 
 exports.allOrder = catchAsync(async (req, res, next) => {
@@ -192,7 +258,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     status: 'success',
     results: doc.length,
     data: {
-      data: doc.reverse(),
+      data: doc,
     },
   });
 });
@@ -466,6 +532,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
         },
       },
       {
+        model: salesRep,
+        attributes: {
+          exclude: ['createdAt', 'updatedAt', 'deleted', 'deletedAt','password'],
+        },
+      },
+      {
         model: chequeDetail,
         attributes: {
           exclude: ['createdAt', 'updatedAt', 'deletedAt'],
@@ -492,6 +564,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
               `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             'product',
+          ],
+          [
+            literal(
+              `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'productCode',
           ],
           'qty',
           'price',
@@ -716,7 +794,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   
   const placedOrder = await order.findOne({
     where: { id: req.params.orderId },
-    attributes: ['id', 'supplierId','paymentStatus','salesRepId'],
+    attributes: ['id', 'supplierId','paymentStatus','salesRepId','invoiceId'],
   });
 
   console.log("🚀 ~ exports.updateOrder=catchAsync ~ body.items:", req.body)
@@ -727,7 +805,27 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('The order payment has already been made. You may proceed with the update.', 404));
   }
 
-   const input = {order:{}}
+  
+    let checkSession = false
+    
+    if(placedOrder?.invoiceId){
+      const session = await Stripe.checkCheckoutSessionStatus(placedOrder?.invoiceId)
+      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session)
+
+      if(session== "paid"){
+          await order.update({paymentMethod:'card',paymentStatus:'done'},{where:{id:placedOrder.id}})
+          return next(new AppError('As the payment for the order has already been made, we are unable to update an invoice at this point.', 404));
+
+      }else if(session == 'open'){
+         checkSession = true
+      }
+
+    }
+
+
+ if(checkSession) await Stripe.blockCheckoutSession(placedOrder?.invoiceId)
+
+   const input = {order:{invoiceId:null, hostedInvoiceUrl:null}}
    input.items = req.body.items
  
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)  
@@ -795,12 +893,15 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       },
       attributes:['charges']
   });
+  if (!shippingCompany) {
+       return next(new AppError('Not dealing in such weights. Contact customer support for this order.', 400));
+    }
 
   input.order.itemsPrice = itemsPrice
   input.order.totalWeight = totalWeight
   input.order.shippingCharges = shippingCompany?.charges
   input.order.subTotal = itemsPrice + input.order.vat
-  input.order.totalBill = itemsPrice +  parseFloat(input?.order?.vat) + parseFloat(shippingCompany?.charges|0)
+  input.order.totalBill = itemsPrice +  parseFloat(input?.order?.vat || 0) + parseFloat(shippingCompany?.charges || 0)
   console.log("🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:", shippingCompany?.charges)
 
   await order.update(input?.order,{where:{id:placedOrder?.id}})

@@ -12,7 +12,8 @@ async function downloadPDF(pdfUrl, outputPath) {
 }
 module.exports = function ({ email,data, invoice}) {
   console.log("ðŸš€ ~ data:", data)
-  let hiSupplierName = `Hope you're doing well`
+  //will use from env BASE URL
+  let SessionUrl = `https://backendbb.trimworldwide.com/view/pay-order-invoice?orderId=${data?.id}`
  
   let items = [] 
   data?.items.forEach((ele) => {
@@ -119,7 +120,7 @@ module.exports = function ({ email,data, invoice}) {
           "
         >
           <a
-            href="${invoice?.hostedInvoiceUrl}"
+            href="${SessionUrl}"
             style="
               padding: 10px 20px;
               background-color: #86644c;
@@ -184,10 +185,10 @@ module.exports = function ({ email,data, invoice}) {
             </tr>
            ${items}
            <tr style="background-color: #e0e0e0;">
-              <td style="text-align: left; padding: 10px; font-weight: bold;">VAT</td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;">Shipping charges</td>
               <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
               <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
-              <td style="text-align: left; padding: 10px; font-weight: bold;">$${data.vat}</td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;">$${data.shippingCharges}</td>
             </tr>
             <tr style="background-color: #e0e0e0;">
               <td style="text-align: left; padding: 10px; font-weight: bold;">Total</td>

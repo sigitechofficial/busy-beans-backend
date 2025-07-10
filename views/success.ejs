@@ -2,24 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Payment Successful</title>
+  <title>Payment Already Completed</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
       padding-top: 100px;
-      color: #3E342C;
+      color: white;
+      background-color: #8F5D46;
+      margin: 0;
+      height: 100vh;
+    }
+
+    .checkmark {
+      font-size: 64px;
+      color: #ffffff;
+    }
+
+    p {
+      font-size: 18px;
+      margin-top: 20px;
     }
   </style>
 </head>
 <body>
-  <h1>✅ Payment Successful!</h1>
-  <p>Thank you for your payment for Order <strong><span id="order-id"></span></strong>.</p>
-
-  <script>
-    const orderId = new URLSearchParams(window.location.search).get("orderId");
-    document.getElementById("order-id").innerText = orderId;
-  </script>
+  <div class="checkmark">✅</div>
+  <h1>Payment Already Completed</h1>
+  <p>Your invoice has already been paid successfully. No further action is needed.</p>
 </body>
 </html>

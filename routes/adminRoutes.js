@@ -122,6 +122,7 @@ router
 
 router.get('/orders', manageOrderController.allOrder);
 router.post('/order-management/send-invoice/:orderId', manageOrderController.sendInvoice);
+router.post('/order-management/fetch-invoice/:orderId', manageOrderController.fetchInvoice);
 router.patch('/order-management/update-order/:orderId', manageOrderController.updateOrder);
 
 router.get('/order-details/:id', manageOrderController.orderDetails);

@@ -9,6 +9,7 @@ const { literal } = require('sequelize')
 const { emailDateFormate } = require('./emailDateFormate')
 
 exports.dataForEmailAndNotifications = async (orderId) => {
+  console.log("🚀 ~ exports.dataForEmailAndNotifications= ~ orderId:", orderId)
   const doc = await order.findOne({
     where: { id : orderId },
     include: [
@@ -141,6 +142,8 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'paymentMethodId',
       'shippingCharges',
       'poNumber',
+      'hostedInvoiceUrl',
+      'shippingCharges',
     ],
   });
   const output = JSON.parse(JSON.stringify(doc))

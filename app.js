@@ -15,6 +15,20 @@ const globalErrorHandler = require('./controllers/errorController');
 const userRouter = require('./routes/userRoutes');
 const adminRouter = require('./routes/adminRoutes');
 const webhookRoute = require('./routes/webhooks')
+app.use((req, res, next) => {
+  console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+app.set('view engine', 'ejs');
+app.set('views', __dirname + '/views');
+const viewRoute = require('./routes/viewRoutes')
+
+app.use('/view', viewRoute);
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
 app.use('/webhook', bodyParser.raw({ type: 'application/json' }), webhookRoute)
 
 dotenv.config({ path: './.env' });
@@ -56,8 +70,8 @@ app.use(cors());
 // Stripe webhook, BEFORE body-parser, because stripe needs the body as stream
 
 // Body parser, reading data from body into req.body
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+// app.use(express.json({ limit: '10kb' }));
+// app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser());
 
 app.use(compression());
