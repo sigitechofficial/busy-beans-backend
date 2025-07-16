@@ -6,15 +6,14 @@ class APIFeatures {
     this.queryString = queryString;
     this.queryOptions = {}; // Store query options here
   }
- 
 
   filter() {
     const queryObj = { ...this.queryString };
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
     excludedFields.forEach((el) => delete queryObj[el]);
-  
-    const filterConditions = { deleted : 0 };
-  
+
+    const filterConditions = { deleted: 0 };
+
     // Handle advanced filtering like ?price[gte]=100
     Object.keys(queryObj).forEach((key) => {
       if (key.includes('[')) {
@@ -27,12 +26,12 @@ class APIFeatures {
         filterConditions[key] = queryObj[key];
       }
     });
-  
+
     this.queryOptions.where = filterConditions;
-  
+
     return this;
   }
-  
+
   sort() {
     if (this.queryString.sort) {
       const sortBy = this.queryString.sort

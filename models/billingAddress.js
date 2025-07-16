@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   const billingAddress = sequelize.define(
     'billingAddress',
-      {
+    {
       companyaddress: {
         type: DataTypes.STRING,
         allowNull: true,

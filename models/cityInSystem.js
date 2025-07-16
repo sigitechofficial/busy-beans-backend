@@ -15,8 +15,7 @@ module.exports = (sequelize) => {
         defaultValue: false,
       },
     },
-    { 
- 
+    {
       indexes: [
         {
           fields: ['name'],

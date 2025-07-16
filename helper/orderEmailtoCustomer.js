@@ -1,15 +1,16 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
-const { emailDateFormate } = require('../utils/emailDateFormate')
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
+const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email,data, satge = 'Confirmed',invoice}) {
-let hiCustomer = `Hi ${data?.customerName}!`
- const  invoiceSection = invoice?`   <tr>
+module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
+  let hiCustomer = `Hi ${data?.customerName}!`;
+  const invoiceSection = invoice
+    ? `   <tr>
               <td
                 style="
                   padding-left: 37px;
@@ -82,12 +83,13 @@ let hiCustomer = `Hi ${data?.customerName}!`
           </a>
           
         </td>
-      </tr>`:``; 
- let orderNote = `Your order has been confirmed and will be prepared according to the
-                instructions.`
- 
-   let items = [] 
-   console.log("data?.itemsdata?.itemsdata?.itemsdata?.items",data?.items)
+      </tr>`
+    : ``;
+  let orderNote = `Your order has been confirmed and will be prepared according to the
+                instructions.`;
+
+  let items = [];
+  console.log('data?.itemsdata?.itemsdata?.itemsdata?.items', data?.items);
   data?.items.forEach((ele) => {
     let temp = `<tr>
                     <td
@@ -109,12 +111,12 @@ let hiCustomer = `Hi ${data?.customerName}!`
                     >
                       $${ele.price}
                     </td>
-            </tr>`
+            </tr>`;
     temp = items.push(temp);
     return temp;
   });
 
-  items = items.join('');  
+  items = items.join('');
 
   transporter.sendMail(
     {
@@ -325,7 +327,7 @@ let hiCustomer = `Hi ${data?.customerName}!`
                         text-align: right;
                       "
                     >
-                      $${data?.shippingCharges || 0.00}
+                      $${data?.shippingCharges || 0.0}
                     </td>
                   </tr>
                   <tr>
@@ -375,10 +377,10 @@ let hiCustomer = `Hi ${data?.customerName}!`
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};

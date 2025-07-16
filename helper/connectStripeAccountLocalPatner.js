@@ -1,24 +1,24 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer') 
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
 
-module.exports = function ({ email, name = '', boardingLink= '',password }) {
-  console.log("🚀 ~ boardingLink:", boardingLink)
-  console.log("🚀 ~ boardingLink:", boardingLink)
-  console.log("🚀 ~ boardingLink:", boardingLink)
-  console.log("🚀 ~ boardingLink:", boardingLink)
-  console.log("🚀 ~ boardingLink:", boardingLink)
-  console.log("🚀 ~ boardingLink:", boardingLink)
-  console.log("🚀 ~ boardingLink:", boardingLink)
-  let hiUser = `Hi ${name}!`
+module.exports = function ({ email, name = '', boardingLink = '', password }) {
+  console.log('🚀 ~ boardingLink:', boardingLink);
+  console.log('🚀 ~ boardingLink:', boardingLink);
+  console.log('🚀 ~ boardingLink:', boardingLink);
+  console.log('🚀 ~ boardingLink:', boardingLink);
+  console.log('🚀 ~ boardingLink:', boardingLink);
+  console.log('🚀 ~ boardingLink:', boardingLink);
+  console.log('🚀 ~ boardingLink:', boardingLink);
+  let hiUser = `Hi ${name}!`;
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: [`${email}`,'sigidevelopers@gmail.com'], //`${email}` list of receivers
+      to: [`${email}`, 'sigidevelopers@gmail.com'], //`${email}` list of receivers
       subject: `${hiUser}! Welcome to Busy Bean. To start receiving online payments connect your Stripe account`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>
@@ -179,12 +179,10 @@ module.exports = function ({ email, name = '', boardingLink= '',password }) {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
-
-
+  );
+};

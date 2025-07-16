@@ -1,4 +1,4 @@
-const { DataTypes,Sequelize } = require('sequelize');
+const { DataTypes, Sequelize } = require('sequelize');
 
 module.exports = (sequelize) => {
   const order = sequelize.define(
@@ -124,7 +124,7 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       adminReceivableStatus: {
-         type: DataTypes.BOOLEAN,
+        type: DataTypes.BOOLEAN,
         allowNull: true,
         defaultValue: false,
       },
@@ -189,7 +189,7 @@ module.exports = (sequelize) => {
 
     order.hasOne(models.chequeDetail);
     models.chequeDetail.belongsTo(order);
-    
+
     order.hasOne(models.orderFrequency);
     models.orderFrequency.belongsTo(order);
 

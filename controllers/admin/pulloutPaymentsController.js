@@ -1,68 +1,94 @@
-const { supplier,order,salesRep,user,item,product } = require('../../models');
+const {
+  supplier,
+  order,
+  salesRep,
+  user,
+  item,
+  product,
+} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
- const factory = require('../handlerFactory');
-const { Op, literal, where, fn } = require('sequelize')
+const factory = require('../handlerFactory');
+const { Op, literal, where, fn } = require('sequelize');
 const APIFeatures = require('../../utils/apiFeatures');
 const Stripe = require('../stripe');
- 
 
-//TODO creaete a model where we save that paymentintent and the amount update all order and add pulloutsId against them . pull out has status processiong we will add webhook if succeedd than status change orther wise set all order pulloutsId null so we can pull again 
+//TODO creaete a model where we save that paymentintent and the amount update all order and add pulloutsId against them . pull out has status processiong we will add webhook if succeedd than status change orther wise set all order pulloutsId null so we can pull again
 
+exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
+  async (req, res, next) => {
+    const patner = await salesRep.findOne({ where: { id: req.params.srId } });
 
-exports.pullPaymentsFromPatnersBankAccounts = catchAsync(async (req, res, next) => {
-  const patner = await salesRep.findOne({where:{id:req.params.srId }});
+    const { amount, orderList } = req.body;
+    console.log(
+      '🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ orderList:',
+      orderList,
+    );
 
-  const { amount , orderList} = req.body
-  console.log("🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ orderList:", orderList)
+    const orderIds = orderList.map((order) => order.id);
 
-  const orderIds = orderList.map(order => order.id);
-
-  if(!patner.defaultBankAccount){
-    return next(new AppError('Payments can’t be pulled because the partner has no default bank account attached.', 400));
-  }
-  
-  const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount(
-    {amount,customerId:patner?.stripeCustomerId,savedPaymentMethodId:patner?.defaultBankAccount}
-  )
-  
-  console.log("🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:", pullouts)
-  if(pullouts){
-    console.log("🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:", pullouts)
-    order.update({adminReceivableStatus:true},{where:{id:orderIds}}) 
-    for (const ele of orderList) {
-      await order.update(
-        {
-          adminReceivableAmount: ele.adminReceivableAmount,
-          localPatnerCommission: ele.localPatnerCommission
-        },
-        { where: { id: ele.id } }
+    if (!patner.defaultBankAccount) {
+      return next(
+        new AppError(
+          'Payments can’t be pulled because the partner has no default bank account attached.',
+          400,
+        ),
       );
     }
 
-  }else{
-    return next(new AppError('Something Want so wrong Payments can’t be pulled.', 400));
-  }
+    const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
+      amount,
+      customerId: patner?.stripeCustomerId,
+      savedPaymentMethodId: patner?.defaultBankAccount,
+    });
 
-  res.status(200).json({
-    status: 'success',
-    data: {},
-  });
+    console.log(
+      '🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:',
+      pullouts,
+    );
+    if (pullouts) {
+      console.log(
+        '🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:',
+        pullouts,
+      );
+      order.update(
+        { adminReceivableStatus: true },
+        { where: { id: orderIds } },
+      );
+      for (const ele of orderList) {
+        await order.update(
+          {
+            adminReceivableAmount: ele.adminReceivableAmount,
+            localPatnerCommission: ele.localPatnerCommission,
+          },
+          { where: { id: ele.id } },
+        );
+      }
+    } else {
+      return next(
+        new AppError('Something Want so wrong Payments can’t be pulled.', 400),
+      );
+    }
 
-});
- 
-
-
+    res.status(200).json({
+      status: 'success',
+      data: {},
+    });
+  },
+);
 
 const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
   try {
-    console.log("🚀 ~ pullPaymentsFromPartnersBank ~ orderList:", orderList);
+    console.log('🚀 ~ pullPaymentsFromPartnersBank ~ orderList:', orderList);
 
-    const orderIds = orderList.map(order => order.id);
+    const orderIds = orderList.map((order) => order.id);
 
     // Step 1: Check if partner has a default bank account
     if (!patner?.defaultBankAccount) {
-      throw new AppError('Payments can’t be pulled because the partner has no default bank account attached.', 400);
+      throw new AppError(
+        'Payments can’t be pulled because the partner has no default bank account attached.',
+        400,
+      );
     }
 
     // Step 2: Pull amount from partner using Stripe Financial Connections
@@ -77,7 +103,7 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
       // Set adminReceivableStatus true for all involved orders
       await order.update(
         { adminReceivableStatus: true },
-        { where: { id: orderIds } }
+        { where: { id: orderIds } },
       );
 
       // Update adminReceivableAmount and localPatnerCommission per order
@@ -86,42 +112,41 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
           {
             adminReceivableAmount: ele.adminReceivableAmount,
             localPatnerCommission: ele.localPatnerCommission,
-            proportionalStripeFee:0,
-            grossPartnerAmount:ele.localPatnerCommission,
+            proportionalStripeFee: 0,
+            grossPartnerAmount: ele.localPatnerCommission,
           },
-          { where: { id: ele.id } }
+          { where: { id: ele.id } },
         );
       }
     }
 
     return { success: true, pullouts };
   } catch (error) {
-    console.error("❌ Error in pullPaymentsFromPartnersBank:", error);
+    console.error('❌ Error in pullPaymentsFromPartnersBank:', error);
     throw new AppError(error.message || 'Payment pulling failed.', 500);
   }
 };
 
- 
-async function getOrdersForLocalPartner({localPatner}) {
+async function getOrdersForLocalPartner({ localPatner }) {
   try {
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
-  const condition = {
-    invoiceId: null,
-    paymentMethodId: null,
-    adminReceivableStatus: false,
-    localPatnerCommission: 0.00,
-    salesRepId: localPatner.id,
-    statusId: {
-      [Op.in]: [1,2,3,4,5],
-    },
-    on: {
-      [Op.lte]: oneMonthAgo, // only include orders from the past 1 month
-    },
-  };
+    const condition = {
+      invoiceId: null,
+      paymentMethodId: null,
+      adminReceivableStatus: false,
+      localPatnerCommission: 0.0,
+      salesRepId: localPatner.id,
+      statusId: {
+        [Op.in]: [1, 2, 3, 4, 5],
+      },
+      on: {
+        [Op.lte]: oneMonthAgo, // only include orders from the past 1 month
+      },
+    };
 
-    console.log("🚀 ~ getOrdersForLocalPartner ~ condition:", condition);
+    console.log('🚀 ~ getOrdersForLocalPartner ~ condition:', condition);
 
     const doc = await order.findAll({
       where: condition,
@@ -131,7 +156,9 @@ async function getOrdersForLocalPartner({localPatner}) {
           attributes: [
             'id',
             [
-              literal(`(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`),
+              literal(
+                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+              ),
               'product',
             ],
             'qty',
@@ -160,7 +187,7 @@ async function getOrdersForLocalPartner({localPatner}) {
           ), 0)`),
           'adminReceivableAmount',
         ],
-      
+
         [
           literal(`COALESCE(
             (SELECT SUM(wholesalePrice)
@@ -174,28 +201,31 @@ async function getOrdersForLocalPartner({localPatner}) {
       ],
     });
 
-    if(!doc || doc.length < 1 ){
-      console.log("🚀 ~ NOR ORDER ARE TEHRE TO PULL OUT MONEY FROM:", false)
-      return false
+    if (!doc || doc.length < 1) {
+      console.log('🚀 ~ NOR ORDER ARE TEHRE TO PULL OUT MONEY FROM:', false);
+      return false;
     }
 
     const input = JSON.parse(JSON.stringify(doc));
 
-// Calculate total adminReceivableAmount
+    // Calculate total adminReceivableAmount
     const totalAdminReceivableAmount = input.reduce((sum, order) => {
       const value = parseFloat(order.adminReceivableAmount) || 0;
       return sum + value;
     }, 0);
 
-    pullPaymentsFromPartnersBank({amount:totalAdminReceivableAmount,orderList:input,patner:localPatner})
-    
+    pullPaymentsFromPartnersBank({
+      amount: totalAdminReceivableAmount,
+      orderList: input,
+      patner: localPatner,
+    });
+
     return input.length;
   } catch (error) {
-    console.error("❌ Error in getOrdersForLocalPartner:", error);
+    console.error('❌ Error in getOrdersForLocalPartner:', error);
     throw new AppError(error.message, 500);
   }
 }
-
 
 async function processAllLocalPartners() {
   try {
@@ -203,13 +233,15 @@ async function processAllLocalPartners() {
     const patners = await salesRep.findAll({ where: { deleted: 0 } });
 
     if (!patners || patners.length === 0) {
-      console.log("❗ No local partners found.");
+      console.log('❗ No local partners found.');
       return;
     }
 
     // Step 2: Loop through each partner and process their orders
     for (const ele of patners) {
-      console.log(`🔄 Processing orders for local partner: ${ele?.srName || ele.id}`);
+      console.log(
+        `🔄 Processing orders for local partner: ${ele?.srName || ele.id}`,
+      );
 
       // Call your order-fetching function
       const orders = await getOrdersForLocalPartner(ele.id);
@@ -217,9 +249,8 @@ async function processAllLocalPartners() {
       // Optional: log or handle the returned orders
       console.log(`✅ Found ${orders} orders for ${ele?.srName || ele.id}`);
     }
-
   } catch (error) {
-    console.error("❌ Error in processAllLocalPartners:", error);
+    console.error('❌ Error in processAllLocalPartners:', error);
     throw new AppError(error.message, 500);
   }
 }

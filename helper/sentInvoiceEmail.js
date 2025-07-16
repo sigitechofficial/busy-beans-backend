@@ -1,41 +1,73 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const fs = require('fs');
+const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer') 
-const { emailDateFormate } = require('../utils/emailDateFormate')
-async function downloadPDF(pdfUrl, outputPath) {
-  const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
-  fs.writeFileSync(outputPath, response.data);
-}
-module.exports = function ({ email,data, invoice}) {
-  console.log("ðŸš€ ~ data:", data)
+const { attachments } = require('./attactments');
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
+const { emailDateFormate } = require('../utils/emailDateFormate');
+const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
+
+// async function downloadPDF(pdfUrl, outputPath) {
+//   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+//   fs.writeFileSync(outputPath, response.data);
+// }
+module.exports = async function ({ email, data, invoice }) {
+  console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
-  let SessionUrl = `https://backendbb.trimworldwide.com/view/pay-order-invoice?orderId=${data?.id}`
- 
-  let items = [] 
+  let SessionUrl = `https://backendbb.trimworldwide.com/view/pay-order-invoice?orderId=${data?.id}`;
+  console.log('__dirname:', __dirname);
+
+  const folderPath = path.join(__dirname, '..', 'public', 'invoicePDFs');
+  // Create the folder if it doesn't exist
+  if (!fs.existsSync(folderPath)) {
+    fs.mkdirSync(folderPath, { recursive: true }); // Ensures parent folders are created if missing
+    console.log("📁 'public/invoicePDFs' folder created.");
+  }
+
+  const pdfFileName = `invoice-00${data.id}.pdf`; // or use your original naming
+  let pdfPath = path.join(folderPath, pdfFileName);
+
+  // Now it's safe to check file existence
+  if (!fs.existsSync(pdfPath)) {
+    console.error(`❌ File not found: ${pdfPath}`);
+    await GenerateInvoicePdf(data, data.id);
+    pdfPath = path.join(folderPath, pdfFileName);
+    console.error(`📁 New invoice Generated: ${pdfPath}`);
+  } else {
+    console.error(`📁 invoice Found no need to create New one: ${pdfPath}`);
+  }
+
+  const emailAttachments = [
+    ...attachments().footer,
+    {
+      filename: `invoice-00${data.id}.pdf`,
+      path: pdfPath,
+      contentType: 'application/pdf',
+    },
+  ];
+  let items = [];
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
-              <td style="padding: 10px;">$${ele.price/ele.qty}</td>
+              <td style="padding: 10px;">$${ele.price / ele.qty}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
             </tr>
-            `
+            `;
     temp = items.push(temp);
     return temp;
   });
 
-  items = items.join('');  
+  items = items.join('');
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
       subject: `Your Order ${data.id} Please Complete Your Payment`, // Subject line
-      attachments: attachment.footer,
+      attachments: emailAttachments,
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -219,10 +251,10 @@ module.exports = function ({ email,data, invoice}) {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};

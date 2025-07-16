@@ -1,8 +1,8 @@
-const origin = '655 South Hope Street 901 Los Angeles California 90017'
-const address = '128 City Road, London, United Kingdom, EC1V 2NX'
-const copyRight = 'Copyright © 2025 trim'
-const supportEmail = 'support@trimworldwide.com'
-const supportNumber = '017874854624'
+const origin = '655 South Hope Street 901 Los Angeles California 90017';
+const address = '128 City Road, London, United Kingdom, EC1V 2NX';
+const copyRight = 'Copyright © 2025 trim';
+const supportEmail = 'support@trimworldwide.com';
+const supportNumber = '017874854624';
 
 exports.newFooter = `<tr>
             <td style="padding: 20px; text-align: center;">
@@ -54,4 +54,4 @@ exports.newFooter = `<tr>
     </table>
 </body>
 </html>
-`
+`;

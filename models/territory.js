@@ -15,7 +15,7 @@ module.exports = (sequelize) => {
         defaultValue: false,
       },
     },
-    { 
+    {
       indexes: [
         {
           fields: ['name'],
@@ -24,7 +24,7 @@ module.exports = (sequelize) => {
       ],
     },
   );
- 
+
   territory.associate = (models) => {
     territory.hasMany(models.cityInSystem);
     models.cityInSystem.belongsTo(territory);

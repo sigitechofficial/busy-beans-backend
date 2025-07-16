@@ -1,17 +1,17 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
-const { emailDateFormate } = require('../utils/emailDateFormate')
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
+const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email,data}) {
-  console.log("🚀 ~ data:", data)
-  let hiSupplierName = `Hope you're doing well`
- 
-  let items = [] 
+module.exports = function ({ email, data }) {
+  console.log('🚀 ~ data:', data);
+  let hiSupplierName = `Hope you're doing well`;
+
+  let items = [];
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
@@ -20,12 +20,12 @@ module.exports = function ({ email,data}) {
               <td style="padding: 10px;">$${ele.price}</td>
               <td style="padding: 10px;">$${(parseFloat(ele?.price) * ele?.qty).toFixed(2)}</td>
             </tr>
-            `
+            `;
     temp = items.push(temp);
     return temp;
   });
 
-    items = items.join('');  
+  items = items.join('');
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
@@ -141,10 +141,10 @@ module.exports = function ({ email,data}) {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};

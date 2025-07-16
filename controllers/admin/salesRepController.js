@@ -1,10 +1,21 @@
-const { salesRep,user,address,order,item,salesFromPatners,stateInSystem,billingAddress} = require('../../models');
+const {
+  salesRep,
+  user,
+  address,
+  order,
+  item,
+  salesFromPatners,
+  stateInSystem,
+  billingAddress,
+} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Stripe = require('../stripe');
 const factory = require('../handlerFactory');
 const { sendQuotationEvent } = require('../events/sendQuotationEvents');
-const { connectStripeAccountEvent } = require('../events/connectStripeAccountEvent');
+const {
+  connectStripeAccountEvent,
+} = require('../events/connectStripeAccountEvent');
 const { response } = require('../../utils/response');
 const { Op, literal, fn, col } = require('sequelize');
 
@@ -17,270 +28,309 @@ exports.getSalesRep = factory.getOne(salesRep);
 exports.updateSalesRep = factory.updateOne(salesRep);
 
 exports.createSalesRep = catchAsync(async (req, res, next) => {
- 
-    const input = req.body;
-    console.log("🚀 ~ exports.createSalesRep=catchAsync ~ input:", input)
- 
-    const condition = {deleted :0};
-    condition.email = input?.email
-    // condition.state = input?.state
-    const exist = await salesRep.findOne({ where: condition, attributes: ['id'] });
+  const input = req.body;
+  console.log('🚀 ~ exports.createSalesRep=catchAsync ~ input:', input);
 
-    if (exist) {
-      if(exist.email == input.email){return next(new AppError('Email already exist', 400));
-      }
-      // else{
-      //   return next(new AppError('State already has a local Patner', 400));
-      // }
+  const condition = { deleted: 0 };
+  condition.email = input?.email;
+  // condition.state = input?.state
+  const exist = await salesRep.findOne({
+    where: condition,
+    attributes: ['id'],
+  });
+
+  if (exist) {
+    if (exist.email == input.email) {
+      return next(new AppError('Email already exist', 400));
     }
-  
-    if (req.file) {
-      // throw new  'Image not uploaded', 'Please upload image';
-      const tmpPath = req.file.path;
-      const imagePath = tmpPath.replace(/\\/g, '/');
-      input.image = imagePath;
-      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
-    } else {
-      input.image = undefined;
-      console.log("🚀 ~ c ~ input.image:", input.image)
+    // else{
+    //   return next(new AppError('State already has a local Patner', 400));
+    // }
+  }
+
+  if (req.file) {
+    // throw new  'Image not uploaded', 'Please upload image';
+    const tmpPath = req.file.path;
+    const imagePath = tmpPath.replace(/\\/g, '/');
+    input.image = imagePath;
+    console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
+  } else {
+    input.image = undefined;
+    console.log('🚀 ~ c ~ input.image:', input.image);
+  }
+
+  const stripeCustomer = await Stripe.addCustomer({
+    name: input.srName,
+    email: input.email,
+  });
+  input.stripeCustomerId = stripeCustomer;
+
+  const doc = await salesRep.create(input);
+  await stateInSystem.update(
+    { salesRepId: doc?.id },
+    { where: { name: input?.state } },
+  );
+
+  connectStripeAccountEvent({ patner: doc });
+
+  return res.status(201).json({
+    status: 'success',
+    data: {
+      data: doc,
+    },
+  });
+});
+
+exports.createFinancialConnectionsSession = catchAsync(
+  async (req, res, next) => {
+    const patner = await salesRep.findOne({ where: { id: req.params.srId } });
+    if (patner?.defaultBankAccount) {
+      return res.status(200).json({
+        status: 'success',
+        message: `Your bank account is connected. You're all set`,
+        data: { clientSecret: null, setputIntendId: null },
+      });
     }
+    let stripeCustomerId = patner?.stripeCustomerId;
+    if (!patner?.stripeCustomerId) {
+      const stripeCustomer = await Stripe.addCustomer({
+        name: patner.srName,
+        email: patner.email,
+      });
+      patner.stripeCustomerId = stripeCustomer;
+      await patner.save();
+      stripeCustomerId = stripeCustomer;
+    }
+    console.log(
+      '🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ stripeCustomerId:',
+      stripeCustomerId,
+    );
 
-    const stripeCustomer = await Stripe.addCustomer({name:input.srName,email:input.email})
-    input.stripeCustomerId = stripeCustomer
+    const session = await Stripe.financialConnectionsSession({
+      customerId: stripeCustomerId,
+    });
 
-    const doc = await salesRep.create(input);
-    await stateInSystem.update({salesRepId:doc?.id},{where:{name:input?.state}})
-    
-    connectStripeAccountEvent({patner:doc})
-   
-    return res.status(201).json({
+    console.log(
+      '🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ session:',
+      session,
+    );
+
+    return res.status(200).json({
       status: 'success',
       data: {
-        data: doc,
+        clientSecret: session?.client_secret,
+        setputIntendId: session.id,
       },
     });
-});
-
-exports.createFinancialConnectionsSession = catchAsync(async (req, res, next) => {
-   
-  const patner = await salesRep.findOne({where:{id:req.params.srId}});
-   if(patner?.defaultBankAccount){
- 
-    return res.status(200).json({
-    status: 'success',   
-    message:`Your bank account is connected. You're all set`,
-    data: {clientSecret:null , setputIntendId: null },
-  });
-   }
-  let stripeCustomerId = patner?.stripeCustomerId
-   if(!patner?.stripeCustomerId){
-    const stripeCustomer = await Stripe.addCustomer({name:patner.srName,email:patner.email})
-    patner.stripeCustomerId = stripeCustomer
-    await patner.save()
-    stripeCustomerId = stripeCustomer
-  }
-  console.log("🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ stripeCustomerId:", stripeCustomerId)
-
-  const session =  await Stripe.financialConnectionsSession({customerId:stripeCustomerId})
-
-  console.log("🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ session:", session)
-
-  return res.status(200).json({
-    status: 'success',   
-    data: {clientSecret: session?.client_secret , setputIntendId: session.id },
-  });
-  
-});
+  },
+);
 
 exports.attachBankAccount = catchAsync(async (req, res, next) => {
+  const { paymentMethodId } = req.body;
+  const patner = await salesRep.findOne({ where: { id: req.params.srId } });
 
-  const {paymentMethodId} = req.body
-  const patner = await salesRep.findOne({where:{id:req.params.srId }});
-   
-  const attach =  await Stripe.attachBankAccountPaymentMethod({paymentMethodId,customerId:patner.stripeCustomerId})
- 
-  patner.defaultBankAccount = attach.success? attach.paymentMethodId:null
-  await patner.save()
-  
-  return res.status(200).json({
-    status: 'success',   
-    data: {attach},
+  const attach = await Stripe.attachBankAccountPaymentMethod({
+    paymentMethodId,
+    customerId: patner.stripeCustomerId,
   });
 
+  patner.defaultBankAccount = attach.success ? attach.paymentMethodId : null;
+  await patner.save();
+
+  return res.status(200).json({
+    status: 'success',
+    data: { attach },
+  });
 });
 
 exports.deleteSalesRep = catchAsync(async (req, res, next) => {
- 
-    await salesRep.update({deleted:true},{
+  await salesRep.update(
+    { deleted: true },
+    {
       where: { id: req.params.id },
-    });
+    },
+  );
 
-    await user.update({salesRepId:null},{
+  await user.update(
+    { salesRepId: null },
+    {
       where: { salesRepId: req.params.id },
-    });
-    
- return res.status(200).json({
+    },
+  );
+
+  return res.status(200).json({
     status: 'success',
     data: {},
   });
 });
 
 exports.addCustomer = catchAsync(async (req, res, next) => {
- 
   req.body.info.verifiedAt = new Date();
-  console.log("🚀 ~ exports.addCustomer=catchAsync ~ req.body:", req.body)
-  req.body.info.salesRepId = req.params.srId
-  req.body.info.createdBy = 'sales-rep'
+  console.log('🚀 ~ exports.addCustomer=catchAsync ~ req.body:', req.body);
+  req.body.info.salesRepId = req.params.srId;
+  req.body.info.createdBy = 'sales-rep';
   const newUser = await user.create(req.body?.info);
 
   req.body.address.userId = newUser?.id;
   req.body.billingAddress.userId = newUser?.id;
   const defaultAddress = await address.create(req.body?.address);
   await billingAddress.create(req.body?.billingAddress);
-  
-  console.log("🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:", defaultAddress)
 
-  const stripeCustomerId = await Stripe.addCustomer({email:newUser?.email,name:newUser?.name})
-  newUser.stripeCustomerId = stripeCustomerId
-  await newUser.save()
+  console.log(
+    '🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:',
+    defaultAddress,
+  );
+
+  const stripeCustomerId = await Stripe.addCustomer({
+    email: newUser?.email,
+    name: newUser?.name,
+  });
+  newUser.stripeCustomerId = stripeCustomerId;
+  await newUser.save();
 
   return res.status(200).json(
-      response({
-        data: {
-          message: 'Customer added successfully.',
-          data: {id:newUser.id},
-        },
-      }),
+    response({
+      data: {
+        message: 'Customer added successfully.',
+        data: { id: newUser.id },
+      },
+    }),
   );
-  
 });
 
 exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
-  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
     return next(new AppError('Data not Found!', 404));
   }
-    
-  const connectAccount = await Stripe.createConnectAccount({email:sr.email,returnUrl : req.body.returnUrl})
 
-  sr.connectAccountId = connectAccount.accountId
+  const connectAccount = await Stripe.createConnectAccount({
+    email: sr.email,
+    returnUrl: req.body.returnUrl,
+  });
 
-  await sr.save()
+  sr.connectAccountId = connectAccount.accountId;
+
+  await sr.save();
   return res.status(200).json(
-      response({
-        data: {
-          message: 'Connect Account.',
-          data: connectAccount,
-        },
-      }),
+    response({
+      data: {
+        message: 'Connect Account.',
+        data: connectAccount,
+      },
+    }),
   );
-  
 });
 
 exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
-  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
-      return next(new AppError('Data not Found!', 404));
-  } 
-   console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
+    return next(new AppError('Data not Found!', 404));
+  }
+  console.log('🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
 
-  const connectAccount = await Stripe.createStripeAccountLink({accountId:sr.connectAccountId,returnUrl : req.body.returnUrl})
- 
+  const connectAccount = await Stripe.createStripeAccountLink({
+    accountId: sr.connectAccountId,
+    returnUrl: req.body.returnUrl,
+  });
 
   return res.status(200).json(
-      response({
-        data: {
-          message: 'Connect Account.',
-          data: {connectAccount},
-        },
-      }),
+    response({
+      data: {
+        message: 'Connect Account.',
+        data: { connectAccount },
+      },
+    }),
   );
-  
 });
 
 exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
-  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
-      return next(new AppError('Data not Found!', 404));
-  } 
-   console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
+    return next(new AppError('Data not Found!', 404));
+  }
+  console.log('🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
 
-  const connectAccount = await Stripe.createStripeLoginLink({accountId:sr.connectAccountId})
- 
+  const connectAccount = await Stripe.createStripeLoginLink({
+    accountId: sr.connectAccountId,
+  });
 
   return res.status(200).json(
-      response({
-        data: {
-          message: 'Connect Account.',
-          data: {connectAccount},
-        },
-      }),
+    response({
+      data: {
+        message: 'Connect Account.',
+        data: { connectAccount },
+      },
+    }),
   );
-  
 });
 
 exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
-  const sr = await salesRep.findOne({where:{id:req.params.srId}});
+  const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
-      return next(new AppError('Data not Found!', 404));
-  } 
+    return next(new AppError('Data not Found!', 404));
+  }
   if (!sr.connectAccountId) {
-      return next(new AppError('Stripe Account not connect!', 404));
-  } 
-   console.log("🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr)
+    return next(new AppError('Stripe Account not connect!', 404));
+  }
+  console.log('🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
 
-  const connectAccount = await Stripe.retrieveConnectAccount({accountId:sr.connectAccountId})
- if(connectAccount)
-
-  await salesRep.update({isAccountConnected:true},{where:{id:req.params.srId}})
+  const connectAccount = await Stripe.retrieveConnectAccount({
+    accountId: sr.connectAccountId,
+  });
+  if (connectAccount)
+    await salesRep.update(
+      { isAccountConnected: true },
+      { where: { id: req.params.srId } },
+    );
 
   return res.status(200).json(
-      response({
-         message: 'Connect Account.',
-        data: {isAccountConnected:true,connectAccount:connectAccount.id},
-      }),
+    response({
+      message: 'Connect Account.',
+      data: { isAccountConnected: true, connectAccount: connectAccount.id },
+    }),
   );
 });
 
 exports.sendQuotation = catchAsync(async (req, res, next) => {
   console.log(req.body);
-  
-  req.body.order.items = req.body?.items
-  sendQuotationEvent({email:req.body?.email,data:req.body?.order})
-  
+
+  req.body.order.items = req.body?.items;
+  sendQuotationEvent({ email: req.body?.email, data: req.body?.order });
+
   return res.status(200).json({
-    status: 'success',   
+    status: 'success',
     data: {},
   });
 });
 
 exports.salersMoney = catchAsync(async (req, res, next) => {
-//   const doc = await item.findOne({
-//     attributes: [
-//       [literal('SUM(`item`.`price`)'), 'totalSales'],
-//       [literal('SUM(`item`.`salerCommission`)'), 'salerCommission'],
-//       [literal('SUM(`item`.`wholesalePrice`)'), 'wholesalePrice'],
-//       [literal('SUM(`item`.`qty`)'), 'numberOfSoldProducts']
-//     ],
-//     include: [
-//       {
-//         model: order,
-//         where: { salesRepId: req.params.srId },
-//         attributes: []
-//       }
-//     ],
-//     raw: true,
-//   });
+  //   const doc = await item.findOne({
+  //     attributes: [
+  //       [literal('SUM(`item`.`price`)'), 'totalSales'],
+  //       [literal('SUM(`item`.`salerCommission`)'), 'salerCommission'],
+  //       [literal('SUM(`item`.`wholesalePrice`)'), 'wholesalePrice'],
+  //       [literal('SUM(`item`.`qty`)'), 'numberOfSoldProducts']
+  //     ],
+  //     include: [
+  //       {
+  //         model: order,
+  //         where: { salesRepId: req.params.srId },
+  //         attributes: []
+  //       }
+  //     ],
+  //     raw: true,
+  //   });
 
-    const doc = await salesRep.findOne({
+  const doc = await salesRep.findOne({
     where: {
       id: req.params.srId,
     },
-    attributes:[ 
+    attributes: [
       [
-          fn(
-            'FORMAT',
-            literal(`
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(items.price)
                 FROM orders
@@ -289,12 +339,12 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep'
               )
             `),
-            1
-          ),
-          'totalSales',
-        ],
-         [
-            literal(`
+          1,
+        ),
+        'totalSales',
+      ],
+      [
+        literal(`
               (
                 SELECT SUM(items.wholesalePrice)
                 FROM orders
@@ -303,13 +353,13 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep'
               )
             `),
-           
-          'wholesalePrice',
-        ],
-          [
-          fn(
-            'FORMAT',
-            literal(`
+
+        'wholesalePrice',
+      ],
+      [
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(items.price - items.wholesalePrice)
                 FROM orders
@@ -318,14 +368,14 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep'
               )
             `),
-            1
-          ),
-          'salerCommission',
-        ],
-          [
-          fn(
-            'FORMAT',
-            literal(`
+          1,
+        ),
+        'salerCommission',
+      ],
+      [
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(items.qty)
                 FROM orders
@@ -334,34 +384,33 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep'
               )
             `),
-            1
-          ),
-          'numberOfSoldProducts',
-        ],
-        
-        ]
+          1,
+        ),
+        'numberOfSoldProducts',
+      ],
+    ],
   });
   if (!doc) {
-      return next(new AppError('Data not Found!', 404));
+    return next(new AppError('Data not Found!', 404));
   }
 
-  const result = JSON.parse(JSON.stringify(doc))
+  const result = JSON.parse(JSON.stringify(doc));
   const paidToAdmin = await salesFromPatners.sum('amount', {
     where: {
       salesRepId: req.params.srId,
     },
   });
-      
-    const credit = await salesRep.findOne({
+
+  const credit = await salesRep.findOne({
     where: {
       id: req.params.srId,
     },
-    attributes:[ 
+    attributes: [
       'creditLimit',
       [
-          fn(
-            'FORMAT',
-            literal(`
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(items.price)
                 FROM orders
@@ -370,17 +419,18 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-            1
-          ),
-          'creditUsed',
-        ],]
+          1,
+        ),
+        'creditUsed',
+      ],
+    ],
   });
 
-const toBePaid = parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0)
+  const toBePaid =
+    parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0);
   // Return response
   res.status(200).json({
     status: 'success',
-    data: {...result,toBePaid , paidToAdmin : paidToAdmin||0, credit},
+    data: { ...result, toBePaid, paidToAdmin: paidToAdmin || 0, credit },
   });
-
 });

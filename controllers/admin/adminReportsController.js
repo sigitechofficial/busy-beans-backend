@@ -1,13 +1,20 @@
-const { supplier,order,salesRep,user,item,product } = require('../../models');
+const {
+  supplier,
+  order,
+  salesRep,
+  user,
+  item,
+  product,
+} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
- 
-const { Op, literal, where, fn } = require('sequelize')
- 
+
+const { Op, literal, where, fn } = require('sequelize');
+
 exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
-const doc = await salesRep.findAll({
+  const doc = await salesRep.findAll({
     attributes: [
-      'id', 
+      'id',
       'srName',
       [
         fn(
@@ -19,7 +26,7 @@ const doc = await salesRep.findAll({
         ),
         'totalSales',
       ],
-     [
+      [
         fn(
           'FORMAT',
           literal(`
@@ -31,11 +38,11 @@ const doc = await salesRep.findAll({
                 AND orders.createdBy = 'sales-rep'
             )
           `),
-          1
+          1,
         ),
         'wholesalePriceCost',
       ],
-       [
+      [
         fn(
           'FORMAT',
           literal(`
@@ -47,9 +54,9 @@ const doc = await salesRep.findAll({
                 AND orders.createdBy = 'sales-rep'
             )
           `),
-          1
+          1,
         ),
-        'totalCommission'
+        'totalCommission',
       ],
       [
         literal(
@@ -57,29 +64,25 @@ const doc = await salesRep.findAll({
         ),
         'ordersPlaced',
       ],
-      
     ],
   });
- 
+
   res.status(200).json({
     status: 'success',
     data: doc,
   });
-
 });
 
- 
 exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
-
   const doc = await salesRep.findAll({
-      attributes: [
-        'id', 
-        'srName',
-        'creditLimit',
+    attributes: [
+      'id',
+      'srName',
+      'creditLimit',
       [
-          fn(
-            'FORMAT',
-            literal(`
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(items.wholesalePrice)
                 FROM orders
@@ -88,35 +91,28 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-            1
-          ),
-          'creditUsed',
-        ],
-        
+          1,
+        ),
+        'creditUsed',
       ],
-    });
+    ],
+  });
 
-
- 
   res.status(200).json({
     status: 'success',
     data: doc,
   });
-
 });
 
-
- 
 exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
-
   const doc = await salesRep.findAll({
-      attributes: [
-        'id', 
-        'srName',
+    attributes: [
+      'id',
+      'srName',
       [
-          fn(
-            'FORMAT',
-            literal(`
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(items.wholesalePrice)
                 FROM orders
@@ -125,73 +121,68 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.adminReceivableStatus = false
               )
             `),
-            1
-          ),
-          'outstandingBalance',
-        ],
-        [
+          1,
+        ),
+        'outstandingBalance',
+      ],
+      [
         literal(
           `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.createdBy = 'sales-rep' AND orders.adminReceivableStatus = false)`,
         ),
         'ordersOnCredit',
       ],
-        
-      ],
-    }); 
+    ],
+  });
   res.status(200).json({
     status: 'success',
     data: doc,
   });
-
 });
 
 exports.customerReport = catchAsync(async (req, res, next) => {
-
   const doc = await user.findAll({
-      where: literal(`
+    where: literal(`
         EXISTS (
           SELECT 1
           FROM orders 
           WHERE orders.userId = user.id
         )
       `),
-      attributes: [
-        'id', 
-        'name',
-        [
-          fn(
-            'FORMAT',
-            literal(`
+    attributes: [
+      'id',
+      'name',
+      [
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(totalBill)
                 FROM orders WHERE orders.userID = user.id
               )
-            `), 
-            1
-          ),
-          'totatSpent',
-        ],
-        [
-          literal(
-            `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id)`
-          ),
-          'numberOfOrders',
-        ],
-        [
-          fn(
-            'FORMAT',
-            literal(`
+            `),
+          1,
+        ),
+        'totatSpent',
+      ],
+      [
+        literal(`(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id)`),
+        'numberOfOrders',
+      ],
+      [
+        fn(
+          'FORMAT',
+          literal(`
               (
                 SELECT SUM(totalBill) / NULLIF(COUNT(*), 0)
                 FROM orders WHERE orders.userID = user.id
               )
             `),
-            1
-          ),
-          'avgSpent',
-        ],
-        [
-            literal(`
+          1,
+        ),
+        'avgSpent',
+      ],
+      [
+        literal(`
               (
                 SELECT orders.on
                 FROM orders 
@@ -200,59 +191,56 @@ exports.customerReport = catchAsync(async (req, res, next) => {
                 LIMIT 1
               )
             `),
-          'lastOrderDate',
-        ],
-        [
-          literal(
-           `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
-          ),
-          'outstandingBalance',
-      ], 
+        'lastOrderDate',
       ],
-  }); 
+      [
+        literal(
+          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
+        ),
+        'outstandingBalance',
+      ],
+    ],
+  });
 
   res.status(200).json({
     status: 'success',
     data: doc,
   });
-
 });
 
 exports.productSalesReport = catchAsync(async (req, res, next) => {
-
   const doc = await product.findAll({
-  
-      attributes: [
-        'id', 
-        'name',
-        [
-            literal(`
+    attributes: [
+      'id',
+      'name',
+      [
+        literal(`
               (
                 SELECT SUM(qty)
                 FROM items WHERE items.productId = product.id
               )
-            `), 
-          'unitsSold',
-        ],
-        [
-            literal(`
+            `),
+        'unitsSold',
+      ],
+      [
+        literal(`
               (
                 SELECT SUM(price)
                 FROM items WHERE items.productId = product.id  AND items.wholesalePrice < 1
               )
-            `), 
-          'customerPriceTotal',
-        ],
-        [
-            literal(`
+            `),
+        'customerPriceTotal',
+      ],
+      [
+        literal(`
               (
                 SELECT SUM(wholesalePrice)
                 FROM items WHERE items.productId = product.id AND items.wholesalePrice > 0
               )
-            `), 
-          'wholesalePriceTotal',
-        ],
-        [
+            `),
+        'wholesalePriceTotal',
+      ],
+      [
         literal(`
           (
             SELECT SUM(
@@ -264,54 +252,51 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
             FROM items 
             WHERE items.productId = product.id
           )
-        `), 
+        `),
         'revenue',
       ],
-      ],
-  }); 
+    ],
+  });
 
   res.status(200).json({
     status: 'success',
     data: doc,
   });
-
 });
 
 exports.productSalesReport = catchAsync(async (req, res, next) => {
-
   const doc = await product.findAll({
-  
-      attributes: [
-        'id', 
-        'name',
-        [
-            literal(`
+    attributes: [
+      'id',
+      'name',
+      [
+        literal(`
               (
                 SELECT SUM(qty)
                 FROM items WHERE items.productId = product.id
               )
-            `), 
-          'unitsSold',
-        ],
-        [
-            literal(`
+            `),
+        'unitsSold',
+      ],
+      [
+        literal(`
               (
                 SELECT SUM(price)
                 FROM items WHERE items.productId = product.id  AND items.wholesalePrice < 1
               )
-            `), 
-          'customerPriceTotal',
-        ],
-        [
-            literal(`
+            `),
+        'customerPriceTotal',
+      ],
+      [
+        literal(`
               (
                 SELECT SUM(wholesalePrice)
                 FROM items WHERE items.productId = product.id AND items.wholesalePrice > 0
               )
-            `), 
-          'wholesalePriceTotal',
-        ],
-        [
+            `),
+        'wholesalePriceTotal',
+      ],
+      [
         literal(`
           (
             SELECT SUM(
@@ -323,10 +308,10 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
             FROM items 
             WHERE items.productId = product.id
           )
-        `), 
+        `),
         'revenue',
       ],
-          [
+      [
         literal(`(
           SELECT srName
           FROM salesReps
@@ -342,50 +327,49 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
         )`),
         'topSalesRepName',
       ],
-      ],
-  }); 
+    ],
+  });
 
   res.status(200).json({
     status: 'success',
     data: doc,
   });
-
 });
 
-      //   [
-      //     literal(
-      //       `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id)`
-      //     ),
-      //     'numberOfOrders',
-      //   ],
-      //   [
-      //     fn(
-      //       'FORMAT',
-      //       literal(`
-      //         (
-      //           SELECT SUM(totalBill) / NULLIF(COUNT(*), 0)
-      //           FROM orders WHERE orders.userID = user.id
-      //         )
-      //       `),
-      //       1
-      //     ),
-      //     'avgSpent',
-      //   ],
-      //   [
-      //       literal(`
-      //         (
-      //           SELECT orders.on
-      //           FROM orders 
-      //           WHERE orders.userID = user.id
-      //           ORDER BY orders.on DESC
-      //           LIMIT 1
-      //         )
-      //       `),
-      //     'lastOrderDate',
-      //   ],
-      //   [
-      //     literal(
-      //      `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
-      //     ),
-      //     'outstandingBalance',
-      // ], 
+//   [
+//     literal(
+//       `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id)`
+//     ),
+//     'numberOfOrders',
+//   ],
+//   [
+//     fn(
+//       'FORMAT',
+//       literal(`
+//         (
+//           SELECT SUM(totalBill) / NULLIF(COUNT(*), 0)
+//           FROM orders WHERE orders.userID = user.id
+//         )
+//       `),
+//       1
+//     ),
+//     'avgSpent',
+//   ],
+//   [
+//       literal(`
+//         (
+//           SELECT orders.on
+//           FROM orders
+//           WHERE orders.userID = user.id
+//           ORDER BY orders.on DESC
+//           LIMIT 1
+//         )
+//       `),
+//     'lastOrderDate',
+//   ],
+//   [
+//     literal(
+//      `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
+//     ),
+//     'outstandingBalance',
+// ],

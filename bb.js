@@ -1,57 +1,58 @@
 const db = require('./models');
-require('dotenv').config(); // Load environment variables from .env file
+require('dotenv').config();
 
 const server = require('./app');
 
-const serverPort = 8011;
+const serverPort = process.env.PORT || 8011;
+const serverHost = process.env.HOST || '0.0.0.0'; // Accept connections from anywhere
 
-const syncDb = 0; // Use environment variable for flexibility
+const syncDb = 0;
 
 if (syncDb) {
   db.sequelize
     .sync({ alter: true })
-    .then(() => {
-      console.log('Database synchronized successfully.');
-    })
-    .catch((err) => {
-      console.error('Error synchronizing database:', err);
-    });
+    .then(() => console.log('✅ Database synchronized successfully.'))
+    .catch((err) => console.error('❌ Error synchronizing database:', err));
 }
 
-// Handle unhandled promise rejections and uncaught exceptions
+// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  // Optionally, restart the server or perform other actions
+  console.error('\n🔴 Unhandled Rejection at:', promise);
+  console.error('Reason:', reason, '\n');
 });
 
+// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception thrown:', err);
-  // Optionally, restart the server or perform other actions
-  process.exit(1); // Exit the process to avoid undefined states
+  console.error('\n🔴 Uncaught Exception:', err, '\n');
+  process.exit(1);
 });
 
-// Graceful Shutdown
+// Graceful shutdown
 const gracefulShutdown = () => {
-  console.log('Received kill signal, shutting down gracefully.');
+  console.log('\n🟡 Received shutdown signal. Closing server...');
   server.close(() => {
-    console.log('Closed out remaining connections.');
+    console.log('✅ Server closed successfully.\n');
     process.exit(0);
   });
 
-  // Force shutdown after 10 seconds
   setTimeout(() => {
-    console.error(
-      'Could not close connections in time, forcefully shutting down.',
-    );
+    console.error('❌ Force shutdown: Timed out.');
     process.exit(1);
-  }, 10000); 
+  }, 10000);
 };
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
- 
-server.listen(serverPort,'192.168.1.118', (err) => {
-  if (err) throw err
-  console.log(`Server is listening on 192.168.1.118:${serverPort}`)
-  
-})
+
+// Start the server
+server.listen(serverPort, serverHost, (err) => {
+  if (err) throw err;
+
+  const localURL = `http://${serverHost}:${serverPort}`;
+  console.log('\n🟢 Server started successfully!');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`🚀 Listening on:         ${localURL}`);
+  console.log('🌐 To expose publicly:   Run the following command:');
+  console.log(`                         ngrok http ${serverPort}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+});

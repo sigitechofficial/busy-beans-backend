@@ -3,15 +3,18 @@ const {
   orderHistory,
   item,
   address,
-  user
-} = require('../models')
-const { literal } = require('sequelize')
-const { emailDateFormate } = require('./emailDateFormate')
+  user,
+  salesRep,
+  supplier,
+  billingAddress,
+} = require('../models');
+const { literal } = require('sequelize');
+const { emailDateFormate } = require('./emailDateFormate');
 
 exports.dataForEmailAndNotifications = async (orderId) => {
-  console.log("🚀 ~ exports.dataForEmailAndNotifications= ~ orderId:", orderId)
+  console.log('🚀 ~ exports.dataForEmailAndNotifications= ~ orderId:', orderId);
   const doc = await order.findOne({
-    where: { id : orderId },
+    where: { id: orderId },
     include: [
       {
         model: address,
@@ -35,6 +38,46 @@ exports.dataForEmailAndNotifications = async (orderId) => {
           'orderId',
           'productId',
         ],
+      },
+      {
+        model: salesRep,
+        attributes: {
+          exclude: [
+            'createdAt',
+            'updatedAt',
+            'deleted',
+            'deletedAt',
+            'password',
+          ],
+        },
+      },
+      {
+        model: user,
+        attributes: {
+          exclude: [
+            'createdAt',
+            'updatedAt',
+            'latestOtp',
+            'password',
+            'deleted',
+            'deletedAt',
+            'stripeCustomerId',
+            'verifiedAt',
+            'status',
+          ],
+        },
+        include: {
+          model: billingAddress,
+          attributes: {
+            exclude: [
+              'createdAt',
+              'updatedAt',
+              'userId',
+              'deleted',
+              'deletedAt',
+            ],
+          },
+        },
       },
     ],
     attributes: [
@@ -70,35 +113,35 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         'emailToSendInvoices',
       ],
       [
-        literal( 
+        literal(
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         'orderCurrentStatus',
       ],
-       [
+      [
         literal(`COALESCE(
          (SELECT SUM(salerCommission)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'localPatnerCommission',
       ],
-        [
-          literal(`
+      [
+        literal(`
             COALESCE(order.totalBill, 0) - COALESCE((
               SELECT SUM(salerCommission)
               FROM items
               WHERE items.orderId = order.id
             ), 0)
           `),
-          'adminReceivableAmount'
-        ],
+        'adminReceivableAmount',
+      ],
       [
         literal(
           `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
         ),
         'supplierName',
       ],
-       [
+      [
         literal(
           `(SELECT supplier.email FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
         ),
@@ -146,11 +189,18 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'shippingCharges',
     ],
   });
-  const output = JSON.parse(JSON.stringify(doc))
-  console.log("🚀 ~ exports.dataForEmailAndNotifications= ~ output:", output.totalBill)
+  const output = JSON.parse(JSON.stringify(doc));
+  console.log(
+    '🚀 ~ exports.dataForEmailAndNotifications= ~ output:',
+    output.totalBill,
+  );
 
-  output.localPatnerCommission = await item.sum('salerCommission', { where: { orderId: output.id } });
-  output.adminReceivableAmount = parseFloat(output?.totalBill || 0) - parseFloat(output.localPatnerCommission||0);
+  output.localPatnerCommission = await item.sum('salerCommission', {
+    where: { orderId: output.id },
+  });
+  output.adminReceivableAmount =
+    parseFloat(output?.totalBill || 0) -
+    parseFloat(output.localPatnerCommission || 0);
 
-  return { details: output, email:output?.email }
-}
+  return { details: output, email: output?.email };
+};

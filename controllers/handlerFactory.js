@@ -22,12 +22,12 @@ exports.deleteOne = (Model) =>
     });
   });
 
-exports.softdelete = (Model,changes) =>
+exports.softdelete = (Model, changes) =>
   catchAsync(async (req, res, next) => {
     const input = changes || {};
-    input.deleted = true
+    input.deleted = true;
 
-    const doc = await Model.update(input,{
+    const doc = await Model.update(input, {
       where: { id: req.params.id },
     });
 
@@ -37,21 +37,21 @@ exports.softdelete = (Model,changes) =>
         data: doc[1],
       },
     });
-});
+  });
 
 exports.updateOne = (Model) =>
   catchAsync(async (req, res, next) => {
     const input = req.body;
-    input.password = undefined;
+    // input.password = undefined;
     if (req.file) {
       // throw new  'Image not uploaded', 'Please upload image';
       const tmpPath = req.file.path;
       const imagePath = tmpPath.replace(/\\/g, '/');
       input.image = imagePath;
-      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
+      console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
     } else {
       input.image = undefined;
-      console.log("🚀 ~ c ~ input.image:", input.image)
+      console.log('🚀 ~ c ~ input.image:', input.image);
     }
     const doc = await Model.update(input, {
       where: { id: req.params.id },
@@ -71,30 +71,33 @@ exports.updateOne = (Model) =>
     });
   });
 
-exports.createOne = (Model,checks) =>
+exports.createOne = (Model, checks) =>
   catchAsync(async (req, res, next) => {
     const input = req.body;
-  if (checks && checks.length > 0) {
-    const condition = {deleted :0};
-      checks.forEach(field => {
+    if (checks && checks.length > 0) {
+      const condition = { deleted: 0 };
+      checks.forEach((field) => {
         if (req.body[field]) {
           condition[field] = req.body[field];
         }
       });
-    const exist = await Model.findOne({ where: condition, attributes: ['id'] });
-    if (exist) {
-      return next(new AppError('Already Exist', 400));
+      const exist = await Model.findOne({
+        where: condition,
+        attributes: ['id'],
+      });
+      if (exist) {
+        return next(new AppError('Already Exist', 400));
+      }
     }
-  }
     if (req.file) {
       // throw new  'Image not uploaded', 'Please upload image';
       const tmpPath = req.file.path;
       const imagePath = tmpPath.replace(/\\/g, '/');
       input.image = imagePath;
-      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
+      console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
     } else {
       input.image = undefined;
-      console.log("🚀 ~ c ~ input.image:", input.image)
+      console.log('🚀 ~ c ~ input.image:', input.image);
     }
 
     const doc = await Model.create(input);

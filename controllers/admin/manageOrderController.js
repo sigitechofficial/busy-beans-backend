@@ -10,8 +10,11 @@ const {
   statuses,
   shippingCompanies,
   billingAddress,
-  salesRep
+  salesRep,
 } = require('../../models');
+const fs = require('fs');
+const path = require('path');
+
 const { Op, literal, fn, col } = require('sequelize');
 const APIFeatures = require('../../utils/apiFeatures');
 
@@ -21,25 +24,33 @@ const Stripe = require('../stripe');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
-const { sentPaymentInvoiceEvent } = require('../events/sentPaymentInvoiceEvent');
 const {
-dataForEmailAndNotifications
-} = require('../../utils/emailsNotificationsData')
+  sentPaymentInvoiceEvent,
+} = require('../events/sentPaymentInvoiceEvent');
+const {
+  dataForEmailAndNotifications,
+} = require('../../utils/emailsNotificationsData');
 
 const {
-processTransferToLocalPartner
-} = require('../../utils/localPatnerCommissionTranfer')
+  processTransferToLocalPartner,
+} = require('../../utils/localPatnerCommissionTranfer');
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
-  const { details,email } = await dataForEmailAndNotifications(req.params.orderId);
+  const { details, email } = await dataForEmailAndNotifications(
+    req.params.orderId,
+  );
 
-  if(details?.paymentIntentId || details?.paymentStatus == 'done'){
-    return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
+  if (details?.paymentIntentId || details?.paymentStatus == 'done') {
+    return next(
+      new AppError(
+        'As the payment for the order has already been made, we are unable to send an invoice at this point.',
+        404,
+      ),
+    );
   }
-  
 
   //   let checkSession = false
-    
+
   //   if(details?.invoiceId){
   //     const session = await Stripe.checkCheckoutSessionStatus(details?.invoiceId)
 
@@ -55,7 +66,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
 
   //     const preSession = {
   //           "invoiceId": details.invoiceId,
-  //           "hostedInvoiceUrl":details.hostedInvoiceUrl, 
+  //           "hostedInvoiceUrl":details.hostedInvoiceUrl,
   //           "invoicePdf": ""
   //       }
 
@@ -63,58 +74,76 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
 
   //     if(!checkSession)await order.update(invoice,{where:{id:details.id}})
 
-  let to = [email]
-   if (email) {
-      if(details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
-        to.push(details?.emailToSendInvoices)
-      }
+  let to = [email];
+  if (email) {
+    if (details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
+      to.push(details?.emailToSendInvoices);
     }
+  }
 
-  sentPaymentInvoiceEvent({email:to,data:details})
+  sentPaymentInvoiceEvent({ email: to, data: details });
   res.status(200).json({
     status: 'success',
-    data: {
-    },
+    data: {},
   });
 });
 
-
 exports.fetchInvoice = catchAsync(async (req, res, next) => {
-  const { details,email } = await dataForEmailAndNotifications(req.params.orderId);
+  const { details, email } = await dataForEmailAndNotifications(
+    req.params.orderId,
+  );
 
-  if(details?.paymentIntentId || details?.paymentStatus == 'done'){
-    return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
+  if (details?.paymentIntentId || details?.paymentStatus == 'done') {
+    return next(
+      new AppError(
+        'As the payment for the order has already been made, we are unable to send an invoice at this point.',
+        404,
+      ),
+    );
   }
-  
 
-    let checkSession = false
-    
-    if(details?.invoiceId){
-      const session = await Stripe.checkCheckoutSessionStatus(details?.invoiceId)
-      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session)
+  let checkSession = false;
 
-      if(session== "paid"){
-          await order.update({paymentMethod:'card',paymentStatus:'done'},{where:{id:req.params.orderId}})
-          return next(new AppError('As the payment for the order has already been made, we are unable to send an invoice at this point.', 404));
+  if (details?.invoiceId) {
+    const session = await Stripe.checkCheckoutSessionStatus(details?.invoiceId);
+    console.log('🚀 ~ exports.fetchInvoice=catchAsync ~ session:', session);
 
-      }else if(session == 'open'){
-         checkSession = true
-      }
-
+    if (session == 'paid') {
+      await order.update(
+        { paymentMethod: 'card', paymentStatus: 'done' },
+        { where: { id: req.params.orderId } },
+      );
+      return next(
+        new AppError(
+          'As the payment for the order has already been made, we are unable to send an invoice at this point.',
+          404,
+        ),
+      );
+    } else if (session == 'open') {
+      checkSession = true;
     }
+  }
 
-      const preSession = {
-            "invoiceId": details.invoiceId,
-            "hostedInvoiceUrl":details.hostedInvoiceUrl, 
-            "invoicePdf": ""
-        }
+  const preSession = {
+    invoiceId: details.invoiceId,
+    hostedInvoiceUrl: details.hostedInvoiceUrl,
+    invoicePdf: '',
+  };
 
-      const invoice = !checkSession ? await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) : preSession
+  const invoice = !checkSession
+    ? await Stripe.createInvoiceWithItems({
+        customerId: details.stripeCustomerId,
+        order: details,
+      })
+    : preSession;
 
-      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:", invoice)
-      if(!checkSession)await order.update(invoice,{where:{id:details.id}})
-      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:", checkSession)
- 
+  console.log('🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:', invoice);
+  if (!checkSession) await order.update(invoice, { where: { id: details.id } });
+  console.log(
+    '🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:',
+    checkSession,
+  );
+
   // sentPaymentInvoiceEvent({email:to,data:details,invoice})
   res.status(200).json({
     status: 'success',
@@ -156,13 +185,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
         'id',
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           'product',
         ],
         [
           literal(
-            `(SELECT products.image FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.image FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           'image',
         ],
@@ -171,7 +200,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
         'discount',
         'orderId',
         'productId',
-        'wholesalePrice'
+        'wholesalePrice',
       ],
     },
   ];
@@ -182,50 +211,50 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     'id',
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
       ),
       'customerName',
     ],
     [
       literal(
-        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
       ),
       'orderCurrentStatus',
     ],
     [
-        literal(`COALESCE(
+      literal(`COALESCE(
          (SELECT SUM(salerCommission)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-        'totalSalerCommission',
+      'totalSalerCommission',
     ],
     [
-        literal(`COALESCE(
+      literal(`COALESCE(
          (SELECT SUM(qty)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-        'totalQuantity',
+      'totalQuantity',
     ],
     [
-        literal(`COALESCE(
+      literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-        'adminEarnings',
+      'adminEarnings',
     ],
     [
-        literal(`COALESCE(
+      literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-        'wholesalePrice',
+      'wholesalePrice',
     ],
-      [
-        literal( 
-          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
-        ),
-        'salesRepName',
-      ],
+    [
+      literal(
+        `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
+      ),
+      'salesRepName',
+    ],
     'totalBill',
     'subTotal',
     'discountPrice',
@@ -239,15 +268,15 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     'frequency',
     'paymentStatus',
     'statusId',
-      'adminReceivableStatus',
-      'adminReceivableAmount',
-      'localPatnerCommission',
-      'invoicePdf',
-      'invoiceId',
-      'createdBy',
-      'on',
-      'createdAt',
-      'shippingCharges'
+    'adminReceivableStatus',
+    'adminReceivableAmount',
+    'localPatnerCommission',
+    'invoicePdf',
+    'invoiceId',
+    'createdBy',
+    'on',
+    'createdAt',
+    'shippingCharges',
   ];
 
   // Execute the query
@@ -264,20 +293,20 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 });
 
 exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
-  let  condition = {
-  paymentStatus: 'done',
-  // invoiceId: null,
-  paymentMethodId: null,
+  let condition = {
+    paymentStatus: 'done',
+    // invoiceId: null,
+    paymentMethodId: null,
 
-  adminReceivableStatus: false,
-  localPatnerCommission: 0.00,
-  salesRepId: req.params.srId,
-  statusId: {
-    [Op.in]: [4, 5]
-  }
-};
-  
-  console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition)
+    adminReceivableStatus: false,
+    localPatnerCommission: 0.0,
+    salesRepId: req.params.srId,
+    statusId: {
+      [Op.in]: [4, 5],
+    },
+  };
+
+  console.log('ðŸš€ ~ exports.allOrder=catchAsync ~ condition:', condition);
 
   const doc = await order.findAll({
     where: condition,
@@ -297,7 +326,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
           'discount',
           'orderId',
           'productId',
-          'wholesalePrice'
+          'wholesalePrice',
         ],
       },
     ],
@@ -310,7 +339,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
         'customerName',
       ],
       [
-        literal( 
+        literal(
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         'orderCurrentStatus',
@@ -322,32 +351,32 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
           WHERE items.orderId = order.id ), 0)`),
         'localPatnerCommission',
       ],
-        [
-      literal(`
+      [
+        literal(`
         COALESCE(order.totalBill, 0) - COALESCE((
           SELECT SUM(salerCommission)
           FROM items
           WHERE items.orderId = order.id
         ), 0)
       `),
-      'adminReceivableAmount'
-        ],
-       [
+        'adminReceivableAmount',
+      ],
+      [
         literal(`COALESCE(
          (SELECT SUM(qty)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'totalQuantity',
-    ],
-         [
+      ],
+      [
         literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'wholesalePrice',
       ],
-           [
-        literal( 
+      [
+        literal(
           `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
         'salesRepName',
@@ -372,7 +401,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'createdBy',
       'on',
       'createdAt',
-      'shippingCharges'
+      'shippingCharges',
     ],
   });
   if (!doc) {
@@ -390,18 +419,18 @@ exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
   let condition = {
     paymentStatus: 'done',
     adminReceivableStatus: false,
-    localPatnerCommission: 0.00,
+    localPatnerCommission: 0.0,
     salesRepId: req.params.srId,
     statusId: {
-      [Op.in]: [4, 5]
+      [Op.in]: [4, 5],
     },
     [Op.or]: [
       { paymentMethodId: { [Op.not]: null } },
-      { invoiceId: { [Op.not]: null } }
-    ]
+      { invoiceId: { [Op.not]: null } },
+    ],
   };
-    
-  console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition)
+
+  console.log('ðŸš€ ~ exports.allOrder=catchAsync ~ condition:', condition);
 
   const doc = await order.findAll({
     where: condition,
@@ -421,7 +450,7 @@ exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
           'discount',
           'orderId',
           'productId',
-          'wholesalePrice'
+          'wholesalePrice',
         ],
       },
     ],
@@ -434,7 +463,7 @@ exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
         'customerName',
       ],
       [
-        literal( 
+        literal(
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         'orderCurrentStatus',
@@ -446,32 +475,32 @@ exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
           WHERE items.orderId = order.id ), 0)`),
         'localPatnerCommission',
       ],
-        [
-      literal(`
+      [
+        literal(`
         COALESCE(order.totalBill, 0) - COALESCE((
           SELECT SUM(salerCommission)
           FROM items
           WHERE items.orderId = order.id
         ), 0)
       `),
-      'adminReceivableAmount'
-        ],
-       [
+        'adminReceivableAmount',
+      ],
+      [
         literal(`COALESCE(
          (SELECT SUM(qty)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'totalQuantity',
-    ],
-         [
+      ],
+      [
         literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'wholesalePrice',
       ],
-           [
-        literal( 
+      [
+        literal(
           `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
         'salesRepName',
@@ -496,7 +525,7 @@ exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
       'createdBy',
       'on',
       'createdAt',
-      'shippingCharges'
+      'shippingCharges',
     ],
   });
   if (!doc) {
@@ -513,8 +542,8 @@ exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
 exports.orderDetails = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
-  
-  console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition)
+
+  console.log('ðŸš€ ~ exports.allOrder=catchAsync ~ condition:', condition);
 
   const doc = await order.findOne({
     where: condition,
@@ -528,13 +557,25 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       {
         model: supplier,
         attributes: {
-          exclude: ['createdAt', 'updatedAt',  'deleted', 'deletedAt','password'],
+          exclude: [
+            'createdAt',
+            'updatedAt',
+            'deleted',
+            'deletedAt',
+            'password',
+          ],
         },
       },
       {
         model: salesRep,
         attributes: {
-          exclude: ['createdAt', 'updatedAt', 'deleted', 'deletedAt','password'],
+          exclude: [
+            'createdAt',
+            'updatedAt',
+            'deleted',
+            'deletedAt',
+            'password',
+          ],
         },
       },
       {
@@ -546,14 +587,30 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       {
         model: user,
         attributes: {
-          exclude: ['createdAt', 'updatedAt', 'latestOtp','password', 'deleted', 'deletedAt', 'stripeCustomerId' , 'verifiedAt', 'status'],
+          exclude: [
+            'createdAt',
+            'updatedAt',
+            'latestOtp',
+            'password',
+            'deleted',
+            'deletedAt',
+            'stripeCustomerId',
+            'verifiedAt',
+            'status',
+          ],
         },
-        include:{
-        model: billingAddress,
-        attributes: {
-          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
+        include: {
+          model: billingAddress,
+          attributes: {
+            exclude: [
+              'createdAt',
+              'updatedAt',
+              'userId',
+              'deleted',
+              'deletedAt',
+            ],
+          },
         },
-      },
       },
       {
         model: item,
@@ -576,7 +633,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           'discount',
           'orderId',
           'productId',
-          'wholesalePrice'
+          'wholesalePrice',
         ],
       },
       {
@@ -596,7 +653,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
             'discription',
           ],
           'on',
-          'statusId'
+          'statusId',
         ],
       },
     ],
@@ -609,7 +666,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
         'customerName',
       ],
       [
-        literal( 
+        literal(
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         'orderCurrentStatus',
@@ -634,7 +691,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           FROM items
           WHERE items.orderId = order.id ), 0)`),
         'totalQuantity',
-      ], 
+      ],
       [
         literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
@@ -643,7 +700,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
         'wholesalePrice',
       ],
       [
-        literal( 
+        literal(
           `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
         'salesRepName',
@@ -670,7 +727,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'createdBy',
       'on',
       'createdAt',
-      'shippingCharges'
+      'shippingCharges',
     ],
   });
   if (!doc) {
@@ -692,7 +749,6 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
   const doc = await order.findOne({
     where: { id: orderId },
-    attributes: ['id', 'supplierId'],
   });
 
   if (!doc) {
@@ -707,22 +763,77 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     await chequeDetail.create(req.body?.cheque);
   }
 
-  console.log("🚀 ~ exports.orderJourneryComplete ~ req.body?.orderData?.statusId :", req.body?.orderData?.statusId )
+  console.log(
+    '🚀 ~ exports.orderJourneryComplete ~ req.body?.orderData?.statusId :',
+    req.body?.orderData?.statusId,
+  );
   if (req.body?.orderData?.statusId) {
-    if(req.body?.orderData?.statusId == 2)supplierNewOrderEvent({orderId:orderId})
-      
+    if (req.body?.orderData?.statusId == 2)
+      supplierNewOrderEvent({ orderId: orderId });
+
+    if (req.body?.orderData?.statusId == 6) {
+      if (doc?.invoiceId) {
+        let checkSession = false;
+        const session = await Stripe.checkCheckoutSessionStatus(doc?.invoiceId);
+        console.log('🚀 ~ exports.fetchInvoice=catchAsync ~ session:', session);
+
+        if (session == 'paid') {
+          await order.update(
+            { paymentMethod: 'card', paymentStatus: 'done' },
+            { where: { id: doc.id } },
+          );
+          return next(
+            new AppError(
+              'As the payment for the order has already been made, we are unable to cancel.',
+              404,
+            ),
+          );
+        } else if (session == 'open') {
+          checkSession = true;
+        }
+
+        if (checkSession) await Stripe.blockCheckoutSession(doc?.invoiceId);
+      }
+
+      const pdfFilename = `invoice-00${order.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
+      const pdfPath = path.join(
+        __dirname,
+        '../../public/invoicePDFs',
+        pdfFilename,
+      );
+
+      // Check if file exists, then delete
+      fs.access(pdfPath, fs.constants.F_OK, (err) => {
+        if (!err) {
+          fs.unlink(pdfPath, (unlinkErr) => {
+            if (unlinkErr) {
+              console.error(
+                `❌ Failed to delete invoice PDF for order ${order.id}:`,
+                unlinkErr,
+              );
+            } else {
+              console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
+            }
+          });
+        } else {
+          console.warn(
+            `⚠️ No invoice PDF found for order ${order.id} at ${pdfPath}`,
+          );
+        }
+      });
+    }
+
     await orderHistory.create({
       statusId: req.body?.orderData?.statusId,
       orderId: orderId,
       on: Date.now(),
     });
   }
-  
+
   return res.status(200).json({
     status: 'success',
     data: {},
   });
-            
 });
 
 //* Assigin Supplier will Confirm order from admin side
@@ -747,41 +858,47 @@ exports.supplierAcknowledgement = catchAsync(async (req, res, next) => {
       data: doc,
     },
   });
-
 });
 
 //* Edit Cheque Information
 exports.eidtCheque = catchAsync(async (req, res, next) => {
   const { cheque, chequeId } = req.body;
   await chequeDetail.update(cheque, { where: { id: chequeId } });
- 
+
   return res.status(200).json({
     status: 'success',
     data: {},
   });
 });
 
-
 exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
-   const weight = req.body.weight; // Weight from req.body
-   console.log("🚀 ~ exports.findShippingCompanyForWeight=catchAsync ~ weight:", weight)
+  const weight = req.body.weight; // Weight from req.body
+  console.log(
+    '🚀 ~ exports.findShippingCompanyForWeight=catchAsync ~ weight:',
+    weight,
+  );
 
-    // Find the shipping company where the weight is between weightFrom and weightTo
-    const shippingCompany = await shippingCompanies.findOne({
-      where: {
-        weightFrom: {
-          [Op.lte]: weight, // Less than or equal to the weight
-        },
-        weightTo: {
-          [Op.gte]: weight, // Greater than or equal to the weight
-        },
+  // Find the shipping company where the weight is between weightFrom and weightTo
+  const shippingCompany = await shippingCompanies.findOne({
+    where: {
+      weightFrom: {
+        [Op.lte]: weight, // Less than or equal to the weight
       },
-      attributes:['charges']
-    });
+      weightTo: {
+        [Op.gte]: weight, // Greater than or equal to the weight
+      },
+    },
+    attributes: ['charges'],
+  });
 
-    if (!shippingCompany) {
-       return next(new AppError('Not dealing in such weights. Contact customer support for this order.', 400));
-    }
+  if (!shippingCompany) {
+    return next(
+      new AppError(
+        'Not dealing in such weights. Contact customer support for this order.',
+        400,
+      ),
+    );
+  }
 
   return res.status(200).json({
     status: 'success',
@@ -791,126 +908,178 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
 
 //* UPDATE ORDER
 exports.updateOrder = catchAsync(async (req, res, next) => {
-  
   const placedOrder = await order.findOne({
     where: { id: req.params.orderId },
-    attributes: ['id', 'supplierId','paymentStatus','salesRepId','invoiceId'],
+    attributes: [
+      'id',
+      'supplierId',
+      'paymentStatus',
+      'salesRepId',
+      'invoiceId',
+    ],
   });
 
-  console.log("🚀 ~ exports.updateOrder=catchAsync ~ body.items:", req.body)
+  console.log('🚀 ~ exports.updateOrder=catchAsync ~ body.items:', req.body);
   if (!placedOrder) {
     return next(new AppError('Order not found.', 404));
+  } else if (placedOrder.paymentStatus == 'done') {
+    return next(
+      new AppError(
+        'The order payment has already been made. You may proceed with the update.',
+        404,
+      ),
+    );
   }
-  else if(placedOrder.paymentStatus == 'done'){
-    return next(new AppError('The order payment has already been made. You may proceed with the update.', 404));
-  }
 
-  
-    let checkSession = false
-    
-    if(placedOrder?.invoiceId){
-      const session = await Stripe.checkCheckoutSessionStatus(placedOrder?.invoiceId)
-      console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session)
+  let checkSession = false;
 
-      if(session== "paid"){
-          await order.update({paymentMethod:'card',paymentStatus:'done'},{where:{id:placedOrder.id}})
-          return next(new AppError('As the payment for the order has already been made, we are unable to update an invoice at this point.', 404));
+  if (placedOrder?.invoiceId) {
+    const session = await Stripe.checkCheckoutSessionStatus(
+      placedOrder?.invoiceId,
+    );
+    console.log('🚀 ~ exports.fetchInvoice=catchAsync ~ session:', session);
 
-      }else if(session == 'open'){
-         checkSession = true
-      }
+    if (session == 'paid') {
+      await order.update(
+        { paymentMethod: 'card', paymentStatus: 'done' },
+        { where: { id: placedOrder.id } },
+      );
 
+      return next(
+        new AppError(
+          'As the payment for the order has already been made, we are unable to update an invoice at this point.',
+          404,
+        ),
+      );
+    } else if (session == 'open') {
+      checkSession = true;
     }
-
-
- if(checkSession) await Stripe.blockCheckoutSession(placedOrder?.invoiceId)
-
-   const input = {order:{invoiceId:null, hostedInvoiceUrl:null}}
-   input.items = req.body.items
- 
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input)  
-
-  if (input?.items?.length < 1 ) {
-   throw new AppError('Update possible, but no changes were made.', 404);
   }
-  
-  let productIds = input?.items.map(item => item.productId);
-  let totalWeight  = 0
-  let itemsPrice =0
 
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds)
+  if (checkSession) await Stripe.blockCheckoutSession(placedOrder?.invoiceId);
+
+  const input = { order: { invoiceId: null, hostedInvoiceUrl: null } };
+  input.items = req.body.items;
+
+  console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
+
+  if (input?.items?.length < 1) {
+    throw new AppError('Update possible, but no changes were made.', 404);
+  }
+
+  let productIds = input?.items.map((item) => item.productId);
+  let totalWeight = 0;
+  let itemsPrice = 0;
+
+  console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
   const products = await product.findAll({
     where: {
       id: {
-        [Op.in]: productIds
-      }
-    }
-  });
- 
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products.length)
-  const finalItems = products.map((obj) => {
-      const element = {};
-      element.productId = obj.id;
-      // console.log("🚀 ~ finalItems ~ obj:", obj)
-
-      // Find the matching product in input.items based on productId
-      let prod = input?.items.find(item => item.productId == obj.id);
-
-      // Set the qty from input.items or default to 1 if not found
-      let qty = prod ? parseInt(prod.qty) : 1;
-      console.log("🚀 ~ finalItems ~ qty:", qty)
-      element.qty =  qty;
-      // Calculate price, wholesalePrice, and weight for the item
-      element.price = obj.price * qty;
-      element.wholesalePrice = obj.wholesalePrice * qty;
-      element.weight = obj.weight * qty;
-      element.orderId = placedOrder?.id;
-
-      // Accumulate the total weight and price
-      itemsPrice += element.price;
-      totalWeight += element.weight;
-
-      // Handle salesRep commission if applicable
-      if (placedOrder?.salesRepId) {
-          element.salerCommission = parseFloat(element.price) - parseFloat(element.wholesalePrice );
-      } else {
-          element.wholesalePrice = 0;
-          element.salerCommission  =0
-      }
-
-      return element; // Return the transformed element
-    });
-    
-  console.log("🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:", totalWeight)
-  const shippingCompany = await shippingCompanies.findOne({
-      where: {
-        weightFrom: {
-          [Op.lte]: totalWeight, // Less than or equal to the weight
-        },
-        weightTo: {
-          [Op.gte]: totalWeight, // Greater than or equal to the weight
-        },
+        [Op.in]: productIds,
       },
-      attributes:['charges']
+    },
+  });
+
+  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products.length);
+  const finalItems = products.map((obj) => {
+    const element = {};
+    element.productId = obj.id;
+    // console.log("🚀 ~ finalItems ~ obj:", obj)
+
+    // Find the matching product in input.items based on productId
+    let prod = input?.items.find((item) => item.productId == obj.id);
+
+    // Set the qty from input.items or default to 1 if not found
+    let qty = prod ? parseInt(prod.qty) : 1;
+    console.log('🚀 ~ finalItems ~ qty:', qty);
+    element.qty = qty;
+    // Calculate price, wholesalePrice, and weight for the item
+    element.price = obj.price * qty;
+    element.wholesalePrice = obj.wholesalePrice * qty;
+    element.weight = obj.weight * qty;
+    element.orderId = placedOrder?.id;
+
+    // Accumulate the total weight and price
+    itemsPrice += element.price;
+    totalWeight += element.weight;
+
+    // Handle salesRep commission if applicable
+    if (placedOrder?.salesRepId) {
+      element.salerCommission =
+        parseFloat(element.price) - parseFloat(element.wholesalePrice);
+    } else {
+      element.wholesalePrice = 0;
+      element.salerCommission = 0;
+    }
+
+    return element; // Return the transformed element
+  });
+
+  console.log(
+    '🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:',
+    totalWeight,
+  );
+  const shippingCompany = await shippingCompanies.findOne({
+    where: {
+      weightFrom: {
+        [Op.lte]: totalWeight, // Less than or equal to the weight
+      },
+      weightTo: {
+        [Op.gte]: totalWeight, // Greater than or equal to the weight
+      },
+    },
+    attributes: ['charges'],
   });
   if (!shippingCompany) {
-       return next(new AppError('Not dealing in such weights. Contact customer support for this order.', 400));
+    return next(
+      new AppError(
+        'Not dealing in such weights. Contact customer support for this order.',
+        400,
+      ),
+    );
+  }
+
+  input.order.itemsPrice = itemsPrice;
+  input.order.totalWeight = totalWeight;
+  input.order.shippingCharges = shippingCompany?.charges;
+  input.order.subTotal = itemsPrice + input.order.vat;
+  input.order.totalBill =
+    itemsPrice +
+    parseFloat(input?.order?.vat || 0) +
+    parseFloat(shippingCompany?.charges || 0);
+  console.log(
+    '🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:',
+    shippingCompany?.charges,
+  );
+
+  await order.update(input?.order, { where: { id: placedOrder?.id } });
+  await item.destroy({ where: { orderId: placedOrder?.id } });
+  await item.bulkCreate(finalItems);
+  const pdfFilename = `invoice-00${order.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
+  const pdfPath = path.join(__dirname, '../../public/invoicePDFs', pdfFilename);
+
+  // Check if file exists, then delete
+  fs.access(pdfPath, fs.constants.F_OK, (err) => {
+    if (!err) {
+      fs.unlink(pdfPath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error(
+            `❌ Failed to delete invoice PDF for order ${order.id}:`,
+            unlinkErr,
+          );
+        } else {
+          console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
+        }
+      });
+    } else {
+      console.warn(
+        `⚠️ No invoice PDF found for order ${order.id} at ${pdfPath}`,
+      );
     }
-
-  input.order.itemsPrice = itemsPrice
-  input.order.totalWeight = totalWeight
-  input.order.shippingCharges = shippingCompany?.charges
-  input.order.subTotal = itemsPrice + input.order.vat
-  input.order.totalBill = itemsPrice +  parseFloat(input?.order?.vat || 0) + parseFloat(shippingCompany?.charges || 0)
-  console.log("🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:", shippingCompany?.charges)
-
-  await order.update(input?.order,{where:{id:placedOrder?.id}})
-  await item.destroy({where: {orderId: placedOrder?.id}});
-  await item.bulkCreate(finalItems)
- 
-  return res.status(200).json({
-    status: 'success',   
-    data: {id: req.params.orderId },
   });
-  
+
+  return res.status(200).json({
+    status: 'success',
+    data: { id: req.params.orderId },
+  });
 });

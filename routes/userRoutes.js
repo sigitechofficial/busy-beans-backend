@@ -3,7 +3,6 @@ const authController = require('../controllers/customer/authController');
 const orderController = require('../controllers/customer/orderController');
 const profileController = require('../controllers/customer/profileController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
- 
 
 const router = express.Router();
 
@@ -14,7 +13,10 @@ router.post('/otp/verfication', authController.otpVerification);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.post('/resend-otp/:type', authController.resendOtp);
-router.post('/financial-connections-session/:id', authController.stripeAchPayment);
+router.post(
+  '/financial-connections-session/:id',
+  authController.stripeAchPayment,
+);
 
 router.post('/book-order/:id', orderController.bookOrder);
 router.post('/book-order', orderController.bookOrder);

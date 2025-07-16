@@ -52,7 +52,7 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: true,
       },
-      countryCode : {
+      countryCode: {
         type: DataTypes.STRING,
         allowNull: true,
         defaultValue: true,
@@ -120,7 +120,6 @@ module.exports = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
-     
     },
     {
       tableName: 'supplier',

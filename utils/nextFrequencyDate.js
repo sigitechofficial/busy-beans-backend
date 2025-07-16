@@ -15,7 +15,11 @@ exports.nextFrequencyDate = ({ currentDate, frequency }) => {
       date.setMonth(date.getMonth() + 1);
 
       // If resulting month doesn't have the same day, adjust (e.g., Feb 30 doesn't exist)
-      const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const daysInMonth = new Date(
+        date.getFullYear(),
+        date.getMonth() + 1,
+        0,
+      ).getDate();
       if (originalDay > daysInMonth) {
         date.setDate(daysInMonth);
       } else {
@@ -32,6 +36,6 @@ exports.nextFrequencyDate = ({ currentDate, frequency }) => {
 
   return {
     nextOrderDate: date,
-    visibilityDate: visibilityDate
+    visibilityDate: visibilityDate,
   };
-}
+};

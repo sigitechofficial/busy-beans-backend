@@ -1,10 +1,10 @@
-const { product,user,supplier,orderHistory, } = require('../../models');
+const { product, user, supplier, orderHistory } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 
-exports.addProduct = factory.createOne(product,['name']);
+exports.addProduct = factory.createOne(product, ['name']);
 
 exports.view = catchAsync(async (req, res, next) => {
   const input = req.body;

@@ -52,7 +52,7 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-       countryCode: {
+      countryCode: {
         type: DataTypes.STRING,
         allowNull: true,
       },
@@ -144,13 +144,12 @@ module.exports = (sequelize) => {
   //     console.log("🚀 ~ user.addHook ~ input.password:", input.password)
   //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
   //     console.log("🚀 ~ user.addHook ~ After.password:", input.password)
-    
+
   //   }
   // });
 
   // Associations models
   user.associate = (models) => {
-    
     user.hasMany(models.address);
     models.address.belongsTo(user);
 

@@ -12,6 +12,7 @@ const adminReportsController = require('../controllers/admin/adminReportsControl
 const supplierReportsController = require('../controllers/admin/supplierReportsController');
 const salesRepReportsController = require('../controllers/admin/salesRepReportsController');
 const dashboardsController = require('../controllers/admin/dashboardsController');
+const shippingCompanyController = require('../controllers/admin/shippingCompanyController');
 
 const pulloutPaymentsController = require('../controllers/admin/pulloutPaymentsController');
 
@@ -25,22 +26,29 @@ router.post('/login/sales-rep', authController.salesRepLogin);
 router.post('/login/supplier', authController.supplierLogin);
 
 router.post('/forgot-password', authController.adminForgotPassword);
-router.post('/forgot-password/sales-rep', authController.salesRepForgotPassword);
+router.post(
+  '/forgot-password/sales-rep',
+  authController.salesRepForgotPassword,
+);
 router.post('/forgot-password/supplier', authController.supplierForgotPassword);
-
 
 router.post('/resend-otp', authController.adminResendOtp);
 router.post('/resend-otp/sales-rep', authController.salesRepResendOtp);
 router.post('/resend-otp/supplier', authController.supplierResendOtp);
 
 router.post('/otp-verification', authController.adminOtpVerification);
-router.post('/otp-verification/sales-rep', authController.salesRepOtpVerification);
-router.post('/otp-verification/supplier', authController.supplierOtpVerification);
+router.post(
+  '/otp-verification/sales-rep',
+  authController.salesRepOtpVerification,
+);
+router.post(
+  '/otp-verification/supplier',
+  authController.supplierOtpVerification,
+);
 
-router.post('/reset-password', authController.adminResetPassword) 
-router.post('/reset-password/sales-rep', authController.salesRepResendOtp) 
+router.post('/reset-password', authController.adminResetPassword);
+router.post('/reset-password/sales-rep', authController.salesRepResendOtp);
 router.post('/reset-password/supplier', authController.supplierResetPassword);
-
 
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -121,9 +129,18 @@ router
 //! Order Management
 
 router.get('/orders', manageOrderController.allOrder);
-router.post('/order-management/send-invoice/:orderId', manageOrderController.sendInvoice);
-router.post('/order-management/fetch-invoice/:orderId', manageOrderController.fetchInvoice);
-router.patch('/order-management/update-order/:orderId', manageOrderController.updateOrder);
+router.post(
+  '/order-management/send-invoice/:orderId',
+  manageOrderController.sendInvoice,
+);
+router.post(
+  '/order-management/fetch-invoice/:orderId',
+  manageOrderController.fetchInvoice,
+);
+router.patch(
+  '/order-management/update-order/:orderId',
+  manageOrderController.updateOrder,
+);
 
 router.get('/order-details/:id', manageOrderController.orderDetails);
 
@@ -134,36 +151,17 @@ router.patch(
   manageOrderController.orderJourneryComplete,
 );
 
-router.patch(
-  '/order-dispatch',
-  manageOrderController.orderJourneryComplete,
-);
+router.patch('/order-dispatch', manageOrderController.orderJourneryComplete);
 
-router.patch(
-  '/order-deliver',
-  manageOrderController.orderJourneryComplete,
-);
+router.patch('/order-deliver', manageOrderController.orderJourneryComplete);
 
+router.patch('/order-cancel', manageOrderController.orderJourneryComplete);
 
-router.patch(
-  '/order-cancel',
-  manageOrderController.orderJourneryComplete,
-);
+router.patch('/edit-order', manageOrderController.orderJourneryComplete);
 
-router.patch(
-  '/edit-order',
-  manageOrderController.orderJourneryComplete,
-);
+router.patch('/add-cheque', manageOrderController.orderJourneryComplete);
 
-router.patch(
-  '/add-cheque',
-  manageOrderController.orderJourneryComplete,
-);
-
-router.patch(
-  '/edit-cheque',
-  manageOrderController.eidtCheque,
-);
+router.patch('/edit-cheque', manageOrderController.eidtCheque);
 
 //! Customer Management
 router.get(
@@ -171,10 +169,7 @@ router.get(
   customerController.viewCustomersManagement,
 );
 
-router.patch(
-  '/customer-update/:id',
-  customerController.updateCutomer,
-);
+router.patch('/customer-update/:id', customerController.updateCutomer);
 
 router.get(
   '/customer-management/customer-list/:condition',
@@ -198,17 +193,17 @@ router.patch(
 
 router.get(
   '/customer-management/invoice-customers-balance',
-  customerController.InvoiceCustomers
+  customerController.InvoiceCustomers,
 );
 
 router.get(
   '/order-frequency/upcomming-orders',
-  orderFrequencyController.orderAccordingToFrequency
+  orderFrequencyController.orderAccordingToFrequency,
 );
 
 router.get(
   '/order-frequency/upcomming-orders/sale-rep/:srId',
-  orderFrequencyController.orderAccordingToFrequency
+  orderFrequencyController.orderAccordingToFrequency,
 );
 
 router.post(
@@ -219,58 +214,48 @@ router.post(
 router.post(
   '/order-frequency/book-orders/sale-rep/:srId',
   orderFrequencyController.bookOrderAccordingToFrequency,
-)
+);
 
-router.post(
-  '/send-quotation',
-  salesRepController.sendQuotation,
-)
+router.post('/send-quotation', salesRepController.sendQuotation);
 
 router.post(
   '/sales-rep/book-new-order/:srId',
   orderFrequencyController.bookNewOrder,
-)
+);
 
-router.post(
-  '/add-customer/sales-rep/:srId',
-  salesRepController.addCustomer,
-)
+router.post('/add-customer/sales-rep/:srId', salesRepController.addCustomer);
 
 router.post(
   '/create-bank-setup-intent/sales-rep/:srId',
   salesRepController.createFinancialConnectionsSession,
-)
+);
 
 router.post(
   '/attach-bank-account-setup/sales-rep/:srId',
   salesRepController.attachBankAccount,
-)
+);
 
-router.get(
-  '/sales-rep/sales/:srId',
-  salesRepController.salersMoney,
-)
+router.get('/sales-rep/sales/:srId', salesRepController.salersMoney);
 
 router.post(
   '/create-stripe-connect-account/:srId',
   salesRepController.stripeConnectAccount,
-)
-
+);
 
 router.post(
   '/stripe-connect-account-url/:srId',
   salesRepController.stripeConnectAccountLink,
-)
+);
 
 router.get(
   '/stripe-connect-account-dashboard/:srId',
   salesRepController.stripeConnectAccountDashboard,
-)
+);
 
 router.get(
   '/stripe-connect-account-retrieve/:srId',
   salesRepController.stripeConnectAccountRetrive,
-)
+);
 
 //! Supplier Management
 
@@ -287,34 +272,34 @@ router
   .delete(supplierController.deleteSupplier); // For deleting a category by ID
 
 router
-.route('/sales-rep/')
-.get(salesRepController.getAllSalesRep) // For fetching all categories
-.post(uploadSalesRepImage.single('image'), salesRepController.createSalesRep); // For creating a new category
+  .route('/sales-rep/')
+  .get(salesRepController.getAllSalesRep) // For fetching all categories
+  .post(uploadSalesRepImage.single('image'), salesRepController.createSalesRep); // For creating a new category
 
 // Category by ID routes
 router
-.route('/sales-rep/:id')
-.get(salesRepController.getSalesRep)  
-.patch(uploadSalesRepImage.single('image'), salesRepController.updateSalesRep)  
-.delete(salesRepController.deleteSalesRep);  
+  .route('/sales-rep/:id')
+  .get(salesRepController.getSalesRep)
+  .patch(uploadSalesRepImage.single('image'), salesRepController.updateSalesRep)
+  .delete(salesRepController.deleteSalesRep);
 
-//! Address Management 
- 
+//! Address Management
+
 router.patch(
   '/address-management/update-address/:id',
   addressController.updateAddress,
-)
+);
 
 router.patch(
   '/address-management/update-billing-address/:id',
   addressController.updateBillingAddress,
-)
+);
 
 //! Country Management
 router
   .route('/address-management/country/')
-  .get(addressController.getAllCountries) // For fetching all  
-  .post(addressController.createCountry); // For creating a new  
+  .get(addressController.getAllCountries) // For fetching all
+  .post(addressController.createCountry); // For creating a new
 
 // Category by ID routes
 router
@@ -323,164 +308,167 @@ router
   .patch(addressController.updateCountry) // For updating   by ID
   .delete(addressController.deleteCountry); // For deleting a   by ID
 
-
-  //! State Management
+//! State Management
 router
-.route('/address-management/state/')
-.get(addressController.getAllStates) //  
-.post(addressController.createState); // 
- 
-// Category by ID routes
-router
-.route('/address-management/state/:id')
-.get(addressController.getState)  
-.patch(addressController.updateState)  
-.delete(addressController.deleteState);  
-
- //! City Management
-
-router
-.route('/address-management/city/')
-.get(addressController.getAllCities) //  
-.post(addressController.createCity); // 
+  .route('/address-management/state/')
+  .get(addressController.getAllStates) //
+  .post(addressController.createState); //
 
 // Category by ID routes
 router
-.route('/address-management/city/:id')
-.get(addressController.getCity)  
-.patch(addressController.updateCity)  
-.delete(addressController.deleteCity);  
+  .route('/address-management/state/:id')
+  .get(addressController.getState)
+  .patch(addressController.updateState)
+  .delete(addressController.deleteState);
 
- //! City Management
+//! City Management
 
- router
- .route('/address-management/city/')
- .get(addressController.getAllCities) //  
- .post(addressController.createCity); // 
- 
- // Category by ID routes
- router
- .route('/address-management/city/:id')
- .get(addressController.getCity)  
- .patch(addressController.updateCity)  
- .delete(addressController.deleteCity);  
- 
- //! City Management
+router
+  .route('/address-management/city/')
+  .get(addressController.getAllCities) //
+  .post(addressController.createCity); //
 
- router
- .route('/address-management/territory/')
- .get(addressController.getAllTerritory) //  
- .post(addressController.createTerritory); // 
- 
- // Category by ID routes
- router
- .route('/address-management/territory/:id')
- .get(addressController.getTerritory)  
- .patch(addressController.updateTerritory)  
- .delete(addressController.deleteTerritory);  
- 
+// Category by ID routes
+router
+  .route('/address-management/city/:id')
+  .get(addressController.getCity)
+  .patch(addressController.updateCity)
+  .delete(addressController.deleteCity);
+
+//! City Management
+
+router
+  .route('/address-management/city/')
+  .get(addressController.getAllCities) //
+  .post(addressController.createCity); //
+
+// Category by ID routes
+router
+  .route('/address-management/city/:id')
+  .get(addressController.getCity)
+  .patch(addressController.updateCity)
+  .delete(addressController.deleteCity);
+
+//! City Management
+
+router
+  .route('/address-management/territory/')
+  .get(addressController.getAllTerritory) //
+  .post(addressController.createTerritory); //
+
+// Category by ID routes
+router
+  .route('/address-management/territory/:id')
+  .get(addressController.getTerritory)
+  .patch(addressController.updateTerritory)
+  .delete(addressController.deleteTerritory);
+
 router.patch(
   '/address-management/add-cities-in-territory/:t_id',
   addressController.addCitiesInTerritory,
-)
+);
 
 router.get(
   '/admin-reports/partner-commission',
   adminReportsController.partnerCommissionReport,
-)
+);
 
 router.get(
   '/admin-reports/customer-report',
   adminReportsController.customerReport,
-)
+);
 
 router.get(
   '/admin-reports/product-sales',
   adminReportsController.productSalesReport,
-)
- 
+);
+
 router.get(
   '/admin-reports/partner-commission',
   adminReportsController.partnerCommissionReport,
-)
+);
 
 router.get(
   '/admin-reports/partner-creadit-limit',
   adminReportsController.partnerCreaditLimit,
-)
+);
 
 router.get(
   '/admin-reports/unpaid-partner-balance',
   adminReportsController.unpaidPartnerbalanceReport,
-)
+);
 
-
-
-//! SUPPLIER REPORTS SECTION 
+//! SUPPLIER REPORTS SECTION
 
 router.get(
   '/supplier-reports/assigned-orders-report/:supId',
   supplierReportsController.assignedOrdersReport,
-)
+);
 
 router.get(
   '/supplier-reports/top-products-ordered-report/:supId',
   supplierReportsController.topProductsOrderedReport,
-)
+);
 
 router.get(
   '/supplier-reports/top-products-ordered-report/:supId',
   supplierReportsController.topProductsOrderedReport,
-)
+);
 
-//! SALESREP REPORTS SECTION 
+//! SALESREP REPORTS SECTION
 
 router.get(
   '/sales-rep-reports/orders-placed-report/:supId',
   salesRepReportsController.ordersPlacedReport,
-)
+);
 
 router.get(
   '/sales-rep-reports/commission-summary-report/:srId',
   salesRepReportsController.commissionSummaryReport,
-)
+);
 
 router.get(
   '/sales-rep-reports/customer-report/:srId',
   salesRepReportsController.customerReport,
-)
+);
 
 router.get(
   '/sales-rep-reports/partner-creadit-limit/1',
   salesRepReportsController.partnerCreaditLimit,
-)
+);
 
-//! DashBoard SECTION 
+//! DashBoard SECTION
 
-router.get(
-  '/dashboard',
-  dashboardsController.adminDashboard
-)
+router.get('/dashboard', dashboardsController.adminDashboard);
 
 router.get(
   '/sales-rep-dashboard/:srId',
-  dashboardsController.salesRepDashboard
-)
+  dashboardsController.salesRepDashboard,
+);
 
 router.get(
   '/orders-pending-pullouts/:srId',
-  manageOrderController.ordersPendingPullouts
-)
+  manageOrderController.ordersPendingPullouts,
+);
 
 router.post(
   '/pull-payments-from-patners-banka-account/:srId',
-  pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts
-) 
+  pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts,
+);
 
 router.post(
   '/shipping-charges-on-weight',
-  manageOrderController.findShippingCompanyForWeight
-) 
+  manageOrderController.findShippingCompanyForWeight,
+);
 
+router.get(
+  '/shipping-charges-list',
+  shippingCompanyController.getAllShippingCompany,
+);
+
+router.patch(
+  '/shipping-charges-update',
+  shippingCompanyController.updateShippingCompany,
+);
 
 module.exports = router;

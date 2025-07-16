@@ -97,15 +97,15 @@ module.exports = (sequelize) => {
       },
       connectAccountId: {
         type: DataTypes.STRING(),
-        allowNull: true
+        allowNull: true,
       },
       stripeCustomerId: {
         type: DataTypes.STRING(),
-        allowNull: true
+        allowNull: true,
       },
       defaultBankAccount: {
         type: DataTypes.STRING(),
-        allowNull: true
+        allowNull: true,
       },
       isAccountConnected: {
         type: DataTypes.BOOLEAN,
@@ -156,8 +156,6 @@ module.exports = (sequelize) => {
   //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
   //   }
   // });
-  
-  
 
   // Associations models
   salesRep.associate = (models) => {
@@ -172,7 +170,7 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.salesFromPatners);
     models.salesFromPatners.belongsTo(salesRep);
-    
+
     salesRep.hasOne(models.transfersToSalesRep);
     models.transfersToSalesRep.belongsTo(salesRep);
 

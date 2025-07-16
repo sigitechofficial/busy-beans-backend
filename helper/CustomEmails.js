@@ -1,19 +1,19 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
 
 module.exports = function (data) {
-  console.log('🚀 ~ data:', data)
-  let firstParagraph = `${data.content}`
+  console.log('🚀 ~ data:', data);
+  let firstParagraph = `${data.content}`;
 
-  let secondParagraph = `Thank you for choosing Trim! We look forward to supporting your salon's success.`
+  let secondParagraph = `Thank you for choosing Trim! We look forward to supporting your salon's success.`;
 
-  let greetings = `${data.greetings}`
-  let subject = `${data.greetings}`
+  let greetings = `${data.greetings}`;
+  let subject = `${data.greetings}`;
 
   transporter.sendMail(
     {
@@ -615,10 +615,10 @@ module.exports = function (data) {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};

@@ -1,4 +1,4 @@
-const { user,address } = require('../../models');
+const { user, address } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -6,15 +6,15 @@ const { response } = require('../../utils/response');
 const { Op, literal, fn, col, where } = require('sequelize');
 
 exports.customersList = catchAsync(async (req, res, next) => {
-  const filters = {deleted: 0}
-  if (req.params?.sr == 'not-assign')filters.salesRepId = null
-  else if (req.params?.sr == 'assign')filters.salesRepId = { [Op.ne]: null }
+  const filters = { deleted: 0 };
+  if (req.params?.sr == 'not-assign') filters.salesRepId = null;
+  else if (req.params?.sr == 'assign') filters.salesRepId = { [Op.ne]: null };
 
-  if (req.params?.srId)filters.salesRepId = req.params?.srId
+  if (req.params?.srId) filters.salesRepId = req.params?.srId;
 
   const data = await user.findAll({
     where: filters,
-    attributes: [     
+    attributes: [
       [
         literal('(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)'),
         'totalOrderPlaced',
@@ -24,21 +24,21 @@ exports.customersList = catchAsync(async (req, res, next) => {
           '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
         ),
         'totalOrderAmount',
-      ], 
+      ],
       [
-        literal( 
+        literal(
           `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         'salesRepName',
       ],
-       [
-        literal( 
+      [
+        literal(
           `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         'salesRepState',
       ],
       [
-        literal( 
+        literal(
           `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`,
         ),
         'preferredPaymentMethod',
@@ -53,22 +53,21 @@ exports.customersList = catchAsync(async (req, res, next) => {
       `saleTaxNumber`,
       `emailToSendInvoices`,
     ],
-    include:[{model:address}]
+    include: [{ model: address }],
   });
 
   res.status(200).json({
     status: 'success',
     data: { data },
-
   });
 });
 
 exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
-  const filters = {deleted: 0}
-  if (req.params?.sr == 'not-assign')filters.salesRepId = null
-  else if (req.params?.sr == 'assign')filters.salesRepId = { [Op.ne]: null }
+  const filters = { deleted: 0 };
+  if (req.params?.sr == 'not-assign') filters.salesRepId = null;
+  else if (req.params?.sr == 'assign') filters.salesRepId = { [Op.ne]: null };
 
-  if (req.params?.srId)filters.salesRepId = req.params?.srId
+  if (req.params?.srId) filters.salesRepId = req.params?.srId;
 
   const data = await user.findAll({
     where: filters,
@@ -78,10 +77,10 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
           `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
         ),
         'totalBalance',
-      ], 
+      ],
       `id`,
       `name`,
-      `email`, 
+      `email`,
       `image`,
       `phoneNumber`,
       `saleTaxNumber`,
@@ -93,11 +92,13 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
     status: 'success',
     data: { data },
   });
-
 });
 
 exports.assignSalesRep = catchAsync(async (req, res, next) => {
-await user.update({salesRepId:req.params?.id},{where:{id :req.body?.id}})
+  await user.update(
+    { salesRepId: req.params?.id },
+    { where: { id: req.body?.id } },
+  );
   res.status(200).json({
     status: 'success',
     data: {},
@@ -137,7 +138,7 @@ exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
       ],
     ],
   });
-  
+
   res.status(200).json({
     status: 'success',
     data: { data },

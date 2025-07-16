@@ -1,11 +1,17 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
 const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
-const { user, address,salesRep,stateInSystem,billingAddress } = require('../../models');
+const {
+  user,
+  address,
+  salesRep,
+  stateInSystem,
+  billingAddress,
+} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
@@ -22,7 +28,7 @@ const signToken = (data) =>
     data,
     process.env.JWT_SECRET, // Hardcoded JWT Secret
     {
-      expiresIn:"7d" ,
+      expiresIn: '7d',
     },
   );
 
@@ -56,8 +62,7 @@ const createSendToken = (input, statusCode, req, res) => {
 };
 
 exports.signup = catchAsync(async (req, res, next) => {
-  
-  console.log("🚀 ~ exports.signup=catchAsync ~  req.body:",  req.body)
+  console.log('🚀 ~ exports.signup=catchAsync ~  req.body:', req.body);
 
   const OTP = otpGenerator.generate(4, {
     lowerCaseAlphabets: false,
@@ -68,30 +73,41 @@ exports.signup = catchAsync(async (req, res, next) => {
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
     req.body.info.verifiedAt = Date.now();
   }
-  
-  const sr = await salesRep.findAll({where:{state:req.body?.address?.state}})
 
-  if(sr && sr.length === 1){
+  const sr = await salesRep.findAll({
+    where: { state: req.body?.address?.state },
+  });
+
+  if (sr && sr.length === 1) {
     req.body.info.salesRepId = sr[0]?.id;
   }
-  console.log("🚀 ~ exports.signup=catchAsync ~ sr:", sr?.id)
+  console.log('🚀 ~ exports.signup=catchAsync ~ sr:', sr?.id);
   req.body.info.latestOtp = OTP;
   const newUser = await user.create(req.body?.info);
 
-  
   req.body.address.userId = newUser?.id;
   req.body.billingAddress.userId = newUser?.id;
   const defaultAddress = await address.create(req.body?.address);
   billingAddress.create(req.body?.billingAddress);
-  console.log("🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:", defaultAddress)
-  
-  const stripeCustomerId = await Stripe.addCustomer({email:newUser?.email,name:newUser?.name})
-  newUser.stripeCustomerId = stripeCustomerId
-  await newUser.save()
+  console.log(
+    '🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:',
+    defaultAddress,
+  );
+
+  const stripeCustomerId = await Stripe.addCustomer({
+    email: newUser?.email,
+    name: newUser?.name,
+  });
+  newUser.stripeCustomerId = stripeCustomerId;
+  await newUser.save();
   const input = JSON.parse(JSON.stringify(newUser));
   input.address = defaultAddress;
   if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
-    Event.otpToUsersEvent({email:newUser?.email,name:newUser.name,otp:OTP});
+    Event.otpToUsersEvent({
+      email: newUser?.email,
+      name: newUser.name,
+      otp: OTP,
+    });
     return res.status(200).json(
       response({
         data: {
@@ -100,9 +116,9 @@ exports.signup = catchAsync(async (req, res, next) => {
         },
       }),
     );
-  } 
-  
-  Event.userAccountCreatedEvent({email:newUser?.email,name:newUser?.name})
+  }
+
+  Event.userAccountCreatedEvent({ email: newUser?.email, name: newUser?.name });
   createSendToken(newUser, 201, req, res);
 });
 
@@ -118,16 +134,16 @@ exports.login = catchAsync(async (req, res, next) => {
     where: { email },
   });
   console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
-if (!customer) {
+  if (!customer) {
     return next(new AppError('User Not found!', 200));
   }
-const isMatch = password == customer?.password
+  const isMatch = password == customer?.password;
   if (!user || !isMatch) {
     return next(new AppError('Incorrect email or password', 401));
   }
 
   const customerAddress = await address.findOne({
-    where: { userId :customer?.id },
+    where: { userId: customer?.id },
     attributes: {
       exclude: [`deleted`, `updatedAt`, `deletedAt`],
     },
@@ -141,17 +157,22 @@ const isMatch = password == customer?.password
 });
 
 exports.stripeAchPayment = catchAsync(async (req, res, next) => {
-  const result = await user.findOne({where:{id:req.params?.id},attributes:['stripeCustomerId']})
-  if(!result) return next(new AppError('User not Found', 200));
-  const data = await Stripe.financialConnectionsSession({customerId:result?.stripeCustomerId})
-    return res.status(200).json(
-      response({
-        data: {
-          message: 'Success',
-          data: data,
-        },
-      }),
-    );
+  const result = await user.findOne({
+    where: { id: req.params?.id },
+    attributes: ['stripeCustomerId'],
+  });
+  if (!result) return next(new AppError('User not Found', 200));
+  const data = await Stripe.financialConnectionsSession({
+    customerId: result?.stripeCustomerId,
+  });
+  return res.status(200).json(
+    response({
+      data: {
+        message: 'Success',
+        data: data,
+      },
+    }),
+  );
 });
 
 exports.otpVerification = catchAsync(async (req, res, next) => {
@@ -177,15 +198,17 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
   }
 
   if (customer.latestOtp == otp && on == 'signup') {
-    const data =  JSON.parse(JSON.stringify(customer))
-    data.addresses = undefined
-    data.address = customer?.addresses[0]
+    const data = JSON.parse(JSON.stringify(customer));
+    data.addresses = undefined;
+    data.address = customer?.addresses[0];
     createSendToken(data, 200, req, res);
     customer.verifiedAt = Date.now();
     await customer.save();
-    Event.userAccountApproveEvent({email:customer?.email,name:customer.name})
+    Event.userAccountApproveEvent({
+      email: customer?.email,
+      name: customer.name,
+    });
   } else if (customer.latestOtp == otp) {
-  
     return res.status(200).json(
       response({
         data: {
@@ -315,8 +338,12 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
 
   customer.latestOtp = OTP;
   await customer.save();
-  
-  Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
+
+  Event.otpToUsersForgotPasswordEvent({
+    email: customer?.email,
+    otp: OTP,
+    name: customer?.name,
+  });
 
   res.status(200).json({
     status: 'success',
@@ -330,7 +357,7 @@ exports.resendOtp = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({
     where: { email: req.body.email },
     attributes: {
-      exclude: [ 'updatedAt', 'deleted', 'deletedAt', 'password','latestOtp'],
+      exclude: ['updatedAt', 'deleted', 'deletedAt', 'password', 'latestOtp'],
     },
   });
   if (!customer) {
@@ -342,22 +369,28 @@ exports.resendOtp = catchAsync(async (req, res, next) => {
     upperCaseAlphabets: false,
     specialChars: false,
   });
- 
-  await user.update({latestOtp:OTP},{where:{id:customer?.id}})
-  
-  if(req.params.type == 'signup')
-    {
-      Event.otpToUsersEvent({email:customer?.email,name:customer.name,otp:OTP});
-    }else{
-      Event.otpToUsersForgotPasswordEvent({email:customer?.email,otp:OTP,name:customer?.name});
-    }
+
+  await user.update({ latestOtp: OTP }, { where: { id: customer?.id } });
+
+  if (req.params.type == 'signup') {
+    Event.otpToUsersEvent({
+      email: customer?.email,
+      name: customer.name,
+      otp: OTP,
+    });
+  } else {
+    Event.otpToUsersForgotPasswordEvent({
+      email: customer?.email,
+      otp: OTP,
+      name: customer?.name,
+    });
+  }
   res.status(200).json({
     status: 'success',
-    data: {id:customer?.id , email: customer.email},
+    data: { id: customer?.id, email: customer.email },
     message: 'OTP sent to email!',
   });
 });
-
 
 exports.resetPassword = catchAsync(async (req, res, next) => {
   // 1) Get user based on the token

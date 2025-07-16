@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
 const cors = require('cors');
-const bodyParser = require('body-parser')
+const bodyParser = require('body-parser');
 
 const app = express();
 const server = require('http').createServer(app);
@@ -14,7 +14,7 @@ const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
 const userRouter = require('./routes/userRoutes');
 const adminRouter = require('./routes/adminRoutes');
-const webhookRoute = require('./routes/webhooks')
+const webhookRoute = require('./routes/webhooks');
 app.use((req, res, next) => {
   console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
   next();
@@ -22,14 +22,14 @@ app.use((req, res, next) => {
 
 app.set('view engine', 'ejs');
 app.set('views', __dirname + '/views');
-const viewRoute = require('./routes/viewRoutes')
+const viewRoute = require('./routes/viewRoutes');
 
 app.use('/view', viewRoute);
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send('Something broke!');
 });
-app.use('/webhook', bodyParser.raw({ type: 'application/json' }), webhookRoute)
+app.use('/webhook', bodyParser.raw({ type: 'application/json' }), webhookRoute);
 
 dotenv.config({ path: './.env' });
 // Start express app
@@ -75,7 +75,6 @@ app.use(cors());
 app.use(cookieParser());
 
 app.use(compression());
- 
 
 app.get('/', (req, res) => {
   res.status(200).json({
@@ -94,7 +93,6 @@ app.use((req, res, next) => {
 // 3) ROUTES
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/admin', adminRouter);
-
 
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));

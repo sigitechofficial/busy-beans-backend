@@ -1,18 +1,18 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
-const { emailDateFormate } = require('../utils/emailDateFormate')
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
+const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email, name = '', otp= '' }) {
-  let hiCustomer = `Hi ${name}!`
+module.exports = function ({ email, name = '', otp = '' }) {
+  let hiCustomer = `Hi ${name}!`;
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: [`${email}`,'sigidevelopers@gmail.com'], //`${email}` list of receivers
+      to: [`${email}`, 'sigidevelopers@gmail.com'], //`${email}` list of receivers
       subject: `${hiCustomer}! We found a request for forgot password.
        Its okay! its happens. Use this OTP for reset your password.`, // Subject line
       attachments: attachment.footer,
@@ -159,10 +159,10 @@ module.exports = function ({ email, name = '', otp= '' }) {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};

@@ -70,7 +70,7 @@ function attachments() {
       path: __dirname + '/images/youtube.png',
       cid: 'youtube',
     },
-  }
+  };
 
   return {
     welcome: [attachment.welcome],
@@ -90,6 +90,6 @@ function attachments() {
     ],
     // in-case we have other emails
     attachment,
-  }
+  };
 }
-module.exports = { attachments }
+module.exports = { attachments };

@@ -23,31 +23,31 @@ exports.footer = ` <tr>
             ><img
               src="cid:facebook"
               alt="Facebook"
-              style="width: 24px; margin-right: 10px"
+              style="background-color: #8F5D46; border-radius: 50%; width: 24px; height: 24px; padding:10px; margin-right: 10px"
           /></a>
           <a href="https://x.com/busybean_coffee"
             ><img
               src="cid:twitter"
               alt="Twitter"
-              style="width: 24px; margin-right: 10px"
+              style="background-color: #8F5D46; border-radius: 50%; width: 24px; height: 24px; padding:10px; margin-right: 10px"
           /></a>
           <a href="https://www.instagram.com/busybean_coffee/"
             ><img
               src="cid:instagram"
               alt="Instagram"
-              style="width: 24px; margin-right: 10px"
+              style="background-color: #8F5D46; border-radius: 50%; width: 24px; height: 24px; padding:10px; margin-right: 10px"
           /></a>
           <a href="https://www.linkedin.com/in/thecoffeeman/"
             ><img
               src="cid:linkedin"
               alt="LinkedIn"
-              style="width: 24px; margin-right: 10px"
+              style="background-color: #8F5D46; border-radius: 50%; width: 24px; height: 24px; padding:10px; margin-right: 10px"
           /></a>
           <a href="https://www.youtube.com/channel/UC4b4PYax5H3jRSyw4r0MCjQ/featured"
             ><img
               src="cid:youtube"
               alt="Youtube"
-              style="width: 32px"
+              style="background-color: #8F5D46; border-radius: 50%; width: 24px; height: 24px; padding:10px;"
           /></a>
         </td>
       </tr>
@@ -137,7 +137,7 @@ exports.footer = ` <tr>
     </table>
   </body>
 </html>`;
-          // <a href="#" style="text-decoration: underline">Unsubscribe</a>
+// <a href="#" style="text-decoration: underline">Unsubscribe</a>
 
 // <span
 //   style="color: #202053; margin-left: 5px"
@@ -230,4 +230,4 @@ exports.footer = ` <tr>
 
 // <br /><br />
 //                   Thank you for choosing our services!
-``
+``;

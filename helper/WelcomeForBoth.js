@@ -1,25 +1,25 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: '../.env' })
+const dotenv = require('dotenv');
+dotenv.config({ path: '../.env' });
 
-const { attachments } = require('./attactments')
-const attachment = attachments()
-const { transporter } = require('./transpoter')
-const { footer } = require('./footer')
+const { attachments } = require('./attactments');
+const attachment = attachments();
+const { transporter } = require('./transpoter');
+const { footer } = require('./footer');
 
 module.exports = function (to, name, sentTo = 'salon') {
   let firstParagraph = `Congratulations and welcome to Trim! We're thrilled to have you on board, and we appreciate you choosing our platform to showcase and manage your salon services.
-  <br /><br />Your account has been successfully created, and you can now start exploring the full range of features we offer to enhance your salon's online presence and streamline your booking processes.`
+  <br /><br />Your account has been successfully created, and you can now start exploring the full range of features we offer to enhance your salon's online presence and streamline your booking processes.`;
 
-  let secondParagraph = `Thank you for choosing Trim! We look forward to supporting your salon's success.`
+  let secondParagraph = `Thank you for choosing Trim! We look forward to supporting your salon's success.`;
 
-  let greetings = `Dear ${name}!`
-  let subject = `${greetings} welcome to trim, We're Glad to Have You!`
+  let greetings = `Dear ${name}!`;
+  let subject = `${greetings} welcome to trim, We're Glad to Have You!`;
   if (sentTo == 'customer') {
     firstParagraph = `Welcome to Trim, just to confirm your account is now set up and you're ready to start booking in your next Trim!.
-    <br /><br />Your account has been successfully created, and you're now ready to explore the world of beauty and wellness at your fingertips.`
+    <br /><br />Your account has been successfully created, and you're now ready to explore the world of beauty and wellness at your fingertips.`;
 
-    secondParagraph = `Thank you for choosing Trim! We're here to make your salon experience enjoyable and effortless.`
-    greetings = `Hi ${name}!`
+    secondParagraph = `Thank you for choosing Trim! We're here to make your salon experience enjoyable and effortless.`;
+    greetings = `Hi ${name}!`;
   }
 
   transporter.sendMail(
@@ -532,13 +532,13 @@ module.exports = function (to, name, sentTo = 'salon') {
     },
     function (error, info) {
       if (error) {
-        console.log(error)
+        console.log(error);
       } else {
-        console.log(info)
+        console.log(info);
       }
     },
-  )
-}
+  );
+};
 
 //  <table
 //             align="center"

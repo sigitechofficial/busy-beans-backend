@@ -1,23 +1,21 @@
- 
-const supplierNewOrder = require('../../helper/supplierNewOrder')
+const supplierNewOrder = require('../../helper/supplierNewOrder');
 const {
-dataForEmailAndNotifications
-} = require('../../utils/emailsNotificationsData')
+  dataForEmailAndNotifications,
+} = require('../../utils/emailsNotificationsData');
 
-exports.supplierNewOrderEvent = async ({orderId}) => {
+exports.supplierNewOrderEvent = async ({ orderId }) => {
   try {
-    const orderData = await dataForEmailAndNotifications(orderId)
-    if (!orderData) return false
-    const { details } = orderData
+    const orderData = await dataForEmailAndNotifications(orderId);
+    if (!orderData) return false;
+    const { details } = orderData;
 
     if (orderData?.email) {
       supplierNewOrder({
-       email: orderData?.supplierEmail,
-       data: details,
-       stage: 'Confirmed',
-      })
+        email: orderData?.supplierEmail,
+        data: details,
+        stage: 'Confirmed',
+      });
     }
-   
 
     // const customerNotification = {
     //   title: `Appointment Cancellation`,
@@ -30,7 +28,7 @@ exports.supplierNewOrderEvent = async ({orderId}) => {
     //   title: `Booking Cancellation Alert`,
     //   body: `The appointment with ${fullName} on ${dateTime} has been cancelled.`,
     // }
- 
+
     // ThrowNotification(
     //   customerTokens,
     //   customerNotification,
@@ -42,11 +40,9 @@ exports.supplierNewOrderEvent = async ({orderId}) => {
     //   orderData?.client?.userId,
     // )
 
-    console.log('🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀')
-    return true
+    console.log('🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀');
+    return true;
   } catch (error) {
-    console.log('🚀 ~ exports.supplierNewOrder= ~ error:', error)
+    console.log('🚀 ~ exports.supplierNewOrder= ~ error:', error);
   }
-}
-
- 
+};

@@ -1,10 +1,10 @@
 const { DataTypes } = require('sequelize');
- 
+
 module.exports = (sequelize) => {
   const transfersToSalesRep = sequelize.define(
     'transfersToSalesRep',
     {
-      amount : {
+      amount: {
         type: DataTypes.STRING,
         allowNull: false,
       },

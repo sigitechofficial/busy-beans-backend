@@ -2,334 +2,214 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Invoice</title>
   </head>
   <body
     style="
-      font-family: sans-serif;
-      color: #1f2937;
-      background-color: white;
-      font-size: 13px;
+      font-family: Arial, sans-serif;
+      color: #000;
+      padding: 40px;
+      max-width: 800px;
+      margin: auto;
     "
   >
-    <div style="width: 80%; margin: 0 auto; padding: 2rem">
-      <!-- Invoice Header -->
-      <header
-        style="
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 3rem;
-          border-bottom: 2px solid #905e47;
-          padding-bottom: 1rem;
-        "
-      >
-        <div style="display: flex; align-items: center; gap: 1rem">
-          <img
-            src="https://static.wixstatic.com/media/41bb17_6b71dd75eefb4e7cbc85b9b5115889d3~mv2.png/v1/fill/w_252,h_118,al_c,lg_1,q_85,enc_avif,quality_auto/41bb17_6b71dd75eefb4e7cbc85b9b5115889d3~mv2.png"
-            alt="Busy Bean Logo"
-            style="width: 8rem"
-          />
-        </div>
-        <div style="text-align: right">
-          <h1 style="font-size: 1.25rem; font-weight: bold; color: #3e342c">
-            Busy Bean
-          </h1>
-          <div style="margin-top: 0.5rem; color: #3e342c">
-            <p>
-              <strong>Invoice No:</strong> <%= "INV-00" + order?.id %>
-            </p>
-            <p><strong>Order No:</strong> <%= order?.id%></p>
-            <p><strong>PO No:</strong> <%= order?.poNumber%></p>
+    <!-- Header -->
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 40px;
+      "
+    >
+      <h1 style="font-size: 28px; margin: 0">INVOICE</h1>
+      <img
+        src="https://admin.busybeancoffee.com/images/logocoffee.png"
+        alt="Busy Bean Coffee"
+        style="height: 100px "
+      />
+    </div>
+
+    <!-- Invoice Metadata -->
+    <div style="margin-bottom: 30px">
+      <p style="margin: 4px 0; font-size: 14px">
+        <strong>Invoice number:</strong> INV-00<%= order?.id || '' %>
+      </p>
+      <p style="margin: 4px 0; font-size: 14px">
+        <strong>Date of issue:</strong> <%= order?.on || '' %>
+      </p>
+      <p style="margin: 4px 0; font-size: 14px">
+        <strong>PO Number:</strong> <%= order?.poNumber || '' %>
+      </p>
+    </div>
+
+    <!-- From and Bill To -->
+    <div
+      style="display: flex; justify-content: space-between; margin-bottom: 30px"
+    >
+      <div style="width: 45%">
+        <% if (order?.salesRep) { %>
+        <p
+          style="
+            margin: 0;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+          "
+        >
+          From
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order.salesRep.srName || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order.salesRep.address || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order.salesRep.city || '' %>, <%= order.salesRep.state || '' %>
+          <%= order.salesRep.zipCode || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order.salesRep.country || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px">
+          <%= order.salesRep.phoneNumber || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px">
+          <%= order.salesRep.email || '' %>
+        </p>
+        <% } else { %>
+        <div>
+          <div style="font-size: 14px; font-weight: bold">From</div>
+          <div style="font-size: 14px; text-transform: uppercase">
+            Busy Bean Coffee Inc.
           </div>
+          <div style="font-size: 14px; text-transform: uppercase">
+            1141 CAINHOY RD 350
+          </div>
+          <div style="font-size: 14px; text-transform: uppercase">
+            WAREHOUSE 1
+          </div>
+          <div style="font-size: 14px; text-transform: uppercase">
+            CHARLESTON SC 29492, USA
+          </div>
+          <div style="font-size: 14px; text-transform: uppercase">
+            +1 833-843-2326
+          </div>
+          <div style="font-size: 14px">info@busybeancoffee.com</div>
         </div>
-      </header>
-
-      <!-- Billing and Payment Information -->
-      <div
-        style="
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 2rem;
-          border-bottom: 2px solid #905e47;
-          padding-bottom: 1rem;
-        "
-      >
-        <!-- From Section -->
-        <div style="width: 33.333%">
-          <h2 style="font-size: 1rem; font-weight: bold; color: #3e342c">
-            From:
-          </h2>
-          <p style="color: #3e342c"><%= order?.salesRepName %></p>
-          <!-- <p style="color: #3e342c">Customer ID: 005128 static</p> -->
-          <p style="color: #3e342c">
-            <%= [ order?.address?.addressLineOne,
-            order?.address?.addressLineTwo, order?.address?.town,
-            order?.address?.state, order?.address?.zipCode,
-            order?.address?.country ].filter(Boolean).join(", ") %>
-          </p>
-          <p style="color: #3e342c">Email: --</p>
-          <p style="color: #3e342c">Phone Number: --</p>
-          <p style="color: #3e342c"><strong>Issue Date:</strong> 02/06/2025</p>
-        </div>
-
-        <!-- Bill To Section -->
-        <div style="width: 33.333%">
-          <h2 style="font-size: 1rem; font-weight: bold; color: #3e342c">
-            Bill To:
-          </h2>
-          <p style="color: #3e342c"><%= order?.customerName %></p>
-          <p style="color: #3e342c">Customer ID: <%= order?.user?.id %></p>
-          <p style="color: #3e342c">--</p>
-          <p style="color: #3e342c">Email: <%= order?.user?.email %></p>
-          <p style="color: #3e342c">
-            Phone Number: <%= order?.user?.countryCode +
-            order?.user?.phoneNumber %>
-          </p>
-          <p style="color: #3e342c">
-            <strong>Issue Date:</strong> <%= order?.on %>
-          </p>
-        </div>
-
-        <!-- Payment Info Section -->
-        <!-- <div style="width: 33.333%">
-          <p style="color: #3e342c">
-            <strong>Delivery Date:</strong> 02/06/2025
-          </p>
-          <p style="color: #3e342c">
-            <strong>Payment Method:</strong> Visa Card
-          </p>
-          <p style="color: #3e342c">
-            <strong>Card Details:</strong> ************3256
-          </p>
-        </div>
-      </div> -->
-
-      <!-- Invoice Table -->
-      <div style="margin-bottom: 2rem; padding-bottom: 1rem">
-        <table
-          style="
-            width: 100%;
-            border-collapse: collapse;
-            border: 1px solid #905e47;
-            font-size: 12px;
-          "
-        >
-          <thead>
-            <tr style="background-color: #905e47; color: white">
-              <th
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: left;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Item
-              </th>
-              <th
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: center;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Quantity
-              </th>
-              <th
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Unit Price
-              </th>
-              <th
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Amount
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <% order?.items?.forEach((item) => { %>
-            <tr>
-              <td
-                style="padding: 0.4rem 0.8rem; border-bottom: 1px solid #905e47"
-              >
-                <%= item.product %>
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: center;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                <%= item.qty %>
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                $<%= Number(item.price).toFixed(2) %>
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                $<%= (Number(item.price) * Number(item.qty)).toFixed(2) %>
-              </td>
-            </tr>
-            <% }); %>
-          </tbody>
-        </table>
+        <% } %>
       </div>
 
-      <!-- Summary Table -->
-      <div
-        style="
-          margin-bottom: 2rem;
-          border-bottom: 2px solid #905e47;
-          padding-bottom: 1rem;
-        "
-      >
-        <table
+      <div style="width: 45%">
+        <p
           style="
-            margin-left: auto;
-            width: max-content;
-            border-collapse: collapse;
-            border: 1px solid #905e47;
-            font-size: 12px;
+            margin: 0;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
           "
         >
-          <tbody>
-            <tr>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Subtotal
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                $ <%= order?.subTotal %>
-              </td>
-            </tr>
-            <tr>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Delivery charges
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                $ --
-              </td>
-            </tr>
-            <tr>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Discount
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                $ --
-              </td>
-            </tr>
-            <tr>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                VAT
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                $ <%= order?.vat %>
-              </td>
-            </tr>
-            <tr style="font-weight: bold; color: #3e342c">
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                Total
-              </td>
-              <td
-                style="
-                  padding: 0.4rem 0.8rem;
-                  text-align: right;
-                  border-bottom: 1px solid #905e47;
-                "
-              >
-                $ <%= order?.totalBill %>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+          Bill to
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order?.user?.name || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order?.user?.billingAddresses?.[0]?.addressLineOne || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order?.user?.billingAddresses?.[0]?.town || '' %>, <%=
+          order?.user?.billingAddresses?.[0]?.state || '' %> <%=
+          order?.user?.billingAddresses?.[0]?.zipCode || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
+          <%= order?.user?.billingAddresses?.[0]?.country || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px">
+          <%= order?.user?.phoneNumber || '' %>
+        </p>
+        <p style="margin: 4px 0; font-size: 14px">
+          <%= order?.user?.email || '' %>
+        </p>
       </div>
+    </div>
 
-      <!-- Footer -->
-      <footer
-        style="
-          text-align: center;
-          margin-top: 2rem;
-          color: #3e342c;
-          font-size: 12px;
-        "
+    <!-- Amount Due -->
+    <div style="margin-bottom: 30px">
+      <p style="font-size: 20px; font-weight: bold; margin: 0">
+        $<%= order?.totalBill || '0.00' %> due amount
+      </p>
+      <a
+        href="https://backendbb.trimworldwide.com/view/pay-order-invoice?orderId=<%= order?.id %>"
+        style="color: #1a73e8; font-size: 14px; text-decoration: underline"
       >
-        <p>Payment method: Visa Card</p>
-        <p>Thank you for choosing us!</p>
-      </footer>
+        Pay online
+      </a>
+
+    </div>
+
+    <!-- Items Table -->
+    <table
+      style="
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        margin-bottom: 40px;
+      "
+    >
+      <thead>
+        <tr style="border-bottom: 2px solid #000">
+          <th style="text-align: left; padding: 8px">Code</th>
+          <th style="text-align: left; padding: 8px">Item</th>
+          <th style="text-align: center; padding: 8px">Quantity</th>
+          <th style="text-align: right; padding: 8px">Unit price</th>
+          <th style="text-align: right; padding: 8px">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% (order?.items || []).forEach(item => { %>
+        <tr>
+          <td style="padding: 8px"><%= item?.productCode || '' %></td>
+          <td style="padding: 8px; font-weight: 600">
+            <%= item?.product || '' %>
+          </td>
+          <td style="padding: 8px; text-align: center">
+            <%= item?.qty || '0' %>
+          </td>
+          <td style="padding: 8px; text-align: right">
+            $<%= ((item?.price / item?.qty) || 0).toFixed(2) %>
+          </td>
+          <td style="padding: 8px; text-align: right">
+            $<%= item?.price || '0.00' %>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div style="width: 100%; display: flex; justify-content: flex-end">
+      <table style="width: 300px; font-size: 14px">
+        <tr>
+          <td style="padding: 4px">Subtotal</td>
+          <td style="padding: 4px; text-align: right">
+            $<%= order?.subTotal || '0.00' %>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 4px">Shipping Charges</td>
+          <td style="padding: 4px; text-align: right">
+            $<%= order?.shippingCharges || '0.00' %>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 4px; font-weight: bold">Total</td>
+          <td style="padding: 4px; text-align: right; font-weight: bold">
+            $<%= order?.totalBill || '0.00' %>
+          </td>
+        </tr>
+      </table>
     </div>
   </body>
 </html>

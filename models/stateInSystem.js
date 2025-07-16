@@ -19,7 +19,7 @@ module.exports = (sequelize) => {
         defaultValue: false,
       },
     },
-    { 
+    {
       indexes: [
         {
           fields: ['name'],
@@ -33,7 +33,7 @@ module.exports = (sequelize) => {
   stateInSystem.associate = (models) => {
     stateInSystem.hasMany(models.cityInSystem);
     models.cityInSystem.belongsTo(stateInSystem);
-    
+
     stateInSystem.hasMany(models.territory);
     models.territory.belongsTo(stateInSystem);
 

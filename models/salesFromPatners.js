@@ -5,7 +5,7 @@ module.exports = (sequelize) => {
   const salesFromPatners = sequelize.define(
     'salesFromPatners',
     {
-      amount:  {
+      amount: {
         type: DataTypes.DECIMAL(20, 2),
         allowNull: true,
         defaultValue: 0,
@@ -27,6 +27,6 @@ module.exports = (sequelize) => {
       timestamps: true,
     },
   );
-  
+
   return salesFromPatners;
 };

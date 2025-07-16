@@ -7,7 +7,7 @@ const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
 
 module.exports = function (OTP, data, type) {
-  console.log('🚀 ~ OTP:', OTP); 
+  console.log('🚀 ~ OTP:', OTP);
   let heading = `Reset password`;
   let preOtpText = `We found a request for forgot password.
   Its okay! its happens. Use this OTP for

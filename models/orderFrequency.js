@@ -11,17 +11,17 @@ module.exports = (sequelize) => {
       },
       orderDate: {
         type: DataTypes.DATEONLY,
-        allowNull: true, 
+        allowNull: true,
       },
       nextOrderDate: {
         type: DataTypes.DATEONLY,
-        allowNull: true, 
+        allowNull: true,
       },
       visibilityDate: {
         type: DataTypes.DATEONLY,
-        allowNull: true, 
+        allowNull: true,
       },
-      
+
       frequency: {
         type: DataTypes.ENUM(
           'just-onces',
@@ -32,9 +32,8 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 'just-onces',
       },
-      
     },
-    { 
+    {
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
@@ -47,7 +46,7 @@ module.exports = (sequelize) => {
       ],
     },
   );
- 
+
   // Associations models
   orderFrequency.associate = (models) => {
     orderFrequency.hasMany(models.order);

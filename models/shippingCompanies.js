@@ -7,7 +7,6 @@ module.exports = (sequelize) => {
       company: {
         type: DataTypes.STRING,
         allowNull: false,
-
       },
       weightFrom: {
         type: DataTypes.INTEGER,
@@ -22,12 +21,13 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 0,
       },
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
     },
     {
-      primaryKey: true,
-      autoIncrement: true,
-      paranoid: true,
-      timestamps: true,
       indexes: [
         {
           fields: ['company'],
