@@ -52,6 +52,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
       `countryCode`,
       `saleTaxNumber`,
       `emailToSendInvoices`,
+      `companyName`,
     ],
     include: [{ model: address }],
   });
@@ -85,6 +86,7 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
       `phoneNumber`,
       `saleTaxNumber`,
       `emailToSendInvoices`,
+      'companyName',
     ],
   });
 

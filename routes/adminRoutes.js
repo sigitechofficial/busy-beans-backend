@@ -20,6 +20,15 @@ const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
 const router = express.Router();
+// LAMDA FUNCTION
+router.post(
+  '/lambda-function/pending-pullout-fromlocal-patner-banks',
+  pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts,
+);
+router.post(
+  '/lambda-function/create-upcomming-orders',
+  orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
+);
 // const protect = require('../middlewares/accessCheck');
 router.post('/login', authController.adminLogin);
 router.post('/login/sales-rep', authController.salesRepLogin);

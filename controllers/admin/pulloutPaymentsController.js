@@ -94,8 +94,8 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
     // Step 2: Pull amount from partner using Stripe Financial Connections
     const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
       amount,
-      customerId: patner.stripeCustomerId,
-      savedPaymentMethodId: patner.defaultBankAccount,
+      customerId: patner?.stripeCustomerId,
+      savedPaymentMethodId: patner?.defaultBankAccount,
     });
 
     // Step 3: If payment successful, update orders
@@ -127,26 +127,35 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
   }
 };
 
-async function getOrdersForLocalPartner({ localPatner }) {
+async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
   try {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
+    console.log(
+      '🚀 ~ getOrdersForLocalPartnerAndPullRequestLamda ~ oneMonthAgo:',
+      oneMonthAgo,
+    );
+
     const condition = {
-      invoiceId: null,
-      paymentMethodId: null,
+      salesRepId: localPatner.id,
       adminReceivableStatus: false,
       localPatnerCommission: 0.0,
-      salesRepId: localPatner.id,
       statusId: {
         [Op.in]: [1, 2, 3, 4, 5],
       },
       on: {
-        [Op.lte]: oneMonthAgo, // only include orders from the past 1 month
+        [Op.lte]: oneMonthAgo,
+      },
+      [Op.not]: {
+        [Op.and]: [{ paymentStatus: 'paid' }, { PaymentMethod: 'card' }],
       },
     };
 
-    console.log('🚀 ~ getOrdersForLocalPartner ~ condition:', condition);
+    console.log(
+      '🚀 ~ getOrdersForLocalPartnerAndPullRequestLamda ~ condition:',
+      condition,
+    );
 
     const doc = await order.findAll({
       where: condition,
@@ -202,8 +211,15 @@ async function getOrdersForLocalPartner({ localPatner }) {
     });
 
     if (!doc || doc.length < 1) {
-      console.log('🚀 ~ NOR ORDER ARE TEHRE TO PULL OUT MONEY FROM:', false);
+      console.log(
+        `🚀❌ ~ NO ORDER ARE TEHRE TO PULL OUT MONEY FROM: localPatner ${localPatner.id}`,
+        false,
+      );
       return false;
+    } else {
+      console.log(
+        `🔄 ~ (${doc?.length}) ORDER ARE TEHRE TO PULL OUT MONEY FROM: localPatner ${localPatner.id}`,
+      );
     }
 
     const input = JSON.parse(JSON.stringify(doc));
@@ -222,13 +238,16 @@ async function getOrdersForLocalPartner({ localPatner }) {
 
     return input.length;
   } catch (error) {
-    console.error('❌ Error in getOrdersForLocalPartner:', error);
+    console.error(
+      '❌ Error in getOrdersForLocalPartnerAndPullRequestLamda:',
+      error,
+    );
     throw new AppError(error.message, 500);
   }
 }
 
-async function processAllLocalPartners() {
-  try {
+exports.processAllLocalPartnersForPaymentPullouts = catchAsync(
+  async (req, res, next) => {
     // Step 1: Get all active (non-deleted) sales reps
     const patners = await salesRep.findAll({ where: { deleted: 0 } });
 
@@ -236,21 +255,24 @@ async function processAllLocalPartners() {
       console.log('❗ No local partners found.');
       return;
     }
-
     // Step 2: Loop through each partner and process their orders
     for (const ele of patners) {
       console.log(
-        `🔄 Processing orders for local partner: ${ele?.srName || ele.id}`,
+        `🔄 Processing orders for local partner ${ele.id} : ${ele?.srName || ele.id}`,
       );
-
-      // Call your order-fetching function
-      const orders = await getOrdersForLocalPartner(ele.id);
-
-      // Optional: log or handle the returned orders
-      console.log(`✅ Found ${orders} orders for ${ele?.srName || ele.id}`);
+      if (ele?.defaultBankAccount) {
+        getOrdersForLocalPartnerAndPullRequestLamda({ localPatner: ele });
+      } else {
+        console.log(
+          '🚀 ~  Payments can’t be pulled because the partner has no default bank account attached.',
+          ele?.srName,
+        );
+      }
     }
-  } catch (error) {
-    console.error('❌ Error in processAllLocalPartners:', error);
-    throw new AppError(error.message, 500);
-  }
-}
+    res.status(200).json({
+      status: 'success',
+      message: 'Payments pullout request success',
+      data: { forNumberOfPatner: patners?.length },
+    });
+  },
+);

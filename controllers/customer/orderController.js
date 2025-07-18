@@ -18,7 +18,7 @@ const { orderEvents } = require('../events/orderEvents');
 const { createPaymentIntent } = require('../stripe');
 const Stripe = require('../stripe');
 const { Op, literal } = require('sequelize');
-
+const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
@@ -108,6 +108,8 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     parseFloat(shippingCompany?.charges || 0);
 
   const newOrder = await order.create(input?.order);
+  newOrder.invoiceNumber = `INV-00${newOrder?.id}`;
+  await newOrder.save();
 
   await orderHistory.bulkCreate([
     {
@@ -131,6 +133,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
 
   // orderEvents({orderId:newOrder?.id})
+  supplierNewOrderEvent({ orderId: newOrder?.id });
   return res.status(200).json({
     status: 'success',
     data: { id: newOrder?.id },
@@ -139,7 +142,6 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
 exports.paymentIntent = catchAsync(async (req, res, next) => {
   const input = req.body;
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
   console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
   if (input?.items?.length < 1) {
     throw new AppError('Cart is empty add products to place order', 404);

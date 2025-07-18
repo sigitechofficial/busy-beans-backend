@@ -37,6 +37,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
           'discount',
           'orderId',
           'productId',
+          [
+            literal(
+              `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'productCode',
+          ],
         ],
       },
       {
@@ -159,6 +165,13 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         ),
         'connectAccountId',
       ],
+      [
+        literal(
+          `(SELECT salesReps.email FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
+        ),
+        'patnerEmail',
+      ],
+
       'totalBill',
       'subTotal',
       'discountPrice',
@@ -187,6 +200,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'poNumber',
       'hostedInvoiceUrl',
       'shippingCharges',
+      'invoiceNumber',
     ],
   });
   const output = JSON.parse(JSON.stringify(doc));

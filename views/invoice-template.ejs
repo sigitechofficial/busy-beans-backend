@@ -33,7 +33,7 @@
     <!-- Invoice Metadata -->
     <div style="margin-bottom: 30px">
       <p style="margin: 4px 0; font-size: 14px">
-        <strong>Invoice number:</strong> INV-00<%= order?.id || '' %>
+        <strong>Invoice number:</strong> <%= order?.invoiceNumber || '' %>
       </p>
       <p style="margin: 4px 0; font-size: 14px">
         <strong>Date of issue:</strong> <%= order?.on || '' %>

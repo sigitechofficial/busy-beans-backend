@@ -27,6 +27,7 @@ const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
 const {
   sentPaymentInvoiceEvent,
 } = require('../events/sentPaymentInvoiceEvent');
+const { orderShippedEvent } = require('../events/orderShippedEvent');
 const {
   dataForEmailAndNotifications,
 } = require('../../utils/emailsNotificationsData');
@@ -75,6 +76,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   //     if(!checkSession)await order.update(invoice,{where:{id:details.id}})
 
   let to = [email];
+
   if (email) {
     if (details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
       to.push(details?.emailToSendInvoices);
@@ -277,6 +279,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     'on',
     'createdAt',
     'shippingCharges',
+    'invoiceNumber',
   ];
 
   // Execute the query
@@ -402,6 +405,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'on',
       'createdAt',
       'shippingCharges',
+      'invoiceNumber',
     ],
   });
   if (!doc) {
@@ -526,6 +530,7 @@ exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
       'on',
       'createdAt',
       'shippingCharges',
+      'invoiceNumber',
     ],
   });
   if (!doc) {
@@ -768,8 +773,13 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     req.body?.orderData?.statusId,
   );
   if (req.body?.orderData?.statusId) {
-    if (req.body?.orderData?.statusId == 2)
+    if (req.body?.orderData?.statusId == 2) {
       supplierNewOrderEvent({ orderId: orderId });
+    }
+
+    if (req.body?.orderData?.statusId == 4) {
+      orderShippedEvent({ orderId });
+    }
 
     if (req.body?.orderData?.statusId == 6) {
       if (doc?.invoiceId) {
@@ -795,7 +805,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
         if (checkSession) await Stripe.blockCheckoutSession(doc?.invoiceId);
       }
 
-      const pdfFilename = `invoice-00${order.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
+      const pdfFilename = `order#${order?.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
       const pdfPath = path.join(
         __dirname,
         '../../public/invoicePDFs',
@@ -931,6 +941,10 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     );
   }
 
+  if (req.body?.order) {
+    await order.update(req.body?.order, { where: { id: placedOrder.id } });
+  }
+
   let checkSession = false;
 
   if (placedOrder?.invoiceId) {
@@ -1055,7 +1069,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   await order.update(input?.order, { where: { id: placedOrder?.id } });
   await item.destroy({ where: { orderId: placedOrder?.id } });
   await item.bulkCreate(finalItems);
-  const pdfFilename = `invoice-00${order.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
+  const pdfFilename = `order#${order.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
   const pdfPath = path.join(__dirname, '../../public/invoicePDFs', pdfFilename);
 
   // Check if file exists, then delete

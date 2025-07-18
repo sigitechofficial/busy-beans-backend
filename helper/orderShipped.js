@@ -1,21 +1,30 @@
+const fs = require('fs');
+const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
-const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email, data }) {
-  let hiSupplierName = `Hi ${data.supplierName}`;
-  const DeliveryAddress = `${data?.address?.companyaddress}, ${data?.address?.addressLineOne}, ${data?.address?.addressLineTwo}, ${data?.address?.town}, ${data?.address?.state}, ${data?.address?.zipCode}, ${data?.address?.country}`;
+// async function downloadPDF(pdfUrl, outputPath) {
+//   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+//   fs.writeFileSync(outputPath, response.data);
+// }
+
+module.exports = async function ({ email, data, invoice }) {
+  console.log('ðŸš€ ~ data:', data);
+  //will use from env BASE URL
+
   let items = [];
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
+              <td style="padding: 10px;">$${ele.price / ele.qty}</td>
+              <td style="padding: 10px;">$${ele?.price}</td>
             </tr>
             `;
     temp = items.push(temp);
@@ -23,14 +32,15 @@ module.exports = function ({ email, data }) {
   });
 
   items = items.join('');
+
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: [`${email}`], //`${email}` list of receivers
-      subject: `${hiSupplierName}! A new order has been placed on Busy Bean..`, // Subject line
-      attachments: attachment.footer,
+      to: email, //`${email}` list of receivers
+      subject: `Your Busy Bean Coffee order #${data.id} has shipped!📦.`, // Subject line
+      attachments: attachments().footer,
       html: `<!DOCTYPE html>
-<html lang="en">
+  <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -60,7 +70,7 @@ module.exports = function ({ email, data }) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-          <img
+         <img
                   src="cid:logo"
                   alt="Image"
                   width="250"
@@ -68,20 +78,6 @@ module.exports = function ({ email, data }) {
                   style="border-radius: 16px"
                 />
         </td>
-      </tr>
-      <tr>
-        <td
-          align="center"
-          style="
-            padding: 20px;
-            font-family: 'Chivo', sans-serif;
-            color: #000000;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1.5;
-          "
-        >
-          New Order Received – Order #${data.id}</td>
       </tr>
       <tr>
         <td
@@ -95,10 +91,10 @@ module.exports = function ({ email, data }) {
             line-height: 1.5;
           "
         >
-          ${hiSupplierName},
+           Order #${data.id} Shipped by Supplier
         </td>
       </tr>
-      <tr>
+           <tr>
         <td
           style="
             padding-left: 37px;
@@ -110,10 +106,8 @@ module.exports = function ({ email, data }) {
             line-height: 1.5;
           "
         >
-          A new order has been placed on <strong>Busy Bean</strong>. Below are
-          the order details:
+          The supplier has dispatched Order #${data.id}. Please review the details below and prepare to receive the shipment for local delivery to the customer.
         </td>
-      </tr>
       <tr>
         <td
           style="
@@ -143,22 +137,37 @@ module.exports = function ({ email, data }) {
         >
           <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
+          <span style="font-weight: 600">PoNumebr:</span>
+          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
           <span style="font-weight: 600">Customer Name:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.customerName}</span><br />
-          <span style="font-weight: 600">Delivery Address:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${DeliveryAddress}</span>
         </td>
       </tr>
+       
       <tr>
         <td style="padding-left: 37px; padding-right: 37px; padding-top: 10px; font-family: 'Nunito', sans-serif; font-size: 14px; line-height: 1.5;">
           <table width="100%" cellspacing="0" cellpadding="5" style="border-collapse: collapse; background-color: #f3f3f3;">
             <tr style="background-color: #e0e0e0;">
               <th style="text-align: left; padding: 10px; font-weight: bold;">Item</th>
               <th style="text-align: left; padding: 10px; font-weight: bold;">Quantity</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Unit Price</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Amount</th>
             </tr>
            ${items}
+           <tr style="background-color: #e0e0e0;">
+              <td style="text-align: left; padding: 10px; font-weight: bold;">Shipping charges</td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;">$${data.shippingCharges}</td>
+            </tr>
+            <tr style="background-color: #e0e0e0;">
+              <td style="text-align: left; padding: 10px; font-weight: bold;">Total</td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;">$${data.totalBill}</td>
+            </tr>
           </table>
         </td>
       </tr>
@@ -174,13 +183,7 @@ module.exports = function ({ email, data }) {
             line-height: 1.5;
           "
         >
-          Please process this order at your earliest convenience. If you have
-          any questions or need further details, feel free to contact us at
-          <a
-            href="mailto:info@busybeancoffee.com"
-            style="color: #ef250b; text-decoration: underline"
-            >info@busybeancoffee.com</a
-          >.
+          If you'd like to place an order or need a customized package, feel free to contact us directly. We're happy to serve you quality coffee, delivered fresh.<br>Looking forward to your response!
         </td>
       </tr>
        ${footer}

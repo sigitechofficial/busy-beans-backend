@@ -14,6 +14,7 @@ const { nextFrequencyDate } = require('../../utils/nextFrequencyDate');
 const factory = require('../handlerFactory');
 const { Op, literal, fn, col } = require('sequelize');
 const { orderEvents } = require('../events/orderEvents');
+const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
 
 exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
   //orderData is
@@ -151,14 +152,14 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     ],
   });
 
-  let percentage = (credit.dataValues.creditUsed / credit.creditLimit) * 100;
+  let percentage = (credit?.dataValues?.creditUsed / credit?.creditLimit) * 100;
   console.log(
     '---------------------------------creaditUed',
-    credit.dataValues.creditUsed,
+    credit?.dataValues?.creditUsed,
   );
   console.log(
     '---------------------------------creditLimit',
-    credit.creditLimit,
+    credit?.creditLimit,
   );
   if (percentage >= 80) {
     throw new AppError(
@@ -173,6 +174,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.totalBill =
     parseFloat(input.order.totalBill) + parseFloat(input.order.shippingCharges);
   const newOrder = await order.create(input?.order);
+  newOrder.invoiceNumber = `INV-00${newOrder?.id}`;
+  await newOrder.save();
 
   await orderHistory.bulkCreate([
     {
@@ -202,7 +205,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     setOrderFrequency({ orderData: newOrder, salesRepId: req.params?.srId });
 
   orderEvents({ orderId: newOrder?.id });
-
+  supplierNewOrderEvent({ orderId: newOrder?.id });
   return res.status(200).json({
     status: 'success',
     data: { id: newOrder?.id },
@@ -334,10 +337,13 @@ const frequencyBookOrder = async ({ id }) => {
       parseFloat(shippingCompany?.charges || 0);
     result.totalWeight = totalWeight;
     result.statusId = 1;
+    result.order.supplierId = 9; //TODO will be automated
     result.salesRepId = result?.salesRepId;
     result.createdBy = 'sales-rep';
 
     const newOrder = await order.create(result);
+    newOrder.invoiceNumber = `INV-00${newOrder?.id}`;
+    await newOrder.save();
 
     result?.items.forEach((item) => {
       item.orderId = newOrder.id;
@@ -364,6 +370,7 @@ const frequencyBookOrder = async ({ id }) => {
 
     orderFrequency.update(updateFrequencyData, { where: { id: id } });
 
+    supplierNewOrderEvent({ orderId: newOrder?.id });
     console.log('ðŸš€ ~ frequencyBookOrder ~ result:', result);
   } catch (error) {
     console.log('ðŸš€ ~ exports.frequencyBookOrder = ~ error:', error);
@@ -394,3 +401,35 @@ exports.bookOrderAccordingToFrequency = catchAsync(async (req, res, next) => {
     message: 'Orders booked according to frequency successfully.',
   });
 });
+
+exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
+  async (req, res, next) => {
+    const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    console.log("🚀🚀🚀🚀🚀🚀 ~ today:", today)
+    const pendingOrders = await orderFrequency.findAll({
+      where: { visibilityDate: today },
+      attributes: ['id'],
+    });
+    console.log("🚀 ~ pendingOrders:", pendingOrders)
+
+    if (!pendingOrders || pendingOrders.length === 0) {
+      console.log('❌ No pending frequency orders for today.');
+      return res.status(200).json({
+        status: 'fail',
+        message: 'No pending frequency orders for today.',
+        processed: 0,
+      });
+    }
+
+    for (const order of pendingOrders) {
+      console.log('🔁~processing order', order?.id);
+      await frequencyBookOrder({ id: order?.id });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Orders booked according to frequency successfully.',
+      processed: pendingOrders.length,
+    });
+  },
+);
