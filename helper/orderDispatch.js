@@ -37,9 +37,9 @@ module.exports = async function ({ email, data, invoice }) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
-      subject: `Your Busy Bean Coffee order #${data.id} has shipped!📦.`, // Subject line
+      subject: `Busy Beans Update: Order #${data.id} Has Been Shipped`, // Subject line
       attachments: attachments().footer,
-      replyTo: 'noreply@busybeancoffee.com',
+      replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
   <html lang="en">
   <head>
@@ -92,23 +92,25 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-           Order #${data.id} Shipped by Supplier
+           Order #${data.id} dispatched
         </td>
       </tr>
            <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 20px;
-            font-family: 'Chivo', sans-serif;
-            color: rgba(0, 0, 0, 0.8);
-            font-size: 16px;
-            line-height: 1.5;
-          "
-        >
-          The supplier has dispatched Order #${data.id}. Please review the details below and prepare to receive the shipment for local delivery to the customer.
-        </td>
+       <td
+        style="
+          padding-left: 37px;
+          padding-right: 37px;
+          padding-top: 20px;
+          font-family: 'Chivo', sans-serif;
+          color: rgba(0, 0, 0, 0.8);
+          font-size: 16px;
+          line-height: 1.5;
+        "
+      >
+        Your Busy Beans Coffee order <strong>#${data.id}</strong> has been dispatched and is on its way to you!<br />
+        Sit tight — your fresh coffee will be arriving soon. You can find the full order details below.
+      </td>
+
       <tr>
         <td
           style="

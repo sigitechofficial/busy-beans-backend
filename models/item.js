@@ -48,7 +48,6 @@ module.exports = (sequelize) => {
       tableName: 'items',
       primaryKey: true,
       autoIncrement: true,
-      paranoid: true,
       timestamps: true,
     },
   );

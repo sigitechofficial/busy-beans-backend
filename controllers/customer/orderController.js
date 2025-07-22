@@ -32,7 +32,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     where: { id: input?.order?.userId },
     attributes: ['salesRepId'],
   });
-  input.order.statusId = 2;
+  input.order.statusId = 1;
   input.order.salesRepId = customer?.salesRepId;
   let itemsPrice = 0;
   let totalWeight = 0;
@@ -100,7 +100,6 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   input.order.itemsPrice = itemsPrice;
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = totalWeight;
-  input.order.supplierId = 9; //TODO will be automated
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +
@@ -117,11 +116,6 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
       orderId: newOrder.id,
       on: Date.now(),
     },
-    {
-      statusId: 2,
-      orderId: newOrder.id,
-      on: Date.now(),
-    },
   ]);
 
   finalItems.forEach((element) => {
@@ -132,8 +126,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
   // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
 
-  // orderEvents({orderId:newOrder?.id})
-  supplierNewOrderEvent({ orderId: newOrder?.id });
+  orderEvents({ orderId: newOrder?.id });
   return res.status(200).json({
     status: 'success',
     data: { id: newOrder?.id },

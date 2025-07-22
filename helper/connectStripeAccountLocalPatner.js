@@ -21,6 +21,7 @@ module.exports = function ({ email, name = '', boardingLink = '', password }) {
       to: [`${email}`, 'sigidevelopers@gmail.com'], //`${email}` list of receivers
       subject: `${hiUser}! Welcome to Busy Bean. To start receiving online payments connect your Stripe account`, // Subject line
       attachments: attachment.footer,
+      replyTo: 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>

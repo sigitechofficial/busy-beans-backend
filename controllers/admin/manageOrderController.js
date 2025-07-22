@@ -11,6 +11,7 @@ const {
   shippingCompanies,
   billingAddress,
   salesRep,
+  orderFrequency,
 } = require('../../models');
 const fs = require('fs');
 const path = require('path');
@@ -28,6 +29,7 @@ const {
   sentPaymentInvoiceEvent,
 } = require('../events/sentPaymentInvoiceEvent');
 const { orderShippedEvent } = require('../events/orderShippedEvent');
+const { orderDispatchEvent } = require('../events/orderDispatchEvent');
 const {
   dataForEmailAndNotifications,
 } = require('../../utils/emailsNotificationsData');
@@ -35,6 +37,7 @@ const {
 const {
   processTransferToLocalPartner,
 } = require('../../utils/localPatnerCommissionTranfer');
+const { count } = require('console');
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const { details, email } = await dataForEmailAndNotifications(
@@ -219,6 +222,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
+        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+      ),
+      'companyName',
+    ],
+    [
+      literal(
         `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
       ),
       'orderCurrentStatus',
@@ -298,142 +307,14 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
   let condition = {
     paymentStatus: 'done',
-    // invoiceId: null,
-    paymentMethodId: null,
-
     adminReceivableStatus: false,
-    localPatnerCommission: 0.0,
+    // localPatnerCommission: 0.0,
+    // paymentMethod: { [Op.not]: 'card'},
     salesRepId: req.params.srId,
-    statusId: {
-      [Op.in]: [4, 5],
-    },
+    // statusId: {
+    //   [Op.in]: [4, 5],
+    // },
   };
-
-  console.log('ðŸš€ ~ exports.allOrder=catchAsync ~ condition:', condition);
-
-  const doc = await order.findAll({
-    where: condition,
-    include: [
-      {
-        model: item,
-        attributes: [
-          'id',
-          [
-            literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'product',
-          ],
-          'qty',
-          'price',
-          'discount',
-          'orderId',
-          'productId',
-          'wholesalePrice',
-        ],
-      },
-    ],
-    attributes: [
-      'id',
-      [
-        literal(
-          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
-        ),
-        'customerName',
-      ],
-      [
-        literal(
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
-        ),
-        'orderCurrentStatus',
-      ],
-      [
-        literal(`COALESCE(
-         (SELECT SUM(salerCommission)
-          FROM items
-          WHERE items.orderId = order.id ), 0)`),
-        'localPatnerCommission',
-      ],
-      [
-        literal(`
-        COALESCE(order.totalBill, 0) - COALESCE((
-          SELECT SUM(salerCommission)
-          FROM items
-          WHERE items.orderId = order.id
-        ), 0)
-      `),
-        'adminReceivableAmount',
-      ],
-      [
-        literal(`COALESCE(
-         (SELECT SUM(qty)
-          FROM items
-          WHERE items.orderId = order.id ), 0)`),
-        'totalQuantity',
-      ],
-      [
-        literal(`COALESCE(
-         (SELECT SUM(wholesalePrice)
-          FROM items
-          WHERE items.orderId = order.id ), 0)`),
-        'wholesalePrice',
-      ],
-      [
-        literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
-        ),
-        'salesRepName',
-      ],
-      'totalBill',
-      'subTotal',
-      'discountPrice',
-      'discountPercentage',
-      'itemsPrice',
-      'vat',
-      'totalWeight',
-      'note',
-      'paymentMethod',
-      'poNumber',
-      'frequency',
-      'statusId',
-      'trackingNumber',
-      'paymentStatus',
-      'adminReceivableStatus',
-      'invoicePdf',
-      'invoiceId',
-      'createdBy',
-      'on',
-      'createdAt',
-      'shippingCharges',
-      'invoiceNumber',
-    ],
-  });
-  if (!doc) {
-    return next(new AppError('Data not found!', 400));
-  }
-  res.status(200).json({
-    status: 'success',
-    data: {
-      order: doc,
-    },
-  });
-});
-
-exports.ordersPendingPayouts = catchAsync(async (req, res, next) => {
-  let condition = {
-    paymentStatus: 'done',
-    adminReceivableStatus: false,
-    localPatnerCommission: 0.0,
-    salesRepId: req.params.srId,
-    statusId: {
-      [Op.in]: [4, 5],
-    },
-    [Op.or]: [
-      { paymentMethodId: { [Op.not]: null } },
-      { invoiceId: { [Op.not]: null } },
-    ],
-  };
-
   console.log('ðŸš€ ~ exports.allOrder=catchAsync ~ condition:', condition);
 
   const doc = await order.findAll({
@@ -672,6 +553,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'companyName',
+      ],
+      [
+        literal(
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         'orderCurrentStatus',
@@ -733,6 +620,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'on',
       'createdAt',
       'shippingCharges',
+      'invoiceNumber',
     ],
   });
   if (!doc) {
@@ -779,6 +667,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
     if (req.body?.orderData?.statusId == 4) {
       orderShippedEvent({ orderId });
+    }
+
+    if (req.body?.orderData?.statusId == 5) {
+      orderDispatchEvent({ orderId });
     }
 
     if (req.body?.orderData?.statusId == 6) {
@@ -926,6 +818,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       'paymentStatus',
       'salesRepId',
       'invoiceId',
+      'orderFrequencyId',
     ],
   });
 
@@ -1012,6 +905,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.orderId = placedOrder?.id;
+    element.orderFrequencyId = placedOrder?.orderFrequencyId;
 
     // Accumulate the total weight and price
     itemsPrice += element.price;
@@ -1056,7 +950,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   input.order.itemsPrice = itemsPrice;
   input.order.totalWeight = totalWeight;
   input.order.shippingCharges = shippingCompany?.charges;
-  input.order.subTotal = itemsPrice + input.order.vat;
+  input.order.subTotal = itemsPrice + parseFloat(input?.order?.vat || 0);
   input.order.totalBill =
     itemsPrice +
     parseFloat(input?.order?.vat || 0) +
@@ -1095,5 +989,55 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: 'success',
     data: { id: req.params.orderId },
+  });
+});
+
+exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
+  const data = await statuses.findAll({
+    attributes: [
+      'id',
+      'orderStatus',
+      [
+        literal(
+          '(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id)',
+        ),
+        'count',
+      ],
+    ],
+  });
+
+  let condition = {};
+  if (req.params.srId) condition.salesRepId = req.params.srId;
+
+  // Add visibilityDate condition
+  condition.visibilityDate = {
+    [Op.lte]: new Date(), // or moment().toDate()
+  };
+
+  const upcommingOrderCount = await orderFrequency.count({
+    where: {
+      ...condition,
+      nextOrderDate: {
+        [Op.notIn]: literal(`
+          (SELECT DATE(orders.on)
+          FROM orders
+          WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
+          AND orders.orderFrequencyId = orderFrequency.id)
+        `),
+      },
+    },
+  });
+
+  const output = JSON.parse(JSON.stringify(data));
+
+  output.push({
+    id: 7,
+    orderStatus: 'Upcomming Orders',
+    count: upcommingOrderCount,
+  });
+
+  return res.status(200).json({
+    status: 'success',
+    data: output,
   });
 });

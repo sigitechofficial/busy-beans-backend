@@ -480,4 +480,9 @@ router.patch(
   shippingCompanyController.updateShippingCompany,
 );
 
+router.get(
+  '/order-navigation-counts',
+  manageOrderController.orderNavigationCounts,
+);
+
 module.exports = router;

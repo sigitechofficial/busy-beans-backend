@@ -305,23 +305,6 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
 });
 
 exports.salersMoney = catchAsync(async (req, res, next) => {
-  //   const doc = await item.findOne({
-  //     attributes: [
-  //       [literal('SUM(`item`.`price`)'), 'totalSales'],
-  //       [literal('SUM(`item`.`salerCommission`)'), 'salerCommission'],
-  //       [literal('SUM(`item`.`wholesalePrice`)'), 'wholesalePrice'],
-  //       [literal('SUM(`item`.`qty`)'), 'numberOfSoldProducts']
-  //     ],
-  //     include: [
-  //       {
-  //         model: order,
-  //         where: { salesRepId: req.params.srId },
-  //         attributes: []
-  //       }
-  //     ],
-  //     raw: true,
-  //   });
-
   const doc = await salesRep.findOne({
     where: {
       id: req.params.srId,
@@ -331,65 +314,176 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         fn(
           'FORMAT',
           literal(`
-              (
-                SELECT SUM(items.price)
-                FROM orders
-                JOIN items ON items.orderId = orders.id
-                WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep'
-              )
-            `),
+          (
+            SELECT SUM(adminReceivableAmount)
+            FROM orders
+            WHERE orders.salesRepId = salesRep.id
+              AND orders.adminReceivableStatus = true
+          )
+        `),
+          1,
+        ),
+        'paidToAdmin',
+      ],
+      // Total sales (offline)
+      [
+        fn(
+          'FORMAT',
+          literal(`
+          (
+            SELECT SUM(totalBill)
+            FROM orders
+            WHERE orders.salesRepId = salesRep.id
+              AND orders.createdBy = 'sales-rep'
+          )
+        `),
           1,
         ),
         'totalSales',
       ],
       [
-        literal(`
-              (
-                SELECT SUM(items.wholesalePrice)
-                FROM orders
-                JOIN items ON items.orderId = orders.id
-                WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep'
-              )
-            `),
+        fn(
+          'FORMAT',
+          literal(`
+      (
+        SELECT SUM(
+          COALESCE(o.totalBill, 0) - COALESCE((
+            SELECT SUM(i.salerCommission)
+            FROM items i
+            WHERE i.orderId = o.id
+          ), 0)
+        )
+        FROM orders o
+        WHERE o.salesRepId = salesRep.id
+          AND o.paymentStatus = 'done'
+            AND o.adminReceivableStatus = 0
+      )
+    `),
+          1,
+        ),
+        'toBePaid',
+      ],
 
+      // Wholesale price (offline)
+      [
+        literal(`
+        (
+          SELECT SUM(items.wholesalePrice)
+          FROM orders
+          JOIN items ON items.orderId = orders.id
+          WHERE orders.salesRepId = salesRep.id
+            AND orders.createdBy = 'sales-rep'
+        )
+      `),
         'wholesalePrice',
       ],
+
+      // Saler Commission (offline)
       [
         fn(
           'FORMAT',
           literal(`
-              (
-                SELECT SUM(items.price - items.wholesalePrice)
-                FROM orders
-                JOIN items ON items.orderId = orders.id
-                WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep'
-              )
-            `),
+          (
+            SELECT SUM(items.price - items.wholesalePrice)
+            FROM orders
+            JOIN items ON items.orderId = orders.id
+            WHERE orders.salesRepId = salesRep.id
+              AND orders.createdBy = 'sales-rep'
+              AND orders.paymentStatus = 'done'
+              AND orders.paymentMethod != 'card'
+          )
+        `),
           1,
         ),
         'salerCommission',
       ],
+      // Number of sold products (offline)
       [
         fn(
           'FORMAT',
           literal(`
-              (
-                SELECT SUM(items.qty)
-                FROM orders
-                JOIN items ON items.orderId = orders.id
-                WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep'
-              )
-            `),
+          (
+            SELECT SUM(items.qty)
+            FROM orders
+            JOIN items ON items.orderId = orders.id
+            WHERE orders.salesRepId = salesRep.id
+              AND orders.createdBy = 'sales-rep'
+          )
+        `),
           1,
         ),
         'numberOfSoldProducts',
       ],
+
+      // Total Sales (online)
+      [
+        fn(
+          'FORMAT',
+          literal(`
+          (
+            SELECT SUM(totalBill)
+            FROM orders
+            WHERE orders.salesRepId = salesRep.id
+              AND orders.createdBy = 'customer'
+          )
+        `),
+          1,
+        ),
+        'totalSalesOnline',
+      ],
+
+      // Wholesale price (online)
+      [
+        literal(`
+        (
+          SELECT SUM(items.wholesalePrice)
+          FROM orders
+          JOIN items ON items.orderId = orders.id
+          WHERE orders.salesRepId = salesRep.id
+            AND orders.createdBy = 'customer'
+        )
+      `),
+        'wholesalePriceOnline',
+      ],
+
+      // Saler Commission (online)
+      [
+        fn(
+          'FORMAT',
+          literal(`
+          (
+            SELECT SUM(items.price - items.wholesalePrice)
+            FROM orders
+            JOIN items ON items.orderId = orders.id
+            WHERE orders.salesRepId = salesRep.id
+              AND orders.createdBy = 'customer'
+          )
+        `),
+          1,
+        ),
+        'salerCommissionOnline',
+      ],
+
+      // Number of sold products (online)
+      [
+        fn(
+          'FORMAT',
+          literal(`
+          (
+            SELECT SUM(items.qty)
+            FROM orders
+            JOIN items ON items.orderId = orders.id
+            WHERE orders.salesRepId = salesRep.id
+              AND orders.createdBy = 'customer'
+          )
+        `),
+          1,
+        ),
+        'numberOfSoldProductsOnline',
+      ],
     ],
   });
+
   if (!doc) {
     return next(new AppError('Data not Found!', 404));
   }
@@ -426,11 +520,9 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
     ],
   });
 
-  const toBePaid =
-    parseFloat(result.wholesalePrice) - parseFloat(paidToAdmin || 0);
   // Return response
   res.status(200).json({
     status: 'success',
-    data: { ...result, toBePaid, paidToAdmin: paidToAdmin || 0, credit },
+    data: { ...result, credit },
   });
 });

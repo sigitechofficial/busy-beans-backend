@@ -32,6 +32,7 @@ module.exports = function ({ email, data }) {
       to: [`${email}`], //`${email}` list of receivers
       subject: `We’re excited to share with you a customized quotation for our premium coffee blends`, // Subject line
       attachments: attachment.footer,
+      replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>

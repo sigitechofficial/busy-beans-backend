@@ -9,7 +9,21 @@ const { emailDateFormate } = require('../utils/emailDateFormate');
 
 module.exports = function ({ email, data }) {
   let hiSupplierName = `Hi ${data.supplierName}`;
-  const DeliveryAddress = `${data?.address?.companyaddress}, ${data?.address?.addressLineOne}, ${data?.address?.addressLineTwo}, ${data?.address?.town}, ${data?.address?.state}, ${data?.address?.zipCode}, ${data?.address?.country}`;
+  const addressParts = [
+    data?.address?.companyaddress,
+    data?.address?.addressLineOne,
+    data?.address?.addressLineTwo,
+    data?.address?.town,
+    data?.address?.state,
+    data?.address?.zipCode,
+    data?.address?.country,
+  ];
+
+  const DeliveryAddress = addressParts
+    .filter((part) => part && part.trim() !== '') // remove null/undefined/empty strings
+    .join(', ')
+    .concat('.');
+
   let items = [];
   data?.items.forEach((ele) => {
     let temp = `
@@ -27,8 +41,9 @@ module.exports = function ({ email, data }) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: [`${email}`], //`${email}` list of receivers
-      subject: `${hiSupplierName}! A new order has been placed on Busy Bean..`, // Subject line
+      subject: `${hiSupplierName}, You’ve Received a New Order #${data.id} to Fulfill`, // Subject line
       attachments: attachment.footer,
+      replyTo: 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>

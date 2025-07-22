@@ -122,8 +122,9 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
-      subject: `Order Confirmed ${data.id}`, // Subject line
+      subject: `Your Busy Beans Coffee Order #${data.id} Has Been Confirmed`, // Subject line
       attachments: attachment.footer,
+      replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
       html: `
       <!DOCTYPE html>
       <html lang="en">

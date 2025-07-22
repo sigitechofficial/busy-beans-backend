@@ -67,6 +67,7 @@ module.exports = async function ({ email, data, invoice }) {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
       subject: `Your Order ${data.id} Please Complete Your Payment`, // Subject line
+      replyTo: 'noreply@busybeancoffee.com',
       attachments: emailAttachments,
       html: `<!DOCTYPE html>
 <html lang="en">

@@ -37,6 +37,7 @@ module.exports = function (OTP, data, type) {
       to: to, // list of receivers
       subject: subject, // Subject line
       attachments: attachment.footer,
+      replyTo: 'noreply@busybeancoffee.com',
       html: `
       
 <!DOCTYPE html>

@@ -53,6 +53,7 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
 
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
 console.log(typeof setOrderFrequency);
+
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.srId) condition.salesRepId = req.params.srId;
@@ -67,7 +68,7 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       ...condition,
       nextOrderDate: {
         [Op.notIn]: literal(`
-          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.userId = orderFrequency.userId)
+          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
         `),
       },
     },
@@ -130,6 +131,34 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     throw new AppError('Cart is empty add products to place order', 404);
   }
 
+  if (!input?.order?.shippingCharges) {
+    return next(
+      new AppError(
+        'Not dealing in such weights. Contact customer support for this order.',
+        400,
+      ),
+    );
+  }
+  const shippingCompany = await shippingCompanies.findOne({
+    where: {
+      weightFrom: {
+        [Op.lte]: input?.order?.totalWeight, // Less than or equal to the weight
+      },
+      weightTo: {
+        [Op.gte]: input?.order?.totalWeight, // Greater than or equal to the weight
+      },
+    },
+    attributes: ['charges'],
+  });
+  if (!shippingCompany) {
+    return next(
+      new AppError(
+        'Not dealing in such weights. Contact customer support for this order.',
+        400,
+      ),
+    );
+  }
+
   const credit = await salesRep.findOne({
     where: {
       id: req.params.srId,
@@ -167,10 +196,9 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       404,
     );
   }
-  input.order.statusId = 2;
+  input.order.statusId = 1;
   input.order.salesRepId = req.params?.srId;
   input.order.createdBy = 'sales-rep';
-  input.order.supplierId = 9; //TODO will be automated
   input.order.totalBill =
     parseFloat(input.order.totalBill) + parseFloat(input.order.shippingCharges);
   const newOrder = await order.create(input?.order);
@@ -180,11 +208,6 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   await orderHistory.bulkCreate([
     {
       statusId: 1,
-      orderId: newOrder.id,
-      on: Date.now(),
-    },
-    {
-      statusId: 2,
       orderId: newOrder.id,
       on: Date.now(),
     },
@@ -205,7 +228,6 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     setOrderFrequency({ orderData: newOrder, salesRepId: req.params?.srId });
 
   orderEvents({ orderId: newOrder?.id });
-  supplierNewOrderEvent({ orderId: newOrder?.id });
   return res.status(200).json({
     status: 'success',
     data: { id: newOrder?.id },
@@ -325,19 +347,19 @@ const frequencyBookOrder = async ({ id }) => {
       },
       attributes: ['charges'],
     });
+
     result.shippingCharges = shippingCompany?.charges || 0;
 
-    console.log('🚀 ~ frequencyBookOrder ~ productsPrice:', productsPrice);
-    console.log('🚀 ~ frequencyBookOrder ~ result:', result);
+    console.log('🚀 ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
+    console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
     // result.itemsPrice = productsPrice
-    result.subTotal = productsPrice + parseFloat(result?.vat);
+    result.subTotal = productsPrice + parseFloat(result?.vat || 0);
     result.totalBill =
       productsPrice +
       parseFloat(result?.vat || 0) +
       parseFloat(shippingCompany?.charges || 0);
     result.totalWeight = totalWeight;
     result.statusId = 1;
-    result.order.supplierId = 9; //TODO will be automated
     result.salesRepId = result?.salesRepId;
     result.createdBy = 'sales-rep';
 
@@ -370,7 +392,6 @@ const frequencyBookOrder = async ({ id }) => {
 
     orderFrequency.update(updateFrequencyData, { where: { id: id } });
 
-    supplierNewOrderEvent({ orderId: newOrder?.id });
     console.log('ðŸš€ ~ frequencyBookOrder ~ result:', result);
   } catch (error) {
     console.log('ðŸš€ ~ exports.frequencyBookOrder = ~ error:', error);
@@ -405,12 +426,12 @@ exports.bookOrderAccordingToFrequency = catchAsync(async (req, res, next) => {
 exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
   async (req, res, next) => {
     const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
-    console.log("🚀🚀🚀🚀🚀🚀 ~ today:", today)
+    console.log('🚀🚀🚀🚀🚀🚀 ~ today:', today);
     const pendingOrders = await orderFrequency.findAll({
       where: { visibilityDate: today },
       attributes: ['id'],
     });
-    console.log("🚀 ~ pendingOrders:", pendingOrders)
+    console.log('🚀 ~ pendingOrders:', pendingOrders);
 
     if (!pendingOrders || pendingOrders.length === 0) {
       console.log('❌ No pending frequency orders for today.');

@@ -17,6 +17,7 @@ const adminRouter = require('./routes/adminRoutes');
 const webhookRoute = require('./routes/webhooks');
 app.use((req, res, next) => {
   console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
+  console.log(`📥 Incoming Header: ${req.headers}`);
   next();
 });
 

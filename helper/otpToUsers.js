@@ -15,6 +15,7 @@ module.exports = function ({ email, name = '', otp = '' }) {
       to: [`${email}`], //`${email}` list of receivers
       subject: `${hiCustomer}! Welcome to Busy Bean. We are thrilled to have you on board.`, // Subject line
       attachments: attachment.footer,
+      replyTo: 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>
