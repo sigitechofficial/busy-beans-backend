@@ -5,10 +5,12 @@ const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
+const { header } = require('./header');
+
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
 module.exports = function ({ email, data }) {
-  console.log('🚀 ~ data:', data);
+  console.log('ðŸš€ ~ data:', data);
   let hiSupplierName = `Hope you're doing well`;
 
   let items = [];
@@ -29,8 +31,8 @@ module.exports = function ({ email, data }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: [`${email}`], //`${email}` list of receivers
-      subject: `We’re excited to share with you a customized quotation for our premium coffee blends`, // Subject line
+      to: email, //`${email}` list of receivers
+      subject: `Weâ€™re excited to share with you a customized quotation for our premium coffee blends`, // Subject line
       attachments: attachment.footer,
       replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
@@ -64,13 +66,7 @@ module.exports = function ({ email, data }) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-          <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
+        ${header}
         </td>
       </tr>
       <tr>
@@ -100,7 +96,7 @@ module.exports = function ({ email, data }) {
             line-height: 1.5;
           "
         >
-         I hope this message finds you well. We’re excited to share with you a customized quotation for our premium coffee blends, curated to suit your taste and business needs.<br>Please find below the details of our offer:
+         I hope this message finds you well. Weâ€™re excited to share with you a customized quotation for our premium coffee blends, curated to suit your taste and business needs.<br>Please find below the details of our offer:
         </td>
       </tr>
       <tr>

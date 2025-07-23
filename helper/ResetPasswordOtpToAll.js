@@ -5,6 +5,7 @@ const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
+const { header } = require('./header');
 
 module.exports = function (OTP, data, type) {
   console.log('🚀 ~ OTP:', OTP);
@@ -71,13 +72,7 @@ module.exports = function (OTP, data, type) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-          <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
+          ${header}
         </td>
       </tr>
       <tr>

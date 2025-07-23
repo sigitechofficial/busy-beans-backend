@@ -6,20 +6,47 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
-const { emailDateFormate } = require('../utils/emailDateFormate');
 const { header } = require('./header');
+const { emailDateFormate } = require('../utils/emailDateFormate');
+const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 
 // async function downloadPDF(pdfUrl, outputPath) {
 //   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
 //   fs.writeFileSync(outputPath, response.data);
 // }
-
 module.exports = async function ({ email, data, invoice }) {
-  let hiSupplierName = `Hi ${data.customerName}`;
-
-  console.log('Ã°Å¸Å¡â‚¬ ~ data:', data);
+  // console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
+  console.log('TO CUSTOMER: --------------------------------', __dirname);
 
+  const folderPath = path.join(__dirname, '..', 'public', 'invoicePDFs');
+  // Create the folder if it doesn't exist
+  if (!fs.existsSync(folderPath)) {
+    fs.mkdirSync(folderPath, { recursive: true }); // Ensures parent folders are created if missing
+    console.log("📁 'public/invoicePDFs' folder created.");
+  }
+
+  const pdfFileName = `invoice-00${data.id}.pdf`; // or use your original naming
+  let pdfPath = path.join(folderPath, pdfFileName);
+
+  // Now it's safe to check file existence
+  if (!fs.existsSync(pdfPath)) {
+    console.error(`❌ File not found: ${pdfPath}`);
+    await GenerateInvoicePdf(data, data.id);
+    pdfPath = path.join(folderPath, pdfFileName);
+    console.error(`📁 New invoice Generated: ${pdfPath}`);
+  } else {
+    console.error(`📁 invoice Found no need to create New one: ${pdfPath}`);
+  }
+
+  const emailAttachments = [
+    ...attachments().footer,
+    {
+      filename: `invoice-00${data.id}.pdf`,
+      path: pdfPath,
+      contentType: 'application/pdf',
+    },
+  ];
   let items = [];
   data?.items.forEach((ele) => {
     let temp = `
@@ -35,17 +62,15 @@ module.exports = async function ({ email, data, invoice }) {
   });
 
   items = items.join('');
-  const on = emailDateFormate(data?.on);
-
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
-      subject: `Your Busy Bean Coffee order #${data.id} has shipped!ðŸ“¦.`, // Subject line
-      attachments: attachments().footer,
-      replyTo: data.supplierEmail || 'info@busybeancoffee.com',
+      subject: `We’ve Received Your Payment for Order #${data.id} – Thank You!`, // Subject line
+      replyTo: data?.patnerEmail || 'info@busybeancoffee.com',
+      attachments: emailAttachments,
       html: `<!DOCTYPE html>
-  <html lang="en">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -76,23 +101,9 @@ module.exports = async function ({ email, data, invoice }) {
       <tr>
         <td align="center" style="padding: 20px 0">
          ${header}
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            font-family: 'Chivo', sans-serif;
-            color: #000000;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1.5;
-          "
-        >
-           Order #${data.id} Shipped by Supplier
         </td>
       </tr>
-           <tr>
+      <tr>
         <td
           style="
             padding-left: 37px;
@@ -104,8 +115,11 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          The supplier has dispatched Order #${data.id}. Please review the details below and prepare to receive the shipment for local delivery to the customer.
+        You’ve successfully completed the payment for your Busy Beans Coffee order <strong>#${data.id}</strong>.  
+        <br />
+        You can review your order details below for your reference.
         </td>
+      </tr>
       <tr>
         <td
           style="
@@ -138,14 +152,10 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
-          <span style="font-weight: 600">Company Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
-           <span style="font-weight: 600">Shipping Company:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
-          <span style="font-weight: 600">Tracking Number:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />
-        </td> 
+          <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
+          <span style="font-weight: 600">Customer Name:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.customerName}</span><br />
+        </td>
       </tr>
        
       <tr>
@@ -185,7 +195,9 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          If you have any questions or need further details, please reply to this email. 
+          If you'd like to place an order or need a customized package, feel free to visit our <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+            website
+          </a>. We're happy to serve you quality coffee, delivered fresh.<br>If you have any questions or need further details, please reply to this email.
         </td>
       </tr>
        ${footer}

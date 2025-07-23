@@ -5,6 +5,7 @@ const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
+const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
 module.exports = function ({ email, name = '' }) {
@@ -33,13 +34,7 @@ module.exports = function ({ email, name = '' }) {
         <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; max-width: 600px;">
             <tr>
           <td align="center" style="padding: 20px 0;">
-           <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
+        ${header}
           </td>
         </tr>
         <tr>

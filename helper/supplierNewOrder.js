@@ -37,13 +37,15 @@ module.exports = function ({ email, data }) {
   });
 
   items = items.join('');
+  const on = emailDateFormate(data?.on);
+
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: [`${email}`], //`${email}` list of receivers
+      to: email, //`${email}` list of receivers
       subject: `${hiSupplierName}, You’ve Received a New Order #${data.id} to Fulfill`, // Subject line
       attachments: attachment.footer,
-      replyTo: 'noreply@busybeancoffee.com',
+      replyTo: data?.patnerEmail || 'info@busybeancoffee.com',
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -83,20 +85,6 @@ module.exports = function ({ email, data }) {
                   style="border-radius: 16px"
                 />
         </td>
-      </tr>
-      <tr>
-        <td
-          align="center"
-          style="
-            padding: 20px;
-            font-family: 'Chivo', sans-serif;
-            color: #000000;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1.5;
-          "
-        >
-          New Order Received – Order #${data.id}</td>
       </tr>
       <tr>
         <td
@@ -159,9 +147,9 @@ module.exports = function ({ email, data }) {
           <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
           <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
-          <span style="font-weight: 600">Customer Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.customerName}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
+          <span style="font-weight: 600">Company Name:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
           <span style="font-weight: 600">Delivery Address:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${DeliveryAddress}</span>
         </td>
@@ -189,13 +177,7 @@ module.exports = function ({ email, data }) {
             line-height: 1.5;
           "
         >
-          Please process this order at your earliest convenience. If you have
-          any questions or need further details, feel free to contact us at
-          <a
-            href="mailto:info@busybeancoffee.com"
-            style="color: #ef250b; text-decoration: underline"
-            >info@busybeancoffee.com</a
-          >.
+         If you have any questions or need further details, please reply to this email. 
         </td>
       </tr>
        ${footer}

@@ -232,6 +232,11 @@ router.post(
   orderFrequencyController.bookNewOrder,
 );
 
+router.post(
+  '/book-new-order',
+  orderFrequencyController.bookNewOrder,
+);
+
 router.post('/add-customer/sales-rep/:srId', salesRepController.addCustomer);
 
 router.post(
@@ -483,6 +488,11 @@ router.patch(
 router.get(
   '/order-navigation-counts',
   manageOrderController.orderNavigationCounts,
+);
+
+router.get(
+  '/order-navigation-counts/sales-rep/:srid',
+  manageOrderController.orderNavigationCountsLocalPatner,
 );
 
 module.exports = router;

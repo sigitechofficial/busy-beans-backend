@@ -12,7 +12,10 @@ const { literal } = require('sequelize');
 const { emailDateFormate } = require('./emailDateFormate');
 
 exports.dataForEmailAndNotifications = async (orderId) => {
-  console.log('🚀 ~ exports.dataForEmailAndNotifications= ~ orderId:', orderId);
+  console.log(
+    'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ orderId:',
+    orderId,
+  );
   const doc = await order.findOne({
     where: { id: orderId },
     include: [
@@ -93,6 +96,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
           `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         'customerName',
+      ],
+      [
+        literal(
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'companyName',
       ],
       [
         literal(
@@ -205,7 +214,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
   });
   const output = JSON.parse(JSON.stringify(doc));
   console.log(
-    '🚀 ~ exports.dataForEmailAndNotifications= ~ output:',
+    'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:',
     output.totalBill,
   );
 

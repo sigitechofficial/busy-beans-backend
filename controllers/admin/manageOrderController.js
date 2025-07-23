@@ -40,9 +40,9 @@ const {
 const { count } = require('console');
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
-  const { details, email } = await dataForEmailAndNotifications(
-    req.params.orderId,
-  );
+ const details = await order.findOne({
+    where: { id: req.params.orderId },
+  });
 
   if (details?.paymentIntentId || details?.paymentStatus == 'done') {
     return next(
@@ -52,6 +52,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
       ),
     );
   }
+  sentPaymentInvoiceEvent({ orderId:req.params.orderId });
 
   //   let checkSession = false
 
@@ -77,16 +78,8 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   //     const invoice = !checkSession ? await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) : preSession
 
   //     if(!checkSession)await order.update(invoice,{where:{id:details.id}})
+ 
 
-  let to = [email];
-
-  if (email) {
-    if (details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
-      to.push(details?.emailToSendInvoices);
-    }
-  }
-
-  sentPaymentInvoiceEvent({ email: to, data: details });
   res.status(200).json({
     status: 'success',
     data: {},
@@ -510,6 +503,13 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           ],
           [
             literal(
+              `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'singleUnitWeight',
+          ],
+          ['weight', 'itemWeights'],
+          [
+            literal(
               `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             'productCode',
@@ -665,11 +665,11 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       supplierNewOrderEvent({ orderId: orderId });
     }
 
-    if (req.body?.orderData?.statusId == 4) {
-      orderShippedEvent({ orderId });
-    }
+    // if (req.body?.orderData?.statusId == 4) {
+    // }
 
     if (req.body?.orderData?.statusId == 5) {
+      orderShippedEvent({ orderId });
       orderDispatchEvent({ orderId });
     }
 
@@ -963,7 +963,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   await order.update(input?.order, { where: { id: placedOrder?.id } });
   await item.destroy({ where: { orderId: placedOrder?.id } });
   await item.bulkCreate(finalItems);
-  const pdfFilename = `order#${order.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
+  const pdfFilename = `invoice-00${placedOrder.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
   const pdfPath = path.join(__dirname, '../../public/invoicePDFs', pdfFilename);
 
   // Check if file exists, then delete
@@ -972,7 +972,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       fs.unlink(pdfPath, (unlinkErr) => {
         if (unlinkErr) {
           console.error(
-            `❌ Failed to delete invoice PDF for order ${order.id}:`,
+            `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
             unlinkErr,
           );
         } else {
@@ -981,11 +981,11 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       });
     } else {
       console.warn(
-        `⚠️ No invoice PDF found for order ${order.id} at ${pdfPath}`,
+        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
       );
     }
   });
-
+  sentPaymentInvoiceEvent({ orderId:placedOrder?.id});
   return res.status(200).json({
     status: 'success',
     data: { id: req.params.orderId },
@@ -1008,6 +1008,57 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
 
   let condition = {};
   if (req.params.srId) condition.salesRepId = req.params.srId;
+
+  // Add visibilityDate condition
+  condition.visibilityDate = {
+    [Op.lte]: new Date(), // or moment().toDate()
+  };
+
+  const upcommingOrderCount = await orderFrequency.count({
+    where: {
+      ...condition,
+      nextOrderDate: {
+        [Op.notIn]: literal(`
+          (SELECT DATE(orders.on)
+          FROM orders
+          WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
+          AND orders.orderFrequencyId = orderFrequency.id)
+        `),
+      },
+    },
+  });
+
+  const output = JSON.parse(JSON.stringify(data));
+
+  output.push({
+    id: 7,
+    orderStatus: 'Upcomming Orders',
+    count: upcommingOrderCount,
+  });
+
+  return res.status(200).json({
+    status: 'success',
+    data: output,
+  });
+});
+
+
+exports.orderNavigationCountsLocalPatner = catchAsync(async (req, res, next) => {
+  const data = await statuses.findAll({
+    attributes: [
+      'id',
+      'orderStatus',
+      [
+        literal(
+          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.salesRepId = ${req.params?.srId})`,
+        ),
+        'count',
+      ],
+    ],
+  });
+
+  let condition = {};
+  if (req.params.srId) condition.salesRepId = req.params?.srId;
 
   // Add visibilityDate condition
   condition.visibilityDate = {

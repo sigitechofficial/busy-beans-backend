@@ -1,4 +1,5 @@
 const orderEmailtoCustomer = require('../../helper/orderEmailtoCustomer');
+const orderEmailtoLocalPatner = require('../../helper/orderEmailtoLocalPatner');
 const {
   dataForEmailAndNotifications,
 } = require('../../utils/emailsNotificationsData');
@@ -15,16 +16,6 @@ exports.orderEvents = async ({ orderId }) => {
     const { details, email } = orderData;
     let to = email ? [email] : [];
     let invoice = null;
-    if (!details?.paymentIntentId) {
-      invoice = details.invoiceId
-        ? await Stripe.getInvoiceDetails({ invoiceId: details.invoiceId })
-        : await Stripe.createInvoiceWithItems({
-            customerId: details.stripeCustomerId,
-            order: details,
-          });
-      await order.update(invoice, { where: { id: details.id } });
-      // sentPaymentInvoiceEvent({email,data:details,invoice})
-    }
 
     if (details?.email) {
       if (
@@ -45,5 +36,26 @@ exports.orderEvents = async ({ orderId }) => {
     return true;
   } catch (error) {
     console.log('🚀 ~ exports.orderEvents= ~ error:', error);
+  }
+};
+
+
+
+exports.orderEventsToLocalPatnerOrAdmin = async ({ orderId }) => {
+  try {
+    const orderData = await dataForEmailAndNotifications(orderId);
+    if (!orderData) return false;
+    const { details, email } = orderData;
+      orderEmailtoLocalPatner({
+        email: details?.patnerEmail || 'info@busybeancoffee.com',
+        data: details,
+        stage: 'Confirmed',
+        invoice,
+      });
+     
+    console.log('🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀');
+    return true;
+  } catch (error) {
+    console.log('🚀 ~ exports.orderEventsToLocalPatnerOrAdmin= ~ error:', error);
   }
 };

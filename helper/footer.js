@@ -120,6 +120,7 @@ exports.footer = ` <tr>
       </tr>
       <tr>
         <td align="center" style="padding-top: 20px">
+          <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer">
           <img
             src="cid:logo"
             alt="Powered by"
@@ -127,6 +128,7 @@ exports.footer = ` <tr>
             height="55"
             style="border-radius: 16px"
           />
+          </a>
         </td>
       </tr>
     </table>

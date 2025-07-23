@@ -104,6 +104,19 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
+          `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
+        ),
+        'companyName',
+      ],
+      [
+      literal(`COALESCE(
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = orderFrequency.orderId ), 0)`),
+      'totalQuantity',
+     ],
+      [
+        literal(
           `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
         ),
         'email',
@@ -126,9 +139,20 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
 
 exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
-  console.log('🚀 ~ exports.bookNewOrder=catchAsync ~ input:', input);
+  console.log('🚀 ~ exports.bookNewOrder=catchAsync ~ input:', input?.order?.userId);
   if (input?.items?.length < 1) {
     throw new AppError('Cart is empty add products to place order', 404);
+  }
+
+  const customer = await user.findOne({where:{id:input?.order?.userId}})
+  console.log('🚀 ~ exports.bookNewOrder=customer ~ customer:', customer?.id);
+  if (!customer) {
+    return next(
+      new AppError(
+        'Customer not found.',
+        404,
+      ),
+    );
   }
 
   if (!input?.order?.shippingCharges) {
@@ -159,9 +183,12 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     );
   }
 
+ if(customer?.salesRepId)
+  {
+
   const credit = await salesRep.findOne({
     where: {
-      id: req.params.srId,
+      id: customer?.salesRepId,
     },
     attributes: [
       'creditLimit',
@@ -175,7 +202,6 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-
         'creditUsed',
       ],
     ],
@@ -196,8 +222,9 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       404,
     );
   }
+  }
   input.order.statusId = 1;
-  input.order.salesRepId = req.params?.srId;
+  input.order.salesRepId = req.params?.srId || customer?.salesRepId;
   input.order.createdBy = 'sales-rep';
   input.order.totalBill =
     parseFloat(input.order.totalBill) + parseFloat(input.order.shippingCharges);
@@ -225,7 +252,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   await item.bulkCreate(input?.items);
 
   if (newOrder?.frequency != 'just-onces')
-    setOrderFrequency({ orderData: newOrder, salesRepId: req.params?.srId });
+    setOrderFrequency({ orderData: newOrder, salesRepId: req.params?.srId || customer.salesRepId });
 
   orderEvents({ orderId: newOrder?.id });
   return res.status(200).json({
@@ -233,6 +260,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     data: { id: newOrder?.id },
   });
 });
+
 
 const frequencyBookOrder = async ({ id }) => {
   //orderData is

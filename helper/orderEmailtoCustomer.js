@@ -6,40 +6,98 @@ const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
 const { emailDateFormate } = require('../utils/emailDateFormate');
+const { header } = require('./header');
 
 module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
   let hiCustomer = `Hi ${data?.customerName}!`;
-  const invoiceSection = invoice
-    ? `   <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  font-family: 'Chivo', sans-serif;
-                  color: #000000;
-                  font-size: 24px;
-                  font-weight: bold;
-                  line-height: 1.5;
-                "
-              >
-                ${hiCustomer}
-              </td>
+  const addressParts = [
+    data?.address?.companyaddress,
+    data?.address?.addressLineOne,
+    data?.address?.addressLineTwo,
+    data?.address?.town,
+    data?.address?.state,
+    data?.address?.zipCode,
+    data?.address?.country,
+  ];
+
+  const DeliveryAddress = addressParts
+    .filter((part) => part && part.trim() !== '') // remove null/undefined/empty strings
+    .join(', ')
+    .concat('.');
+
+  let items = [];
+  data?.items.forEach((ele) => {
+    let temp = `
+             <tr>
+              <td style="padding: 10px;">${ele.product}</td>
+              <td style="padding: 10px;">${ele.qty}</td>
+              <td style="padding: 10px;">$${ele.price / ele.qty}</td>
+              <td style="padding: 10px;">$${ele?.price}</td>
             </tr>
-            <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  font-family: 'Chivo', sans-serif;
-                  color: rgba(0, 0, 0, 0.8);
-                  font-size: 16px;
-                  line-height: 1.5;
-                "
-              >
-                Thank you for your order!
-              </td>
-            </tr>
-                 <tr>
+            `;
+    temp = items.push(temp);
+    return temp;
+  });
+
+  const on = emailDateFormate(data?.on);
+  items = items.join('');
+  transporter.sendMail(
+    {
+      from: process.env.EMAIL_USERNAME, // sender address
+      to: email, //`${email}` list of receivers
+      subject: `Your Busy Beans Coffee Order #${data.id} Has Been Confirmed`, // Subject line
+      attachments: attachment.footer,
+      replyTo: data?.patnerEmail || 'info@busybeancoffee.com',
+      html: ` <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,100..900;1,100..900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Welcome to Busy Bean</title>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 10px 0px;
+      font-family: Arial, sans-serif;
+      background-color: #f8f8f8;
+    "
+  >
+    <table
+      align="center"
+      border="0"
+      cellpadding="0"
+      cellspacing="0"
+      width="100%"
+      style="border-collapse: collapse; max-width: 600px"
+    >
+      <tr>
+        <td align="center" style="padding: 20px 0">
+       ${header}
+        </td>
+      </tr>
+      <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            font-family: 'Chivo', sans-serif;
+            color: #000000;
+            font-size: 24px;
+            font-weight: bold;
+            line-height: 1.5;
+          "
+        >
+          ${hiCustomer}
+        </td>
+      </tr>
+      <tr>
         <td
           style="
             padding-left: 37px;
@@ -51,328 +109,87 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
             line-height: 1.5;
           "
         >
-         You have placed an order on Busy Bean. Please review the details below and click the button to pay your invoice.
+          A new order has been placed on <strong><a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+  Busy Bean Coffee
+</a></strong>.
         </td>
       </tr>
-       <tr align="center">
+      <tr>
         <td
           style="
             padding-left: 37px;
             padding-right: 37px;
             padding-top: 20px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
+            font-family: 'Chivo', sans-serif;
+            color: rgba(0, 0, 0, 0.8);
+            font-size: 18px;
+            font-weight: bold;
           "
         >
-          <a
-            href="${invoice?.hostedInvoiceUrl}"
-            style="
-              padding: 10px 20px;
-              background-color: #86644c;
-              color: #ffffff;
-              text-decoration: none;
-              border-radius: 5px;
-              font-family: 'Chivo', sans-serif;
-              font-size: 16px;
-            "
-          >
-            Pay Invoice
-          </a>
-          
+          Order Details:
         </td>
-      </tr>`
-    : ``;
-  let orderNote = `Your order has been confirmed and will be prepared according to the
-                instructions.`;
-
-  let items = [];
-  console.log('data?.itemsdata?.itemsdata?.itemsdata?.items', data?.items);
-  data?.items.forEach((ele) => {
-    let temp = `<tr>
-                    <td
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                      "
-                    >
-                      ${ele.qty}x ${ele.product}
-                    </td>
-                    <td
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                        text-align: right;
-                      "
-                    >
-                      $${ele.price}
-                    </td>
-            </tr>`;
-    temp = items.push(temp);
-    return temp;
-  });
-
-  items = items.join('');
-
-  transporter.sendMail(
-    {
-      from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
-      subject: `Your Busy Beans Coffee Order #${data.id} Has Been Confirmed`, // Subject line
-      attachments: attachment.footer,
-      replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
-      html: `
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <link rel="preconnect" href="https://fonts.googleapis.com" />
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-          <link
-            href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,100..900;1,100..900&display=swap"
-            rel="stylesheet"
-          />
-          <title>Welcome to Busy Bean</title>
-        </head>
-        <body
+      </tr>
+      <tr>
+        <td
           style="
-            margin: 0;
-            padding: 10px 0px;
-            font-family: Arial, sans-serif;
-            background-color: #f8f8f8;
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 6px;
+            font-family: 'Chivo', sans-serif;
+            color: rgba(0, 0, 0, 0.8);
+            font-size: 16px;
+            line-height: 1.5;
           "
         >
-          <table
-            align="center"
-            border="0"
-            cellpadding="0"
-            cellspacing="0"
-            width="100%"
-            style="border-collapse: collapse; max-width: 600px"
-          >
-            <tr>
-              <td align="center" style="padding: 20px 0">
-                <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
-              </td>
+          <span style="font-weight: 600">Order ID:</span>
+          <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
+          <span style="font-weight: 600">Order Date:</span>
+          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
+          <span style="font-weight: 600">Company Name:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
+          <span style="font-weight: 600">Delivery Address:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${DeliveryAddress}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding-left: 37px; padding-right: 37px; padding-top: 10px; font-family: 'Nunito', sans-serif; font-size: 14px; line-height: 1.5;">
+          <table width="100%" cellspacing="0" cellpadding="5" style="border-collapse: collapse; background-color: #f3f3f3;">
+            <tr style="background-color: #e0e0e0;">
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Item</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Quantity</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Unit Price</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Amount</th>
             </tr>
-         ${invoiceSection}
-            <tr align="center">
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  padding-top: 20px;
-                  font-family: 'Chivo', sans-serif;
-                  color: rgba(0, 0, 0, 0.8);
-                  font-size: 16px;
-                  line-height: 1.5;
-                "
-              >
-                <span style="font-weight: 600; font-size: larger"
-                  >Order Status:
-                </span>
-                <span
-                  style="
-                    font-weight: bold;
-                    color: #322a23;
-                    background-color: #86644c;
-                    padding: 10px 10px;
-                    border-radius: 60px;
-                  "
-                  >${satge}</span
-                >
-              </td>
+           ${items}
+           <tr style="background-color: #e0e0e0;">
+              <td style="text-align: left; padding: 10px; font-weight: bold;">Shipping charges</td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;">$${data.shippingCharges}</td>
             </tr>
-            <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  padding-top: 20px;
-                  font-family: 'Chivo', sans-serif;
-                  color: rgba(0, 0, 0, 0.8);
-                  font-size: 16px;
-                  line-height: 1.5;
-                "
-              >
-                <span style="font-weight: 600; font-size: large">Order Note:</span>
-                <br />
-                ${orderNote}
-              </td>
+            <tr style="background-color: #e0e0e0;">
+              <td style="text-align: left; padding: 10px; font-weight: bold;">Total</td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;"></td>
+              <td style="text-align: left; padding: 10px; font-weight: bold;">$${data.totalBill}</td>
             </tr>
-            <tr>
-              <td
-                align="center"
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  padding-top: 10px;
-                  font-family: 'Chivo', sans-serif;
-                  color: rgba(0, 0, 0, 0.8);
-                  font-size: 16px;
-                  line-height: 1.5;
-                "
-              >
-                <span style="font-weight: bold">Order No:</span>
-                <span style="font-weight: bold; color: #86644c">${data.id}</span><br />
-                <span style="font-weight: bold">Payment method: </span>${data.paymentMethod}<br />
-                Order Date: ${data.on}
-              </td>
-            </tr>
-            <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  padding-top: 20px;
-                  font-family: 'Chivo', sans-serif;
-                  font-weight: bold;
-                  font-size: 18px;
-                  color: #000000;
-                "
-              >
-                Order Details
-              </td>
-            </tr>
-            <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  padding-top: 10px;
-                  font-family: 'Chivo', sans-serif;
-                  color: rgba(0, 0, 0, 0.8);
-                  font-size: 16px;
-                  line-height: 1.5;
-                "
-              >
-                <table
-                  width="100%"
-                  cellspacing="0"
-                  cellpadding="5"
-                  style="border: 1px solid #d9d9d9; margin-top: 10px"
-                >
-                 ${items}
-                  <tr>
-                    <td
-                      align="end"
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                        font-weight: bold;
-                      "
-                    >
-                      Sub Total:
-                    </td>
-                    <td
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                        text-align: right;
-                      "
-                    >
-                      $${data?.subTotal}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td
-                      align="end"
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                      "
-                    >
-                      Discount:
-                    </td>
-                    <td
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                        text-align: right;
-                      "
-                    >
-                      ${data.discountPrice}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td
-                      align="end"
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                      "
-                    >
-                      Shipping Charges:
-                    </td>
-                    <td
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        color: rgba(0, 0, 0, 0.8);
-                        text-align: right;
-                      "
-                    >
-                      $${data?.shippingCharges || 0.0}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td
-                      align="end"
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        font-weight: bold;
-                        color: rgba(0, 0, 0, 0.8);
-                      "
-                    >
-                      Total:
-                    </td>
-                    <td
-                      style="
-                        font-family: 'Chivo', sans-serif;
-                        font-size: 16px;
-                        font-weight: bold;
-                        color: rgba(0, 0, 0, 0.8);
-                        text-align: right;
-                      "
-                    >
-                      $${data?.totalBill}
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <td
-                style="
-                  padding-left: 37px;
-                  padding-right: 37px;
-                  padding-top: 20px;
-                  font-family: 'Chivo', sans-serif;
-                  color: rgba(0, 0, 0, 0.8);
-                  font-size: 16px;
-                  line-height: 1.5;
-                "
-              >
-                If you have any questions, feel free to reach out to our support team.
-              </td>
-            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 20px;
+            font-family: 'Chivo', sans-serif;
+            color: rgba(0, 0, 0, 0.8);
+            font-size: 16px;
+            line-height: 1.5;
+          "
+        >
+          If you have any questions or need further details, please reply to this email. 
+      </tr>
        ${footer}
       `,
     },

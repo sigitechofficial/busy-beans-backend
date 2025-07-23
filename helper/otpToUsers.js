@@ -5,6 +5,7 @@ const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
+const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
 module.exports = function ({ email, name = '', otp = '' }) {
@@ -47,13 +48,7 @@ module.exports = function ({ email, name = '', otp = '' }) {
     >
       <tr>
         <td align="center" style="padding: 5px 0">
-          <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
+         ${header}
         </td>
       </tr>
       <tr>

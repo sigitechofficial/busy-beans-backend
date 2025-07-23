@@ -14,7 +14,7 @@ const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
-const { orderEvents } = require('../events/orderEvents');
+const { orderEvents,orderEventsToLocalPatnerOrAdmin } = require('../events/orderEvents');
 const { createPaymentIntent } = require('../stripe');
 const Stripe = require('../stripe');
 const { Op, literal } = require('sequelize');
@@ -125,7 +125,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   await item.bulkCreate(finalItems);
 
   // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
-
+orderEventsToLocalPatnerOrAdmin({orderId:newOrder?.id })
   orderEvents({ orderId: newOrder?.id });
   return res.status(200).json({
     status: 'success',

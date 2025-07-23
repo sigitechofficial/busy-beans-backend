@@ -1,29 +1,33 @@
-const fs = require('fs');
-const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
+const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const { header } = require('./header');
 
-// async function downloadPDF(pdfUrl, outputPath) {
-//   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
-//   fs.writeFileSync(outputPath, response.data);
-// }
+module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
+  const addressParts = [
+    data?.address?.companyaddress,
+    data?.address?.addressLineOne,
+    data?.address?.addressLineTwo,
+    data?.address?.town,
+    data?.address?.state,
+    data?.address?.zipCode,
+    data?.address?.country,
+  ];
 
-module.exports = async function ({ email, data, invoice }) {
-  let hiSupplierName = `Hi ${data.customerName}`;
-
-  console.log('Ã°Å¸Å¡â‚¬ ~ data:', data);
-  //will use from env BASE URL
+  const DeliveryAddress = addressParts
+    .filter((part) => part && part.trim() !== '') // remove null/undefined/empty strings
+    .join(', ')
+    .concat('.');
 
   let items = [];
   data?.items.forEach((ele) => {
     let temp = `
-            <tr>
+             <tr>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${ele.price / ele.qty}</td>
@@ -34,18 +38,17 @@ module.exports = async function ({ email, data, invoice }) {
     return temp;
   });
 
-  items = items.join('');
   const on = emailDateFormate(data?.on);
-
+  items = items.join('');
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
-      subject: `Your Busy Bean Coffee order #${data.id} has shipped!ðŸ“¦.`, // Subject line
-      attachments: attachments().footer,
-      replyTo: data.supplierEmail || 'info@busybeancoffee.com',
-      html: `<!DOCTYPE html>
-  <html lang="en">
+      to: 'sigidevelopers@gmail.com', //`${email}` list of receivers
+      subject: `${data?.companyName} Just Placed an Order – #${data.id}`, // Subject line
+      attachments: attachment.footer,
+      replyTo: data?.email,
+      html: ` <!DOCTYPE html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -75,24 +78,11 @@ module.exports = async function ({ email, data, invoice }) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-         ${header}
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            font-family: 'Chivo', sans-serif;
-            color: #000000;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1.5;
-          "
-        >
-           Order #${data.id} Shipped by Supplier
+       ${header}
         </td>
       </tr>
-           <tr>
+      </tr>
+      <tr>
         <td
           style="
             padding-left: 37px;
@@ -104,8 +94,14 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          The supplier has dispatched Order #${data.id}. Please review the details below and prepare to receive the shipment for local delivery to the customer.
+         A new order <strong>#${data.id}</strong> has been placed by <strong>${data?.companyName}</strong> on 
+      <strong>
+        <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+          Busy Bean Coffee
+        </a>
+      </strong>.
         </td>
+      </tr>
       <tr>
         <td
           style="
@@ -135,19 +131,14 @@ module.exports = async function ({ email, data, invoice }) {
         >
           <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
-          <span style="font-weight: 600">Po Number:</span>
-          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
           <span style="font-weight: 600">Company Name:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
-           <span style="font-weight: 600">Shipping Company:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
-          <span style="font-weight: 600">Tracking Number:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />
-        </td> 
+          <span style="font-weight: 600">Delivery Address:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${DeliveryAddress}</span>
+        </td>
       </tr>
-       
       <tr>
         <td style="padding-left: 37px; padding-right: 37px; padding-top: 10px; font-family: 'Nunito', sans-serif; font-size: 14px; line-height: 1.5;">
           <table width="100%" cellspacing="0" cellpadding="5" style="border-collapse: collapse; background-color: #f3f3f3;">
@@ -186,7 +177,7 @@ module.exports = async function ({ email, data, invoice }) {
           "
         >
           If you have any questions or need further details, please reply to this email. 
-        </td>
+          
       </tr>
        ${footer}
       `,

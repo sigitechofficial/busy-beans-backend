@@ -6,6 +6,7 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
+const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 
@@ -67,7 +68,7 @@ module.exports = async function ({ email, data, invoice }) {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
       subject: `Your Order ${data.id} Please Complete Your Payment`, // Subject line
-      replyTo: 'noreply@busybeancoffee.com',
+      replyTo: data.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
       html: `<!DOCTYPE html>
 <html lang="en">
@@ -100,13 +101,7 @@ module.exports = async function ({ email, data, invoice }) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-         <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
+         ${header}
         </td>
       </tr>
       <tr>
@@ -198,7 +193,7 @@ module.exports = async function ({ email, data, invoice }) {
         >
           <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
-          <span style="font-weight: 600">PoNumebr:</span>
+          <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />

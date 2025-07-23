@@ -6,6 +6,7 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
+const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
 // async function downloadPDF(pdfUrl, outputPath) {
@@ -32,12 +33,13 @@ module.exports = async function ({ email, data, invoice }) {
   });
 
   items = items.join('');
+  const on = emailDateFormate(data?.on);
 
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
-      subject: `Busy Beans Update: Order #${data.id} Has Been Shipped`, // Subject line
+      subject: `Busy Bean Coffee Update: Order #${data.id} Has Been Shipped.`, // Subject line
       attachments: attachments().footer,
       replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
@@ -71,32 +73,13 @@ module.exports = async function ({ email, data, invoice }) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-         <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
-        </td>
+        ${header}
       </tr>
       <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            font-family: 'Chivo', sans-serif;
-            color: #000000;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1.5;
-          "
-        >
-           Order #${data.id} dispatched
-        </td>
+    
       </tr>
            <tr>
-       <td
+         <td
         style="
           padding-left: 37px;
           padding-right: 37px;
@@ -107,10 +90,9 @@ module.exports = async function ({ email, data, invoice }) {
           line-height: 1.5;
         "
       >
-        Your Busy Beans Coffee order <strong>#${data.id}</strong> has been dispatched and is on its way to you!<br />
-        Sit tight — your fresh coffee will be arriving soon. You can find the full order details below.
+        Your Busy Beans Coffee order <strong>#${data.id}</strong> has been shipped and is on its way to you!<br />
+        Sit tight, your fresh coffee will be arriving soon. You can find the full order details below.
       </td>
-
       <tr>
         <td
           style="
@@ -138,14 +120,16 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          <span style="font-weight: 600">Order ID:</span>
+         <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
-          <span style="font-weight: 600">PoNumebr:</span>
+          <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
-          <span style="font-weight: 600">Customer Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.customerName}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
+          <span style="font-weight: 600">Company Name:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
+           <span style="font-weight: 600">Shipping Company:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />
         </td> 
@@ -188,7 +172,9 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          If you'd like to place an order or need a customized package, feel free to contact us directly. We're happy to serve you quality coffee, delivered fresh.<br>Looking forward to your response!
+          If you'd like to place an order or need a customized package, feel free to visit our <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+  website
+</a>. We're happy to serve you quality coffee, delivered fresh.<br>If you have any questions or need further details, please reply to this email. 
         </td>
       </tr>
        ${footer}
