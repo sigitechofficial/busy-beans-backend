@@ -232,10 +232,7 @@ router.post(
   orderFrequencyController.bookNewOrder,
 );
 
-router.post(
-  '/book-new-order',
-  orderFrequencyController.bookNewOrder,
-);
+router.post('/book-new-order', orderFrequencyController.bookNewOrder);
 
 router.post('/add-customer/sales-rep/:srId', salesRepController.addCustomer);
 
@@ -493,6 +490,11 @@ router.get(
 router.get(
   '/order-navigation-counts/sales-rep/:srid',
   manageOrderController.orderNavigationCountsLocalPatner,
+);
+
+router.get(
+  '/view-customer-detail/:id',
+  customerController.customerDetail,
 );
 
 module.exports = router;

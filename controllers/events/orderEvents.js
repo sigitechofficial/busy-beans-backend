@@ -39,23 +39,26 @@ exports.orderEvents = async ({ orderId }) => {
   }
 };
 
-
-
 exports.orderEventsToLocalPatnerOrAdmin = async ({ orderId }) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId);
     if (!orderData) return false;
     const { details, email } = orderData;
-      orderEmailtoLocalPatner({
-        email: details?.patnerEmail || 'info@busybeancoffee.com',
-        data: details,
-        stage: 'Confirmed',
-        invoice,
-      });
-     
-    console.log('🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀');
+    orderEmailtoLocalPatner({
+      email: details?.patnerEmail || 'info@busybeancoffee.com',
+      data: details,
+      stage: 'Confirmed',
+      invoice,
+    });
+
+    console.log(
+      '🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀',
+    );
     return true;
   } catch (error) {
-    console.log('🚀 ~ exports.orderEventsToLocalPatnerOrAdmin= ~ error:', error);
+    console.log(
+      '🚀 ~ exports.orderEventsToLocalPatnerOrAdmin= ~ error:',
+      error,
+    );
   }
 };

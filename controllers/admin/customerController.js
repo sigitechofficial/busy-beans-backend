@@ -1,4 +1,4 @@
-const { user, address } = require('../../models');
+const { user, address, order, billingAddress, item } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -144,6 +144,81 @@ exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: { data },
+  });
+});
+
+exports.customerDetail = catchAsync(async (req, res, next) => {
+  let condition = {};
+  if (req.params.id) condition.id = req.params.id;
+
+  console.log('ðŸš€ ~ exports.allOrder=catchAsync ~ condition:', condition);
+
+  const doc = await user.findOne({
+    where: condition,
+    attributes: [
+      [
+        literal('(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)'),
+        'totalOrderPlaced',
+      ],
+      [
+        literal(
+          '(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)',
+        ),
+        'totalOrderAmount',
+      ],
+      [
+        literal(
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepName',
+      ],
+      [
+        literal(
+          `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+        ),
+        'salesRepState',
+      ],
+      [
+        literal(
+          `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`,
+        ),
+        'preferredPaymentMethod',
+      ],
+      `id`,
+      `name`,
+      `email`,
+      `status`,
+      `image`,
+      `phoneNumber`,
+      `countryCode`,
+      `saleTaxNumber`,
+      `emailToSendInvoices`,
+      `companyName`,
+    ],
+    include: [
+      {
+        model: address,
+        attributes: {
+          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
+        },
+      },
+      {
+        model: billingAddress,
+        attributes: {
+          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
+        },
+      },
+    ],
+  });
+
+  if (!doc) {
+    return next(new AppError('Data not found!', 400));
+  }
+  res.status(200).json({
+    status: 'success',
+    data: {
+      customer: doc,
+    },
   });
 });
 

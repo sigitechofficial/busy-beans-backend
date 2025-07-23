@@ -514,7 +514,7 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
         transfer_data: {
           destination: order.connectAccountId, // e.g. $30 to partner
         },
-        
+
         metadata: {
           orderId: order?.id,
           partnerId: order?.connectAccountId,
@@ -533,7 +533,6 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       proportionalStripeFee: stripeFee,
       invoicePdf: '',
     };
-
   } catch (error) {
     console.error('❌ Checkout Session creation failed:', error);
     throw new Error(error.message);

@@ -152,9 +152,13 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
-          <span style="font-weight: 600">Customer Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.customerName}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
+          <span style="font-weight: 600">Company Name:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
+           <span style="font-weight: 600">Shipping Company:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
+          <span style="font-weight: 600">Tracking Number:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />
         </td>
       </tr>
        

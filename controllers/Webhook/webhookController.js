@@ -3,7 +3,10 @@ const stripe = require('stripe')(STRIPE_SECRET_KEY);
 const Stripe = require('../stripe');
 const { user, salesRep, transfersToSalesRep, item } = require('../../models');
 const { order } = require('../../models');
-const { paidInvoiceEmailEvent,paidInvoiceAdminOrLocalPatnerEvent } = require('../events/paymentInvoicePaidEvent');
+const {
+  paidInvoiceEmailEvent,
+  paidInvoiceAdminOrLocalPatnerEvent,
+} = require('../events/paymentInvoicePaidEvent');
 
 const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8`; //LIVE
 // const endpointSecret = `whsec_LXBjpD1YQdl9DjLFLgyjoaIf1jRxypn8` //SANDBOX
@@ -48,8 +51,8 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
 const invoicePaid = async (event) => {
   try {
     const invoice = event.data.object;
-      const localPartnerId = invoice.metadata?.salesRepId;
-      let localPatnerAccount = invoice.metadata?.localPatnerAccount;
+    const localPartnerId = invoice.metadata?.salesRepId;
+    let localPatnerAccount = invoice.metadata?.localPatnerAccount;
     const orderId = invoice.metadata?.orderId;
     console.log('🚀 ~ invoicePaid ~ orderId:', orderId);
 
@@ -58,8 +61,8 @@ const invoicePaid = async (event) => {
       { where: { id: orderId } },
     );
 
-    paidInvoiceEmailEvent({orderId})
-    paidInvoiceAdminOrLocalPatnerEvent({orderId})
+    paidInvoiceEmailEvent({ orderId });
+    paidInvoiceAdminOrLocalPatnerEvent({ orderId });
     //   if(!localPartnerId) {
     //   return true
     //   }
