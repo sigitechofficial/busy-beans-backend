@@ -15,9 +15,9 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
-  // console.log('ðŸš€ ~ data:', data);
+  console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
-  console.log('TO ADMIN: --------------------------------', __dirname);
+  console.log('__dirname:', __dirname);
 
   const folderPath = path.join(__dirname, '..', 'public', 'invoicePDFs');
   // Create the folder if it doesn't exist
@@ -48,6 +48,7 @@ module.exports = async function ({ email, data, invoice }) {
     },
   ];
   let items = [];
+    const on = emailDateFormate(data?.on);
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
@@ -65,7 +66,7 @@ module.exports = async function ({ email, data, invoice }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
+      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
       subject: `Busy Bean Coffee Order #${data.id} Payment Completed`, // Subject line
       replyTo: data.email,
       attachments: emailAttachments,
@@ -154,7 +155,7 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
           <span style="font-weight: 600">Company Name:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
-          <span style="font-weight: 600">Shipping Company:</span>
+           <span style="font-weight: 600">Shipping Company:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />

@@ -61,12 +61,12 @@ module.exports = async function ({ email, data, invoice }) {
     temp = items.push(temp);
     return temp;
   });
-
+  const on = emailDateFormate(data?.on);
   items = items.join('');
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
+      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
       subject: `Your Order ${data.id} Please Complete Your Payment`, // Subject line
       replyTo: data.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
@@ -191,14 +191,18 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          <span style="font-weight: 600">Order ID:</span>
+        <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
           <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${data?.on}</span><br />
-          <span style="font-weight: 600">Customer Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.customerName}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
+          <span style="font-weight: 600">Company Name:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
+           <span style="font-weight: 600">Shipping Company:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
+          <span style="font-weight: 600">Tracking Number:</span>
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />
         </td>
       </tr>
        

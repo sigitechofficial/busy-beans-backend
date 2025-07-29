@@ -11,6 +11,7 @@ const AppError = require('../../utils/appError');
 
 const { Op, literal, where, fn } = require('sequelize');
 
+
 exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
     attributes: [
@@ -20,9 +21,9 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
         fn(
           'FORMAT',
           literal(
-            `(SELECT SUM(orders.itemsPrice) FROM orders WHERE orders.salesRepId = salesRep.id  AND orders.createdBy = 'sales-rep')`,
+            `(SELECT SUM(orders.totalBill) FROM orders WHERE orders.salesRepId = salesRep.id  AND orders.statusId != 6)`,
           ),
-          1,
+          2,
         ),
         'totalSales',
       ],
@@ -35,10 +36,10 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
               FROM orders
               JOIN items ON items.orderId = orders.id
               WHERE orders.salesRepId = salesRep.id
-                AND orders.createdBy = 'sales-rep'
+              AND  orders.statusId != 6
             )
           `),
-          1,
+          2,
         ),
         'wholesalePriceCost',
       ],
@@ -51,16 +52,17 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
               FROM orders
               JOIN items ON items.orderId = orders.id
               WHERE orders.salesRepId = salesRep.id
-                AND orders.createdBy = 'sales-rep'
+                AND orders.statusId != 6
+                
             )
           `),
-          1,
+          2,
         ),
         'totalCommission',
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.createdBy = 'sales-rep')`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.statusId != 6)`,
         ),
         'ordersPlaced',
       ],
@@ -72,7 +74,6 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
     data: doc,
   });
 });
-
 exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
     attributes: [

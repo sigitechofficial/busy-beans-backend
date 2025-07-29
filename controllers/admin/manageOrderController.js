@@ -40,7 +40,7 @@ const {
 const { count } = require('console');
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
-  const details = await order.findOne({
+ const details = await order.findOne({
     where: { id: req.params.orderId },
   });
 
@@ -52,7 +52,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
       ),
     );
   }
-  sentPaymentInvoiceEvent({ orderId: req.params.orderId });
+  sentPaymentInvoiceEvent({ orderId:req.params.orderId });
 
   //   let checkSession = false
 
@@ -78,6 +78,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   //     const invoice = !checkSession ? await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) : preSession
 
   //     if(!checkSession)await order.update(invoice,{where:{id:details.id}})
+ 
 
   res.status(200).json({
     status: 'success',
@@ -796,7 +797,7 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         'Not dealing in such weights. Contact customer support for this order.',
-        400,
+        200,
       ),
     );
   }
@@ -921,44 +922,39 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
     return element; // Return the transformed element
   });
-
-  console.log(
-    '🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:',
-    totalWeight,
-  );
-  const shippingCompany = await shippingCompanies.findOne({
-    where: {
-      weightFrom: {
-        [Op.lte]: totalWeight, // Less than or equal to the weight
-      },
-      weightTo: {
-        [Op.gte]: totalWeight, // Greater than or equal to the weight
-      },
-    },
-    attributes: ['charges'],
-  });
-  if (!shippingCompany) {
-    return next(
-      new AppError(
-        'Not dealing in such weights. Contact customer support for this order.',
-        400,
-      ),
-    );
-  }
+let shippingCompany
+ if(!req.body?.order?.shippingCharges){
+   shippingCompany = await shippingCompanies.findOne({
+     where: {
+       weightFrom: {
+         [Op.lte]: totalWeight, // Less than or equal to the weight
+       },
+       weightTo: {
+         [Op.gte]: totalWeight, // Greater than or equal to the weight
+       },
+     },
+     attributes: ['charges'],
+   });
+   if (!shippingCompany) {
+     return next(
+       new AppError(
+         'Not dealing in such weights. Contact customer support for this order.',
+         400,
+       ),
+     );
+   }
+ }
 
   input.order.itemsPrice = itemsPrice;
+  input.order.invoiceNumber = req.body?.order?.invoiceNumber;
   input.order.totalWeight = totalWeight;
-  input.order.shippingCharges = shippingCompany?.charges;
+  input.order.shippingCharges = req.body?.order?.shippingCharges ||  shippingCompany?.charges;
   input.order.subTotal = itemsPrice + parseFloat(input?.order?.vat || 0);
   input.order.totalBill =
     itemsPrice +
     parseFloat(input?.order?.vat || 0) +
-    parseFloat(shippingCompany?.charges || 0);
-  console.log(
-    '🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:',
-    shippingCompany?.charges,
-  );
-
+    parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
+ 
   await order.update(input?.order, { where: { id: placedOrder?.id } });
   await item.destroy({ where: { orderId: placedOrder?.id } });
   await item.bulkCreate(finalItems);
@@ -1041,54 +1037,53 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.orderNavigationCountsLocalPatner = catchAsync(
-  async (req, res, next) => {
-    const data = await statuses.findAll({
-      attributes: [
-        'id',
-        'orderStatus',
-        [
-          literal(
-            `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.salesRepId = ${req.params?.srId})`,
-          ),
-          'count',
-        ],
+
+exports.orderNavigationCountsLocalPatner = catchAsync(async (req, res, next) => {
+  const data = await statuses.findAll({
+    attributes: [
+      'id',
+      'orderStatus',
+      [
+        literal(
+          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.salesRepId = ${req.params?.srId})`,
+        ),
+        'count',
       ],
-    });
+    ],
+  });
 
-    let condition = {};
-    if (req.params.srId) condition.salesRepId = req.params?.srId;
+  let condition = {};
+  if (req.params.srId) condition.salesRepId = req.params?.srId;
 
-    // Add visibilityDate condition
-    condition.visibilityDate = {
-      [Op.lte]: new Date(), // or moment().toDate()
-    };
+  // Add visibilityDate condition
+  condition.visibilityDate = {
+    [Op.lte]: new Date(), // or moment().toDate()
+  };
 
-    const upcommingOrderCount = await orderFrequency.count({
-      where: {
-        ...condition,
-        nextOrderDate: {
-          [Op.notIn]: literal(`
+  const upcommingOrderCount = await orderFrequency.count({
+    where: {
+      ...condition,
+      nextOrderDate: {
+        [Op.notIn]: literal(`
           (SELECT DATE(orders.on)
           FROM orders
           WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
           AND orders.orderFrequencyId = orderFrequency.id)
         `),
-        },
       },
-    });
+    },
+  });
 
-    const output = JSON.parse(JSON.stringify(data));
+  const output = JSON.parse(JSON.stringify(data));
 
-    output.push({
-      id: 7,
-      orderStatus: 'Upcomming Orders',
-      count: upcommingOrderCount,
-    });
+  output.push({
+    id: 7,
+    orderStatus: 'Upcomming Orders',
+    count: upcommingOrderCount,
+  });
 
-    return res.status(200).json({
-      status: 'success',
-      data: output,
-    });
-  },
-);
+  return res.status(200).json({
+    status: 'success',
+    data: output,
+  });
+});

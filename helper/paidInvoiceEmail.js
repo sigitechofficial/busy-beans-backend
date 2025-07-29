@@ -15,9 +15,9 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
-  // console.log('ðŸš€ ~ data:', data);
+  console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
-  console.log('TO CUSTOMER: --------------------------------', __dirname);
+  console.log('__dirname:', __dirname);
 
   const folderPath = path.join(__dirname, '..', 'public', 'invoicePDFs');
   // Create the folder if it doesn't exist
@@ -48,6 +48,7 @@ module.exports = async function ({ email, data, invoice }) {
     },
   ];
   let items = [];
+    const on = emailDateFormate(data?.on);
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
@@ -65,7 +66,7 @@ module.exports = async function ({ email, data, invoice }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
+      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
       subject: `We’ve Received Your Payment for Order #${data.id} – Thank You!`, // Subject line
       replyTo: data?.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
@@ -147,7 +148,7 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          <span style="font-weight: 600">Order ID:</span>
+         <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
           <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />

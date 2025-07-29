@@ -506,6 +506,7 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       metadata: {
         orderId: order?.id,
       },
+      
     };
 
     if (order.connectAccountId) {
@@ -514,17 +515,15 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
         transfer_data: {
           destination: order.connectAccountId, // e.g. $30 to partner
         },
-
+        setup_future_usage: 'off_session',
         metadata: {
           orderId: order?.id,
           partnerId: order?.connectAccountId,
           salesRepId: order?.salesRepId,
           stripeFee: `${stripeFee}`,
         },
-        setup_future_usage: 'off_session', // ✅ Save payment method for future use
       };
     }
-
     const session = await stripe.checkout.sessions.create(input);
 
     return {

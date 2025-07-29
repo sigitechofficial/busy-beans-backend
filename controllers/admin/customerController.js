@@ -74,9 +74,15 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
     where: filters,
     attributes: [
       [
-        literal(
-          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
-        ),
+        literal(`
+          (
+            SELECT SUM(totalBill)
+            FROM orders
+            WHERE orders.userId = user.id
+              AND orders.paymentStatus = 'pending'
+              AND orders.statusId != 6
+          )
+        `),
         'totalBalance',
       ],
       `id`,
@@ -95,7 +101,6 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
     data: { data },
   });
 });
-
 exports.assignSalesRep = catchAsync(async (req, res, next) => {
   await user.update(
     { salesRepId: req.params?.id },
@@ -194,6 +199,8 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
       `saleTaxNumber`,
       `emailToSendInvoices`,
       `companyName`,
+      'dispatchEmail',
+      'salesRepId'
     ],
     include: [
       {
@@ -224,5 +231,42 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
 
 // exports.getAllProducts = factory.getAll(product);
 // exports.getProduct = factory.getOne(product);
-exports.updateCutomer = factory.updateOne(user);
+exports.updateCutomer =  catchAsync(async (req, res, next) => {
+
+   if(req.body?.info){
+     await user.update(req.body.info, {
+      where: { id: req.params.id },
+    });
+   }
+   if(req.body?.address){
+     await address.update(req.body.address, {
+      where: { userId: req.params.id },
+    });
+   }
+   if(req.body?.billingAddress){
+     await billingAddress.update(req.body.billingAddress, {
+      where: { userId: req.params.id },
+    });
+   }
+
+
+  res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});
 // exports.deleteProduct = factory.deleteOne(product);
+
+
+
+exports.deleteCustomer = catchAsync(async (req, res, next) => {
+  
+    const doc = await user.update({deleted:1}, {
+      where: { id: req.params.id },
+    });
+
+  res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});

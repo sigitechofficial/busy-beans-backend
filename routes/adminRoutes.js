@@ -205,6 +205,12 @@ router.get(
   customerController.InvoiceCustomers,
 );
 
+
+router.get(
+  '/customer-management/invoice-customers-balance/sales-rep/:srId',
+  customerController.InvoiceCustomers,
+);
+
 router.get(
   '/order-frequency/upcomming-orders',
   orderFrequencyController.orderAccordingToFrequency,
@@ -227,14 +233,19 @@ router.post(
 
 router.post('/send-quotation', salesRepController.sendQuotation);
 
+
+router.post(
+  '/book-new-order',
+  orderFrequencyController.bookNewOrder,
+);
+
 router.post(
   '/sales-rep/book-new-order/:srId',
   orderFrequencyController.bookNewOrder,
 );
 
-router.post('/book-new-order', orderFrequencyController.bookNewOrder);
-
 router.post('/add-customer/sales-rep/:srId', salesRepController.addCustomer);
+router.post('/add-customer', salesRepController.addCustomer);
 
 router.post(
   '/create-bank-setup-intent/sales-rep/:srId',
@@ -487,14 +498,21 @@ router.get(
   manageOrderController.orderNavigationCounts,
 );
 
+
 router.get(
-  '/order-navigation-counts/sales-rep/:srid',
+  '/order-navigation-counts/sales-rep/:srId',
   manageOrderController.orderNavigationCountsLocalPatner,
 );
 
 router.get(
   '/view-customer-detail/:id',
   customerController.customerDetail,
+);
+
+
+router.delete(
+  '/delete-customer/:id',
+  customerController.deleteCustomer,
 );
 
 module.exports = router;

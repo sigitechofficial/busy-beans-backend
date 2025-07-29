@@ -3,13 +3,10 @@ const stripe = require('stripe')(STRIPE_SECRET_KEY);
 const Stripe = require('../stripe');
 const { user, salesRep, transfersToSalesRep, item } = require('../../models');
 const { order } = require('../../models');
-const {
-  paidInvoiceEmailEvent,
-  paidInvoiceAdminOrLocalPatnerEvent,
-} = require('../events/paymentInvoicePaidEvent');
+const { paidInvoiceEmailEvent,paidInvoiceAdminOrLocalPatnerEvent } = require('../events/paymentInvoicePaidEvent');
 
 const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8`; //LIVE
-// const endpointSecret = `whsec_LXBjpD1YQdl9DjLFLgyjoaIf1jRxypn8` //SANDBOX
+// const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN` //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature'];
 
@@ -36,9 +33,6 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
     case 'checkout.session.completed':
       await invoicePaid(event);
       break;
-    case 'checkout.session.completed':
-      await invoicePaid(event);
-      break;
     case 'invoice.paid': //not needed yet  "_" add underscore to prevent tranfers for now
       await invoicePaid(event);
       break;
@@ -51,8 +45,8 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
 const invoicePaid = async (event) => {
   try {
     const invoice = event.data.object;
-    const localPartnerId = invoice.metadata?.salesRepId;
-    let localPatnerAccount = invoice.metadata?.localPatnerAccount;
+      const localPartnerId = invoice.metadata?.salesRepId;
+      let localPatnerAccount = invoice.metadata?.localPatnerAccount;
     const orderId = invoice.metadata?.orderId;
     console.log('🚀 ~ invoicePaid ~ orderId:', orderId);
 
@@ -61,8 +55,8 @@ const invoicePaid = async (event) => {
       { where: { id: orderId } },
     );
 
-    paidInvoiceEmailEvent({ orderId });
-    paidInvoiceAdminOrLocalPatnerEvent({ orderId });
+    paidInvoiceEmailEvent({orderId})
+    paidInvoiceAdminOrLocalPatnerEvent({orderId})
     //   if(!localPartnerId) {
     //   return true
     //   }

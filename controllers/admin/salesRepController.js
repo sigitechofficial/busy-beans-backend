@@ -29,7 +29,7 @@ exports.updateSalesRep = factory.updateOne(salesRep);
 
 exports.createSalesRep = catchAsync(async (req, res, next) => {
   const input = req.body;
-  console.log('🚀 ~ exports.createSalesRep=catchAsync ~ input:', input);
+  console.log('ðŸš€ ~ exports.createSalesRep=catchAsync ~ input:', input);
 
   const condition = { deleted: 0 };
   condition.email = input?.email;
@@ -53,10 +53,10 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
     const tmpPath = req.file.path;
     const imagePath = tmpPath.replace(/\\/g, '/');
     input.image = imagePath;
-    console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
+    console.log('ðŸš€ ~ catchAsync ~ nput.image:', input.image);
   } else {
     input.image = undefined;
-    console.log('🚀 ~ c ~ input.image:', input.image);
+    console.log('ðŸš€ ~ c ~ input.image:', input.image);
   }
 
   const stripeCustomer = await Stripe.addCustomer({
@@ -102,7 +102,7 @@ exports.createFinancialConnectionsSession = catchAsync(
       stripeCustomerId = stripeCustomer;
     }
     console.log(
-      '🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ stripeCustomerId:',
+      'ðŸš€ ~ exports.createFinancialConnectionsSession=catchAsync ~ stripeCustomerId:',
       stripeCustomerId,
     );
 
@@ -111,7 +111,7 @@ exports.createFinancialConnectionsSession = catchAsync(
     });
 
     console.log(
-      '🚀 ~ exports.createFinancialConnectionsSession=catchAsync ~ session:',
+      'ðŸš€ ~ exports.createFinancialConnectionsSession=catchAsync ~ session:',
       session,
     );
 
@@ -167,8 +167,8 @@ exports.deleteSalesRep = catchAsync(async (req, res, next) => {
 exports.addCustomer = catchAsync(async (req, res, next) => {
   req.body.info.verifiedAt = new Date();
   console.log('🚀 ~ exports.addCustomer=catchAsync ~ req.body:', req.body);
-  req.body.info.salesRepId = req.params.srId;
-  req.body.info.createdBy = 'sales-rep';
+  req.body.info.salesRepId = req.params?.srId || null;
+  req.body.info.createdBy = req.params?.srId? 'sales-rep' : 'admin';
   const newUser = await user.create(req.body?.info);
 
   req.body.address.userId = newUser?.id;
@@ -227,7 +227,7 @@ exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
   if (!sr) {
     return next(new AppError('Data not Found!', 404));
   }
-  console.log('🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
+  console.log('ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
 
   const connectAccount = await Stripe.createStripeAccountLink({
     accountId: sr.connectAccountId,
@@ -249,7 +249,7 @@ exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
   if (!sr) {
     return next(new AppError('Data not Found!', 404));
   }
-  console.log('🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
+  console.log('ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
 
   const connectAccount = await Stripe.createStripeLoginLink({
     accountId: sr.connectAccountId,
@@ -273,7 +273,7 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
   if (!sr.connectAccountId) {
     return next(new AppError('Stripe Account not connect!', 404));
   }
-  console.log('🚀 ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
+  console.log('ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
 
   const connectAccount = await Stripe.retrieveConnectAccount({
     accountId: sr.connectAccountId,
@@ -304,6 +304,8 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
   });
 });
 
+
+
 exports.salersMoney = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findOne({
     where: {
@@ -321,7 +323,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.adminReceivableStatus = true
           )
         `),
-          1,
+          2,
         ),
         'paidToAdmin',
       ],
@@ -337,7 +339,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'sales-rep'
           )
         `),
-          1,
+          2,
         ),
         'totalSales',
       ],
@@ -359,7 +361,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
             AND o.adminReceivableStatus = 0
       )
     `),
-          1,
+          2,
         ),
         'toBePaid',
       ],
@@ -393,7 +395,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.paymentMethod != 'card'
           )
         `),
-          1,
+          2,
         ),
         'salerCommission',
       ],
@@ -410,7 +412,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'sales-rep'
           )
         `),
-          1,
+          2,
         ),
         'numberOfSoldProducts',
       ],
@@ -427,7 +429,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'customer'
           )
         `),
-          1,
+          2,
         ),
         'totalSalesOnline',
       ],
@@ -459,7 +461,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'customer'
           )
         `),
-          1,
+          2,
         ),
         'salerCommissionOnline',
       ],
@@ -477,7 +479,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'customer'
           )
         `),
-          1,
+          2,
         ),
         'numberOfSoldProductsOnline',
       ],
@@ -513,7 +515,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-          1,
+          2,
         ),
         'creditUsed',
       ],
@@ -526,3 +528,4 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
     data: { ...result, credit },
   });
 });
+

@@ -20,6 +20,8 @@ router.post(
 
 router.post('/book-order/:id', orderController.bookOrder);
 router.post('/book-order', orderController.bookOrder);
+router.post('/sheet-upload', orderController.SheetUplod);
+
 router.post('/create-payment-intent', orderController.paymentIntent);
 router.get('/orders', manageOrderController.allOrder);
 router.get('/order-details/:id', manageOrderController.orderDetails);

@@ -43,7 +43,7 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
+      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
       subject: `${data?.companyName} Just Placed an Order – #${data.id}`, // Subject line
       attachments: attachment.footer,
       replyTo: data?.email,
