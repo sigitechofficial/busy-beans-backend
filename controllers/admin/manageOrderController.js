@@ -40,8 +40,8 @@ const {
 const { count } = require('console');
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
- const details = await order.findOne({
-    where: { id: req.params.orderId },
+  const details = await order.findOne({
+    where: { id: req.params?.orderId },
   });
 
   if (details?.paymentIntentId || details?.paymentStatus == 'done') {
@@ -52,7 +52,9 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
       ),
     );
   }
-  sentPaymentInvoiceEvent({ orderId:req.params.orderId });
+  console.log('🚀 ~ req.body:', req.body);
+  await order.update(req.body, { where: { id: req.params?.orderId } });
+  sentPaymentInvoiceEvent({ orderId: req.params?.orderId });
 
   //   let checkSession = false
 
@@ -78,7 +80,24 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   //     const invoice = !checkSession ? await Stripe.createInvoiceWithItems({customerId:details.stripeCustomerId , order:details}) : preSession
 
   //     if(!checkSession)await order.update(invoice,{where:{id:details.id}})
- 
+  res.status(200).json({
+    status: 'success',
+    data: {},
+  });
+});
+
+exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
+  const listOrder = req.body?.order;
+  console.log('🚀 ~ sendInvoiceMultiple ~ Body:', listOrder);
+  if (listOrder && listOrder.length > 0) {
+    console.log('🚀 ~ sendInvoiceMultiple ~ listOrder:', listOrder);
+    for (const ele of listOrder) {
+      console.log('🚀 ~ sendInvoiceMultiple ~ orderId:', ele);
+      sentPaymentInvoiceEvent({ orderId: ele.orderId });
+
+      order.update(ele, { where: { id: ele.orderId } });
+    }
+  }
 
   res.status(200).json({
     status: 'success',
@@ -282,6 +301,16 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     'createdAt',
     'shippingCharges',
     'invoiceNumber',
+    'invoiceDate',
+    'invoiceReminder',
+    'invoicePaidDate',
+    'termDays',
+    [
+      literal(
+        `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
+      ),
+      'overdueInvoice',
+    ],
   ];
 
   // Execute the query
@@ -405,6 +434,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'createdAt',
       'shippingCharges',
       'invoiceNumber',
+      
     ],
   });
   if (!doc) {
@@ -621,6 +651,10 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'createdAt',
       'shippingCharges',
       'invoiceNumber',
+      'invoiceDate',
+      'invoiceReminder',
+      'invoicePaidDate',
+      'termDays'
     ],
   });
   if (!doc) {
@@ -819,6 +853,9 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       'salesRepId',
       'invoiceId',
       'orderFrequencyId',
+      'invoiceDate',
+      'invoiceReminder',
+      'invoicePaidDate',
     ],
   });
 
@@ -922,39 +959,41 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
     return element; // Return the transformed element
   });
-let shippingCompany
- if(!req.body?.order?.shippingCharges){
-   shippingCompany = await shippingCompanies.findOne({
-     where: {
-       weightFrom: {
-         [Op.lte]: totalWeight, // Less than or equal to the weight
-       },
-       weightTo: {
-         [Op.gte]: totalWeight, // Greater than or equal to the weight
-       },
-     },
-     attributes: ['charges'],
-   });
-   if (!shippingCompany) {
-     return next(
-       new AppError(
-         'Not dealing in such weights. Contact customer support for this order.',
-         400,
-       ),
-     );
-   }
- }
+  let shippingCompany;
+  if (!req.body?.order?.shippingCharges) {
+    shippingCompany = await shippingCompanies.findOne({
+      where: {
+        weightFrom: {
+          [Op.lte]: totalWeight, // Less than or equal to the weight
+        },
+        weightTo: {
+          [Op.gte]: totalWeight, // Greater than or equal to the weight
+        },
+      },
+      attributes: ['charges'],
+    });
+    if (!shippingCompany) {
+      return next(
+        new AppError(
+          'Not dealing in such weights. Contact customer support for this order.',
+          400,
+        ),
+      );
+    }
+  }
 
   input.order.itemsPrice = itemsPrice;
   input.order.invoiceNumber = req.body?.order?.invoiceNumber;
   input.order.totalWeight = totalWeight;
-  input.order.shippingCharges = req.body?.order?.shippingCharges ||  shippingCompany?.charges;
+  input.order.invoicePdf = 1;
+  input.order.shippingCharges =
+    req.body?.order?.shippingCharges || shippingCompany?.charges;
   input.order.subTotal = itemsPrice + parseFloat(input?.order?.vat || 0);
   input.order.totalBill =
     itemsPrice +
     parseFloat(input?.order?.vat || 0) +
     parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
- 
+
   await order.update(input?.order, { where: { id: placedOrder?.id } });
   await item.destroy({ where: { orderId: placedOrder?.id } });
   await item.bulkCreate(finalItems);
@@ -1037,50 +1076,73 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.orderNavigationCountsLocalPatner = catchAsync(
+  async (req, res, next) => {
+    const data = await statuses.findAll({
+      attributes: [
+        'id',
+        'orderStatus',
+        [
+          literal(
+            `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.salesRepId = ${req.params?.srId})`,
+          ),
+          'count',
+        ],
+      ],
+    });
 
-exports.orderNavigationCountsLocalPatner = catchAsync(async (req, res, next) => {
+    let condition = {};
+    if (req.params.srId) condition.salesRepId = req.params?.srId;
+
+    // Add visibilityDate condition
+    condition.visibilityDate = {
+      [Op.lte]: new Date(), // or moment().toDate()
+    };
+
+    const upcommingOrderCount = await orderFrequency.count({
+      where: {
+        ...condition,
+        nextOrderDate: {
+          [Op.notIn]: literal(`
+          (SELECT DATE(orders.on)
+          FROM orders
+          WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
+          AND orders.orderFrequencyId = orderFrequency.id)
+        `),
+        },
+      },
+    });
+
+    const output = JSON.parse(JSON.stringify(data));
+
+    output.push({
+      id: 7,
+      orderStatus: 'Upcomming Orders',
+      count: upcommingOrderCount,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: output,
+    });
+  },
+);
+
+exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
   const data = await statuses.findAll({
     attributes: [
       'id',
       'orderStatus',
       [
         literal(
-          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.salesRepId = ${req.params?.srId})`,
+          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id})`,
         ),
         'count',
       ],
     ],
   });
 
-  let condition = {};
-  if (req.params.srId) condition.salesRepId = req.params?.srId;
-
-  // Add visibilityDate condition
-  condition.visibilityDate = {
-    [Op.lte]: new Date(), // or moment().toDate()
-  };
-
-  const upcommingOrderCount = await orderFrequency.count({
-    where: {
-      ...condition,
-      nextOrderDate: {
-        [Op.notIn]: literal(`
-          (SELECT DATE(orders.on)
-          FROM orders
-          WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
-          AND orders.orderFrequencyId = orderFrequency.id)
-        `),
-      },
-    },
-  });
-
   const output = JSON.parse(JSON.stringify(data));
-
-  output.push({
-    id: 7,
-    orderStatus: 'Upcomming Orders',
-    count: upcommingOrderCount,
-  });
 
   return res.status(200).json({
     status: 'success',

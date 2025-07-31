@@ -4,11 +4,23 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+let { footer } = require('./footer');
+const generateFooterHtml = require('./footerLocalpatner');
+
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const { header } = require('./header');
 
 module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
+
+  const  lcoalPatner = data?.salesRep
+    if(lcoalPatner) {
+      footer = generateFooterHtml({
+      address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
+      supportEmail: `${lcoalPatner?.email}`,
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`
+    });
+      // console.log("🚀 ~ footer:", footer)
+  }
   let hiCustomer = `Hi ${data?.customerName}!`;
   const addressParts = [
     data?.address?.companyaddress,

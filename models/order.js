@@ -153,6 +153,23 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      invoiceDate: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      invoiceReminder: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      invoicePaidDate: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      termDays: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 30,
+      },
     },
     {
       tableName: 'orders',

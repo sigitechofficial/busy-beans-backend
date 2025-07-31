@@ -295,15 +295,16 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
 exports.sendQuotation = catchAsync(async (req, res, next) => {
   console.log(req.body);
 
+  const localPatner = await salesRep.findOne({where:{id: req.params?.srId}})
+
   req.body.order.items = req.body?.items;
-  sendQuotationEvent({ email: req.body?.email, data: req.body?.order });
+  sendQuotationEvent({ email: req.body?.email, data: req.body?.order , localPatner:localPatner });
 
   return res.status(200).json({
     status: 'success',
     data: {},
   });
 });
-
 
 
 exports.salersMoney = catchAsync(async (req, res, next) => {

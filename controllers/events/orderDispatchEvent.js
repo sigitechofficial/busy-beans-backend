@@ -7,8 +7,18 @@ exports.orderDispatchEvent = async ({ orderId }) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId);
     if (!orderData) return false;
-    const { details } = orderData;
-    orderDispatch({ email: details?.email, data: details });
+    const { details,email } = orderData;
+    let to = email ? [email] : [];
+    if (details?.email) {
+     if (
+        details?.dispatchEmail &&
+        email != details?.dispatchEmail
+      ) {
+        to.push(details?.dispatchEmail);
+      }
+
+    orderDispatch({ email: to, data: details });
+    }
     console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');
     return true;
   } catch (error) {

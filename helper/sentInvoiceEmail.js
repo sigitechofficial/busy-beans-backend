@@ -5,7 +5,8 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+let { footer } = require('./footer');
+const generateFooterHtml = require('./footerLocalpatner');
 const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
@@ -15,7 +16,16 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
-  console.log('ðŸš€ ~ data:', data);
+  const lcoalPatner = data?.salesRep;
+  if (lcoalPatner) {
+    footer = generateFooterHtml({
+      address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
+      supportEmail: `${lcoalPatner?.email}`,
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`,
+    });
+    // console.log("🚀 ~ footer:", footer)
+  }
+  // console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
   let SessionUrl = `https://backendbb.trimworldwide.com/view/pay-order-invoice?orderId=${data?.id}`;
   console.log('__dirname:', __dirname);
@@ -62,12 +72,17 @@ module.exports = async function ({ email, data, invoice }) {
     return temp;
   });
   const on = emailDateFormate(data?.on);
+  const mainContent = data?.invoiceDate ?`This is a gentle reminder that your invoice for order is still pending. We appreciate your prompt attention.
+Please review the invoice below and complete your payment at your earliest convenience.`: "You have placed an order on Busy Bean. Please review the details below and click the button to pay your invoice." 
+const bottomContent = data?.invoiceDate ?`If you have already made the payment, please disregard this message. Otherwise, we look forward to receiving your payment soon.
+Need help or want a custom order? Just reply to this email or call us!`:`If you'd like to place an order or need a customized package, feel free to contact us directly. We're happy to serve you quality coffee, delivered fresh.<br>Looking forward to your response!`
+const heading = data.invoiceDate? `Payment Reminder: Complete Payment for Order ${data.id}`: `Complete Payment for Order ${data.id}`
   items = items.join('');
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
-      subject: `Your Order ${data.id} Please Complete Your Payment`, // Subject line
+      subject:data?.invoiceDate ?`Payment Reminder: Complete Payment for Order ${data.id}`: `Your Order ${data?.id} Please Complete Your Payment`, // Subject line
       replyTo: data.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
       html: `<!DOCTYPE html>
@@ -116,7 +131,7 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-           Complete Payment for Order ${data.id}
+           ${heading}
         </td>
       </tr>
            <tr>
@@ -131,7 +146,7 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-         You have placed an order on Busy Bean. Please review the details below and click the button to pay your invoice.
+        ${mainContent}
         </td>
       </tr>
        <tr align="center">
@@ -243,7 +258,7 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          If you'd like to place an order or need a customized package, feel free to contact us directly. We're happy to serve you quality coffee, delivered fresh.<br>Looking forward to your response!
+         ${bottomContent}
         </td>
       </tr>
        ${footer}

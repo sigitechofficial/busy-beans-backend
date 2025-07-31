@@ -63,6 +63,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
   });
 });
 
+
 exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
   const filters = { deleted: 0 };
   if (req.params?.sr == 'not-assign') filters.salesRepId = null;
@@ -85,6 +86,31 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
         `),
         'totalBalance',
       ],
+      [
+        literal(`
+          (
+            SELECT COUNT(id)
+            FROM orders
+            WHERE orders.userId = user.id
+              AND orders.paymentStatus = 'pending'
+              AND orders.statusId != 6
+          )
+        `),
+        'numberOfOrders',
+      ],
+      [
+      literal(`
+        (
+          SELECT COUNT(id)
+          FROM orders
+          WHERE orders.userId = user.id
+            AND orders.paymentStatus = 'pending'
+            AND orders.statusId != 6
+            AND orders.on <= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        )
+      `),
+      'overDueOrders',
+      ],
       `id`,
       `name`,
       `email`,
@@ -101,9 +127,13 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
     data: { data },
   });
 });
+
+
 exports.assignSalesRep = catchAsync(async (req, res, next) => {
+  const id = req.params?.id == 'remove' ? null:req.params?.id;
+ 
   await user.update(
-    { salesRepId: req.params?.id },
+    { salesRepId: id },
     { where: { id: req.body?.id } },
   );
   res.status(200).json({
@@ -111,6 +141,7 @@ exports.assignSalesRep = catchAsync(async (req, res, next) => {
     data: {},
   });
 });
+
 
 exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
   const today = new Date();

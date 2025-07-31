@@ -88,7 +88,7 @@ exports.footer = ` <tr>
             color: #000000;
           "
         >
-          Copyright © 2025 BusyBean
+          Copyright © 2025 Busy Bean Coffee Inc.
         </td>
       </tr>
       <tr>

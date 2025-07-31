@@ -228,7 +228,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.totalBill =
     parseFloat(input.order.totalBill) + parseFloat(input.order.shippingCharges);
   const newOrder = await order.create(input?.order);
-  newOrder.invoiceNumber = `INV-00${newOrder?.id}`;
+  newOrder.invoiceNumber = `INV00${newOrder?.id}`;
   await newOrder.save();
 
   await orderHistory.bulkCreate([
@@ -390,7 +390,7 @@ const frequencyBookOrder = async ({ id }) => {
     result.createdBy = 'sales-rep';
 
     const newOrder = await order.create(result);
-    newOrder.invoiceNumber = `INV-00${newOrder?.id}`;
+    newOrder.invoiceNumber = `INV00${newOrder?.id}`;
     await newOrder.save();
 
     result?.items.forEach((item) => {

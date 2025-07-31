@@ -4,11 +4,23 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+let { footer } = require('./footer');
+const generateFooterHtml = require('./footerLocalpatner');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
 module.exports = function ({ email, data }) {
   let hiSupplierName = `Hi ${data.supplierName}`;
+
+  const lcoalPatner = data?.salesRep;
+  if (lcoalPatner) {
+    footer = generateFooterHtml({
+      address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
+      supportEmail: `${lcoalPatner?.email}`,
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`,
+    });
+  }
+
+    console.log("🚀 ~ footer:", email)
   const addressParts = [
     data?.address?.companyaddress,
     data?.address?.addressLineOne,
@@ -28,6 +40,7 @@ module.exports = function ({ email, data }) {
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
+              <td style="padding: 10px;">${ele.sku}</td>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
             </tr>
@@ -38,6 +51,25 @@ module.exports = function ({ email, data }) {
 
   items = items.join('');
   const on = emailDateFormate(data?.on);
+  const htmlSnipit = `
+  <span style="color: #161616ff; font-weight: 600">Deliver To</span><br>
+  ${data?.companyName ? `<span style="margin: 0; color:black;">${data.companyName}</span><br>` : ''}
+  ${data?.customerName ? `<span style="margin: 0; color:black;">${data.customerName}</span><br>` : ''}
+  ${data?.address?.companyaddress ? `<span style="margin: 0; color:black;">${data.address.companyaddress}</span><br>` : ''}
+  ${data?.address?.addressLineOne ? `<span style="margin: 0; color:black;">${data.address.addressLineOne}</span><br>` : ''}
+  ${data?.address?.addressLineTwo ? `<span style="margin: 0; color:black;">${data.address.addressLineTwo}</span><br>` : ''}
+  ${
+    data?.address?.town || data?.address?.state || data?.address?.zipCode
+      ? `
+    <span style="margin: 0; color:black;">
+      ${data.address.town || ''} ${data.address.state || ''} ${data.address.zipCode || ''}
+    </span><br>`
+      : ''
+  }
+  ${data?.address?.country ? `<span style="margin: 0; color:black;">${data.address.country}</span><br>` : ''}
+  ${data?.countryCode && data?.phoneNumber ? `<span style="margin: 0; color:black;">Phone: ${data.countryCode}${data.phoneNumber}</span><br>` : ''}
+  ${on ? `<span style="margin-top: 20px; color:black;">Dispatched on ${on}</span>` : ''}
+`;
 
   transporter.sendMail(
     {
@@ -113,8 +145,7 @@ module.exports = function ({ email, data }) {
             line-height: 1.5;
           "
         >
-          A new order has been placed on <strong>Busy Bean</strong>. Below are
-          the order details:
+          Please ship the following order.
         </td>
       </tr>
       <tr>
@@ -129,7 +160,7 @@ module.exports = function ({ email, data }) {
             font-weight: bold;
           "
         >
-          Order Details:
+          <h3>Order #${data?.id}</h3>
         </td>
       </tr>
       <tr>
@@ -137,31 +168,28 @@ module.exports = function ({ email, data }) {
           style="
             padding-left: 37px;
             padding-right: 37px;
-            padding-top: 6px;
+            padding-top: 0px;
             font-family: 'Chivo', sans-serif;
             color: rgba(0, 0, 0, 0.8);
             font-size: 16px;
             line-height: 1.5;
           "
         >
-          <span style="font-weight: 600">Order ID:</span>
-          <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
-          <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
-          <span style="font-weight: 600">Company Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
-          <span style="font-weight: 600">Delivery Address:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${DeliveryAddress}</span>
-        </td>
+        ${htmlSnipit}
       </tr>
       <tr>
         <td style="padding-left: 37px; padding-right: 37px; padding-top: 10px; font-family: 'Nunito', sans-serif; font-size: 14px; line-height: 1.5;">
           <table width="100%" cellspacing="0" cellpadding="5" style="border-collapse: collapse; background-color: #f3f3f3;">
             <tr style="background-color: #e0e0e0;">
-              <th style="text-align: left; padding: 10px; font-weight: bold;">Item</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">Code</th>
+            <th style="text-align: left; padding: 10px; font-weight: bold;">Item</th>
               <th style="text-align: left; padding: 10px; font-weight: bold;">Quantity</th>
             </tr>
            ${items}
+            <tr>
+              <td style="padding: 10px;"><b>Total</b><td>
+              <td style="padding: 10px;"><b>${data?.totalQuantity}</b></td>
+            </tr>
           </table>
         </td>
       </tr>

@@ -42,9 +42,9 @@ exports.dataForEmailAndNotifications = async (orderId) => {
           'productId',
           [
             literal(
-              `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`,
+              `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
-            'productCode',
+            'sku',
           ],
         ],
       },
@@ -93,6 +93,18 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'id',
       [
         literal(
+          `(SELECT users.countryCode FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'countryCountry',
+      ],
+      [
+        literal(
+          `(SELECT users.phoneNumber FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'phoneNumber',
+      ],
+      [
+        literal(
           `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         'customerName',
@@ -126,6 +138,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
           `(SELECT users.emailToSendInvoices FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         'emailToSendInvoices',
+      ],
+      [
+        literal(
+          `(SELECT users.dispatchEmail FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'dispatchEmail',
       ],
       [
         literal(
@@ -180,7 +198,13 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         ),
         'patnerEmail',
       ],
-
+      [
+        literal(`COALESCE(
+              (SELECT SUM(qty)
+                FROM items
+                WHERE items.orderId = order.id ), 0)`),
+        'totalQuantity',
+      ],
       'totalBill',
       'subTotal',
       'discountPrice',
@@ -210,6 +234,10 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'hostedInvoiceUrl',
       'shippingCharges',
       'invoiceNumber',
+      'invoiceNumber',
+      'invoiceDate',
+      'invoiceReminder',
+      'invoicePaidDate',
     ],
   });
   const output = JSON.parse(JSON.stringify(doc));

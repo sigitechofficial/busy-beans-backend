@@ -9,13 +9,14 @@ exports.supplierNewOrderEvent = async ({ orderId }) => {
     if (!orderData) return false;
     const { details } = orderData;
 
-    if (orderData?.email) {
+   
+        
       supplierNewOrder({
-        email: orderData?.supplierEmail,
+        email: details?.supplierEmail,
         data: details,
         stage: 'Confirmed',
       });
-    }
+    
 
     // const customerNotification = {
     //   title: `Appointment Cancellation`,
@@ -40,7 +41,7 @@ exports.supplierNewOrderEvent = async ({ orderId }) => {
     //   orderData?.client?.userId,
     // )
 
-    console.log('🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀');
+    // console.log('🚀 ~~~~~);
     return true;
   } catch (error) {
     console.log('🚀 ~ exports.supplierNewOrder= ~ error:', error);

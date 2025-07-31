@@ -4,12 +4,22 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+let { footer } = require('./footer');
+const generateFooterHtml = require('./footerLocalpatner');
 const { header } = require('./header');
 
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email, data }) {
+module.exports = function ({ email, data, lcoalPatner}) {
+  if (lcoalPatner) {
+    footer = generateFooterHtml({
+      address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
+      supportEmail: `${lcoalPatner?.email}`,
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`,
+    });
+    // console.log("🚀 ~ footer:", footer)
+  }
+
   console.log('ðŸš€ ~ data:', data);
   let hiSupplierName = `Hope you're doing well`;
 
@@ -31,10 +41,10 @@ module.exports = function ({ email, data }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-     to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
-      subject: `Weâ€™re excited to share with you a customized quotation for our premium coffee blends`, // Subject line
+      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      subject: `We are excited to share with you a customized quotation for our premium coffee blends`, // Subject line
       attachments: attachment.footer,
-      replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
+      replyTo: lcoalPatner?.email || 'noreply@busybeancoffee.com',
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -96,7 +106,7 @@ module.exports = function ({ email, data }) {
             line-height: 1.5;
           "
         >
-         I hope this message finds you well. Weâ€™re excited to share with you a customized quotation for our premium coffee blends, curated to suit your taste and business needs.<br>Please find below the details of our offer:
+         I hope this message finds you well. We are excited to share with you a customized quotation for our premium coffee blends, curated to suit your taste and business needs.<br>Please find below the details of our offer:
         </td>
       </tr>
       <tr>

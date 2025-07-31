@@ -142,6 +142,12 @@ router.post(
   '/order-management/send-invoice/:orderId',
   manageOrderController.sendInvoice,
 );
+
+router.post(
+  '/order-management/send-invoice',
+  manageOrderController.sendInvoiceMultiple,
+);
+
 router.post(
   '/order-management/fetch-invoice/:orderId',
   manageOrderController.fetchInvoice,
@@ -232,7 +238,7 @@ router.post(
 );
 
 router.post('/send-quotation', salesRepController.sendQuotation);
-
+router.post('/send-quotation/sales-rep/:srId', salesRepController.sendQuotation);
 
 router.post(
   '/book-new-order',
@@ -502,6 +508,11 @@ router.get(
 router.get(
   '/order-navigation-counts/sales-rep/:srId',
   manageOrderController.orderNavigationCountsLocalPatner,
+);
+
+router.get(
+  '/order-navigation-counts/supplier/:id',
+  manageOrderController.orderNavigationCountsSupplier,
 );
 
 router.get(

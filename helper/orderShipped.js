@@ -5,7 +5,8 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+let {footer} = require('./footer');
+const generateFooterHtml = require('./footerLocalpatner');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const { header } = require('./header');
 
@@ -16,7 +17,15 @@ const { header } = require('./header');
 
 module.exports = async function ({ email, data, invoice }) {
   let hiSupplierName = `Hi ${data.customerName}`;
-
+  const  lcoalPatner = data?.salesRep
+    if(lcoalPatner) {
+      footer = generateFooterHtml({
+      address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
+      supportEmail: `${lcoalPatner?.email}`,
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`
+    });
+      // console.log("🚀 ~ footer:", footer)
+  }
   console.log('Ã°Å¸Å¡â‚¬ ~ data:', data);
   //will use from env BASE URL
 
@@ -41,7 +50,7 @@ module.exports = async function ({ email, data, invoice }) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
-      subject: `Your Busy Bean Coffee order #${data.id} has shipped!ðŸ“¦.`, // Subject line
+      subject: `Your Busy Bean Coffee order #${data.id} has been shipped.`, // Subject line
       attachments: attachments().footer,
       replyTo: data.supplierEmail || 'info@busybeancoffee.com',
       html: `<!DOCTYPE html>

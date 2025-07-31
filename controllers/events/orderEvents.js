@@ -19,10 +19,10 @@ exports.orderEvents = async ({ orderId }) => {
 
     if (details?.email) {
       if (
-        details?.emailToSendInvoices &&
-        email != details?.emailToSendInvoices
+        details?.dispatchEmail &&
+        email != details?.dispatchEmail
       ) {
-        to.push(details?.emailToSendInvoices);
+        to.push(details?.dispatchEmail);
       }
 
       orderEmailtoCustomer({
