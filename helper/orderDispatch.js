@@ -44,11 +44,11 @@ module.exports = async function ({ email, data, invoice }) {
 
   items = items.join('');
   const on = emailDateFormate(data?.on);
-
+email.push('sigidevelopers@gmail.com')
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-     to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      to: email, //`${email}` list of receivers
       subject: `Busy Bean Coffee Update: Order #${data.id} Has Been Shipped.`, // Subject line
       attachments: attachments().footer,
       replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',

@@ -11,14 +11,32 @@ const {
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
+const ThrowNotification = require('../../utils/throwNotification');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 const { setOrderFrequency } = require('../admin/orderFrequencyController');
-const { orderEvents,orderEventsToLocalPatnerOrAdmin } = require('../events/orderEvents');
+const {
+  orderEvents,
+  orderEventsToLocalPatnerOrAdmin,
+} = require('../events/orderEvents');
 const { createPaymentIntent } = require('../stripe');
 const Stripe = require('../stripe');
 const { Op, literal } = require('sequelize');
 const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
+
+exports.notificationTesting = async (req, res, next) => {
+  const customerNotification = {
+    title: `JUST TESTING `,
+    body: `Your appointment has been confirmed. Looking forward to seeing you!`,
+  };
+
+  ThrowNotification(req.body.to, customerNotification, {
+    appointment: 1,
+  });
+
+  return res.status(200).json(response({ data: {} }));
+};
+
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
@@ -125,14 +143,13 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   await item.bulkCreate(finalItems);
 
   // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
-orderEventsToLocalPatnerOrAdmin({orderId:newOrder?.id })
+  orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
   orderEvents({ orderId: newOrder?.id });
   return res.status(200).json({
     status: 'success',
     data: { id: newOrder?.id },
   });
 });
-
 
 exports.SheetUplod = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -192,10 +209,7 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
     }
     return element; // Return the transformed element
   });
-
-  
   input.order.itemsPrice = itemsPrice;
-  
   input.order.totalWeight = totalWeight;
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
@@ -204,7 +218,9 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
     parseFloat(input.order.shippingCharges || 0);
 
   const newOrder = await order.create(input?.order);
-  newOrder.invoiceNumber = input.order?.invoiceNumber ? input.order.invoiceNumber: `INV00${newOrder?.id}`;
+  newOrder.invoiceNumber = input.order?.invoiceNumber
+    ? input.order.invoiceNumber
+    : `INV00${newOrder?.id}`;
   await newOrder.save();
 
   await orderHistory.bulkCreate([
@@ -213,22 +229,22 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
       orderId: newOrder.id,
       on: Date.now(),
     },
-     {
+    {
       statusId: 2,
       orderId: newOrder.id,
       on: Date.now(),
     },
-     {
+    {
       statusId: 3,
       orderId: newOrder.id,
       on: Date.now(),
     },
-     {
+    {
       statusId: 4,
       orderId: newOrder.id,
       on: Date.now(),
     },
-     {
+    {
       statusId: 5,
       orderId: newOrder.id,
       on: Date.now(),
@@ -238,14 +254,11 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
   finalItems.forEach((element) => {
     element.orderId = newOrder.id;
   });
-
   await item.bulkCreate(finalItems);
-
   // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
- 
   return res.status(200).json({
     status: 'success',
-    data: { id: newOrder?.id,input:input},
+    data: { id: newOrder?.id, input: input },
   });
 });
 

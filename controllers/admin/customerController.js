@@ -63,7 +63,6 @@ exports.customersList = catchAsync(async (req, res, next) => {
   });
 });
 
-
 exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
   const filters = { deleted: 0 };
   if (req.params?.sr == 'not-assign') filters.salesRepId = null;
@@ -99,7 +98,7 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
         'numberOfOrders',
       ],
       [
-      literal(`
+        literal(`
         (
           SELECT COUNT(id)
           FROM orders
@@ -109,7 +108,7 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
             AND orders.on <= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         )
       `),
-      'overDueOrders',
+        'overDueOrders',
       ],
       `id`,
       `name`,
@@ -128,20 +127,15 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
   });
 });
 
-
 exports.assignSalesRep = catchAsync(async (req, res, next) => {
-  const id = req.params?.id == 'remove' ? null:req.params?.id;
- 
-  await user.update(
-    { salesRepId: id },
-    { where: { id: req.body?.id } },
-  );
+  const id = req.params?.id == 'remove' ? null : req.params?.id;
+
+  await user.update({ salesRepId: id }, { where: { id: req.body?.id } });
   res.status(200).json({
     status: 'success',
     data: {},
   });
 });
-
 
 exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
   const today = new Date();
@@ -231,7 +225,7 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
       `emailToSendInvoices`,
       `companyName`,
       'dispatchEmail',
-      'salesRepId'
+      'salesRepId',
     ],
     include: [
       {
@@ -262,24 +256,22 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
 
 // exports.getAllProducts = factory.getAll(product);
 // exports.getProduct = factory.getOne(product);
-exports.updateCutomer =  catchAsync(async (req, res, next) => {
-
-   if(req.body?.info){
-     await user.update(req.body.info, {
+exports.updateCutomer = catchAsync(async (req, res, next) => {
+  if (req.body?.info) {
+    await user.update(req.body.info, {
       where: { id: req.params.id },
     });
-   }
-   if(req.body?.address){
-     await address.update(req.body.address, {
+  }
+  if (req.body?.address) {
+    await address.update(req.body.address, {
       where: { userId: req.params.id },
     });
-   }
-   if(req.body?.billingAddress){
-     await billingAddress.update(req.body.billingAddress, {
+  }
+  if (req.body?.billingAddress) {
+    await billingAddress.update(req.body.billingAddress, {
       where: { userId: req.params.id },
     });
-   }
-
+  }
 
   res.status(200).json({
     status: 'success',
@@ -288,13 +280,13 @@ exports.updateCutomer =  catchAsync(async (req, res, next) => {
 });
 // exports.deleteProduct = factory.deleteOne(product);
 
-
-
 exports.deleteCustomer = catchAsync(async (req, res, next) => {
-  
-    const doc = await user.update({deleted:1}, {
+  const doc = await user.update(
+    { deleted: 1 },
+    {
       where: { id: req.params.id },
-    });
+    },
+  );
 
   res.status(200).json({
     status: 'success',

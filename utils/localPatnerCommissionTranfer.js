@@ -147,7 +147,6 @@ exports.processTransferToLocalPartner = async ({ orderId }) => {
     return true;
   } catch (error) {
     console.error('Error processing transfer to local partner:', error);
-    console.error('Error processing transfer to local partner:', error);
     return false;
   }
 };

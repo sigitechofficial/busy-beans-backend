@@ -2,6 +2,8 @@ const supplierNewOrder = require('../../helper/supplierNewOrder');
 const {
   dataForEmailAndNotifications,
 } = require('../../utils/emailsNotificationsData');
+const ThrowNotification = require('../../utils/throwNotification');
+
 
 exports.supplierNewOrderEvent = async ({ orderId }) => {
   try {
@@ -9,39 +11,35 @@ exports.supplierNewOrderEvent = async ({ orderId }) => {
     if (!orderData) return false;
     const { details } = orderData;
 
-   
-        
-      supplierNewOrder({
-        email: details?.supplierEmail,
-        data: details,
-        stage: 'Confirmed',
+    supplierNewOrder({
+      email: details?.supplierEmail,
+      data: details,
+      stage: 'Confirmed',
+    });
+
+
+     
+
+      const supplierNotification = {
+        title: `New Order Assigned`,
+        body: `Order #${details?.id} has been assigned to you.`,
+      };
+
+       const adminNotification = {
+        title: `Order Assigned to Supplier`,
+        body: `Order #${details?.id} has been dispatched to Supplier ${data?.supplierName}.`,
+      };
+
+      ThrowNotification(orderData.adminTokens, adminNotification, {
+        orderId: details?.id,
       });
-    
 
-    // const customerNotification = {
-    //   title: `Appointment Cancellation`,
-    //   body: `We regret to inform you that your appointment on ${dateTime} has been cancelled. Please contact us to reschedule.`,
-    // }
+      ThrowNotification(orderData.supplierTokens, supplierNotification, {
+        orderId: details?.id,
+      });
 
-    // const fullName = `${appointment.user.firstName} ${appointment.user.lastName}`
-
-    // const salonNotification = {
-    //   title: `Booking Cancellation Alert`,
-    //   body: `The appointment with ${fullName} on ${dateTime} has been cancelled.`,
-    // }
-
-    // ThrowNotification(
-    //   customerTokens,
-    //   customerNotification,
-    //   {
-    //     appointment: appointment.id,
-    //     name: orderData.salon.salonName,
-    //     image: orderData.salon.image,
-    //   },
-    //   orderData?.client?.userId,
-    // )
-
-    // console.log('🚀 ~~~~~);
+    console.log('🚀 ~ exports.supplierNewOrder= :');
+     
     return true;
   } catch (error) {
     console.log('🚀 ~ exports.supplierNewOrder= ~ error:', error);

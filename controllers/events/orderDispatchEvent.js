@@ -2,23 +2,21 @@ const orderDispatch = require('../../helper/orderDispatch');
 const {
   dataForEmailAndNotifications,
 } = require('../../utils/emailsNotificationsData');
+const ThrowNotification = require('../../utils/throwNotification');
 
 exports.orderDispatchEvent = async ({ orderId }) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId);
     if (!orderData) return false;
-    const { details,email } = orderData;
+    const { details, email } = orderData;
     let to = email ? [email] : [];
     if (details?.email) {
-     if (
-        details?.dispatchEmail &&
-        email != details?.dispatchEmail
-      ) {
+      if (details?.dispatchEmail && email != details?.dispatchEmail) {
         to.push(details?.dispatchEmail);
       }
 
-    orderDispatch({ email: to, data: details });
-    }
+      orderDispatch({ email: to, data: details });
+    }  
     console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');
     return true;
   } catch (error) {

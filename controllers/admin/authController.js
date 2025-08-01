@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
-const { user, address, account, salesRep, supplier } = require('../../models');
+const { user, address, account, salesRep, supplier,deviceToken } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const Email = require('../../utils/email');
@@ -24,7 +24,7 @@ const signToken = (data) =>
   );
 
 const createSendToken = (input, statusCode, req, res) => {
-  console.log('🚀 ~ createSendToken ~ input:', input);
+  // console.log('🚀 ~ createSendToken ~ input:', input);
   const token = signToken({
     id: input.id,
     name: input.name,
@@ -81,35 +81,43 @@ exports.signup = catchAsync(async (req, res, next) => {
   createSendToken(newUser, 201, req, res);
 });
 
-const login = (Model) =>
-  catchAsync(async (req, res, next) => {
+const login = (Model, entity) => {
+  return catchAsync(async (req, res, next) => {
     const { email, password } = req.body;
-    console.log('🚀 ~ exports.login=catchAsync ~ req.body;:', req.body);
-
-    // 1) Check if email and password exist
-    if (!email || !password) {
-      return next(new AppError('Please provide email and password!', 400));
-    }
-
-    // 2) Check if user exists && password is correct
-    const data = await Model.findOne({
-      where: { email, deleted: 0 },
+    console.log("🚀 ~ login ~ entity:", entity)
+        console.log('🚀 ~ exports.login=catchAsync ~ req.body;:', req.body);
+        // 1) Check if email and password exist
+        if (!email || !password) {
+            return next(new AppError('Please provide email and password!', 400));
+        }
+        // 2) Check if user exists && password is correct
+        const data = await Model.findOne({
+            where: { email, deleted: 0 },
+        });
+        console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
+        // if (!data || !(await bcrypt.compare(password, data?.password))) {
+        //   return next(new AppError('Incorrect email or password', 400));
+        // }
+        if (!data || password != data.password) {
+            return next(new AppError('Incorrect email or password', 400));
+        }
+        if (!data?.status) {
+            return next(new AppError('You are blocked by admin!', 400));
+        }
+        if (req.body?.tokenId) {
+            const input = { tokenId: req.body?.tokenId };
+            if (entity == 'localPartner')
+                input.salesRepId = data?.id;
+            else if (entity == 'supplier')
+                input.supplierId = data?.id;
+            else
+                input.accountId = data?.id;
+            deviceToken.create(input);
+        }
+        // 3) If everything ok, send token to client
+        createSendToken(data, 200, req, res);
     });
-    console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
-    // if (!data || !(await bcrypt.compare(password, data?.password))) {
-    //   return next(new AppError('Incorrect email or password', 400));
-    // }
-
-    if (!data || password != data.password) {
-      return next(new AppError('Incorrect email or password', 400));
-    }
-    if (!data?.status) {
-      return next(new AppError('You are blocked by admin!', 400));
-    }
-
-    // 3) If everything ok, send token to client
-    createSendToken(data, 200, req, res);
-  });
+};
 
 const forgotPassword = (Model) =>
   catchAsync(async (req, res, next) => {
@@ -231,9 +239,9 @@ const resetPassword = (Model) =>
     createSendToken(entity, 200, req, res);
   });
 
-exports.adminLogin = login(account);
-exports.salesRepLogin = login(salesRep);
-exports.supplierLogin = login(supplier);
+exports.adminLogin = login(account,'admin');
+exports.salesRepLogin = login(salesRep,'localPartner');
+exports.supplierLogin = login(supplier,'supplier');
 
 exports.adminForgotPassword = forgotPassword(account);
 exports.salesRepForgotPassword = forgotPassword(salesRep);

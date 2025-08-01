@@ -11,7 +11,6 @@ const AppError = require('../../utils/appError');
 
 const { Op, literal, where, fn } = require('sequelize');
 
-
 exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
     attributes: [
@@ -74,6 +73,7 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
     data: doc,
   });
 });
+
 exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
     attributes: [

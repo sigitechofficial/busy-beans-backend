@@ -160,6 +160,9 @@ module.exports = (sequelize) => {
   supplier.associate = (models) => {
     supplier.hasMany(models.order);
     models.order.belongsTo(supplier);
+
+    supplier.hasMany(models.deviceToken);
+    models.deviceToken.belongsTo(supplier);
   };
 
   return supplier;

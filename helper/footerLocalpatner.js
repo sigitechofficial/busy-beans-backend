@@ -1,4 +1,4 @@
-function generateFooterHtml({ origin='', address, copyRight = 'Copyright © 2025 Busy Bean Coffee Inc.', supportEmail ='', supportNumber =''}) {
+function generateFooterHtml({ origin='', address, copyRight = 'Copyright ï¿½ 2025 Busy Bean Coffee Inc.', supportEmail ='', supportNumber =''}) {
   console.log("ðŸš€ ~ generateFooterHtml ~ address:", address)
   console.log("ðŸš€ ~ generateFooterHtml ~ supportNumber:", supportNumber)
   console.log("ðŸš€ ~ generateFooterHtml ~ supportEmail:", supportEmail)
@@ -86,7 +86,7 @@ function generateFooterHtml({ origin='', address, copyRight = 'Copyright © 2025 
             color: #000000;
           "
         >
-          Copyright Â© 2025 BusyBean
+          Copyright Â© 2025 Busy Bean Coffee, Inc.
         </td>
       </tr>
       <tr>
@@ -122,9 +122,8 @@ function generateFooterHtml({ origin='', address, copyRight = 'Copyright © 2025 
           <img
             src="cid:logo"
             alt="Powered by"
-            width="118"
-            height="55"
-            style="border-radius: 16px"
+            width="150"
+            style="border-radius: 16px; object"
           />
           </a>
         </td>

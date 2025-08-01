@@ -176,6 +176,9 @@ module.exports = (sequelize) => {
 
     salesRep.hasOne(models.stateInSystem);
     models.stateInSystem.belongsTo(salesRep);
+
+    salesRep.hasMany(models.deviceToken);
+    models.deviceToken.belongsTo(salesRep);
   };
 
   return salesRep;

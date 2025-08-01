@@ -2,8 +2,7 @@ exports.header = ` <a href="https://orders.busybeancoffee.com" target="_blank" r
 <img
                   src="cid:logo"
                   alt="Image"
-                  width="250"
-                  height="100"
+                  width="300"
                   style="border-radius: 16px"
                 />
 </a>`;

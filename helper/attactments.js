@@ -1,8 +1,8 @@
 function attachments() {
   const attachment = {
     logo: {
-      filename: 'logo.webp',
-      path: `${__dirname}/images/logo.webp`,
+      filename: 'logo.png',
+      path: `${__dirname}/images/logo.png`,
       cid: 'logo',
     },
     cancel: {

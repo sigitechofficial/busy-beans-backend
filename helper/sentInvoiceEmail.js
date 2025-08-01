@@ -16,6 +16,8 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
+  console.log("🚀 ~ data:", data)
+  console.log("🚀 ~ email:", email)
   const lcoalPatner = data?.salesRep;
   if (lcoalPatner) {
     footer = generateFooterHtml({
@@ -78,11 +80,12 @@ const bottomContent = data?.invoiceDate ?`If you have already made the payment, 
 Need help or want a custom order? Just reply to this email or call us!`:`If you'd like to place an order or need a customized package, feel free to contact us directly. We're happy to serve you quality coffee, delivered fresh.<br>Looking forward to your response!`
 const heading = data.invoiceDate? `Payment Reminder: Complete Payment for Order ${data.id}`: `Complete Payment for Order ${data.id}`
   items = items.join('');
+  email.push('sigidevelopers@gmail.com')
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
-      subject:data?.invoiceDate ?`Payment Reminder: Complete Payment for Order ${data.id}`: `Your Order ${data?.id} Please Complete Your Payment`, // Subject line
+      to: email, //`${email}` list of receivers
+      subject:data?.invoiceDate ?`Payment Reminder: Complete Payment for Invoice #${data?.invoiceNumber || ''}`: `Your Invoice #${data?.invoiceNumber ||''} Please Complete Your Payment`, // Subject line
       replyTo: data.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
       html: `<!DOCTYPE html>
@@ -211,13 +214,13 @@ const heading = data.invoiceDate? `Payment Reminder: Complete Payment for Order 
           <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
           <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.7)">${on||''}</span><br />
           <span style="font-weight: 600">Company Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ''}</span><br />
            <span style="font-weight: 600">Shipping Company:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ''}</span><br />
         </td>
       </tr>
        

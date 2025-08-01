@@ -506,7 +506,6 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       metadata: {
         orderId: order?.id,
       },
-      
     };
 
     if (order.connectAccountId) {
@@ -704,6 +703,7 @@ async function pullAmountPaymentIntentFromBankAccount({
   amount,
   savedPaymentMethodId,
   customerId,
+  orders = [],
 }) {
   try {
     const cents = convertToCents(amount);
@@ -711,6 +711,15 @@ async function pullAmountPaymentIntentFromBankAccount({
       '🚀 ~ pullAmountPaymentIntentFromBankAccount ~ amount:',
       amount,
     );
+
+    const metadata = {
+      message: 'Payment for these orders has been pulled out',
+    };
+
+    orders.forEach((orderId, index) => {
+      metadata[`order`] = `#${orderId}`;
+    });
+
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: cents,
@@ -720,12 +729,13 @@ async function pullAmountPaymentIntentFromBankAccount({
       payment_method_types: ['us_bank_account'],
       off_session: true,
       confirm: true,
+      metadata,
     });
 
     return {
       success: true,
       paymentIntentId: paymentIntent.id,
-      status: paymentIntent.status, // will likely be "processing"
+      status: paymentIntent.status, // likely "processing"
     };
   } catch (error) {
     console.error('❌ ACH pull failed:', error);
@@ -784,7 +794,6 @@ module.exports = {
   createInvoiceWithItems,
   transferToLocalPatners,
   getInvoiceDetails,
-
   createStandardConnectAccount,
 };
 // sessionCheckoutPaymnet --- check payment destination

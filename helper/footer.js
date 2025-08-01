@@ -124,8 +124,6 @@ exports.footer = ` <tr>
           <img
             src="cid:logo"
             alt="Powered by"
-            width="118"
-            height="55"
             style="border-radius: 16px"
           />
           </a>

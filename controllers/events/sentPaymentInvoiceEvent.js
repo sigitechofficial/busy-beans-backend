@@ -5,18 +5,21 @@ const {
 
 exports.sentPaymentInvoiceEvent = async ({ orderId }) => {
   try {
-  const { details, email } = await dataForEmailAndNotifications(orderId);
+    const { details, email } = await dataForEmailAndNotifications(orderId);
 
-  let to = [email];
-
-  if (email) {
-    if (details?.emailToSendInvoices && email != details?.emailToSendInvoices) {
-      to.push(details?.emailToSendInvoices);
+    let to = [];
+    to.push(email)
+    if (email) {
+      if (
+        details?.emailToSendInvoices &&
+        email != details?.emailToSendInvoices
+      ) {
+        to.push(details?.emailToSendInvoices);
+      }
     }
-  }
+    console.log("🚀 ~ to:", JSON.stringify(to))
 
-
-    sentInvoiceEmail({ email: email, data: details});
+    sentInvoiceEmail({ email: to, data: details });
     console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');
     return true;
   } catch (error) {

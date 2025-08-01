@@ -8,6 +8,7 @@ const Stripe = require('../stripe');
 const {
   sentPaymentInvoiceEvent,
 } = require('../events/sentPaymentInvoiceEvent');
+const ThrowNotification = require('../../utils/throwNotification');
 
 exports.orderEvents = async ({ orderId }) => {
   try {
@@ -18,10 +19,7 @@ exports.orderEvents = async ({ orderId }) => {
     let invoice = null;
 
     if (details?.email) {
-      if (
-        details?.dispatchEmail &&
-        email != details?.dispatchEmail
-      ) {
+      if (details?.dispatchEmail && email != details?.dispatchEmail) {
         to.push(details?.dispatchEmail);
       }
 
@@ -32,6 +30,22 @@ exports.orderEvents = async ({ orderId }) => {
         invoice,
       });
     }
+
+ 
+
+      const adminNotification = {
+        title: `New Order Received`,
+        body: `A new Order #${details?.id} has been placed by ${details?.companyName}`,
+      };
+
+      ThrowNotification(orderData.adminTokens, adminNotification, {
+        orderId: details?.id,
+      });
+
+      ThrowNotification(orderData.salesRepTokens, adminNotification, {
+        orderId: details?.id,
+      });
+      
     console.log('🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀');
     return true;
   } catch (error) {
@@ -39,23 +53,26 @@ exports.orderEvents = async ({ orderId }) => {
   }
 };
 
-
-
 exports.orderEventsToLocalPatnerOrAdmin = async ({ orderId }) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId);
     if (!orderData) return false;
     const { details, email } = orderData;
-      orderEmailtoLocalPatner({
-        email: details?.patnerEmail || 'info@busybeancoffee.com',
-        data: details,
-        stage: 'Confirmed',
-        invoice,
-      });
-     
-    console.log('🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀');
+    orderEmailtoLocalPatner({
+      email: details?.patnerEmail || 'info@busybeancoffee.com',
+      data: details,
+      stage: 'Confirmed',
+      invoice,
+    });
+
+    console.log(
+      '🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀',
+    );
     return true;
   } catch (error) {
-    console.log('🚀 ~ exports.orderEventsToLocalPatnerOrAdmin= ~ error:', error);
+    console.log(
+      '🚀 ~ exports.orderEventsToLocalPatnerOrAdmin= ~ error:',
+      error,
+    );
   }
 };

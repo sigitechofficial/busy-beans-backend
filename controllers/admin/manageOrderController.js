@@ -36,8 +36,7 @@ const {
 
 const {
   processTransferToLocalPartner,
-} = require('../../utils/localPatnerCommissionTranfer');
-const { count } = require('console');
+} = require('../../utils/localPatnerCommissionTranfer'); 
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const details = await order.findOne({
@@ -434,7 +433,6 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'createdAt',
       'shippingCharges',
       'invoiceNumber',
-      
     ],
   });
   if (!doc) {
@@ -654,7 +652,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'invoiceDate',
       'invoiceReminder',
       'invoicePaidDate',
-      'termDays'
+      'termDays',
     ],
   });
   if (!doc) {

@@ -17,6 +17,7 @@ router.post(
   '/financial-connections-session/:id',
   authController.stripeAchPayment,
 );
+router.post('/throw-notification', orderController.notificationTesting);
 
 router.post('/book-order/:id', orderController.bookOrder);
 router.post('/book-order', orderController.bookOrder);

@@ -7,9 +7,11 @@ const {
   salesRep,
   supplier,
   billingAddress,
+  deviceToken,
 } = require('../models');
-const { literal } = require('sequelize');
+const { Op,literal } = require('sequelize');
 const { emailDateFormate } = require('./emailDateFormate');
+// const { Op, literal, fn, col } = require('sequelize');
 
 exports.dataForEmailAndNotifications = async (orderId) => {
   console.log(
@@ -45,6 +47,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
               `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             'sku',
+          ],
+          [
+            literal(
+              `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'productCode',
           ],
         ],
       },
@@ -221,19 +229,18 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'paymentStatus',
       'on',
       'salesRepId',
+      'supplierId',
       'adminReceivableStatus',
       'adminReceivableAmount',
       'localPatnerCommission',
       'invoicePdf',
       'invoiceId',
-      'createdBy',
+      'createdAt',
       'userId',
       'paymentMethodId',
       'shippingCharges',
       'poNumber',
       'hostedInvoiceUrl',
-      'shippingCharges',
-      'invoiceNumber',
       'invoiceNumber',
       'invoiceDate',
       'invoiceReminder',
@@ -246,12 +253,41 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     output.totalBill,
   );
 
+  const tokenCondition = {
+    [Op.or]: [
+      { supplierId: output?.supplierId },
+      { salesRepId: output?.salesRepId },
+      { accountId: 1 },
+      { userId: output?.userId },
+    ],
+  };
+
+  const dvtokens = await deviceToken.findAll({where:tokenCondition})
+
+  // Now split them into 4 arrays
+  const adminTokens = dvtokens
+    .filter((t) => t.accountId === 1)
+    .map((t) => t.tokenId);
+
+  const userTokens = dvtokens
+    .filter((t) => t.userId === order.userId)
+    .map((t) => t.tokenId);
+
+  const supplierTokens = dvtokens
+    .filter((t) => t.supplierId === order.supperId)
+    .map((t) => t.tokenId);
+
+  const salesRepTokens = dvtokens
+    .filter((t) => t.salesRepId === order.salesRepId)
+    .map((t) => t.tokenId);
+
   output.localPatnerCommission = await item.sum('salerCommission', {
     where: { orderId: output.id },
   });
+
   output.adminReceivableAmount =
     parseFloat(output?.totalBill || 0) -
     parseFloat(output.localPatnerCommission || 0);
 
-  return { details: output, email: output?.email };
+  return { details: output, email: output?.email,adminTokens,userTokens,supplierTokens,salesRepTokens };
 };

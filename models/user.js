@@ -165,6 +165,9 @@ module.exports = (sequelize) => {
 
     user.hasMany(models.billingAddress);
     models.billingAddress.belongsTo(user);
+
+    user.hasMany(models.deviceToken);
+    models.deviceToken.belongsTo(user);
   };
 
   return user;

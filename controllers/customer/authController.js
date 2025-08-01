@@ -11,6 +11,7 @@ const {
   salesRep,
   stateInSystem,
   billingAddress,
+  deviceToken,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -141,7 +142,7 @@ exports.login = catchAsync(async (req, res, next) => {
   if (!user || !isMatch) {
     return next(new AppError('Incorrect email or password', 401));
   }
-
+  if(req.body?.tokenId) deviceToken.create({tokenId:req.body?.tokenId,userId:customer.id})
   const customerAddress = await address.findOne({
     where: { userId: customer?.id },
     attributes: {

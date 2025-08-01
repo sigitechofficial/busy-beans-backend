@@ -168,7 +168,7 @@ exports.addCustomer = catchAsync(async (req, res, next) => {
   req.body.info.verifiedAt = new Date();
   console.log('🚀 ~ exports.addCustomer=catchAsync ~ req.body:', req.body);
   req.body.info.salesRepId = req.params?.srId || null;
-  req.body.info.createdBy = req.params?.srId? 'sales-rep' : 'admin';
+  req.body.info.createdBy = req.params?.srId ? 'sales-rep' : 'admin';
   const newUser = await user.create(req.body?.info);
 
   req.body.address.userId = newUser?.id;
@@ -295,17 +295,22 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
 exports.sendQuotation = catchAsync(async (req, res, next) => {
   console.log(req.body);
 
-  const localPatner = await salesRep.findOne({where:{id: req.params?.srId}})
+  const localPatner = await salesRep.findOne({
+    where: { id: req.params?.srId },
+  });
 
   req.body.order.items = req.body?.items;
-  sendQuotationEvent({ email: req.body?.email, data: req.body?.order , localPatner:localPatner });
+  sendQuotationEvent({
+    email: req.body?.email,
+    data: req.body?.order,
+    localPatner: localPatner,
+  });
 
   return res.status(200).json({
     status: 'success',
     data: {},
   });
 });
-
 
 exports.salersMoney = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findOne({
@@ -529,4 +534,3 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
     data: { ...result, credit },
   });
 });
-
