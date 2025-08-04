@@ -295,9 +295,10 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
 exports.sendQuotation = catchAsync(async (req, res, next) => {
   console.log(req.body);
 
-  const localPatner = await salesRep.findOne({
-    where: { id: req.params?.srId },
-  });
+  console.log("🚀 ~ req.params?.srId:", req.params?.srId)
+  const localPatner = req.params?.srId ? await salesRep.findOne({
+    where: { id: req.params?.srId }
+  }):null
 
   req.body.order.items = req.body?.items;
   sendQuotationEvent({

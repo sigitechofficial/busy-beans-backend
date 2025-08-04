@@ -65,6 +65,10 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   });
   // return res.json(products)
   console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products.length);
+  // if(){
+  // const percentageDiscount = (input.order.discount / input.order.totalBill) * 100;
+
+  // }
   const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
@@ -82,11 +86,17 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
 
+    
+    if(input.order.discount){
+      
+      
+    }
+    
+  
     // Accumulate the total weight and price
     itemsPrice += element.price;
     totalWeight += element.weight;
-
-    // Handle salesRep commission if applicable
+  // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
       element.salerCommission =
         parseFloat(element.price) - parseFloat(element.wholesalePrice);

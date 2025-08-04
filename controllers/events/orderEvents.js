@@ -31,21 +31,19 @@ exports.orderEvents = async ({ orderId }) => {
       });
     }
 
- 
+    const adminNotification = {
+      title: `New Order Received`,
+      body: `A new Order #${details?.id} has been placed by ${details?.companyName}`,
+    };
 
-      const adminNotification = {
-        title: `New Order Received`,
-        body: `A new Order #${details?.id} has been placed by ${details?.companyName}`,
-      };
+    ThrowNotification(orderData.adminTokens, adminNotification, {
+      orderId: details?.id,
+    });
 
-      ThrowNotification(orderData.adminTokens, adminNotification, {
-        orderId: details?.id,
-      });
+    ThrowNotification(orderData.salesRepTokens, adminNotification, {
+      orderId: details?.id,
+    });
 
-      ThrowNotification(orderData.salesRepTokens, adminNotification, {
-        orderId: details?.id,
-      });
-      
     console.log('🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀');
     return true;
   } catch (error) {

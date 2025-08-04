@@ -40,7 +40,7 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
       amount,
       customerId: patner?.stripeCustomerId,
       savedPaymentMethodId: patner?.defaultBankAccount,
-      orders:orderIds
+      orders: orderIds,
     });
 
     console.log(
@@ -97,7 +97,7 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
       amount,
       customerId: patner?.stripeCustomerId,
       savedPaymentMethodId: patner?.defaultBankAccount,
-      orders:orderIds
+      orders: orderIds,
     });
 
     // Step 3: If payment successful, update orders

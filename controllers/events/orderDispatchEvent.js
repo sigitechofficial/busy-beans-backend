@@ -16,7 +16,7 @@ exports.orderDispatchEvent = async ({ orderId }) => {
       }
 
       orderDispatch({ email: to, data: details });
-    }  
+    }
     console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');
     return true;
   } catch (error) {

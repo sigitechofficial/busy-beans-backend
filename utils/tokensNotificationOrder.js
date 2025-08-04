@@ -19,13 +19,8 @@ exports.tokensNotificationOrder = async (orderId) => {
   );
   const doc = await order.findOne({
     where: { id: orderId },
- 
-    attributes: [
-      'id',
-      'salesRepId',
-      'supplierId',
-      'userId',
-    ],
+
+    attributes: ['id', 'salesRepId', 'supplierId', 'userId'],
   });
   const output = JSON.parse(JSON.stringify(doc));
   console.log(
@@ -71,5 +66,12 @@ exports.tokensNotificationOrder = async (orderId) => {
     parseFloat(output?.totalBill || 0) -
     parseFloat(output.localPatnerCommission || 0);
 
-  return { details: output, email: output?.email,adminTokens,userTokens,supplierTokens,salesRepTokens };
+  return {
+    details: output,
+    email: output?.email,
+    adminTokens,
+    userTokens,
+    supplierTokens,
+    salesRepTokens,
+  };
 };

@@ -10,7 +10,7 @@ const { header } = require('./header');
 
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email, data, lcoalPatner}) {
+module.exports = function ({ email, data, lcoalPatner }) {
   if (lcoalPatner) {
     footer = generateFooterHtml({
       address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,

@@ -4,7 +4,6 @@ const {
 } = require('../../utils/emailsNotificationsData');
 const ThrowNotification = require('../../utils/throwNotification');
 
-
 exports.supplierNewOrderEvent = async ({ orderId }) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId);
@@ -17,29 +16,26 @@ exports.supplierNewOrderEvent = async ({ orderId }) => {
       stage: 'Confirmed',
     });
 
+    const supplierNotification = {
+      title: `New Order Assigned`,
+      body: `Order #${details?.id} has been assigned to you.`,
+    };
 
-     
+    const adminNotification = {
+      title: `Order Assigned to Supplier`,
+      body: `Order #${details?.id} has been dispatched to Supplier ${data?.supplierName}.`,
+    };
 
-      const supplierNotification = {
-        title: `New Order Assigned`,
-        body: `Order #${details?.id} has been assigned to you.`,
-      };
+    ThrowNotification(orderData.adminTokens, adminNotification, {
+      orderId: details?.id,
+    });
 
-       const adminNotification = {
-        title: `Order Assigned to Supplier`,
-        body: `Order #${details?.id} has been dispatched to Supplier ${data?.supplierName}.`,
-      };
-
-      ThrowNotification(orderData.adminTokens, adminNotification, {
-        orderId: details?.id,
-      });
-
-      ThrowNotification(orderData.supplierTokens, supplierNotification, {
-        orderId: details?.id,
-      });
+    ThrowNotification(orderData.supplierTokens, supplierNotification, {
+      orderId: details?.id,
+    });
 
     console.log('🚀 ~ exports.supplierNewOrder= :');
-     
+
     return true;
   } catch (error) {
     console.log('🚀 ~ exports.supplierNewOrder= ~ error:', error);

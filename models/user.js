@@ -111,6 +111,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(),
         allowNull: true,
       },
+      defaultDiscount: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
     },
     {
       tableName: 'users',

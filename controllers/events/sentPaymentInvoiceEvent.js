@@ -8,7 +8,7 @@ exports.sentPaymentInvoiceEvent = async ({ orderId }) => {
     const { details, email } = await dataForEmailAndNotifications(orderId);
 
     let to = [];
-    to.push(email)
+    to.push(email);
     if (email) {
       if (
         details?.emailToSendInvoices &&
@@ -17,7 +17,7 @@ exports.sentPaymentInvoiceEvent = async ({ orderId }) => {
         to.push(details?.emailToSendInvoices);
       }
     }
-    console.log("🚀 ~ to:", JSON.stringify(to))
+    console.log('🚀 ~ to:', JSON.stringify(to));
 
     sentInvoiceEmail({ email: to, data: details });
     console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');

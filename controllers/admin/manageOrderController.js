@@ -36,7 +36,7 @@ const {
 
 const {
   processTransferToLocalPartner,
-} = require('../../utils/localPatnerCommissionTranfer'); 
+} = require('../../utils/localPatnerCommissionTranfer');
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const details = await order.findOne({

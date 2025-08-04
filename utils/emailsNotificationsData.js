@@ -9,7 +9,7 @@ const {
   billingAddress,
   deviceToken,
 } = require('../models');
-const { Op,literal } = require('sequelize');
+const { Op, literal } = require('sequelize');
 const { emailDateFormate } = require('./emailDateFormate');
 // const { Op, literal, fn, col } = require('sequelize');
 
@@ -262,7 +262,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     ],
   };
 
-  const dvtokens = await deviceToken.findAll({where:tokenCondition})
+  const dvtokens = await deviceToken.findAll({ where: tokenCondition });
 
   // Now split them into 4 arrays
   const adminTokens = dvtokens
@@ -289,5 +289,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     parseFloat(output?.totalBill || 0) -
     parseFloat(output.localPatnerCommission || 0);
 
-  return { details: output, email: output?.email,adminTokens,userTokens,supplierTokens,salesRepTokens };
+  return {
+    details: output,
+    email: output?.email,
+    adminTokens,
+    userTokens,
+    supplierTokens,
+    salesRepTokens,
+  };
 };

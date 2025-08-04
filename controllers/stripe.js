@@ -720,7 +720,6 @@ async function pullAmountPaymentIntentFromBankAccount({
       metadata[`order`] = `#${orderId}`;
     });
 
-
     const paymentIntent = await stripe.paymentIntents.create({
       amount: cents,
       currency: 'usd',

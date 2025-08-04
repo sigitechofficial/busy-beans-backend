@@ -5,7 +5,7 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-let {footer} = require('./footer');
+let { footer } = require('./footer');
 const generateFooterHtml = require('./footerLocalpatner');
 
 const { header } = require('./header');
@@ -18,14 +18,14 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 // }
 module.exports = async function ({ email, data, invoice }) {
   console.log('ðŸš€ ~ data:', data);
-   const  lcoalPatner = data?.salesRep
-    if(lcoalPatner) {
-      footer = generateFooterHtml({
+  const lcoalPatner = data?.salesRep;
+  if (lcoalPatner) {
+    footer = generateFooterHtml({
       address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
       supportEmail: `${lcoalPatner?.email}`,
-      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`,
     });
-      // console.log("🚀 ~ footer:", footer)
+    // console.log("🚀 ~ footer:", footer)
   }
   //will use from env BASE URL
   console.log('__dirname:', __dirname);
@@ -59,7 +59,7 @@ module.exports = async function ({ email, data, invoice }) {
     },
   ];
   let items = [];
-    const on = emailDateFormate(data?.on);
+  const on = emailDateFormate(data?.on);
   data?.items.forEach((ele) => {
     let temp = `
             <tr>

@@ -20,7 +20,7 @@ module.exports = function ({ email, data }) {
     });
   }
 
-    console.log("🚀 ~ footer:", email)
+  console.log('🚀 ~ footer:', email);
   const addressParts = [
     data?.address?.companyaddress,
     data?.address?.addressLineOne,

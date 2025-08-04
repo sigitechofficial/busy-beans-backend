@@ -48,7 +48,7 @@ module.exports = async function ({ email, data, invoice }) {
     },
   ];
   let items = [];
-    const on = emailDateFormate(data?.on);
+  const on = emailDateFormate(data?.on);
   data?.items.forEach((ele) => {
     let temp = `
             <tr>

@@ -54,7 +54,11 @@ const invoicePaid = async (event) => {
     console.log('🚀 ~ invoicePaid ~ orderId:', orderId);
 
     await order.update(
-      { paymentMethod: 'card', paymentStatus: 'done', invoicePaidDate : Date.now() },
+      {
+        paymentMethod: 'card',
+        paymentStatus: 'done',
+        invoicePaidDate: Date.now(),
+      },
       { where: { id: orderId } },
     );
 

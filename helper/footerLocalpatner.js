@@ -1,7 +1,13 @@
-function generateFooterHtml({ origin='', address, copyRight = 'Copyright � 2025 Busy Bean Coffee Inc.', supportEmail ='', supportNumber =''}) {
-  console.log("🚀 ~ generateFooterHtml ~ address:", address)
-  console.log("🚀 ~ generateFooterHtml ~ supportNumber:", supportNumber)
-  console.log("🚀 ~ generateFooterHtml ~ supportEmail:", supportEmail)
+function generateFooterHtml({
+  origin = '',
+  address,
+  copyRight = 'Copyright � 2025 Busy Bean Coffee Inc.',
+  supportEmail = '',
+  supportNumber = '',
+}) {
+  console.log('🚀 ~ generateFooterHtml ~ address:', address);
+  console.log('🚀 ~ generateFooterHtml ~ supportNumber:', supportNumber);
+  console.log('🚀 ~ generateFooterHtml ~ supportEmail:', supportEmail);
   return ` <tr>
         <td
           style="

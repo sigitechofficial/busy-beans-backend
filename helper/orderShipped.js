@@ -5,7 +5,7 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-let {footer} = require('./footer');
+let { footer } = require('./footer');
 const generateFooterHtml = require('./footerLocalpatner');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const { header } = require('./header');
@@ -17,14 +17,14 @@ const { header } = require('./header');
 
 module.exports = async function ({ email, data, invoice }) {
   let hiSupplierName = `Hi ${data.customerName}`;
-  const  lcoalPatner = data?.salesRep
-    if(lcoalPatner) {
-      footer = generateFooterHtml({
+  const lcoalPatner = data?.salesRep;
+  if (lcoalPatner) {
+    footer = generateFooterHtml({
       address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
       supportEmail: `${lcoalPatner?.email}`,
-      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`,
     });
-      // console.log("🚀 ~ footer:", footer)
+    // console.log("🚀 ~ footer:", footer)
   }
   console.log('Ã°Å¸Å¡â‚¬ ~ data:', data);
   //will use from env BASE URL

@@ -5,7 +5,13 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     to: {
-      type: DataTypes.ENUM('customer', 'supplier', 'localPatner', 'admin','all'),
+      type: DataTypes.ENUM(
+        'customer',
+        'supplier',
+        'localPatner',
+        'admin',
+        'all',
+      ),
       allowNull: false,
       defaultValue: 'all',
     },

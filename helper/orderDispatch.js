@@ -5,7 +5,7 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-let {footer} = require('./footer');
+let { footer } = require('./footer');
 const generateFooterHtml = require('./footerLocalpatner');
 const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
@@ -18,14 +18,14 @@ const { emailDateFormate } = require('../utils/emailDateFormate');
 module.exports = async function ({ email, data, invoice }) {
   console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
-  const  lcoalPatner = data?.salesRep
-    if(lcoalPatner) {
-      footer = generateFooterHtml({
+  const lcoalPatner = data?.salesRep;
+  if (lcoalPatner) {
+    footer = generateFooterHtml({
       address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
       supportEmail: `${lcoalPatner?.email}`,
-      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`
+      supportNumber: `${lcoalPatner.countryCode} ${lcoalPatner.phoneNumber}`,
     });
-      // console.log("🚀 ~ footer:", footer)
+    // console.log("🚀 ~ footer:", footer)
   }
 
   let items = [];
@@ -44,7 +44,7 @@ module.exports = async function ({ email, data, invoice }) {
 
   items = items.join('');
   const on = emailDateFormate(data?.on);
-email.push('sigidevelopers@gmail.com')
+  email.push('sigidevelopers@gmail.com');
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
