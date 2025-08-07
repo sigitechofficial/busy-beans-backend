@@ -16,13 +16,21 @@ exports.addProduct = catchAsync(async (req, res, next) => {
     return next(new AppError('Already Exist', 400));
   }
 
-  await product.create(input);
-  if(input.supplierAndSkus && input?.supplierAndSkus?.length > 0){
-    await skuSupplier.bulkCreate(input.supplierAndSkus)
-  } 
+ const data = await product.create(input);
+
+  if (input?.supplierAndSkus && input?.supplierAndSkus?.length > 0) {
+    // Add productId to each object
+    const enrichedSkus = input.supplierAndSkus.map((element) => ({
+      ...element,
+      productId: data.id,
+    }));
+
+    await skuSupplier.bulkCreate(enrichedSkus);
+  }
+
   res.status(200).json({
     status: 'success',
-    data: {},
+    data: {product: data},
   });
 });
 

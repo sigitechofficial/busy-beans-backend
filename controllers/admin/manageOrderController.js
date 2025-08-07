@@ -942,8 +942,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   });
 
    let percentageDiscount = input?.order?.discount
-    ? (input.order?.discount / input.order?.itemsPrice) * 100
-    : 0;
+    ? input.order?.discount: 0;
 
 
   console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products?.length);

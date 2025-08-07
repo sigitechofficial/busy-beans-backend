@@ -226,7 +226,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   );
 
   let percentageDiscount = input?.order?.discount
-    ? (input.order?.discount / input.order?.itemsPrice) * 100
+    ? input?.order?.discount
     : customer?.defaultDiscount;
 
  const finalItems = products.map((obj) => {
