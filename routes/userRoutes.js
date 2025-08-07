@@ -3,6 +3,7 @@ const authController = require('../controllers/customer/authController');
 const orderController = require('../controllers/customer/orderController');
 const profileController = require('../controllers/customer/profileController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
+const Authorization = require('../middlewares/protect');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.post(
 );
 router.post('/throw-notification', orderController.notificationTesting);
 
-router.post('/book-order/:id', orderController.bookOrder);
+router.post('/book-order/:id',Authorization.protect, orderController.bookOrder);
 router.post('/book-order', orderController.bookOrder);
 router.post('/sheet-upload', orderController.SheetUplod);
 

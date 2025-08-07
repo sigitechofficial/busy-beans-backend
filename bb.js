@@ -1,12 +1,12 @@
 const db = require('./models');
 require('dotenv').config();
-
+require('./redis_connect');
 const server = require('./app');
 
 const serverPort = process.env.PORT || 8011;
-const serverHost = process.env.HOST || '192.168.1.156'; // Accept connections from anywhere
+const serverHost = process.env.HOST || '127.0.0.1'; // Accept connections from anywhere
 
-const syncDb = 1;
+const syncDb = 0;
 
 if (syncDb) {
   db.sequelize
@@ -52,7 +52,7 @@ server.listen(serverPort, serverHost, (err) => {
   console.log('\n🟢 Server started successfully!');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`🚀 Listening on:         ${localURL}`);
-  console.log('🌐 To expose publicly:   Run the following command:');
-  console.log(`                         ngrok http ${serverPort}`);
+  // console.log('🌐 To expose publicly:   Run the following command:');
+  // console.log(`                         ngrok http ${serverPort}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 });

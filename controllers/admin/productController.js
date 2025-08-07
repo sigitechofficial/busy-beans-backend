@@ -1,23 +1,25 @@
-const { product, user, supplier, orderHistory } = require('../../models');
+const { product, user, supplier, orderHistory , skuSupplier } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 
-exports.addProduct = factory.createOne(product, ['name']);
+// exports.addProduct = factory.createOne(product, ['name']);
 
-exports.view = catchAsync(async (req, res, next) => {
+exports.addProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
-  if (req.file) {
-    // throw new  'Image not uploaded', 'Please upload image';
-    const tmpPath = req.file.path;
-    const imagePath = tmpPath.replace(/\\/g, '/');
-    input.image = imagePath;
-  } else {
-    throw new AppError('Product Image is required. Please upload Image', 200);
+  const exist = await product.findOne({
+        where: {name :req.body?.name },
+        attributes: ['id'],
+      });
+  if (exist) {
+    return next(new AppError('Already Exist', 400));
   }
-  await product.create(input);
 
+  await product.create(input);
+  if(input.supplierAndSkus && input?.supplierAndSkus?.length > 0){
+    await skuSupplier.bulkCreate(input.supplierAndSkus)
+  } 
   res.status(200).json({
     status: 'success',
     data: {},

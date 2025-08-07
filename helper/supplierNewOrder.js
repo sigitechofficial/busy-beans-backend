@@ -40,9 +40,9 @@ module.exports = function ({ email, data }) {
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
-              <td style="padding: 10px;">${ele.sku}</td>
-              <td style="padding: 10px;">${ele.product}</td>
-              <td style="padding: 10px;">${ele.qty}</td>
+              <td style="padding: 10px;">${ele.supplierSku || ''}</td>
+              <td style="padding: 10px;">${ele.product || ''}</td>
+              <td style="padding: 10px;">${ele.qty || ''}</td>
             </tr>
             `;
     temp = items.push(temp);

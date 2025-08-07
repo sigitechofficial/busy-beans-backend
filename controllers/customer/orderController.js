@@ -37,6 +37,7 @@ exports.notificationTesting = async (req, res, next) => {
   return res.status(200).json(response({ data: {} }));
 };
 
+
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
@@ -48,11 +49,12 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   }
   const customer = await user.findOne({
     where: { id: input?.order?.userId },
-    attributes: ['salesRepId'],
+    attributes: ['salesRepId', 'defaultDiscount'],
   });
   input.order.statusId = 1;
   input.order.salesRepId = customer?.salesRepId;
   let itemsPrice = 0;
+  let discountOnItemsPrice = 0;
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
   console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
@@ -64,14 +66,17 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     },
   });
   // return res.json(products)
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products.length);
-  // if(){
-  // const percentageDiscount = (input.order.discount / input.order.totalBill) * 100;
+  console.log(
+    '🚀 ~ exports.bookOrder=catchAsync ~ products:',
+    products?.length,
+  );
 
-  // }
+  let percentageDiscount = customer?.defaultDiscount || 0;
+
   const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
+    element.categoryId = obj?.categoryId;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
@@ -85,18 +90,21 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     element.price = obj.price * qty;
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
+    element.discount = 0
+    if (percentageDiscount > 0) {
+      // Calculate discount amount
+      const discountAmount = (element.price * percentageDiscount) / 100;
+      // Calculate final price after discount
+      const discountedPrice = element.price - discountAmount;
 
-    
-    if(input.order.discount){
-      
-      
+      element.price = discountedPrice;
+      element.discount = discountAmount;
     }
-    
-  
     // Accumulate the total weight and price
+    discountOnItemsPrice += element.discount 
     itemsPrice += element.price;
     totalWeight += element.weight;
-  // Handle salesRep commission if applicable
+    // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
       element.salerCommission =
         parseFloat(element.price) - parseFloat(element.wholesalePrice);
@@ -117,6 +125,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     },
     attributes: ['charges'],
   });
+
   if (!shippingCompany) {
     return next(
       new AppError(
@@ -125,7 +134,10 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
       ),
     );
   }
+
   input.order.itemsPrice = itemsPrice;
+  input.order.discountPrice = discountOnItemsPrice;
+  input.order.discountPercentage = percentageDiscount;
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = totalWeight;
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
@@ -152,7 +164,11 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
   await item.bulkCreate(finalItems);
 
-  // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
+  if (newOrder.frequency != 'just-onces')
+    setOrderFrequency({
+      orderData: newOrder,
+      salesRepId: customer?.salesRepId,
+    });
   orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
   orderEvents({ orderId: newOrder?.id });
   return res.status(200).json({
@@ -461,6 +477,7 @@ exports.createStripeCustomers = catchAsync(async (req, res, next) => {
   const StripeAccount = await Stripe.createStandardConnectAccount({
     email: req.body.email,
   });
+  
   return res.status(200).json({
     status: 'success',
     data: { userCount: StripeAccount },

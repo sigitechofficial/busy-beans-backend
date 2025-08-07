@@ -7,13 +7,14 @@ const {
   user,
   salesRep,
   shippingCompanies,
+  product,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const { nextFrequencyDate } = require('../../utils/nextFrequencyDate');
 const factory = require('../handlerFactory');
 const { Op, literal, fn, col } = require('sequelize');
-const { orderEvents } = require('../events/orderEvents');
+const { orderEvents,orderEventsToLocalPatnerOrAdmin } = require('../events/orderEvents');
 const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
 
 exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
@@ -136,6 +137,7 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     },
   });
 });
+
 exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
@@ -160,26 +162,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       ),
     );
   }
-  const shippingCompany = await shippingCompanies.findOne({
-    where: {
-      weightFrom: {
-        [Op.lte]: input?.order?.totalWeight, // Less than or equal to the weight
-      },
-      weightTo: {
-        [Op.gte]: input?.order?.totalWeight, // Greater than or equal to the weight
-      },
-    },
-    attributes: ['charges'],
-  });
-  if (!shippingCompany) {
-    return next(
-      new AppError(
-        'Not dealing in such weights. Contact customer support for this order.',
-        400,
-      ),
-    );
-  }
-
+  
   if (customer?.salesRepId) {
     const credit = await salesRep.findOne({
       where: {
@@ -219,11 +202,106 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       );
     }
   }
+ 
+ 
   input.order.statusId = 1;
-  input.order.salesRepId = req.params?.srId || customer?.salesRepId;
-  input.order.createdBy = 'sales-rep';
+  input.order.userId = customer.id;
+  input.order.salesRepId = customer?.salesRepId;
+  let itemsPrice = 0;
+  let discountOnItemsPrice = 0;
+  let totalWeight = 0;
+  let productIds = input?.items.map((item) => item.productId);
+  console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
+  const products = await product.findAll({
+    where: {
+      id: {
+        [Op.in]: productIds,
+      },
+    },
+  });
+  // return res.json(products)
+  console.log(
+    '🚀 ~ exports.bookOrder=catchAsync ~ products:',
+    products?.length,
+  );
+
+  let percentageDiscount = input?.order?.discount
+    ? (input.order?.discount / input.order?.itemsPrice) * 100
+    : customer?.defaultDiscount;
+
+ const finalItems = products.map((obj) => {
+    const element = {};
+    element.productId = obj.id;
+    element.categoryId = obj?.categoryId;
+    // console.log("🚀 ~ finalItems ~ obj:", obj)
+
+    // Find the matching product in input.items based on productId
+    let prod = input?.items.find((item) => item.productId == obj.id);
+
+    // Set the qty from input.items or default to 1 if not found
+    let qty = prod ? parseInt(prod.qty) : 1;
+    console.log('🚀 ~ finalItems ~ qty:', qty);
+    element.qty = qty;
+    // Calculate price, wholesalePrice, and weight for the item
+    element.price = obj.price * qty;
+    element.wholesalePrice = obj.wholesalePrice * qty;
+    element.weight = obj.weight * qty;
+    element.discount = 0
+    if (percentageDiscount > 0) {
+      // Calculate discount amount
+      const discountAmount = (element.price * percentageDiscount) / 100;
+      // Calculate final price after discount
+      const discountedPrice = element.price - discountAmount;
+
+      element.price = discountedPrice;
+      element.discount = discountAmount;
+    }
+    // Accumulate the total weight and price
+    discountOnItemsPrice += element.discount 
+    itemsPrice += element.price;
+    totalWeight += element.weight;
+    // Handle salesRep commission if applicable
+    if (customer?.salesRepId) {
+      element.salerCommission =
+        parseFloat(element.price) - parseFloat(element.wholesalePrice);
+    } else {
+      element.wholesalePrice = 0;
+    }
+    return element; // Return the transformed element
+  });
+
+  const shippingCompany = await shippingCompanies.findOne({
+    where: {
+      weightFrom: {
+        [Op.lte]: totalWeight, // Less than or equal to the weight
+      },
+      weightTo: {
+        [Op.gte]: totalWeight, // Greater than or equal to the weight
+      },
+    },
+    attributes: ['charges'],
+  });
+
+  if (!shippingCompany) {
+    return next(
+      new AppError(
+        'Not dealing in such weights. Contact customer support for this order.',
+        400,
+      ),
+    );
+  }
+
+  input.order.itemsPrice = itemsPrice;
+  input.order.discountPrice = discountOnItemsPrice;
+  input.order.discountPercentage = percentageDiscount;
+  input.order.shippingCharges = shippingCompany?.charges;
+  input.order.totalWeight = totalWeight;
+  input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
-    parseFloat(input.order.totalBill) + parseFloat(input.order.shippingCharges);
+    parseFloat(itemsPrice) +
+    parseFloat(input?.order?.vat || 0) +
+    parseFloat(shippingCompany?.charges || 0);
+
   const newOrder = await order.create(input?.order);
   newOrder.invoiceNumber = `INV00${newOrder?.id}`;
   await newOrder.save();
@@ -236,23 +314,18 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     },
   ]);
 
-  input?.items.forEach((element) => {
+  finalItems.forEach((element) => {
     element.orderId = newOrder.id;
-    element.price = element.price * element.qty;
-    element.wholesalePrice = element.wholesalePrice * element.qty;
-    element.weight = element.weight * element.qty;
-
-    element.salerCommission =
-      parseFloat(element.price) - parseFloat(element.wholesalePrice);
   });
-  await item.bulkCreate(input?.items);
 
-  if (newOrder?.frequency != 'just-onces')
+  await item.bulkCreate(finalItems);
+
+  if (newOrder.frequency != 'just-onces')
     setOrderFrequency({
       orderData: newOrder,
-      salesRepId: req.params?.srId || customer.salesRepId,
+      salesRepId: customer?.salesRepId,
     });
-
+  orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
   orderEvents({ orderId: newOrder?.id });
   return res.status(200).json({
     status: 'success',
@@ -260,9 +333,137 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   });
 });
 
+// exports.bookNewOrder = catchAsync(async (req, res, next) => {
+//   const input = req.body;
+//   console.log(
+//     '🚀 ~ exports.bookNewOrder=catchAsync ~ input:',
+//     input?.order?.userId,
+//   );
+//   if (input?.items?.length < 1) {
+//     throw new AppError('Cart is empty add products to place order', 404);
+//   }
+
+//   const customer = await user.findOne({ where: { id: input?.order?.userId } });
+//   console.log('🚀 ~ exports.bookNewOrder=customer ~ customer:', customer?.id);
+//   if (!customer) {
+//     return next(new AppError('Customer not found.', 404));
+//   }
+
+//   if (!input?.order?.shippingCharges) {
+//     return next(
+//       new AppError(
+//         'Not dealing in such weights. Contact customer support for this order.',
+//         400,
+//       ),
+//     );
+//   }
+  
+//   const shippingCompany = await shippingCompanies.findOne({
+//     where: {
+//       weightFrom: {
+//         [Op.lte]: input?.order?.totalWeight, // Less than or equal to the weight
+//       },
+//       weightTo: {
+//         [Op.gte]: input?.order?.totalWeight, // Greater than or equal to the weight
+//       },
+//     },
+//     attributes: ['charges'],
+//   });
+  
+//   if (!shippingCompany) {
+//     return next(
+//       new AppError(
+//         'Not dealing in such weights. Contact customer support for this order.',
+//         400,
+//       ),
+//     );
+//   }
+
+//   if (customer?.salesRepId) {
+//     const credit = await salesRep.findOne({
+//       where: {
+//         id: customer?.salesRepId,
+//       },
+//       attributes: [
+//         'creditLimit',
+//         [
+//           literal(`
+//               (
+//                 SELECT SUM(items.price)
+//                 FROM orders
+//                 JOIN items ON items.orderId = orders.id
+//                 WHERE orders.salesRepId = salesRep.id
+//                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+//               )
+//             `),
+//           'creditUsed',
+//         ],
+//       ],
+//     });
+
+//     let percentage =
+//       (credit?.dataValues?.creditUsed / credit?.creditLimit) * 100;
+//     console.log(
+//       '---------------------------------creaditUed',
+//       credit?.dataValues?.creditUsed,
+//     );
+//     console.log(
+//       '---------------------------------creditLimit',
+//       credit?.creditLimit,
+//     );
+//     if (percentage >= 80) {
+//       throw new AppError(
+//         `You've used over 80% of your credit limit. Please clear your balance before placing further orders.`,
+//         404,
+//       );
+//     }
+//   }
+ 
+//   input.order.statusId = 1;
+//   input.order.salesRepId = req.params?.srId || customer?.salesRepId;
+//   input.order.createdBy = 'sales-rep';
+//   input.order.totalBill =
+//     parseFloat(input.order.totalBill) + parseFloat(input.order.shippingCharges);
+//   const newOrder = await order.create(input?.order);
+//   newOrder.invoiceNumber = `INV00${newOrder?.id}`;
+//   await newOrder.save();
+
+//   await orderHistory.bulkCreate([
+//     {
+//       statusId: 1,
+//       orderId: newOrder.id,
+//       on: Date.now(),
+//     },
+//   ]);
+
+//   input?.items.forEach((element) => {
+//     element.orderId = newOrder.id;
+//     element.price = element.price * element.qty;
+//     element.wholesalePrice = element.wholesalePrice * element.qty;
+//     element.weight = element.weight * element.qty;
+
+//     element.salerCommission =
+//       parseFloat(element.price) - parseFloat(element.wholesalePrice);
+//   });
+
+//   await item.bulkCreate(input?.items);
+
+//   if (newOrder?.frequency != 'just-onces')
+//     setOrderFrequency({
+//       orderData: newOrder,
+//       salesRepId: req.params?.srId || customer.salesRepId,
+//     });
+
+//   orderEvents({ orderId: newOrder?.id });
+//   return res.status(200).json({
+//     status: 'success',
+//     data: { id: newOrder?.id },
+//   });
+// });
+
 const frequencyBookOrder = async ({ id }) => {
   //orderData is
-  let productsPrice = 0;
+  // let productsPrice = 0;
   try {
     const doc = await orderFrequency.findByPk(id, {
       include: [
@@ -344,15 +545,35 @@ const frequencyBookOrder = async ({ id }) => {
     });
 
     const result = JSON.parse(JSON.stringify(doc));
-
-    // let productsPrice = 0;
+    const customer = await user.findOne({
+      where: { id: result.userId , deleted :0 },
+      attributes: ['salesRepId', 'defaultDiscount'],
+    });
+    if(!customer) {
+     await orderFrequency.update({status:0},{where:{id:result.orderFrequencyId}})
+      return false
+    }
+    let productsPrice = 0;
+    let percentageDiscount = customer?.defaultDiscount || 0;
     let totalWeight = 0;
+    let discountOnItemsPrice = 0;
 
     result?.items.forEach((item) => {
-      productsPrice += parseFloat(item?.price) * item?.qty; // Multiply price by quantity
-      totalWeight += parseFloat(item?.weight) * (item?.qty * 1); // Multiply weight by
       item.weight = parseFloat(item?.weight || 0) * (item?.qty * 1);
       item.price = parseFloat(item?.price) * (item?.qty * 1);
+      item.discount = 0
+      if (percentageDiscount > 0) {
+        // Calculate discount amount
+        const discountAmount = (item.price * percentageDiscount) / 100;
+        // Calculate final price after discount
+        const discountedPrice = item.price - discountAmount;
+
+        item.price = discountedPrice;
+        item.discount = discountAmount;
+       }
+      discountOnItemsPrice += item.discount 
+      productsPrice += item.price;
+      totalWeight += item.weight
       if (result?.salesRepId) {
         item.salerCommission =
           parseFloat(item?.price) * item?.qty -
@@ -375,10 +596,11 @@ const frequencyBookOrder = async ({ id }) => {
     });
 
     result.shippingCharges = shippingCompany?.charges || 0;
-
     console.log('🚀 ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
     console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
-    // result.itemsPrice = productsPrice
+    result.itemsPrice = productsPrice
+    result.discountPrice = discountOnItemsPrice
+ result.discountPercentage = percentageDiscount;
     result.subTotal = productsPrice + parseFloat(result?.vat || 0);
     result.totalBill =
       productsPrice +
@@ -454,7 +676,7 @@ exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
     const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
     console.log('🚀🚀🚀🚀🚀🚀 ~ today:', today);
     const pendingOrders = await orderFrequency.findAll({
-      where: { visibilityDate: today },
+      where: { visibilityDate: today , status: 1},
       attributes: ['id'],
     });
     console.log('🚀 ~ pendingOrders:', pendingOrders);

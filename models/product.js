@@ -78,6 +78,10 @@ module.exports = (sequelize, DataTypes) => {
   product.associate = (models) => {
     product.hasMany(models.item);
     models.item.belongsTo(product);
+
+    product.hasMany(models.skuSupplier);
+    models.skuSupplier.belongsTo(product);
+
   };
   return product;
 };

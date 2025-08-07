@@ -19,6 +19,9 @@ const pulloutPaymentsController = require('../controllers/admin/pulloutPaymentsC
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
+const {protect} = require('../middlewares/protect');
+
+
 const router = express.Router();
 // LAMDA FUNCTION
 router.post(
@@ -29,6 +32,7 @@ router.post(
   '/lambda-function/create-upcomming-orders',
   orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
 );
+
 // const protect = require('../middlewares/accessCheck');
 router.post('/login', authController.adminLogin);
 router.post('/login/sales-rep', authController.salesRepLogin);
@@ -59,10 +63,12 @@ router.post('/reset-password', authController.adminResetPassword);
 router.post('/reset-password/sales-rep', authController.salesRepResendOtp);
 router.post('/reset-password/supplier', authController.supplierResetPassword);
 
+//!MIDDLEWARE PRIVATE ROUTES
+// router.use(protect)
+
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
     const destinationPath = './public/products';
-
     // Call the function to create the destination directory
     createDestinationDirectory(destinationPath, cb);
   },
@@ -485,6 +491,11 @@ router.post(
 
 router.post(
   '/shipping-charges-on-weight',
+  manageOrderController.findShippingCompanyForWeight,
+);
+
+router.post(
+  '/shipping-charges-on-weight/customer/:id',
   manageOrderController.findShippingCompanyForWeight,
 );
 

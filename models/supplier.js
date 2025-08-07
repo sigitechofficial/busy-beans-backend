@@ -163,6 +163,10 @@ module.exports = (sequelize) => {
 
     supplier.hasMany(models.deviceToken);
     models.deviceToken.belongsTo(supplier);
+
+    supplier.hasMany(models.skuSupplier);
+    models.skuSupplier.belongsTo(supplier);
+    
   };
 
   return supplier;

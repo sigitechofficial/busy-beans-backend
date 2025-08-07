@@ -542,6 +542,16 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
             ),
             'productCode',
           ],
+           [
+            literal(`
+            (SELECT supplierSku
+            FROM skuSuppliers
+            WHERE skuSuppliers.productId = items.productId
+              AND skuSuppliers.supplierId = order.supplierId
+            LIMIT 1)
+          `),
+          'supplierSku',
+          ],
           'qty',
           'price',
           'discount',
@@ -806,12 +816,15 @@ exports.eidtCheque = catchAsync(async (req, res, next) => {
 });
 
 exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
-  const weight = req.body.weight; // Weight from req.body
+  const weight = req.body?.weight || 0; // Weight from req.body
   console.log(
     '🚀 ~ exports.findShippingCompanyForWeight=catchAsync ~ weight:',
     weight,
   );
-
+  const customer = await user.findOne({
+    where: { id: req.params?.id },
+    attributes: ['id','salesRepId','defaultDiscount'],
+  });
   // Find the shipping company where the weight is between weightFrom and weightTo
   const shippingCompany = await shippingCompanies.findOne({
     where: {
@@ -836,8 +849,12 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
 
   return res.status(200).json({
     status: 'success',
-    data: shippingCompany,
+    data: {
+      charges:shippingCompany?.charges,
+      discountPercentage:customer?.defaultDiscount
+    },
   });
+
 });
 
 //* UPDATE ORDER
@@ -858,6 +875,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   });
 
   console.log('🚀 ~ exports.updateOrder=catchAsync ~ body.items:', req.body);
+  
   if (!placedOrder) {
     return next(new AppError('Order not found.', 404));
   } else if (placedOrder.paymentStatus == 'done') {
@@ -912,6 +930,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   let productIds = input?.items.map((item) => item.productId);
   let totalWeight = 0;
   let itemsPrice = 0;
+  let discountOnItemsPrice = 0;
 
   console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
   const products = await product.findAll({
@@ -922,7 +941,12 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     },
   });
 
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products.length);
+   let percentageDiscount = input?.order?.discount
+    ? (input.order?.discount / input.order?.itemsPrice) * 100
+    : 0;
+
+
+  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products?.length);
   const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
@@ -942,7 +966,18 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     element.orderId = placedOrder?.id;
     element.orderFrequencyId = placedOrder?.orderFrequencyId;
 
+     element.discount = 0
+    if (percentageDiscount > 0) {
+      // Calculate discount amount
+      const discountAmount = (element.price * percentageDiscount) / 100;
+      // Calculate final price after discount
+      const discountedPrice = element.price - discountAmount;
+
+      element.price = discountedPrice;
+      element.discount = discountAmount;
+    }
     // Accumulate the total weight and price
+    discountOnItemsPrice += element.discount 
     itemsPrice += element.price;
     totalWeight += element.weight;
 
@@ -981,6 +1016,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   }
 
   input.order.itemsPrice = itemsPrice;
+  input.order.discountPrice = discountOnItemsPrice;
+  input.order.discountPercentage = percentageDiscount;
   input.order.invoiceNumber = req.body?.order?.invoiceNumber;
   input.order.totalWeight = totalWeight;
   input.order.invoicePdf = 1;

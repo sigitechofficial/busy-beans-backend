@@ -16,7 +16,7 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
-  console.log('🚀 ~ data:', data);
+  console.log('🚀 ~ data:', data?.salesRep);
   console.log('🚀 ~ email:', email);
   const on = emailDateFormate(data?.on || data?.createdAt);
   const lcoalPatner = data?.salesRep;
@@ -74,7 +74,7 @@ module.exports = async function ({ email, data, invoice }) {
     temp = items.push(temp);
     return temp;
   });
- 
+
   const mainContent = data?.invoiceDate
     ? `This is a gentle reminder that your invoice for order is still pending. We appreciate your prompt attention.
 Please review the invoice below and complete your payment at your earliest convenience.`

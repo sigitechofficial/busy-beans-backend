@@ -112,8 +112,9 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       defaultDiscount: {
-        type: DataTypes.STRING(),
+        type: DataTypes.INTEGER,
         allowNull: true,
+        defaultValue: 0,
       },
     },
     {

@@ -19,12 +19,11 @@ const Event = require('../events/userAccountRelatedEvents');
 
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
-const bcrypt = require('bcryptjs');
-
+const bcrypt = require('bcryptjs'); 
 const signToken = (data) =>
   jwt.sign(
     data,
-    'd4cec3a48d07bcc52c3de15cBusyBeansCoffee60d03989ed0d638daa5677d7b', // Hardcoded JWT Secret
+    process.env.JWT_SECRET, // Hardcoded JWT Secret
     {
       expiresIn: '7d',
     },
@@ -36,7 +35,7 @@ const createSendToken = (input, statusCode, req, res) => {
     id: input.id,
     name: input.name,
     email: input.email,
-    n  
+   
   });
 
   res.cookie('jwt', token, {
@@ -66,7 +65,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     upperCaseAlphabets: false,
     specialChars: false,
   });
-  if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
+  if (!req.body?.info?.registerBy || req.body?.info?.registerBy != 'email') {
     req.body.info.verifiedAt = Date.now();
   }
   const newUser = await user.create(req.body?.info);

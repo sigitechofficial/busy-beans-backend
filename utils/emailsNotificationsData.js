@@ -18,18 +18,8 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ orderId:',
     orderId,
   );
-  const doc = await order.findOne({
-    where: { id: orderId },
-    include: [
-      {
-        model: address,
-        attributes: {
-          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
-        },
-      },
-      {
-        model: item,
-        attributes: [
+
+let itemAttributes = [
           'id',
           [
             literal(
@@ -48,55 +38,28 @@ exports.dataForEmailAndNotifications = async (orderId) => {
             ),
             'sku',
           ],
+         
           [
             literal(
               `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             'productCode',
           ],
-        ],
-      },
-      {
-        model: salesRep,
-        attributes: {
-          exclude: [
-            'createdAt',
-            'updatedAt',
-            'deleted',
-            'deletedAt',
-            'password',
-          ],
-        },
-      },
-      {
-        model: user,
-        attributes: {
-          exclude: [
-            'createdAt',
-            'updatedAt',
-            'latestOtp',
-            'password',
-            'deleted',
-            'deletedAt',
-            'stripeCustomerId',
-            'verifiedAt',
-            'status',
-          ],
-        },
-        include: {
-          model: billingAddress,
-          attributes: {
-            exclude: [
-              'createdAt',
-              'updatedAt',
-              'userId',
-              'deleted',
-              'deletedAt',
-            ],
-          },
-        },
-      },
-    ],
+          [
+            literal(`
+            (SELECT supplierSku
+            FROM skuSuppliers
+            WHERE skuSuppliers.productId = items.productId
+              AND skuSuppliers.supplierId = order.supplierId
+            LIMIT 1)
+          `),
+          'supplierSku',
+          ]
+        ]
+
+  const doc = await order.findOne({
+    where: { id: orderId },
+ 
     attributes: [
       'id',
       [
@@ -246,11 +209,63 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'invoiceReminder',
       'invoicePaidDate',
     ],
+       include: [
+      {
+        model: address,
+        attributes: {
+          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
+        },
+      },
+      {
+        model: item,
+        attributes: itemAttributes
+      },
+      {
+        model: salesRep,
+        attributes: {
+          exclude: [
+            'createdAt',
+            'updatedAt',
+            'deleted',
+            'deletedAt',
+            'password',
+          ],
+        },
+      },
+      {
+        model: user,
+        attributes: {
+          exclude: [
+            'createdAt',
+            'updatedAt',
+            'latestOtp',
+            'password',
+            'deleted',
+            'deletedAt',
+            'stripeCustomerId',
+            'verifiedAt',
+            'status',
+          ],
+        },
+        include: {
+          model: billingAddress,
+          attributes: {
+            exclude: [
+              'createdAt',
+              'updatedAt',
+              'userId',
+              'deleted',
+              'deletedAt',
+            ],
+          },
+        },
+      },
+    ],
   });
   const output = JSON.parse(JSON.stringify(doc));
   console.log(
     'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:',
-    output.totalBill,
+    output,
   );
 
   const tokenCondition = {
