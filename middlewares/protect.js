@@ -1,44 +1,88 @@
 require('dotenv').config();
-// const bcrypt = require('bcrypt');
 const { user } = require('../models');
 const AppError = require('../utils/appError');
+const Redis = require('../utils/redisHandling');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 const catchAsync = require('./../utils/catchAsync');
 
 exports.protect = catchAsync(async (req, res, next) => {
-  // 1) Getting token and check of it's there
   let token;
+  console.log('🚀 ~ protect:');
+
+  // 1) Get token from Authorization header or cookies
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
+    console.log('🚀 ~ PROTECT MIDDLEWARE authorization Bearer Token:');
+
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies && req.cookies.jwt) {
+    console.log('🚀 ~ PROTECT MIDDLEWARE cookies:');
+    token = req.cookies.jwt;
   }
 
   if (!token) {
     return next(
-      new AppError('You are not logged in! Please log in to get access.', 401),
+      new AppError(
+        'You are not logged in! Please log in to get access.',
+        401,
+        'authentication-fail',
+      ),
     );
   }
+  // 2) Verify JWT
+  let decoded;
+  try {
+    decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return next(
+      new AppError('Invalid or expired token.', 401, 'authentication-fail'),
+    );
+  }
+  console.log('🚀 ~ PROTECT MIDDLEWARE decoded:', decoded);
+  // 3) Check if token is still valid in Redis
+  const redisUserId = await Redis.getUserIdFromToken(token);
+  console.log('🚀 ~ PROTECT MIDDLEWARE decoded:', redisUserId);
 
-  // 2) Verification token
-  const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
-
-  // 3) Check if user still exists
-  const currentUser = await user.findById({ where: { id: decoded?.id } });
-  if (!currentUser) {
+  if (!redisUserId || redisUserId !== decoded.id.toString()) {
     return next(
       new AppError(
-        'The user belonging to this token does no longer exist.',
+        'Session expired or token revoked.',
         401,
+        'authentication-fail',
       ),
     );
   }
 
-  // GRANT ACCESS TO PROTECTED ROUTE`
+  // 4) Check if user still exists
+  const currentUser = await user.findOne({
+    where: { id: decoded?.id, deleted: 0 },
+  });
+  if (!currentUser) {
+    return next(
+      new AppError(
+        'The user belonging to this token no longer exists.',
+        401,
+        'authentication-fail',
+      ),
+    );
+  } else if (!currentUser.status) {
+    return next(
+      new AppError(
+        'User blocked by administrator.',
+        401,
+        'authentication-fail',
+      ),
+    );
+  }
+
+  // 5) Grant access and attach token + user to request
   req.user = currentUser;
-  req.user.token = token;
+  req.user.accessToken = token; // used in logout
+  // req.user.accessToken = token;
+  req.user.dvToken = decoded?.dvToken;
   res.locals.user = currentUser;
   next();
 });

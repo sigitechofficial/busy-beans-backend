@@ -9,6 +9,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 const app = express();
+
 const server = require('http').createServer(app);
 const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
@@ -44,7 +45,17 @@ app.enable('trust proxy');
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      return callback(null, true); // reflect the requested origin
+    },
+    credentials: true, // <-- REQUIRED to allow cookies
+  }),
+);
+app.use(cookieParser());
 // // Access-Control-Allow-Origin *
 // // api.natours.com, front-end natours.com
 // // app.use(cors({
@@ -73,7 +84,6 @@ app.use(cors());
 // Body parser, reading data from body into req.body
 // app.use(express.json({ limit: '10kb' }));
 // app.use(express.urlencoded({ extended: true, limit: '10kb' }));
-app.use(cookieParser());
 
 app.use(compression());
 

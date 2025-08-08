@@ -166,7 +166,6 @@ module.exports = (sequelize) => {
 
     supplier.hasMany(models.skuSupplier);
     models.skuSupplier.belongsTo(supplier);
-    
   };
 
   return supplier;

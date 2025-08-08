@@ -19,8 +19,7 @@ const pulloutPaymentsController = require('../controllers/admin/pulloutPaymentsC
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
-const {protect} = require('../middlewares/protect');
-
+const { protect } = require('../middlewares/protect');
 
 const router = express.Router();
 // LAMDA FUNCTION

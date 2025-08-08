@@ -19,47 +19,47 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     orderId,
   );
 
-let itemAttributes = [
-          'id',
-          [
-            literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'product',
-          ],
-          'qty',
-          'price',
-          'discount',
-          'orderId',
-          'productId',
-          [
-            literal(
-              `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'sku',
-          ],
-         
-          [
-            literal(
-              `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'productCode',
-          ],
-          [
-            literal(`
+  let itemAttributes = [
+    'id',
+    [
+      literal(
+        `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+      ),
+      'product',
+    ],
+    'qty',
+    'price',
+    'discount',
+    'orderId',
+    'productId',
+    [
+      literal(
+        `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
+      ),
+      'sku',
+    ],
+
+    [
+      literal(
+        `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
+      ),
+      'productCode',
+    ],
+    [
+      literal(`
             (SELECT supplierSku
             FROM skuSuppliers
             WHERE skuSuppliers.productId = items.productId
               AND skuSuppliers.supplierId = order.supplierId
             LIMIT 1)
           `),
-          'supplierSku',
-          ]
-        ]
+      'supplierSku',
+    ],
+  ];
 
   const doc = await order.findOne({
     where: { id: orderId },
- 
+
     attributes: [
       'id',
       [
@@ -209,7 +209,7 @@ let itemAttributes = [
       'invoiceReminder',
       'invoicePaidDate',
     ],
-       include: [
+    include: [
       {
         model: address,
         attributes: {
@@ -218,7 +218,7 @@ let itemAttributes = [
       },
       {
         model: item,
-        attributes: itemAttributes
+        attributes: itemAttributes,
       },
       {
         model: salesRep,
@@ -263,10 +263,7 @@ let itemAttributes = [
     ],
   });
   const output = JSON.parse(JSON.stringify(doc));
-  console.log(
-    'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:',
-    output,
-  );
+  console.log('ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:', output);
 
   const tokenCondition = {
     [Op.or]: [

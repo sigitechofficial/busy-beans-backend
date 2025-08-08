@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const crypto = require('crypto');
 const { promisify } = require('util');
+const REDIS = require('../../utils/redisHandling');
 const jwt = require('jsonwebtoken');
 // const { Op, literal, col, fn, where } = require('sequelize');
 const {
@@ -31,14 +32,14 @@ const signToken = (data) =>
       expiresIn: '7d',
     },
   );
-  
 
-const createSendToken = (input, statusCode, req, res) => {
+const createSendToken = (input, statusCode, req, res, tokenId = '') => {
   console.log('🚀 ~ createSendToken ~ input:', input);
   const token = signToken({
     id: input.id,
     name: input.name,
     email: input.email,
+    dvToken: tokenId,
   });
 
   res.cookie('jwt', token, {
@@ -52,7 +53,7 @@ const createSendToken = (input, statusCode, req, res) => {
   input.updatedAt = undefined;
   input.deletedAt = undefined;
   input.deleted = undefined;
-
+  REDIS.storeAccessToken(input.id, token);
   res.status(statusCode).json({
     status: 'success',
     data: {
@@ -132,7 +133,7 @@ exports.login = catchAsync(async (req, res, next) => {
   }
   // 2) Check if user exists && password is correct
   const customer = await user.findOne({
-    where: { email, deleted:0 },
+    where: { email, deleted: 0 },
   });
   console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
   if (!customer) {
@@ -155,8 +156,8 @@ exports.login = catchAsync(async (req, res, next) => {
   input.address = customerAddress;
   // 3) If everything ok, send token to client
 
-  createSendToken(input, 200, req, res);
-}); 
+  createSendToken(input, 200, req, res, req.body?.tokenId);
+});
 
 exports.stripeAchPayment = catchAsync(async (req, res, next) => {
   const result = await user.findOne({
@@ -224,14 +225,13 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
   return next(new AppError('Invalid OTP', 200));
 });
 
-exports.logout = (req, res) => {
-  res.cookie('jwt', 'loggedout', {
-    expires: new Date(Date.now() + 10 * 1000),
-    httpOnly: true,
-  });
-  res.status(200).json({ status: 'success' });
-};
-
+// exports.logout = (req, res) => {
+//   res.cookie('jwt', 'loggedout', {
+//     expires: new Date(Date.now() + 10 * 1000),
+//     httpOnly: true,
+//   });
+//   res.status(200).json({ status: 'success' });
+// };
 
 // Only for rendered pages, no errors!
 exports.isLoggedIn = async (req, res, next) => {
@@ -375,7 +375,7 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
   // 1) Get customer from collection
-  const user = await User.findById(req.user.id).select('+password');
+  const user = await user.findById(req.user.id).select('+password');
 
   // 2) Check if POSTed current password is correct
   if (!(await user.correctPassword(req.body.passwordCurrent, user.password))) {
@@ -389,4 +389,31 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
 
   // 4) Log user in, send JWT
   createSendToken(user, 200, req, res);
+});
+
+exports.logout = catchAsync(async (req, res, next) => {
+  // 1) Get customer from collection
+  await deviceToken.destroy({
+    where: {
+      tokenId: req.user?.dvToken || '',
+      userId: req.user?.id,
+    },
+  });
+
+  res.cookie('jwt', 'loggedout', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+  });
+
+  // 3) If so, update password
+  REDIS.revokeSingleToken(req.user?.id, req.user.accessToken);
+
+  return res.status(200).json(
+    response({
+      data: {
+        message: 'Logout',
+        data: {},
+      },
+    }),
+  );
 });

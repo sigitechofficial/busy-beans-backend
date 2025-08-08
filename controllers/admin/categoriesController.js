@@ -61,7 +61,7 @@ exports.deleteCatagory = catchAsync(async (req, res, next) => {
   });
   data.deleted = true;
   await data.save();
-  await product.update({ deleted: 0 }, { where: { categoryId: data?.id } });
+  await product.update({ deleted: 1 }, { where: { categoryId: data?.id } });
 
   res.status(200).json({
     status: 'success',

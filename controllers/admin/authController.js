@@ -19,7 +19,7 @@ const Event = require('../events/userAccountRelatedEvents');
 
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const signToken = (data) =>
   jwt.sign(
     data,
@@ -35,7 +35,6 @@ const createSendToken = (input, statusCode, req, res) => {
     id: input.id,
     name: input.name,
     email: input.email,
-   
   });
 
   res.cookie('jwt', token, {

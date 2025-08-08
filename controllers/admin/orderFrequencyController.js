@@ -14,7 +14,10 @@ const AppError = require('../../utils/appError');
 const { nextFrequencyDate } = require('../../utils/nextFrequencyDate');
 const factory = require('../handlerFactory');
 const { Op, literal, fn, col } = require('sequelize');
-const { orderEvents,orderEventsToLocalPatnerOrAdmin } = require('../events/orderEvents');
+const {
+  orderEvents,
+  orderEventsToLocalPatnerOrAdmin,
+} = require('../events/orderEvents');
 const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
 
 exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
@@ -162,7 +165,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       ),
     );
   }
-  
+
   if (customer?.salesRepId) {
     const credit = await salesRep.findOne({
       where: {
@@ -202,8 +205,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       );
     }
   }
- 
- 
+
   input.order.statusId = 1;
   input.order.userId = customer.id;
   input.order.salesRepId = customer?.salesRepId;
@@ -224,12 +226,11 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     '🚀 ~ exports.bookOrder=catchAsync ~ products:',
     products?.length,
   );
-
-  let percentageDiscount = input?.order?.discount
-    ? input?.order?.discount
+  let percentageDiscount = input?.order?.discountPercentage
+    ? input?.order?.discountPercentage
     : customer?.defaultDiscount;
 
- const finalItems = products.map((obj) => {
+  const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
@@ -246,7 +247,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     element.price = obj.price * qty;
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
-    element.discount = 0
+    element.discount = 0;
     if (percentageDiscount > 0) {
       // Calculate discount amount
       const discountAmount = (element.price * percentageDiscount) / 100;
@@ -257,7 +258,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       element.discount = discountAmount;
     }
     // Accumulate the total weight and price
-    discountOnItemsPrice += element.discount 
+    discountOnItemsPrice += element.discount;
     itemsPrice += element.price;
     totalWeight += element.weight;
     // Handle salesRep commission if applicable
@@ -357,7 +358,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //       ),
 //     );
 //   }
-  
+
 //   const shippingCompany = await shippingCompanies.findOne({
 //     where: {
 //       weightFrom: {
@@ -369,7 +370,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //     },
 //     attributes: ['charges'],
 //   });
-  
+
 //   if (!shippingCompany) {
 //     return next(
 //       new AppError(
@@ -418,7 +419,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //       );
 //     }
 //   }
- 
+
 //   input.order.statusId = 1;
 //   input.order.salesRepId = req.params?.srId || customer?.salesRepId;
 //   input.order.createdBy = 'sales-rep';
@@ -546,12 +547,15 @@ const frequencyBookOrder = async ({ id }) => {
 
     const result = JSON.parse(JSON.stringify(doc));
     const customer = await user.findOne({
-      where: { id: result.userId , deleted :0 },
+      where: { id: result.userId, deleted: 0 },
       attributes: ['salesRepId', 'defaultDiscount'],
     });
-    if(!customer) {
-     await orderFrequency.update({status:0},{where:{id:result.orderFrequencyId}})
-      return false
+    if (!customer) {
+      await orderFrequency.update(
+        { status: 0 },
+        { where: { id: result.orderFrequencyId } },
+      );
+      return false;
     }
     let productsPrice = 0;
     let percentageDiscount = customer?.defaultDiscount || 0;
@@ -561,7 +565,7 @@ const frequencyBookOrder = async ({ id }) => {
     result?.items.forEach((item) => {
       item.weight = parseFloat(item?.weight || 0) * (item?.qty * 1);
       item.price = parseFloat(item?.price) * (item?.qty * 1);
-      item.discount = 0
+      item.discount = 0;
       if (percentageDiscount > 0) {
         // Calculate discount amount
         const discountAmount = (item.price * percentageDiscount) / 100;
@@ -570,10 +574,10 @@ const frequencyBookOrder = async ({ id }) => {
 
         item.price = discountedPrice;
         item.discount = discountAmount;
-       }
-      discountOnItemsPrice += item.discount 
+      }
+      discountOnItemsPrice += item.discount;
       productsPrice += item.price;
-      totalWeight += item.weight
+      totalWeight += item.weight;
       if (result?.salesRepId) {
         item.salerCommission =
           parseFloat(item?.price) * item?.qty -
@@ -598,9 +602,9 @@ const frequencyBookOrder = async ({ id }) => {
     result.shippingCharges = shippingCompany?.charges || 0;
     console.log('🚀 ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
     console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
-    result.itemsPrice = productsPrice
-    result.discountPrice = discountOnItemsPrice
- result.discountPercentage = percentageDiscount;
+    result.itemsPrice = productsPrice;
+    result.discountPrice = discountOnItemsPrice;
+    result.discountPercentage = percentageDiscount;
     result.subTotal = productsPrice + parseFloat(result?.vat || 0);
     result.totalBill =
       productsPrice +
@@ -676,7 +680,7 @@ exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
     const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
     console.log('🚀🚀🚀🚀🚀🚀 ~ today:', today);
     const pendingOrders = await orderFrequency.findAll({
-      where: { visibilityDate: today , status: 1},
+      where: { visibilityDate: today, status: 1 },
       attributes: ['id'],
     });
     console.log('🚀 ~ pendingOrders:', pendingOrders);

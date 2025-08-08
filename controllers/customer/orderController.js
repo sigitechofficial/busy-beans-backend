@@ -37,7 +37,6 @@ exports.notificationTesting = async (req, res, next) => {
   return res.status(200).json(response({ data: {} }));
 };
 
-
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
@@ -90,7 +89,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     element.price = obj.price * qty;
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
-    element.discount = 0
+    element.discount = 0;
     if (percentageDiscount > 0) {
       // Calculate discount amount
       const discountAmount = (element.price * percentageDiscount) / 100;
@@ -101,7 +100,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
       element.discount = discountAmount;
     }
     // Accumulate the total weight and price
-    discountOnItemsPrice += element.discount 
+    discountOnItemsPrice += element.discount;
     itemsPrice += element.price;
     totalWeight += element.weight;
     // Handle salesRep commission if applicable
@@ -477,7 +476,7 @@ exports.createStripeCustomers = catchAsync(async (req, res, next) => {
   const StripeAccount = await Stripe.createStandardConnectAccount({
     email: req.body.email,
   });
-  
+
   return res.status(200).json({
     status: 'success',
     data: { userCount: StripeAccount },

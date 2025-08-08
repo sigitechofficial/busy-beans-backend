@@ -81,7 +81,6 @@ module.exports = (sequelize, DataTypes) => {
 
     product.hasMany(models.skuSupplier);
     models.skuSupplier.belongsTo(product);
-
   };
   return product;
 };

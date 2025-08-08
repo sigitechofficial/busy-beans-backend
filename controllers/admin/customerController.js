@@ -118,6 +118,7 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
       `saleTaxNumber`,
       `emailToSendInvoices`,
       'companyName',
+      'defaultDiscount',
     ],
   });
 
@@ -226,6 +227,7 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
       `companyName`,
       'dispatchEmail',
       'salesRepId',
+      'defaultDiscount',
     ],
     include: [
       {

@@ -1,13 +1,13 @@
-// storeToken.js
- //
-const redisClient = require('../redis_connect');
+const redisClient = require('../redis_connect'); // This returns the client instance
+
 //* Token Storage Logic (Login)
 async function storeAccessToken(userId, refreshToken) {
-  // Store token as key → userId
+  console.log('🚀 ~ Tokenn saved in REDIS:');
+
   await redisClient.set(`refreshToken:${refreshToken}`, userId, {
-    EX: 60 * 60 * 24 * 30, // 30 days
+    EX: 60 * 60 * 24 * 7, // 7 days
   });
-  
+
   // Track token in user-specific Set
   await redisClient.sAdd(`userTokens:${userId}`, refreshToken);
 }
@@ -15,12 +15,15 @@ async function storeAccessToken(userId, refreshToken) {
 
 //*  Validate Token Using Only Token Value
 async function getUserIdFromToken(refreshToken) {
+  console.log('🚀 ~ getUserIdFromToken REDIS:');
+
   return await redisClient.get(`refreshToken:${refreshToken}`);
 }
 // const userId = await getUserIdFromToken(token);
 
 //* Logout: Revoke Only One Token
 async function revokeSingleToken(userId, refreshToken) {
+  console.log('🚀 ~ revokeSingleToken REDIS:');
   await redisClient.del(`refreshToken:${refreshToken}`);
   await redisClient.sRem(`userTokens:${userId}`, refreshToken);
 }
@@ -29,6 +32,7 @@ async function revokeSingleToken(userId, refreshToken) {
 //* Admin Blocks User: Revoke All Tokens
 
 async function revokeAllTokensForUser(userId) {
+  console.log('🚀 ~ revokeAllTokensForUser REDIS:');
   const tokens = await redisClient.sMembers(`userTokens:${userId}`);
 
   for (const token of tokens) {
@@ -42,15 +46,16 @@ async function revokeAllTokensForUser(userId) {
 //*  All User Tokens (for admin/debug)
 
 async function userAllTokens(userId) {
+  console.log('🚀 ~ userAllTokens REDIS:');
   const tokens = await redisClient.sMembers(`userTokens:${userId}`);
   console.log(`Tokens for user ${userId}:`, tokens);
-  return tokens
+  return tokens;
 }
 
 module.exports = {
- storeAccessToken,
- getUserIdFromToken,
- revokeSingleToken,
- revokeAllTokensForUser,
- userAllTokens,
+  storeAccessToken,
+  getUserIdFromToken,
+  revokeSingleToken,
+  revokeAllTokensForUser,
+  userAllTokens,
 };

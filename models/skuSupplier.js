@@ -1,7 +1,7 @@
-const { DataTypes } = require('sequelize'); 
+const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
-  const skuSupplier   = sequelize.define(
+  const skuSupplier = sequelize.define(
     'skuSupplier',
     {
       supplierSku: {
@@ -28,7 +28,6 @@ module.exports = (sequelize) => {
       ],
     },
   );
- 
 
   return skuSupplier;
 };

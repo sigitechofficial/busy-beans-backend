@@ -131,12 +131,12 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
 
 async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
   try {
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const twoMonthAgo = new Date();
+    twoMonthAgo.setMonth(twoMonthAgo.getMonth() - 2);
 
     console.log(
-      '🚀 ~ getOrdersForLocalPartnerAndPullRequestLamda ~ oneMonthAgo:',
-      oneMonthAgo,
+      '🚀 ~ getOrdersForLocalPartnerAndPullRequestLamda ~ twoMonthAgo:',
+      twoMonthAgo,
     );
 
     const condition = {
@@ -147,7 +147,7 @@ async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
         [Op.in]: [1, 2, 3, 4, 5],
       },
       on: {
-        [Op.lte]: oneMonthAgo,
+        [Op.lte]: twoMonthAgo,
       },
       [Op.not]: {
         [Op.and]: [{ paymentStatus: 'paid' }, { PaymentMethod: 'card' }],
