@@ -8,11 +8,12 @@ const {
   stateInSystem,
   cityInSystem,
   countryInSystem,
+  skuSupplier,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 
-const { Op, literal, where, fn } = require('sequelize');
+const { Op, literal, where, fn,col } = require('sequelize');
 
 exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
   res.status(200).json({
@@ -278,6 +279,80 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: { salesSummary, ordersSummary, revenueSummary, totalUser },
+  });
+});
+
+exports.supplierDashboard = catchAsync(async (req, res, next) => {
+  const dashboard = await supplier.findOne({
+    where:{id:req.params.id},
+    attributes: [
+      [
+        literal(
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id)`,
+        ),
+        'totalOrders',
+      ],
+      [
+        literal(
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 2)`,
+        ),
+        'dispatchedToSupplierOrders',
+      ],
+      [
+        literal(
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 3)`,
+        ),
+        'acknowledgedOrders',
+      ],
+      [
+        literal(
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 4)`,
+        ),
+        'shippedOrders',
+      ],
+      [
+        literal(
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 5)`,
+        ),
+        'deliveredOrders',
+      ],
+      [
+        literal(
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 6)`,
+        ),
+        'cancelledOrders',
+      ],
+    ],
+    raw: true,
+  });
+  
+  const topProducts = await item.findAll({
+    attributes: [
+      'productId',
+      [
+        literal(
+          `(SELECT products.name FROM products WHERE products.id = item.productId)`,
+        ),
+        'productName',
+      ],
+      [fn('SUM', col('qty')), 'totalSold']
+    ],
+    group: ['productId'],
+    order: [[fn('SUM', col('qty')), 'DESC']],
+    limit: 5,
+    include: [
+    
+      {
+        model: order,
+        where:{supplierId :req.params?.id},
+        attributes: []  
+      }
+    ]
+  });
+   
+  res.status(200).json({
+    status: 'success',
+    data: {dashboard,topProducts},
   });
 });
 

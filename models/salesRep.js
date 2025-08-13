@@ -179,6 +179,9 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.deviceToken);
     models.deviceToken.belongsTo(salesRep);
+
+    salesRep.hasMany(models.employee);
+    models.employee.belongsTo(salesRep);
   };
 
   return salesRep;

@@ -227,8 +227,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     products?.length,
   );
   let percentageDiscount = input?.order?.discountPercentage
-    ? input?.order?.discountPercentage
-    : customer?.defaultDiscount;
+    ?  parseFloat(input?.order?.discountPercentage)
+    : parseFloat(customer?.defaultDiscount);
 
   const finalItems = products.map((obj) => {
     const element = {};
@@ -558,7 +558,7 @@ const frequencyBookOrder = async ({ id }) => {
       return false;
     }
     let productsPrice = 0;
-    let percentageDiscount = customer?.defaultDiscount || 0;
+    let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
     let totalWeight = 0;
     let discountOnItemsPrice = 0;
 

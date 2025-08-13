@@ -1,10 +1,19 @@
 require('dotenv').config();
-const { user } = require('../models');
+const { user,account,supplier,salesRep,employee } = require('../models');
 const AppError = require('../utils/appError');
 const Redis = require('../utils/redisHandling');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
-const catchAsync = require('./../utils/catchAsync');
+const catchAsync = require('./../utils/catchAsync'); 
+
+const MODEL = {
+  user: user,
+  admin: account,
+  supplier:supplier,
+  localPartner:salesRep,
+  adminEmployee:employee,
+  partnerEmployee:employee 
+};
 
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
@@ -46,7 +55,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   const redisUserId = await Redis.getUserIdFromToken(token);
   console.log('🚀 ~ PROTECT MIDDLEWARE decoded:', redisUserId);
 
-  if (!redisUserId || redisUserId !== decoded.id.toString()) {
+  if (!redisUserId || redisUserId !== decoded.id.toString() || !decoded.entity) {
     return next(
       new AppError(
         'Session expired or token revoked.',
@@ -57,9 +66,11 @@ exports.protect = catchAsync(async (req, res, next) => {
   }
 
   // 4) Check if user still exists
-  const currentUser = await user.findOne({
+  let currentUser = await MODEL[`${decoded.entity}`].findOne({
     where: { id: decoded?.id, deleted: 0 },
   });
+  
+
   if (!currentUser) {
     return next(
       new AppError(
@@ -77,12 +88,23 @@ exports.protect = catchAsync(async (req, res, next) => {
       ),
     );
   }
-
+ currentUser =  JSON.parse(JSON.stringify(currentUser))
   // 5) Grant access and attach token + user to request
   req.user = currentUser;
   req.user.accessToken = token; // used in logout
   // req.user.accessToken = token;
   req.user.dvToken = decoded?.dvToken;
+  req.user.entity = decoded?.entity;
   res.locals.user = currentUser;
   next();
 });
+
+
+exports.restrictTo = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !allowedRoles.includes(req.user.entity)) {
+      return res.status(200).json({status:'fail', message: 'You do not have permission to perform this action' });
+    }
+    next();
+  };
+};

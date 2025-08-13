@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
+const REDIS = require('../../utils/redisHandling');
+
 // const { Op, literal, col, fn, where } = require('sequelize');
 const {
   user,
@@ -9,6 +11,7 @@ const {
   salesRep,
   supplier,
   deviceToken,
+  employee
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -29,12 +32,14 @@ const signToken = (data) =>
     },
   );
 
-const createSendToken = (input, statusCode, req, res) => {
+const createSendToken = (input, statusCode, req, res,tokenId,entity) => {
   // console.log('🚀 ~ createSendToken ~ input:', input);
   const token = signToken({
     id: input.id,
     name: input.name,
     email: input.email,
+    entity:entity,
+    tokenId:tokenId||'',
   });
 
   res.cookie('jwt', token, {
@@ -48,6 +53,7 @@ const createSendToken = (input, statusCode, req, res) => {
   input.updatedAt = undefined;
   input.deletedAt = undefined;
   input.deleted = undefined;
+  REDIS.storeAccessToken(input.id, token);
 
   res.status(statusCode).json({
     status: 'success',
@@ -97,9 +103,19 @@ const login = (Model, entity) => {
       return next(new AppError('Please provide email and password!', 400));
     }
     // 2) Check if user exists && password is correct
-    const data = await Model.findOne({
+     
+    let data = await Model.findOne({
       where: { email, deleted: 0 },
     });
+    if(!data){
+      data =  await employee.findOne({
+        where: { email, deleted: 0 },
+      });
+      console.log("🚀 ~ login ~ data:", data)
+    if(data){
+      entity = data.accountId? 'adminEmployee' : 'parterEmployee'  
+    }
+    }
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
     // if (!data || !(await bcrypt.compare(password, data?.password))) {
     //   return next(new AppError('Incorrect email or password', 400));
@@ -114,11 +130,12 @@ const login = (Model, entity) => {
       const input = { tokenId: req.body?.tokenId };
       if (entity == 'localPartner') input.salesRepId = data?.id;
       else if (entity == 'supplier') input.supplierId = data?.id;
-      else input.accountId = data?.id;
+      else if (entity == 'admin') input.accountId = data?.id;
+      else input.employeeId = data?.id;
       deviceToken.create(input);
     }
     // 3) If everything ok, send token to client
-    createSendToken(data, 200, req, res);
+    createSendToken(data, 200, req, res,req.body?.tokenId,entity);
   });
 };
 
@@ -189,23 +206,23 @@ const resendOtp = (Model) =>
     });
   });
 
-const otpVerification = (Model) =>
+const otpVerification = (Model,entity) =>
   catchAsync(async (req, res, next) => {
     const { otp, id, on } = req.body;
 
     // 2) Check if user exists && password is correct
-    const entity = await Model.findOne({
+    const data = await Model.findOne({
       where: { id },
       attributes: {
         exclude: [`deleted`, `updatedAt`, `deletedAt`],
       },
     });
 
-    if (!entity) {
+    if (!data) {
       return next(new AppError('User not found', 200));
     }
 
-    if (entity.latestOtp == otp) {
+    if (data.latestOtp == otp) {
       return res.status(200).json(
         response({
           data: {
@@ -219,9 +236,9 @@ const otpVerification = (Model) =>
     return next(new AppError('Invalid OTP', 200));
   });
 
-const resetPassword = (Model) =>
+const resetPassword = (Model,entity) =>
   catchAsync(async (req, res, next) => {
-    const entity = await Model.findOne({
+    const data = await Model.findOne({
       where: { id: req.body?.id },
       attributes: {
         exclude: ['updatedAt', 'deleted', 'deletedAt', 'latestOtp'],
@@ -229,17 +246,17 @@ const resetPassword = (Model) =>
     });
 
     // 2) If token has not expired, and there is user, set the new password
-    if (!entity) {
+    if (!data) {
       return next(new AppError('Token is invalid or has expired', 400));
     }
 
     console.log('🚀 ~ catchAsync ~ req.body?.password:', req.body?.password);
-    console.log('🚀 ~ catchAsync ~ entity?.password:', entity?.password);
-    // await Model.update({password:req.body?.password},{where:{id:entity?.id}})
-    entity.password = req.body.password;
-    await entity.save();
-    entity.password = undefined;
-    createSendToken(entity, 200, req, res);
+    console.log('🚀 ~ catchAsync ~ data?.password:', data?.password);
+    // await Model.update({password:req.body?.password},{where:{id:data?.id}})
+    data.password = req.body.password;
+    await data.save();
+    data.password = undefined;
+    createSendToken(data, 200, req, res,req.params.tokenId,entity);
   });
 
 exports.adminLogin = login(account, 'admin');
@@ -258,9 +275,9 @@ exports.adminOtpVerification = otpVerification(account);
 exports.salesRepOtpVerification = otpVerification(salesRep);
 exports.supplierOtpVerification = otpVerification(supplier);
 
-exports.adminResetPassword = resetPassword(account);
-exports.salesRepResetPassword = resetPassword(salesRep);
-exports.supplierResetPassword = resetPassword(supplier);
+exports.adminResetPassword = resetPassword(account,'admin');
+exports.salesRepResetPassword = resetPassword(salesRep,'localPartner');
+exports.supplierResetPassword = resetPassword(supplier, 'supplier');
 
 exports.logina = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;

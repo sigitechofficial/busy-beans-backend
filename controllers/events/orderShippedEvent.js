@@ -8,7 +8,7 @@ exports.orderShippedEvent = async ({ orderId }) => {
     const orderData = await dataForEmailAndNotifications(orderId);
     if (!orderData) return false;
     const { details } = orderData;
-    orderShippedEmail({ email: details?.patnerEmail, data: details });
+    orderShippedEmail({ email: details?.patnerEmail || 'info@busybeancoffee.com' , data: details });
     console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');
     return true;
   } catch (error) {

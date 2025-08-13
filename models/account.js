@@ -52,6 +52,9 @@ module.exports = (sequelize, DataTypes) => {
   account.associate = (models) => {
     account.hasMany(models.deviceToken);
     models.deviceToken.belongsTo(account);
+
+    account.hasMany(models.employee);
+    models.employee.belongsTo(account);
   };
 
   // // Hook to hash password before create or update

@@ -1,4 +1,5 @@
 const express = require('express');
+
 const categoryController = require('../controllers/admin/categoriesController');
 const addressController = require('../controllers/admin/addressController');
 const productController = require('../controllers/admin/productController');
@@ -13,14 +14,15 @@ const supplierReportsController = require('../controllers/admin/supplierReportsC
 const salesRepReportsController = require('../controllers/admin/salesRepReportsController');
 const dashboardsController = require('../controllers/admin/dashboardsController');
 const shippingCompanyController = require('../controllers/admin/shippingCompanyController');
+const employeeController = require('../controllers/admin/employeeController');
 
 const pulloutPaymentsController = require('../controllers/admin/pulloutPaymentsController');
 
 const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
-const { protect } = require('../middlewares/protect');
-
+const auth = require('../middlewares/protect');
+const { protect } = auth
 const router = express.Router();
 // LAMDA FUNCTION
 router.post(
@@ -32,7 +34,6 @@ router.post(
   orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
 );
 
-// const protect = require('../middlewares/accessCheck');
 router.post('/login', authController.adminLogin);
 router.post('/login/sales-rep', authController.salesRepLogin);
 router.post('/login/supplier', authController.supplierLogin);
@@ -61,6 +62,72 @@ router.post(
 router.post('/reset-password', authController.adminResetPassword);
 router.post('/reset-password/sales-rep', authController.salesRepResendOtp);
 router.post('/reset-password/supplier', authController.supplierResetPassword);
+
+router.get('/product', productController.getAllProducts);
+
+
+//! Country Management
+router.get('/address-management/country/', addressController.getAllCountries);
+router.get('/address-management/country/:id', addressController.getCountry);
+
+//! State Management
+router.get('/address-management/state/', addressController.getAllStates);
+router.get('/address-management/state/:id', addressController.getState);
+
+//! City Management
+router.get('/address-management/city/', addressController.getAllCities);
+router.get('/address-management/city/:id', addressController.getCity);
+
+//! Territory Management
+router.get('/address-management/territory/', addressController.getAllTerritory);
+router.get('/address-management/territory/:id', addressController.getTerritory);
+
+
+
+// Create Employee (Admin or SalesRep can create employees)
+router.post(
+  '/employee',
+  auth.protect,
+  auth.restrictTo('admin', 'localPartner'),
+  employeeController.createEmployee
+);
+// routes/employeeRoutes.js
+router.get(
+  '/employee/:employeeId',
+  auth.protect,
+  auth.restrictTo('admin', 'localPartner'),
+  employeeController.getEmployee
+);
+
+router.get(
+  '/employees',
+  auth.protect,
+  auth.restrictTo('admin', 'localPartner'),
+  employeeController.getAllEmployee
+);
+// routes/employeeRoutes.js
+router.patch(
+  '/employee/:employeeId',
+  auth.protect,
+  auth.restrictTo('admin', 'localPartner'),
+  employeeController.updateEmployee
+);
+
+// routes/employeeRoutes.js
+router.delete(
+  '/employee/:employeeId',
+  auth.protect,
+  auth.restrictTo('admin', 'localPartner'),
+  employeeController.deleteEmployee
+);
+
+// routes/employeeRoutes.js
+router.put(
+  '/employee/:employeeId',
+  auth.protect,
+  auth.restrictTo('admin', 'salesRep'),
+  employeeController.updateEmployee
+);
 
 //!MIDDLEWARE PRIVATE ROUTES
 // router.use(protect)
@@ -100,10 +167,10 @@ const salesRepImage = multer.diskStorage({
   },
 });
 
+
 const uploadProductImage = multer({
   storage: productsImage,
 });
-
 const uploadSupplierImage = multer({
   storage: supplierImage,
 });
@@ -117,7 +184,6 @@ router.post(
   uploadProductImage.single('image'),
   productController.addProduct,
 );
-router.get('/product', productController.getAllProducts);
 
 // Category by ID routes
 router
@@ -330,68 +396,40 @@ router.patch(
 //! Country Management
 router
   .route('/address-management/country/')
-  .get(addressController.getAllCountries) // For fetching all
-  .post(addressController.createCountry); // For creating a new
+  .post(addressController.createCountry);
 
-// Category by ID routes
 router
   .route('/address-management/country/:id')
-  .get(addressController.getCountry) // For fetching a   by ID
-  .patch(addressController.updateCountry) // For updating   by ID
-  .delete(addressController.deleteCountry); // For deleting a   by ID
+  .patch(addressController.updateCountry)
+  .delete(addressController.deleteCountry);
 
 //! State Management
 router
   .route('/address-management/state/')
-  .get(addressController.getAllStates) //
-  .post(addressController.createState); //
+  .post(addressController.createState);
 
-// Category by ID routes
 router
   .route('/address-management/state/:id')
-  .get(addressController.getState)
   .patch(addressController.updateState)
   .delete(addressController.deleteState);
 
 //! City Management
-
 router
   .route('/address-management/city/')
-  .get(addressController.getAllCities) //
-  .post(addressController.createCity); //
+  .post(addressController.createCity);
 
-// Category by ID routes
 router
   .route('/address-management/city/:id')
-  .get(addressController.getCity)
   .patch(addressController.updateCity)
   .delete(addressController.deleteCity);
 
-//! City Management
-
-router
-  .route('/address-management/city/')
-  .get(addressController.getAllCities) //
-  .post(addressController.createCity); //
-
-// Category by ID routes
-router
-  .route('/address-management/city/:id')
-  .get(addressController.getCity)
-  .patch(addressController.updateCity)
-  .delete(addressController.deleteCity);
-
-//! City Management
-
+//! Territory Management
 router
   .route('/address-management/territory/')
-  .get(addressController.getAllTerritory) //
-  .post(addressController.createTerritory); //
+  .post(addressController.createTerritory);
 
-// Category by ID routes
 router
   .route('/address-management/territory/:id')
-  .get(addressController.getTerritory)
   .patch(addressController.updateTerritory)
   .delete(addressController.deleteTerritory);
 
@@ -465,7 +503,7 @@ router.get(
 );
 
 router.get(
-  '/sales-rep-reports/partner-creadit-limit/1',
+  '/sales-rep-reports/partner-creadit-limit/:srId',
   salesRepReportsController.partnerCreaditLimit,
 );
 
@@ -476,6 +514,11 @@ router.get('/dashboard', dashboardsController.adminDashboard);
 router.get(
   '/sales-rep-dashboard/:srId',
   dashboardsController.salesRepDashboard,
+);
+
+router.get(
+  '/supplier-dashboard/:id',
+  dashboardsController.supplierDashboard,
 );
 
 router.get(

@@ -20,7 +20,7 @@ module.exports = (sequelize) => {
         defaultValue: 0,
       },
       discountPercentage: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.DECIMAL(20, 2),
         allowNull: true,
         defaultValue: 0,
       },

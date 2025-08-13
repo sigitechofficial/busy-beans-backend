@@ -40,6 +40,7 @@ const createSendToken = (input, statusCode, req, res, tokenId = '') => {
     name: input.name,
     email: input.email,
     dvToken: tokenId,
+    entity: 'user',
   });
 
   res.cookie('jwt', token, {
