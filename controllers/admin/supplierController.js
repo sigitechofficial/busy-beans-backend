@@ -3,6 +3,7 @@ const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { Op, literal, where } = require('sequelize');
+const REDIS = require('../../utils/redisHandling');
 
 exports.getAllSuppliers = factory.getAll(supplier);
 exports.getSupplier = factory.getOne(supplier);

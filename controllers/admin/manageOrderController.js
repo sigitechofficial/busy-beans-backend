@@ -1057,7 +1057,9 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   });
-  sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
+  if (input?.order?.emailInvoiceToCustomer) {
+    sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
+  }
   return res.status(200).json({
     status: 'success',
     data: { id: req.params.orderId },

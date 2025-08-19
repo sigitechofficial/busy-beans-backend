@@ -30,7 +30,7 @@ module.exports = (sequelize, DataTypes) => {
       tableName: 'permissions',
       paranoid: true,
       timestamps: true,
-    }
+    },
   );
 
   // Associations
@@ -38,7 +38,7 @@ module.exports = (sequelize, DataTypes) => {
     // Many-to-many relationship between Permissions and Employees
     permission.belongsToMany(models.employee, {
       through: models.employeePermission, // Reference to join table
-      foreignKey: 'permissionId', 
+      foreignKey: 'permissionId',
       otherKey: 'employeeId',
       as: 'employees', // alias for relationship
     });

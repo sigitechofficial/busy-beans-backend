@@ -54,7 +54,7 @@ const createSendToken = (input, statusCode, req, res, tokenId = '') => {
   input.updatedAt = undefined;
   input.deletedAt = undefined;
   input.deleted = undefined;
-  REDIS.storeAccessToken(input.id, token);
+  REDIS.storeAccessToken(`user${input.id}`, token);
   res.status(statusCode).json({
     status: 'success',
     data: {
@@ -407,7 +407,7 @@ exports.logout = catchAsync(async (req, res, next) => {
   });
 
   // 3) If so, update password
-  REDIS.revokeSingleToken(req.user?.id, req.user.accessToken);
+  REDIS.revokeSingleToken(`user${req.user?.id}`, req.user.accessToken);
 
   return res.status(200).json(
     response({

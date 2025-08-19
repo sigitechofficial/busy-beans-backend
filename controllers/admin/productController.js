@@ -10,26 +10,18 @@ const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
 
-exports.addProduct = factory.createOne(product, ['name']);
-
 exports.addProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
-  const exist = await product.findOne({
-    where: { name: req.body?.name },
-    attributes: ['id'],
-  });
-  if (exist) {
-    return next(new AppError('Already Exist', 400));
-  }
+
   if (req.file) {
     // throw new  'Image not uploaded', 'Please upload image';
     const tmpPath = req.file.path;
     const imagePath = tmpPath.replace(/\\/g, '/');
     input.image = imagePath;
-    console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
+    console.log('ðŸš€ ~ catchAsync ~ nput.image:', input.image);
   } else {
     input.image = undefined;
-    console.log('🚀 ~ c ~ input.image:', input.image);
+    console.log('ðŸš€ ~ c ~ input.image:', input.image);
   }
 
   const data = await product.create(input);
@@ -74,14 +66,10 @@ exports.getProduct = catchAsync(async (req, res, next) => {
 exports.updateProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
   const exist = await product.findOne({
-    where: { name: req.body?.name },
+    where: { id: req.params.id },
     attributes: ['id'],
   });
-  if (exist) {
-    if (exist.id != req.params.id) {
-      return next(new AppError(`Already Exist : ${req.body?.name}`, 400));
-    }
-  } else if (!exist) {
+  if (!exist) {
     return next(new AppError('Product Not Found', 400));
   }
 
@@ -90,10 +78,10 @@ exports.updateProduct = catchAsync(async (req, res, next) => {
     const tmpPath = req.file.path;
     const imagePath = tmpPath.replace(/\\/g, '/');
     input.image = imagePath;
-    console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
+    console.log('ðŸš€ ~ catchAsync ~ nput.image:', input.image);
   } else {
     input.image = undefined;
-    console.log('🚀 ~ c ~ input.image:', input.image);
+    console.log('ðŸš€ ~ c ~ input.image:', input.image);
   }
   await product.update(input, { where: { id: req.params?.id } });
 

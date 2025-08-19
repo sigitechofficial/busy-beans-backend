@@ -11,7 +11,7 @@ const {
   salesRep,
   supplier,
   deviceToken,
-  employee
+  employee,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -32,14 +32,14 @@ const signToken = (data) =>
     },
   );
 
-const createSendToken = (input, statusCode, req, res,tokenId,entity) => {
+const createSendToken = (input, statusCode, req, res, tokenId, entity) => {
   // console.log('🚀 ~ createSendToken ~ input:', input);
   const token = signToken({
     id: input.id,
     name: input.name,
     email: input.email,
-    entity:entity,
-    tokenId:tokenId||'',
+    entity: entity,
+    tokenId: tokenId || '',
   });
 
   res.cookie('jwt', token, {
@@ -53,7 +53,7 @@ const createSendToken = (input, statusCode, req, res,tokenId,entity) => {
   input.updatedAt = undefined;
   input.deletedAt = undefined;
   input.deleted = undefined;
-  REDIS.storeAccessToken(input.id, token);
+  REDIS.storeAccessToken(`${entity}${input.id}`, token);
 
   res.status(statusCode).json({
     status: 'success',
@@ -103,18 +103,18 @@ const login = (Model, entity) => {
       return next(new AppError('Please provide email and password!', 400));
     }
     // 2) Check if user exists && password is correct
-     
+
     let data = await Model.findOne({
       where: { email, deleted: 0 },
     });
-    if(!data){
-      data =  await employee.findOne({
+    if (!data && (entity == 'admin' || entity == 'localPartner')) {
+      data = await employee.findOne({
         where: { email, deleted: 0 },
       });
-      console.log("🚀 ~ login ~ data:", data)
-    if(data){
-      entity = data.accountId? 'adminEmployee' : 'parterEmployee'  
-    }
+      console.log('🚀 ~ login ~ data:', data);
+      if (data) {
+        entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+      }
     }
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
     // if (!data || !(await bcrypt.compare(password, data?.password))) {
@@ -135,19 +135,28 @@ const login = (Model, entity) => {
       deviceToken.create(input);
     }
     // 3) If everything ok, send token to client
-    createSendToken(data, 200, req, res,req.body?.tokenId,entity);
+    createSendToken(data, 200, req, res, req.body?.tokenId, entity);
   });
 };
 
-const forgotPassword = (Model) =>
+const forgotPassword = (Model, entity) =>
   catchAsync(async (req, res, next) => {
-    const entity = await Model.findOne({
-      where: { email: req.body.email },
+    let data = await Model.findOne({
+      where: { email: req.body.email, deleted: 0 },
       attributes: {
         exclude: ['updatedAt', 'deleted', 'deletedAt', 'password'],
       },
     });
-    if (!entity) {
+    if (!data && (entity == 'admin' || entity == 'localPartner')) {
+      data = await employee.findOne({
+        where: { email: req.body.email, deleted: 0 },
+      });
+      console.log('🚀 ~ login ~ data:', data);
+      if (data) {
+        entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+      }
+    }
+    if (!data) {
       return next(new AppError('There is no user with email address.', 404));
     }
 
@@ -157,31 +166,40 @@ const forgotPassword = (Model) =>
       specialChars: false,
     });
 
-    entity.latestOtp = OTP;
-    await entity.save();
+    data.latestOtp = OTP;
+    await data.save();
 
     Event.otpToUsersForgotPasswordEvent({
-      email: entity?.email,
+      email: data?.email,
       otp: OTP,
-      name: entity?.name,
+      name: data?.name,
     });
 
     res.status(200).json({
       status: 'success',
-      data: { id: entity.id, email: entity.email },
+      data: { id: data.id, email: data.email },
       message: 'OTP sent to email!',
     });
   });
 
-const resendOtp = (Model) =>
+const resendOtp = (Model, entity) =>
   catchAsync(async (req, res, next) => {
-    const entity = await Model.findOne({
+    const data = await Model.findOne({
       where: { email: req.body.email },
       attributes: {
         exclude: ['updatedAt', 'deleted', 'deletedAt', 'password', 'latestOtp'],
       },
     });
-    if (!entity) {
+    if (!data && (entity == 'admin' || entity == 'localPartner')) {
+      data = await employee.findOne({
+        where: { email: req.body.email, deleted: 0 },
+      });
+      console.log('🚀 ~ login ~ data:', data);
+      if (data) {
+        entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+      }
+    }
+    if (!data) {
       return next(new AppError('There is no user with email address.', 404));
     }
 
@@ -191,32 +209,42 @@ const resendOtp = (Model) =>
       specialChars: false,
     });
 
-    await Model.update({ latestOtp: OTP }, { where: { id: entity?.id } });
+    await Model.update({ latestOtp: OTP }, { where: { id: data?.id } });
 
     Event.otpToUsersForgotPasswordEvent({
-      email: entity?.email,
+      email: data?.email,
       otp: OTP,
-      name: entity?.name,
+      name: data?.name,
     });
 
     res.status(200).json({
       status: 'success',
-      data: { id: entity?.id, email: entity.email },
+      data: { id: data?.id, email: data.email },
       message: 'OTP sent to email!',
     });
   });
 
-const otpVerification = (Model,entity) =>
+const otpVerification = (Model, entity) =>
   catchAsync(async (req, res, next) => {
     const { otp, id, on } = req.body;
 
     // 2) Check if user exists && password is correct
     const data = await Model.findOne({
-      where: { id },
+      where: { id, deleted: 0 },
       attributes: {
         exclude: [`deleted`, `updatedAt`, `deletedAt`],
       },
     });
+
+    if (!data && (entity == 'admin' || entity == 'localPartner')) {
+      data = await employee.findOne({
+        where: { id, deleted: 0 },
+      });
+      console.log('🚀 ~ login ~ data:', data);
+      if (data) {
+        entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+      }
+    }
 
     if (!data) {
       return next(new AppError('User not found', 200));
@@ -236,15 +264,23 @@ const otpVerification = (Model,entity) =>
     return next(new AppError('Invalid OTP', 200));
   });
 
-const resetPassword = (Model,entity) =>
+const resetPassword = (Model, entity) =>
   catchAsync(async (req, res, next) => {
-    const data = await Model.findOne({
-      where: { id: req.body?.id },
+    let data = await Model.findOne({
+      where: { id: req.body?.id, deleted: 0 },
       attributes: {
         exclude: ['updatedAt', 'deleted', 'deletedAt', 'latestOtp'],
       },
     });
-
+    if (!data && (entity == 'admin' || entity == 'localPartner')) {
+      data = await employee.findOne({
+        where: { id: req.body?.id, deleted: 0 },
+      });
+      console.log('🚀 ~ login ~ data:', data);
+      if (data) {
+        entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+      }
+    }
     // 2) If token has not expired, and there is user, set the new password
     if (!data) {
       return next(new AppError('Token is invalid or has expired', 400));
@@ -256,27 +292,27 @@ const resetPassword = (Model,entity) =>
     data.password = req.body.password;
     await data.save();
     data.password = undefined;
-    createSendToken(data, 200, req, res,req.params.tokenId,entity);
+    createSendToken(data, 200, req, res, req.params.tokenId, entity);
   });
 
 exports.adminLogin = login(account, 'admin');
 exports.salesRepLogin = login(salesRep, 'localPartner');
 exports.supplierLogin = login(supplier, 'supplier');
 
-exports.adminForgotPassword = forgotPassword(account);
-exports.salesRepForgotPassword = forgotPassword(salesRep);
-exports.supplierForgotPassword = forgotPassword(supplier);
+exports.adminForgotPassword = forgotPassword(account, 'admin');
+exports.salesRepForgotPassword = forgotPassword(salesRep, 'localPartner');
+exports.supplierForgotPassword = forgotPassword(supplier, 'supplier');
 
-exports.adminResendOtp = resendOtp(account);
-exports.salesRepResendOtp = resendOtp(salesRep);
-exports.supplierResendOtp = resendOtp(supplier);
+exports.adminResendOtp = resendOtp(account, 'admin');
+exports.salesRepResendOtp = resendOtp(salesRep, 'localPartner');
+exports.supplierResendOtp = resendOtp(supplier, 'supplier');
 
-exports.adminOtpVerification = otpVerification(account);
-exports.salesRepOtpVerification = otpVerification(salesRep);
-exports.supplierOtpVerification = otpVerification(supplier);
+exports.adminOtpVerification = otpVerification(account, 'admin');
+exports.salesRepOtpVerification = otpVerification(salesRep, 'localPartner');
+exports.supplierOtpVerification = otpVerification(supplier, 'supplier');
 
-exports.adminResetPassword = resetPassword(account,'admin');
-exports.salesRepResetPassword = resetPassword(salesRep,'localPartner');
+exports.adminResetPassword = resetPassword(account, 'admin');
+exports.salesRepResetPassword = resetPassword(salesRep, 'localPartner');
 exports.supplierResetPassword = resetPassword(supplier, 'supplier');
 
 exports.logina = catchAsync(async (req, res, next) => {

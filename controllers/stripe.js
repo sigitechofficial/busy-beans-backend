@@ -506,6 +506,9 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       metadata: {
         orderId: order?.id,
       },
+      saved_payment_method_options: {
+        payment_method_save: 'enabled',
+      },
     };
 
     if (order.connectAccountId) {
@@ -777,8 +780,21 @@ async function blockCheckoutSession(sessionId) {
   }
 }
 
+async function cards(customerId) {
+  try {
+    const paymentMethods = await stripe.customers.listPaymentMethods(
+      customerId,
+      { type: 'card' },
+    );
+    return paymentMethods;
+  } catch (error) {
+    throw new AppError(`${error.message} `, 200);
+  }
+}
+
 module.exports = {
   blockCheckoutSession,
+  cards,
   checkCheckoutSessionStatus,
   pullAmountPaymentIntentFromBankAccount,
   attachBankAccountPaymentMethod,

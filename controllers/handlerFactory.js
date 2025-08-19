@@ -1,8 +1,9 @@
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const { Op } = require('sequelize');
-const { ModelName } = require('../models'); // Replace with your actual model name
+const { salesRep, supplier } = require('../models'); // Replace with your actual model name
 const APIFeatures = require('../utils/apiFeatures');
+const REDIS = require('../utils/redisHandling');
 
 exports.deleteOne = (Model) =>
   catchAsync(async (req, res, next) => {

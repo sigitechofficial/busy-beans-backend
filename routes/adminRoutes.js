@@ -22,7 +22,7 @@ const multer = require('multer');
 const path = require('path');
 const { createDestinationDirectory } = require('../utils/customFunctions');
 const auth = require('../middlewares/protect');
-const { protect } = auth
+const { protect } = auth;
 const router = express.Router();
 // LAMDA FUNCTION
 router.post(
@@ -65,7 +65,6 @@ router.post('/reset-password/supplier', authController.supplierResetPassword);
 
 router.get('/product', productController.getAllProducts);
 
-
 //! Country Management
 router.get('/address-management/country/', addressController.getAllCountries);
 router.get('/address-management/country/:id', addressController.getCountry);
@@ -82,35 +81,33 @@ router.get('/address-management/city/:id', addressController.getCity);
 router.get('/address-management/territory/', addressController.getAllTerritory);
 router.get('/address-management/territory/:id', addressController.getTerritory);
 
-
-
 // Create Employee (Admin or SalesRep can create employees)
 router.post(
   '/employee',
   auth.protect,
   auth.restrictTo('admin', 'localPartner'),
-  employeeController.createEmployee
+  employeeController.createEmployee,
 );
 // routes/employeeRoutes.js
 router.get(
   '/employee/:employeeId',
   auth.protect,
   auth.restrictTo('admin', 'localPartner'),
-  employeeController.getEmployee
+  employeeController.getEmployee,
 );
 
 router.get(
   '/employees',
   auth.protect,
   auth.restrictTo('admin', 'localPartner'),
-  employeeController.getAllEmployee
+  employeeController.getAllEmployee,
 );
 // routes/employeeRoutes.js
 router.patch(
   '/employee/:employeeId',
   auth.protect,
   auth.restrictTo('admin', 'localPartner'),
-  employeeController.updateEmployee
+  employeeController.updateEmployee,
 );
 
 // routes/employeeRoutes.js
@@ -118,7 +115,7 @@ router.delete(
   '/employee/:employeeId',
   auth.protect,
   auth.restrictTo('admin', 'localPartner'),
-  employeeController.deleteEmployee
+  employeeController.deleteEmployee,
 );
 
 // routes/employeeRoutes.js
@@ -126,7 +123,7 @@ router.put(
   '/employee/:employeeId',
   auth.protect,
   auth.restrictTo('admin', 'salesRep'),
-  employeeController.updateEmployee
+  employeeController.updateEmployee,
 );
 
 //!MIDDLEWARE PRIVATE ROUTES
@@ -166,7 +163,6 @@ const salesRepImage = multer.diskStorage({
     cb(null, `sales-rep-${Date.now()}${path.extname(file.originalname)}`);
   },
 });
-
 
 const uploadProductImage = multer({
   storage: productsImage,
@@ -250,6 +246,12 @@ router.patch('/add-cheque', manageOrderController.orderJourneryComplete);
 router.patch('/edit-cheque', manageOrderController.eidtCheque);
 
 //! Customer Management
+
+router.get(
+  '/customer-management/payment-cards/:id',
+  customerController.fetchSavedCards,
+);
+
 router.get(
   '/customer-management/dahboard-cards',
   customerController.viewCustomersManagement,
@@ -404,9 +406,7 @@ router
   .delete(addressController.deleteCountry);
 
 //! State Management
-router
-  .route('/address-management/state/')
-  .post(addressController.createState);
+router.route('/address-management/state/').post(addressController.createState);
 
 router
   .route('/address-management/state/:id')
@@ -414,9 +414,7 @@ router
   .delete(addressController.deleteState);
 
 //! City Management
-router
-  .route('/address-management/city/')
-  .post(addressController.createCity);
+router.route('/address-management/city/').post(addressController.createCity);
 
 router
   .route('/address-management/city/:id')
@@ -516,10 +514,7 @@ router.get(
   dashboardsController.salesRepDashboard,
 );
 
-router.get(
-  '/supplier-dashboard/:id',
-  dashboardsController.supplierDashboard,
-);
+router.get('/supplier-dashboard/:id', dashboardsController.supplierDashboard);
 
 router.get(
   '/orders-pending-pullouts/:srId',

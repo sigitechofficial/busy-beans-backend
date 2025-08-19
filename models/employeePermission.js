@@ -38,13 +38,17 @@ module.exports = (sequelize, DataTypes) => {
           fields: ['employeeId', 'permissionId'],
         },
       ],
-    }
+    },
   );
 
   // Associations
   employeePermission.associate = (models) => {
-    models.employeePermission.belongsTo(models.employee, { foreignKey: 'employeeId' });
-    models.employeePermission.belongsTo(models.permission, { foreignKey: 'permissionId' });
+    models.employeePermission.belongsTo(models.employee, {
+      foreignKey: 'employeeId',
+    });
+    models.employeePermission.belongsTo(models.permission, {
+      foreignKey: 'permissionId',
+    });
   };
 
   return employeePermission;

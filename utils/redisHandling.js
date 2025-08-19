@@ -4,12 +4,12 @@ const redisClient = require('../redis_connect'); // This returns the client inst
 async function storeAccessToken(userId, refreshToken) {
   console.log('🚀 ~ Tokenn saved in REDIS:');
 
-  await redisClient.set(`refreshToken:${refreshToken}`, userId, {
+  await redisClient.set(`${refreshToken}`, userId, {
     EX: 60 * 60 * 24 * 7, // 7 days
   });
 
   // Track token in user-specific Set
-  await redisClient.sAdd(`userTokens:${userId}`, refreshToken);
+  await redisClient.sAdd(`${userId}`, refreshToken);
 }
 // await storeRefreshToken(user.id, refreshToken);
 
@@ -17,15 +17,15 @@ async function storeAccessToken(userId, refreshToken) {
 async function getUserIdFromToken(refreshToken) {
   console.log('🚀 ~ getUserIdFromToken REDIS:');
 
-  return await redisClient.get(`refreshToken:${refreshToken}`);
+  return await redisClient.get(`${refreshToken}`);
 }
 // const userId = await getUserIdFromToken(token);
 
 //* Logout: Revoke Only One Token
 async function revokeSingleToken(userId, refreshToken) {
   console.log('🚀 ~ revokeSingleToken REDIS:');
-  await redisClient.del(`refreshToken:${refreshToken}`);
-  await redisClient.sRem(`userTokens:${userId}`, refreshToken);
+  await redisClient.del(`${refreshToken}`);
+  await redisClient.sRem(`${userId}`, refreshToken);
 }
 // await revokeSingleToken(user.id, refreshToken);
 
@@ -33,13 +33,13 @@ async function revokeSingleToken(userId, refreshToken) {
 
 async function revokeAllTokensForUser(userId) {
   console.log('🚀 ~ revokeAllTokensForUser REDIS:');
-  const tokens = await redisClient.sMembers(`userTokens:${userId}`);
+  const tokens = await redisClient.sMembers(`${userId}`);
 
   for (const token of tokens) {
-    await redisClient.del(`refreshToken:${token}`);
+    await redisClient.del(`${token}`);
   }
 
-  await redisClient.del(`userTokens:${userId}`);
+  await redisClient.del(`${userId}`);
 }
 // await revokeAllTokensForUser(userId);
 
@@ -47,7 +47,7 @@ async function revokeAllTokensForUser(userId) {
 
 async function userAllTokens(userId) {
   console.log('🚀 ~ userAllTokens REDIS:');
-  const tokens = await redisClient.sMembers(`userTokens:${userId}`);
+  const tokens = await redisClient.sMembers(`${userId}`);
   console.log(`Tokens for user ${userId}:`, tokens);
   return tokens;
 }

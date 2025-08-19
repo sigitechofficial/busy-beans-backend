@@ -4,7 +4,7 @@ const { DataTypes } = require('sequelize');
 module.exports = (sequelize) => {
   const employee = sequelize.define(
     'employee',
-    { 
+    {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -65,10 +65,10 @@ module.exports = (sequelize) => {
       tableName: 'employees',
       paranoid: true,
       timestamps: true,
-    }
+    },
   );
 
-  employee.associate = (models) => {  
+  employee.associate = (models) => {
     employee.hasMany(models.deviceToken);
     models.deviceToken.belongsTo(employee);
   };

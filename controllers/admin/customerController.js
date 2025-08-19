@@ -3,7 +3,9 @@ const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
 const { response } = require('../../utils/response');
+const REDIS = require('../../utils/redisHandling');
 const { Op, literal, fn, col, where } = require('sequelize');
+const Stripe = require('../stripe');
 
 exports.customersList = catchAsync(async (req, res, next) => {
   const filters = { deleted: 0 };
@@ -145,36 +147,32 @@ exports.viewCustomersManagement = catchAsync(async (req, res, next) => {
   const last30Days = new Date(today);
   last30Days.setDate(today.getDate() - 30);
 
-  const data = await user.findOne({
-    attributes: [
-      // Count the total customers
-      [fn('COUNT', col('id')), 'totalCustomer'],
-      // Count the new customers (verified in the last 30 days)
-      [
-        fn(
-          'COUNT',
-          literal(
-            `CASE WHEN "verifiedAt" >= '${last30Days.toISOString()}' THEN 1 ELSE NULL END`,
-          ),
-        ),
-        'newCustomer',
-      ],
-      // Count active customers (status is true)
-      [
-        fn('COUNT', literal('CASE WHEN "status" = true THEN 1 ELSE NULL END')),
-        'activeCustomer',
-      ],
-      // Count inactive customers (status is false)
-      [
-        fn('COUNT', literal('CASE WHEN "status" = false THEN 1 ELSE NULL END')),
-        'inactiveCustomer',
-      ],
-    ],
+  const totalCustomer = await user.count({ where: { deleted: 0 } });
+  const activeCustomer = await user.count({
+    where: { deleted: 0, status: true },
+  });
+  const inactiveCustomer = await user.count({
+    where: { deleted: 0, status: false },
+  });
+  const newCustomer = await user.count({
+    where: {
+      deleted: 0,
+      verifiedAt: {
+        [Op.gte]: last30Days, // Assuming `last30Days` is a valid Date object
+      },
+    },
   });
 
   res.status(200).json({
     status: 'success',
-    data: { data },
+    data: {
+      data: {
+        totalCustomer,
+        activeCustomer,
+        inactiveCustomer,
+        newCustomer,
+      },
+    },
   });
 });
 
@@ -260,6 +258,8 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
 // exports.getProduct = factory.getOne(product);
 exports.updateCutomer = catchAsync(async (req, res, next) => {
   if (req.body?.info) {
+    if (req.body.info?.status == false)
+      REDIS.revokeAllTokensForUser(req.params.id);
     await user.update(req.body.info, {
       where: { id: req.params.id },
     });
@@ -295,3 +295,34 @@ exports.deleteCustomer = catchAsync(async (req, res, next) => {
     data: {},
   });
 });
+
+exports.fetchSavedCards = async (req, res, next) => {
+  const userId = req.params.id;
+  console.log('🚀 ~ ~ userId:', userId);
+  const customer = await user.findByPk(userId, {
+    attributes: ['email', 'stripeCustomerId'],
+  });
+  if (customer.stripeCustomerId === null || customer.stripeCustomerId === '') {
+    const output = response({ message: 'All cards', data: { cards: [] } });
+    return res.status(200).json(output);
+  }
+  const customerId = customer.stripeCustomerId;
+  const allCards = await Stripe.cards(customerId);
+  console.log('🚀 ~ ~ customerId:', customerId);
+
+  const stripeCards = allCards.data.map((obj) => ({
+    id: obj.id,
+    name: obj.billing_details.name,
+    brand: obj.card.brand,
+    expMonth: obj.card.exp_month,
+    expYear: obj.card.exp_year,
+    last4: obj.card.last4,
+    funding: obj.card.funding,
+  }));
+
+  console.log('🚀 ~ stripeCards ~ stripeCards:', stripeCards);
+
+  const output = response({ data: { cards: stripeCards } });
+
+  return res.status(200).json(output);
+};

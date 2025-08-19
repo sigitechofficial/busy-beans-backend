@@ -12,9 +12,11 @@ exports.orderDispatchEvent = async ({ orderId }) => {
     let to = email ? [email] : [];
     if (details?.email) {
       if (details?.dispatchEmail && email != details?.dispatchEmail) {
-        to.push(details?.dispatchEmail);
+       const emailArray = details?.dispatchEmail? details?.dispatchEmail.split(/\s*,\s*/):[] // This will split by commas with or without spaces
+       to = to.concat(emailArray)
       }
-
+      to = [...new Set(to)];
+      console.log('🚀 ~ to:', JSON.stringify(to));
       orderDispatch({ email: to, data: details });
     }
     console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');

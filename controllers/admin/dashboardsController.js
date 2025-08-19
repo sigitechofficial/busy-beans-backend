@@ -13,7 +13,7 @@ const {
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 
-const { Op, literal, where, fn,col } = require('sequelize');
+const { Op, literal, where, fn, col } = require('sequelize');
 
 exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
   res.status(200).json({
@@ -284,7 +284,7 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
 
 exports.supplierDashboard = catchAsync(async (req, res, next) => {
   const dashboard = await supplier.findOne({
-    where:{id:req.params.id},
+    where: { id: req.params.id },
     attributes: [
       [
         literal(
@@ -325,7 +325,7 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
     ],
     raw: true,
   });
-  
+
   const topProducts = await item.findAll({
     attributes: [
       'productId',
@@ -335,24 +335,23 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
         ),
         'productName',
       ],
-      [fn('SUM', col('qty')), 'totalSold']
+      [fn('SUM', col('qty')), 'totalSold'],
     ],
     group: ['productId'],
     order: [[fn('SUM', col('qty')), 'DESC']],
     limit: 5,
     include: [
-    
       {
         model: order,
-        where:{supplierId :req.params?.id},
-        attributes: []  
-      }
-    ]
+        where: { supplierId: req.params?.id },
+        attributes: [],
+      },
+    ],
   });
-   
+
   res.status(200).json({
     status: 'success',
-    data: {dashboard,topProducts},
+    data: { dashboard, topProducts },
   });
 });
 

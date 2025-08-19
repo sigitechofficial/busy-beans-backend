@@ -47,7 +47,7 @@ exports.assignedOrdersReport = catchAsync(async (req, res, next) => {
       literal(
         `(SELECT createdAt FROM orderHistories WHERE orderHistories.orderId = order.id AND orderHistories.statusId = order.statusId LIMIT 1)`,
       ),
-      'assignedAt',     
+      'assignedAt',
     ],
     [
       literal(`COALESCE(
