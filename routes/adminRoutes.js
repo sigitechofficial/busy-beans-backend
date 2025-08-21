@@ -127,7 +127,7 @@ router.put(
 );
 
 //!MIDDLEWARE PRIVATE ROUTES
-// router.use(protect)
+router.use(protect)
 
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -223,7 +223,10 @@ router.patch(
   '/order-management/update-order/:orderId',
   manageOrderController.updateOrder,
 );
-
+router.delete(
+  '/order-management/delete-order/:orderId',
+  manageOrderController.deleteOrder,
+);
 router.get('/order-details/:id', manageOrderController.orderDetails);
 
 router.patch('/assign-supplier', manageOrderController.orderJourneryComplete);

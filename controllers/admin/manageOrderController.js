@@ -1017,7 +1017,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   }
-
+ 
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
   input.order.discountPercentage = percentageDiscount;
@@ -1187,5 +1187,79 @@ exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: 'success',
     data: output,
+  });
+});
+
+
+exports.deleteOrder = catchAsync(async (req, res, next) => {
+  const placedOrder = await order.findOne({
+    where: { id: req.params.orderId },
+    attributes: [
+      'id',
+      'supplierId',
+      'paymentStatus',
+      'salesRepId',
+      'invoiceId',
+      'orderFrequencyId',
+      'invoiceDate',
+      'invoiceReminder',
+      'invoicePaidDate',
+      'statusId',
+    ],
+  });
+ 
+
+if (!placedOrder) {
+  return next(new AppError('Order not found.', 404));
+} else if (placedOrder.paymentStatus === 'done') {
+  return next(
+    new AppError(
+      'This order has already been paid for and cannot be deleted.',
+      400
+    )
+  );
+} else if (placedOrder.statusId >= 4) {
+  return next(
+    new AppError(
+      'This order has already been dispatched and cannot be deleted.',
+      400
+    )
+  );
+}
+
+  Stripe.blockCheckoutSession(placedOrder?.invoiceId);
+  await order.destroy({ where: { id: placedOrder?.id }} )
+
+await item.destroy({
+  where: { orderId: { [Op.is]: null } }
+});
+
+// Update rows where orderId IS NULL
+await orderHistory.destroy({ where: { orderId: { [Op.is]: null } } });
+ 
+  const pdfFilename = `invoice-00${placedOrder.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
+  const pdfPath = path.join(__dirname, '../../public/invoicePDFs', pdfFilename);
+  fs.access(pdfPath, fs.constants.F_OK, (err) => {
+    if (!err) {
+      fs.unlink(pdfPath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error(
+            `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
+            unlinkErr,
+          );
+        } else {
+          console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
+        }
+      });
+    } else {
+      console.warn(
+        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
+      );
+    }
+  });
+
+  return res.status(200).json({
+    status: 'success',
+    data: { },
   });
 });

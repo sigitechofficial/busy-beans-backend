@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const { salesRep, supplier } = require('../models'); // Replace with your actual model name
 const APIFeatures = require('../utils/apiFeatures');
 const REDIS = require('../utils/redisHandling');
+const {deleteDeviceTokenMultiple,deleteDeviceTokenSingle} = require('../utils/deviceTokenDelete');
 
 exports.deleteOne = (Model) =>
   catchAsync(async (req, res, next) => {
@@ -42,6 +43,8 @@ exports.softdelete = (Model, changes) =>
 
 exports.updateOne = (Model) =>
   catchAsync(async (req, res, next) => {
+      console.log('🚀 ~ catchAsync ~ UPDATE input:' );
+
     const input = req.body;
     // input.password = undefined;
     if (req.file) {
@@ -59,6 +62,21 @@ exports.updateOne = (Model) =>
       returning: true,
       plain: true,
     });
+
+    if(Model == supplier){
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:' );
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:' );
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:' );
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:' );
+
+        deleteDeviceTokenMultiple({id:req.params.id,entity:'supplier', tokenCondition:{supplierId:req.params.id}})
+    } else if(Model == salesRep){
+        console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:' );
+        console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:' );
+        console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:' );
+        console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:' );
+        deleteDeviceTokenMultiple({id:req.params.id,entity:'localPartner', tokenCondition:{salesRepId:req.params.id}})
+    }
 
     if (!doc[1]) {
       return next(new AppError('No document found with that ID', 404));
@@ -139,6 +157,9 @@ exports.getAll = (Model, incommingFilter = {}) =>
       .sort()
       .limitFields()
       .paginate();
+
+      
+    console.log("🚀 ~ features:", features)
 
     const doc = await Model.findAll(features.getQuery()); // Apply queryOptions to the findAll method
 

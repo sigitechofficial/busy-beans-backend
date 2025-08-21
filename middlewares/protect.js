@@ -46,11 +46,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   try {
     decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
     console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
-    console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
-    console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
-    console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
-    console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
-    console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
+ 
   } catch (err) {
     return next(
       new AppError('Invalid or expired token.', 401, 'authentication-fail'),

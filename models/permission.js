@@ -10,16 +10,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       key: {
         type: DataTypes.STRING,
-        allowNull: false,
-        unique: true, // Ensure permission keys are unique (e.g., "order.create")
-        validate: {
-          notNull: {
-            msg: 'Permission key is required',
-          },
-          notEmpty: {
-            msg: 'Permission key cannot be empty',
-          },
-        },
+        allowNull: true,
       },
       description: {
         type: DataTypes.STRING,

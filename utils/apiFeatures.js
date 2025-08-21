@@ -57,11 +57,16 @@ class APIFeatures {
           }
         });
       } else {
-        // ✅ Simple equality like ?paymentStatus=pending
+        // ✅ Simple equality like paymentStatus=pending
         filterConditions[key] = this._castValue(value);
       }
     });
 
+    delete filterConditions.feature;
+    delete filterConditions.sort;
+    delete filterConditions.limit;
+    delete filterConditions.page;
+    delete filterConditions.fields;
     this.queryOptions.where = filterConditions;
     console.dir(filterConditions, { depth: null });
     return this;

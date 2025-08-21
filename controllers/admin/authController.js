@@ -135,6 +135,12 @@ const login = (Model, entity) => {
       deviceToken.create(input);
     }
     // 3) If everything ok, send token to client
+    console.log('🚀 ~ login ~ createSendToken:', entity);
+    console.log('🚀 ~ login ~ createSendToken:', entity);
+    console.log('🚀 ~ login ~ createSendToken:', entity);
+    console.log('🚀 ~ login ~ entity:', entity);
+    console.log('🚀 ~ login ~ entity:', entity);
+
     createSendToken(data, 200, req, res, req.body?.tokenId, entity);
   });
 };

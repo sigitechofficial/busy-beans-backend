@@ -263,7 +263,10 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     ],
   });
   const output = JSON.parse(JSON.stringify(doc));
-  console.log('ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:', output?.id);
+  console.log(
+    'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:',
+    output?.id,
+  );
 
   const tokenCondition = {
     [Op.or]: [

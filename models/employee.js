@@ -71,6 +71,9 @@ module.exports = (sequelize) => {
   employee.associate = (models) => {
     employee.hasMany(models.deviceToken);
     models.deviceToken.belongsTo(employee);
+
+    employee.hasMany(models.permission);
+    models.permission.belongsTo(employee);
   };
 
   return employee;

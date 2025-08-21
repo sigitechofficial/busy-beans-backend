@@ -171,13 +171,6 @@ module.exports = (sequelize) => {
         defaultValue: 30,
       },
     },
-    {
-      tableName: 'orders',
-      primaryKey: true,
-      autoIncrement: true,
-      paranoid: true,
-      timestamps: true,
-    },
   );
 
   // Hook to exclude deletedAt and updatedAt from query results
