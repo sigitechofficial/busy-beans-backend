@@ -860,6 +860,7 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
 
 //* UPDATE ORDER
 exports.updateOrder = catchAsync(async (req, res, next) => {
+    console.log("🚀 ~ req.body:", req.body)
   const placedOrder = await order.findOne({
     where: { id: req.params.orderId },
     attributes: [
@@ -887,6 +888,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       ),
     );
   }
+
 
   if (req.body?.order) {
     await order.update(req.body?.order, { where: { id: placedOrder.id } });
@@ -919,7 +921,9 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   if (checkSession) await Stripe.blockCheckoutSession(placedOrder?.invoiceId);
 
-  const input = { order: { invoiceId: null, hostedInvoiceUrl: null } };
+  const input  = req.body
+  input.order.invoiceId= null
+  input.order.hostedInvoiceUrl= null 
   input.items = req.body.items;
 
   console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
@@ -1057,6 +1061,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   });
+  console.log("🚀 ~ input?.order?.emailInvoiceToCustomer:", input?.order)
   if (input?.order?.emailInvoiceToCustomer) {
     sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
   }

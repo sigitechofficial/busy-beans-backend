@@ -18,6 +18,16 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 module.exports = async function ({ email, data, invoice }) {
   console.log('🚀 ~ data:', data?.salesRep);
   console.log('🚀 ~ email:', email);
+const baseDate = new Date(data?.on || data?.createdAt);
+
+// Add 30 days
+const plus30Days = new Date(baseDate);
+plus30Days.setDate(baseDate.getDate() + 30);
+
+// Convert to yyyy-mm-dd
+const formattedDate = plus30Days.toISOString().split('T')[0];
+
+const dueDate = emailDateFormate(formattedDate)
   const on = emailDateFormate(data?.on || data?.createdAt);
   const lcoalPatner = data?.salesRep;
   if (lcoalPatner) {
@@ -75,26 +85,26 @@ module.exports = async function ({ email, data, invoice }) {
     return temp;
   });
 
-  const mainContent = data?.invoiceDate
+  const mainContent = data?.invoiceReminder
     ? `This is a gentle reminder that your invoice for order is still pending. We appreciate your prompt attention.
 Please review the invoice below and complete your payment at your earliest convenience.`
-    : 'You have placed an order on Busy Bean. Please review the details below and click the button to pay your invoice.';
-  const bottomContent = data?.invoiceDate
+    : `Dear ${data?.companyName || ''},<br><br>Please find the attached invoice ${data.invoiceNumber ||''} from Busy Bean Coffee, Inc.<br>View and pay the invoice click the following button.`;
+  const bottomContent = data?.invoiceReminder
     ? `If you have already made the payment, please disregard this message. Otherwise, we look forward to receiving your payment soon.
 Need help or want a custom order? Just reply to this email or call us!`
     : `If you'd like to place an order or need a customized package, feel free to contact us directly. We're happy to serve you quality coffee, delivered fresh.<br>Looking forward to your response!`;
-  const heading = data.invoiceDate
+  const heading = data.invoiceReminder
     ? `Payment Reminder: Complete Payment for Order ${data.id}`
-    : `Complete Payment for Order ${data.id}`;
+    : `$${data.totalBill} due by ${dueDate} for ${data?.invoiceNumber || ''}`;
   items = items.join('');
   email.push('sigidevelopers@gmail.com');
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
-      subject: data?.invoiceDate
+      subject: data?.invoiceReminder
         ? `Payment Reminder: Complete Payment for Invoice #${data?.invoiceNumber || ''}`
-        : `Your Invoice #${data?.invoiceNumber || ''} Please Complete Your Payment`, // Subject line
+        : `Your Invoice ${data?.invoiceNumber || ''} Please Complete Your Payment`, // Subject line
       replyTo: data.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
       html: `<!DOCTYPE html>

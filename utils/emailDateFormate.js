@@ -48,7 +48,7 @@ exports.emailDateFormate = (dateString, timeString) => {
   const ampm = time.getHours() < 12 ? 'am' : 'pm';
 
   // Construct the formatted string
-  const formattedString = `${dayOfWeek}, ${month} ${dayOfMonth}, ${year}`;
+  const formattedString = `${month} ${dayOfMonth}, ${year}`;
 
   return formattedString;
 };

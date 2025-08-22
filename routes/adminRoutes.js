@@ -34,6 +34,11 @@ router.post(
   orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
 );
 
+router.post(
+  '/order-management/fetch-invoice/:orderId',
+  manageOrderController.fetchInvoice,
+);
+
 router.post('/login', authController.adminLogin);
 router.post('/login/sales-rep', authController.salesRepLogin);
 router.post('/login/supplier', authController.supplierLogin);
@@ -215,10 +220,6 @@ router.post(
   manageOrderController.sendInvoiceMultiple,
 );
 
-router.post(
-  '/order-management/fetch-invoice/:orderId',
-  manageOrderController.fetchInvoice,
-);
 router.patch(
   '/order-management/update-order/:orderId',
   manageOrderController.updateOrder,

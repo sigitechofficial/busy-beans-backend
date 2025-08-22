@@ -44,6 +44,20 @@ exports.addProduct = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllProducts = factory.getAll(product);
+exports.getAllProductsUser = catchAsync(async (req, res, next) => {
+  const data = await product.findOne({
+    where: { status : 0, deleted:0 },
+    attributes: { exclude: ['deleted', 'deletedAt', 'updatedAt'] },
+  });
+
+  if (!data) {
+    return next(new AppError('Product Not Found', 400));
+  }
+  res.status(200).json({    
+    status: 'success',
+    data: { product: data },
+  });
+});
 
 exports.getProduct = catchAsync(async (req, res, next) => {
   const data = await product.findOne({
@@ -63,6 +77,7 @@ exports.getProduct = catchAsync(async (req, res, next) => {
     data: { product: data },
   });
 });
+
 exports.updateProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
   const exist = await product.findOne({

@@ -52,15 +52,15 @@ exports.protect = catchAsync(async (req, res, next) => {
       new AppError('Invalid or expired token.', 401, 'authentication-fail'),
     );
   }
-  console.log('🚀 ~ PROTECT MIDDLEWARE decoded:', decoded);
+  // console.log('🚀 ~ PROTECT MIDDLEWARE decoded:', decoded);
   // 3) Check if token is still valid in Redis
   let redisUserId = await Redis.getUserIdFromToken(token);
-  console.log('🚀 ~ PROTECT MIDDLEWARE FROM REDIS USER ID :', redisUserId);
-  console.log('🚀 ~ decoded.entity:', decoded);
+  // console.log('🚀 ~ PROTECT MIDDLEWARE FROM REDIS USER ID :', redisUserId);
+  // console.log('🚀 ~ decoded.entity:', decoded);
   if (`${decoded?.entity}${decoded?.id}` == redisUserId)
     redisUserId = decoded.id;
-  console.log('🚀 ~ redisUserId: FINAL ', redisUserId);
-  console.log('🚀 ~ decoded?.id: FINAL ', decoded?.id);
+  // console.log('🚀 ~ redisUserId: FINAL ', redisUserId);
+  // console.log('🚀 ~ decoded?.id: FINAL ', decoded?.id);
   const allowedEntities = Object.keys(MODEL);
 
   if (
@@ -77,7 +77,7 @@ exports.protect = catchAsync(async (req, res, next) => {
       ),
     );
   }
-  console.log('🚀 ~ AUTH PASS NOW GET USER FROM DB ', decoded?.id);
+  // console.log('🚀 ~ AUTH PASS NOW GET USER FROM DB ', decoded?.id);
 
   // 4) Check if user still exists
   let currentUser = await MODEL[`${decoded.entity}`].findOne({

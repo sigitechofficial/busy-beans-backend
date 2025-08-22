@@ -3,6 +3,7 @@ const authController = require('../controllers/customer/authController');
 const orderController = require('../controllers/customer/orderController');
 const profileController = require('../controllers/customer/profileController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
+const productController = require('../controllers/admin/productController');
 const Authorization = require('../middlewares/protect');
 
 const router = express.Router();
@@ -35,5 +36,8 @@ router.get('/order-details/:id', manageOrderController.orderDetails);
 router.put('/drawer/update-profile', profileController.updateProfile);
 router.post('/address/add-new/:id', profileController.addAddress);
 router.get('/address/view-all', profileController.getAllAddress);
+// router.get('/product', profileController.productController);
+router.get(`/product`, productController.getAllProducts);
+router.get(`/product/:userId`, productController.getAllProducts);
 
 module.exports = router;

@@ -43,6 +43,10 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: false,
       },
+      type: {
+        type: DataTypes.ENUM('product', 'charges'),
+        defaultValue: 'charges',
+      },
     },
     {
       tableName: 'items',
