@@ -63,7 +63,7 @@ module.exports = async function ({ email, data, invoice }) {
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
-              <td style="padding: 10px;">${ele.product}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''} </td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${ele.price / ele.qty}</td>
               <td style="padding: 10px;">$${ele?.price}</td>

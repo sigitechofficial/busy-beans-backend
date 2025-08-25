@@ -18,7 +18,10 @@ const {
 } = require('../events/connectStripeAccountEvent');
 const { response } = require('../../utils/response');
 const { Op, literal, fn, col } = require('sequelize');
-const {deleteDeviceTokenMultiple,deleteDeviceTokenSingle} = require('../../utils/deviceTokenDelete');
+const {
+  deleteDeviceTokenMultiple,
+  deleteDeviceTokenSingle,
+} = require('../../utils/deviceTokenDelete');
 
 exports.getAllSalesRep = factory.getAll(salesRep);
 

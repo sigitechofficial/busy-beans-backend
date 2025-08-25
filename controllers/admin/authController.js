@@ -12,6 +12,7 @@ const {
   supplier,
   deviceToken,
   employee,
+  permission,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -23,6 +24,7 @@ const Event = require('../events/userAccountRelatedEvents');
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
+const { log } = require('console');
 const signToken = (data) =>
   jwt.sign(
     data,
@@ -94,9 +96,10 @@ exports.signup = catchAsync(async (req, res, next) => {
 });
 
 const login = (Model, entity) => {
+  console.log("🚀 ~ login ~ entity:", entity)
   return catchAsync(async (req, res, next) => {
     const { email, password } = req.body;
-    console.log('🚀 ~ login ~ entity:', entity);
+
     console.log('🚀 ~ exports.login=catchAsync ~ req.body;:', req.body);
     // 1) Check if email and password exist
     if (!email || !password) {
@@ -107,13 +110,18 @@ const login = (Model, entity) => {
     let data = await Model.findOne({
       where: { email, deleted: 0 },
     });
-    if (!data && (entity == 'admin' || entity == 'localPartner')) {
-      data = await employee.findOne({
-        where: { email, deleted: 0 },
-      });
-      console.log('🚀 ~ login ~ data:', data);
-      if (data) {
-        entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+    console.log('🚀 ~ login ~ entityBBBB:', entity);
+    if (!data) {
+      if(entity == 'admin' || entity == 'localPartner'){
+
+        data = await employee.findOne({
+          where: { email, deleted: 0 },
+          include: { model: permission, attributes: ['id', 'key'] },
+        });
+        console.log('🚀 ~ login ~ data:', data);
+        if (data) {
+          entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+        }
       }
     }
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
@@ -136,11 +144,6 @@ const login = (Model, entity) => {
     }
     // 3) If everything ok, send token to client
     console.log('🚀 ~ login ~ createSendToken:', entity);
-    console.log('🚀 ~ login ~ createSendToken:', entity);
-    console.log('🚀 ~ login ~ createSendToken:', entity);
-    console.log('🚀 ~ login ~ entity:', entity);
-    console.log('🚀 ~ login ~ entity:', entity);
-
     createSendToken(data, 200, req, res, req.body?.tokenId, entity);
   });
 };

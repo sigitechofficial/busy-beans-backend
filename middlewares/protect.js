@@ -46,7 +46,6 @@ exports.protect = catchAsync(async (req, res, next) => {
   try {
     decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
     console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
- 
   } catch (err) {
     return next(
       new AppError('Invalid or expired token.', 401, 'authentication-fail'),
@@ -81,7 +80,7 @@ exports.protect = catchAsync(async (req, res, next) => {
 
   // 4) Check if user still exists
   let currentUser = await MODEL[`${decoded.entity}`].findOne({
-    where: { id: decoded?.id, deleted: 0 },
+    where: { id: decoded?.id,email:decoded.email, deleted: 0 },
   });
 
   if (!currentUser) {
@@ -101,6 +100,7 @@ exports.protect = catchAsync(async (req, res, next) => {
       ),
     );
   }
+  
 
   currentUser = JSON.parse(JSON.stringify(currentUser));
 

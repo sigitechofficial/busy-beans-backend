@@ -45,6 +45,12 @@ exports.customersList = catchAsync(async (req, res, next) => {
         ),
         'preferredPaymentMethod',
       ],
+      [
+        literal(
+          `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`,
+        ),
+        'employee',
+      ],
       `id`,
       `name`,
       `email`,
@@ -203,6 +209,12 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
+          `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`,
+        ),
+        'employee',
+      ],
+      [
+        literal(
           `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         'salesRepState',
@@ -226,6 +238,7 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
       'dispatchEmail',
       'salesRepId',
       'defaultDiscount',
+      'employeeId'
     ],
     include: [
       {

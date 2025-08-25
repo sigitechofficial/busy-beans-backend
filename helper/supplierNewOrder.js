@@ -38,15 +38,17 @@ module.exports = function ({ email, data }) {
 
   let items = [];
   data?.items.forEach((ele) => {
-    let temp = `
+
+   if(ele.type == 'product'){
+     let temp = `
             <tr>
               <td style="padding: 10px;">${ele.supplierSku || ''}</td>
-              <td style="padding: 10px;">${ele.product || ''}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
               <td style="padding: 10px;">${ele.qty || ''}</td>
             </tr>
             `;
     temp = items.push(temp);
-    return temp;
+    return temp;}
   });
 
   items = items.join('');

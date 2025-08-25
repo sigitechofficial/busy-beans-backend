@@ -8,6 +8,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
+      productName: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
       price: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
@@ -45,7 +49,7 @@ module.exports = (sequelize) => {
       },
       type: {
         type: DataTypes.ENUM('product', 'charges'),
-        defaultValue: 'charges',
+        defaultValue: 'product',
       },
     },
     {

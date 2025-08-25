@@ -1,30 +1,34 @@
 // utils/deleteDeviceToken.js
-const { deviceToken } = require("../models"); // adjust path as needed
+const { deviceToken } = require('../models'); // adjust path as needed
 const REDIS = require('./redisHandling');
 
-async function deleteDeviceTokenMultiple({entity,tokenCondition,id}) {
-  console.log("🚀 ~ deleteDeviceTokenMultiple ~ entity:")
+async function deleteDeviceTokenMultiple({ entity, tokenCondition, id }) {
+  console.log('🚀 ~ deleteDeviceTokenMultiple ~ entity:');
   try {
-     await deviceToken.destroy({
+    await deviceToken.destroy({
       where: tokenCondition,
     });
 
-    REDIS.revokeAllTokensForUser(`${entity}${id}`)
+    REDIS.revokeAllTokensForUser(`${entity}${id}`);
   } catch (error) {
-    console.error("Error deleting device token:", error);
+    console.error('Error deleting device token:', error);
   }
 }
 
-
-async function deleteDeviceTokenSingle({entity,tokenCondition,refreshToken,id}) {
-  console.log("🚀 ~ deleteDeviceTokenSingle ~ deleteDeviceTokenSingle:")
+async function deleteDeviceTokenSingle({
+  entity,
+  tokenCondition,
+  refreshToken,
+  id,
+}) {
+  console.log('🚀 ~ deleteDeviceTokenSingle ~ deleteDeviceTokenSingle:');
   try {
-     await deviceToken.destroy({
+    await deviceToken.destroy({
       where: tokenCondition,
     });
-    REDIS.revokeSingleToken(`${entity}${id}`,refreshToken)
+    REDIS.revokeSingleToken(`${entity}${id}`, refreshToken);
   } catch (error) {
-    console.error("Error deleting device token:", error);
+    console.error('Error deleting device token:', error);
   }
 }
-module.exports = {deleteDeviceTokenMultiple,deleteDeviceTokenSingle};
+module.exports = { deleteDeviceTokenMultiple, deleteDeviceTokenSingle };

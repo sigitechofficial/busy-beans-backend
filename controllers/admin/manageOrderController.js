@@ -543,6 +543,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
             'productCode',
           ],
           [
+            literal(
+              `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`,
+            ),
+            'grind',
+          ],
+          [
             literal(`
             (SELECT supplierSku
             FROM skuSuppliers
@@ -553,6 +559,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
             'supplierSku',
           ],
           'qty',
+          'productName',
           'price',
           'discount',
           'orderId',
@@ -860,7 +867,7 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
 
 //* UPDATE ORDER
 exports.updateOrder = catchAsync(async (req, res, next) => {
-    console.log("🚀 ~ req.body:", req.body)
+  console.log('🚀 ~ req.body:', req.body);
   const placedOrder = await order.findOne({
     where: { id: req.params.orderId },
     attributes: [
@@ -888,7 +895,6 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       ),
     );
   }
-
 
   if (req.body?.order) {
     await order.update(req.body?.order, { where: { id: placedOrder.id } });
@@ -921,9 +927,9 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   if (checkSession) await Stripe.blockCheckoutSession(placedOrder?.invoiceId);
 
-  const input  = req.body
-  input.order.invoiceId= null
-  input.order.hostedInvoiceUrl= null 
+  const input = req.body;
+  input.order.invoiceId = null;
+  input.order.hostedInvoiceUrl = null;
   input.items = req.body.items;
 
   console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
@@ -954,6 +960,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     '🚀 ~ exports.bookOrder=catchAsync ~ products:',
     products?.length,
   );
+
   const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
@@ -999,6 +1006,39 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
     return element; // Return the transformed element
   });
+
+  if (req.body?.typeCharges?.length > 0) {
+    console.log(
+      '🚀 ~ req.body?.typeCharges?.length:',
+      req.body?.typeCharges?.length,
+    );
+    req.body?.typeCharges.forEach((obj) => {
+      const element = {};
+      element.code = obj.code;
+      element.qty = obj.qty;
+      element.price = obj.price;
+      element.productName = obj.name;
+      element.orderId = placedOrder?.id;
+      element.type = 'charges';
+      element.orderFrequencyId = placedOrder?.orderFrequencyId;
+      element.discount = 0;
+
+      itemsPrice += parseFloat(element?.price || 0);
+
+      // Handle salesRep commission if applicable
+      if (placedOrder?.salesRepId) {
+        element.salerCommission = parseFloat(element?.price);
+      } else {
+        element.wholesalePrice = 0;
+        element.salerCommission = 0;
+      }
+
+      finalItems.push(element);
+    });
+  }
+
+  console.log('🚀 ~ finalItems:', finalItems);
+
   let shippingCompany;
   if (!req.body?.order?.shippingCharges) {
     shippingCompany = await shippingCompanies.findOne({
@@ -1021,7 +1061,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   }
- 
+
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
   input.order.discountPercentage = percentageDiscount;
@@ -1061,7 +1101,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   });
-  console.log("🚀 ~ input?.order?.emailInvoiceToCustomer:", input?.order)
+  console.log('🚀 ~ input?.order?.emailInvoiceToCustomer:', input?.order);
   if (input?.order?.emailInvoiceToCustomer) {
     sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
   }
@@ -1195,7 +1235,6 @@ exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
   });
 });
 
-
 exports.deleteOrder = catchAsync(async (req, res, next) => {
   const placedOrder = await order.findOne({
     where: { id: req.params.orderId },
@@ -1212,36 +1251,35 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
       'statusId',
     ],
   });
- 
 
-if (!placedOrder) {
-  return next(new AppError('Order not found.', 404));
-} else if (placedOrder.paymentStatus === 'done') {
-  return next(
-    new AppError(
-      'This order has already been paid for and cannot be deleted.',
-      400
-    )
-  );
-} else if (placedOrder.statusId >= 4) {
-  return next(
-    new AppError(
-      'This order has already been dispatched and cannot be deleted.',
-      400
-    )
-  );
-}
+  if (!placedOrder) {
+    return next(new AppError('Order not found.', 404));
+  } else if (placedOrder.paymentStatus === 'done') {
+    return next(
+      new AppError(
+        'This order has already been paid for and cannot be deleted.',
+        400,
+      ),
+    );
+  } else if (placedOrder.statusId >= 4) {
+    return next(
+      new AppError(
+        'This order has already been dispatched and cannot be deleted.',
+        400,
+      ),
+    );
+  }
 
   Stripe.blockCheckoutSession(placedOrder?.invoiceId);
-  await order.destroy({ where: { id: placedOrder?.id }} )
+  await order.destroy({ where: { id: placedOrder?.id } });
 
-await item.destroy({
-  where: { orderId: { [Op.is]: null } }
-});
+  await item.destroy({
+    where: { orderId: { [Op.is]: null } },
+  });
 
-// Update rows where orderId IS NULL
-await orderHistory.destroy({ where: { orderId: { [Op.is]: null } } });
- 
+  // Update rows where orderId IS NULL
+  await orderHistory.destroy({ where: { orderId: { [Op.is]: null } } });
+
   const pdfFilename = `invoice-00${placedOrder.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
   const pdfPath = path.join(__dirname, '../../public/invoicePDFs', pdfFilename);
   fs.access(pdfPath, fs.constants.F_OK, (err) => {
@@ -1265,6 +1303,6 @@ await orderHistory.destroy({ where: { orderId: { [Op.is]: null } } });
 
   return res.status(200).json({
     status: 'success',
-    data: { },
+    data: {},
   });
 });

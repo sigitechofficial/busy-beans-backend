@@ -28,9 +28,11 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'product',
     ],
     'qty',
+    'productName',
     'price',
     'discount',
     'orderId',
+    'type',
     'productId',
     [
       literal(
@@ -44,6 +46,12 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
       ),
       'productCode',
+    ],
+    [
+      literal(
+        `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`,
+      ),
+      'grind',
     ],
     [
       literal(`

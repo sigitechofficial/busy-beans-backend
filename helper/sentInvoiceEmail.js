@@ -18,16 +18,16 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 module.exports = async function ({ email, data, invoice }) {
   console.log('🚀 ~ data:', data?.salesRep);
   console.log('🚀 ~ email:', email);
-const baseDate = new Date(data?.on || data?.createdAt);
+  const baseDate = new Date(data?.on || data?.createdAt);
 
-// Add 30 days
-const plus30Days = new Date(baseDate);
-plus30Days.setDate(baseDate.getDate() + 30);
+  // Add 30 days
+  const plus30Days = new Date(baseDate);
+  plus30Days.setDate(baseDate.getDate() + 30);
 
-// Convert to yyyy-mm-dd
-const formattedDate = plus30Days.toISOString().split('T')[0];
+  // Convert to yyyy-mm-dd
+  const formattedDate = plus30Days.toISOString().split('T')[0];
 
-const dueDate = emailDateFormate(formattedDate)
+  const dueDate = emailDateFormate(formattedDate);
   const on = emailDateFormate(data?.on || data?.createdAt);
   const lcoalPatner = data?.salesRep;
   if (lcoalPatner) {
@@ -75,7 +75,7 @@ const dueDate = emailDateFormate(formattedDate)
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
-              <td style="padding: 10px;">${ele.product}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${ele.price / ele.qty}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
@@ -88,7 +88,7 @@ const dueDate = emailDateFormate(formattedDate)
   const mainContent = data?.invoiceReminder
     ? `This is a gentle reminder that your invoice for order is still pending. We appreciate your prompt attention.
 Please review the invoice below and complete your payment at your earliest convenience.`
-    : `Dear ${data?.companyName || ''},<br><br>Please find the attached invoice ${data.invoiceNumber ||''} from Busy Bean Coffee, Inc.<br>View and pay the invoice click the following button.`;
+    : `Dear ${data?.companyName || ''},<br><br>Please find the attached invoice ${data.invoiceNumber || ''} from Busy Bean Coffee, Inc.<br>View and pay the invoice click the following button.`;
   const bottomContent = data?.invoiceReminder
     ? `If you have already made the payment, please disregard this message. Otherwise, we look forward to receiving your payment soon.
 Need help or want a custom order? Just reply to this email or call us!`
@@ -295,4 +295,3 @@ Need help or want a custom order? Just reply to this email or call us!`
     },
   );
 };
-    

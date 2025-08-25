@@ -74,6 +74,9 @@ module.exports = (sequelize) => {
 
     employee.hasMany(models.permission);
     models.permission.belongsTo(employee);
+    
+    employee.hasMany(models.user);
+    models.user.belongsTo(employee);
   };
 
   return employee;

@@ -132,7 +132,7 @@ router.put(
 );
 
 //!MIDDLEWARE PRIVATE ROUTES
-router.use(protect)
+router.use(protect);
 
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {
