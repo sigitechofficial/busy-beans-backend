@@ -1,5 +1,6 @@
 // models/employee.js
 const { DataTypes } = require('sequelize');
+const bcrypt = require('bcryptjs');
 
 module.exports = (sequelize) => {
   const employee = sequelize.define(
@@ -67,6 +68,31 @@ module.exports = (sequelize) => {
       timestamps: true,
     },
   );
+
+  const SALT_ROUNDS = 10; 
+
+  // Create
+  employee.addHook('beforeCreate', (instance) => {
+    if (instance.password) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+    }
+  });
+
+  // Update (only if changed)
+  employee.addHook('beforeUpdate', (instance) => {
+    if (instance.changed('password')) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+    }
+  });
+
+  // If you ever bulk-create users with plaintext passwords:
+  employee.addHook('beforeBulkCreate', (instances) => {
+    for (const i of instances) {
+      if (i.password) {
+        i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);
+      }
+    }
+  });
 
   employee.associate = (models) => {
     employee.hasMany(models.deviceToken);

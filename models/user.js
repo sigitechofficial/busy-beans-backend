@@ -130,33 +130,39 @@ module.exports = (sequelize) => {
         },
       ],
     },
-  );
+  ); 
+// Hide fields in queries
+  user.addHook('beforeFind', (options) => {
+    if (!options.attributes) options.attributes = {};
+    const existing = Array.isArray(options.attributes.exclude) ? options.attributes.exclude : [];
+    options.attributes.exclude = Array.from(new Set([...existing, 'deletedAt', 'updatedAt']));
+  });
 
-  // // Hook to exclude deletedAt and updatedAt from query results
-  // user.addHook('beforeFind', (options) => {
-  //   if (options.attributes) {
-  //     options.attributes.exclude = ['deletedAt', 'updatedAt'];
-  //   }
-  // });
+  const SALT_ROUNDS = 10; 
 
-  // // Hook to hash password before create or update
-  // user.addHook('beforeCreate', async (input) => {
-  //   if (input.password) {
-  //     console.log("🚀 ~ user.addHook ~ input.password:", input.password)
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //     console.log("🚀 ~ user.addHook ~ After.password:", input.password)
-  //   }
-  // });
+  // Create
+  user.addHook('beforeCreate', (instance) => {
+    if (instance.password) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+    }
+  });
 
-  // user.addHook('beforeUpdate', async (input) => {
-  //   if (input.password) {
-  //     console.log("🚀 ~ user.addHook ~ input.password:", input.password)
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //     console.log("🚀 ~ user.addHook ~ After.password:", input.password)
+  // Update (only if changed)
+  user.addHook('beforeUpdate', (instance) => {
+    if (instance.changed('password')) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+    }
+  });
 
-  //   }
-  // });
-
+  // If you ever bulk-create users with plaintext passwords:
+  user.addHook('beforeBulkCreate', (instances) => {
+    for (const i of instances) {
+      if (i.password) {
+        i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);
+      }
+    }
+  });
+  // NOTE: For bulk updates, use { individualHooks: true } so beforeUpdate runs.
   // Associations models
   user.associate = (models) => {
     user.hasMany(models.address);

@@ -21,27 +21,27 @@ exports.footer = ` <tr>
   <td style="padding-top: 10px; text-align: center">
     <a href="https://www.facebook.com/busybeancoffeeinc/"
       style="display: inline-block; width: 44px; height: 44px; border-radius: 50%; background-color: #8F5D46; margin-right: 10px; text-align: center; line-height: 44px;">
-      <img src="cid:facebook" alt="Facebook" style="width: 24px; height: 24px; vertical-align: middle;" />
+      <img src="cid:facebook" style="width: 24px; height: 24px; vertical-align: middle;" />
     </a>
 
     <a href="https://x.com/busybean_coffee"
       style="display: inline-block; width: 44px; height: 44px; border-radius: 50%; background-color: #8F5D46; margin-right: 10px; text-align: center; line-height: 44px;">
-      <img src="cid:twitter" alt="Twitter" style="width: 24px; height: 24px; vertical-align: middle;" />
+      <img src="cid:twitter" style="width: 24px; height: 24px; vertical-align: middle;" />
     </a>
 
     <a href="https://www.instagram.com/busybean_coffee/"
       style="display: inline-block; width: 44px; height: 44px; border-radius: 50%; background-color: #8F5D46; margin-right: 10px; text-align: center; line-height: 44px;">
-      <img src="cid:instagram" alt="Instagram" style="width: 24px; height: 24px; vertical-align: middle;" />
+      <img src="cid:instagram" style="width: 24px; height: 24px; vertical-align: middle;" />
     </a>
 
     <a href="https://www.linkedin.com/in/thecoffeeman/"
       style="display: inline-block; width: 44px; height: 44px; border-radius: 50%; background-color: #8F5D46; margin-right: 10px; text-align: center; line-height: 44px;">
-      <img src="cid:linkedin" alt="LinkedIn" style="width: 24px; height: 24px; vertical-align: middle;" />
+      <img src="cid:linkedin" style="width: 24px; height: 24px; vertical-align: middle;" />
     </a>
 
     <a href="https://www.youtube.com/channel/UC4b4PYax5H3jRSyw4r0MCjQ/featured"
       style="display: inline-block; width: 44px; height: 44px; border-radius: 50%; background-color: #8F5D46; text-align: center; line-height: 44px;">
-      <img src="cid:youtube" alt="YouTube" style="width: 26px; height: 24px; vertical-align: middle;" />
+      <img src="cid:youtube" style="width: 26px; height: 24px; vertical-align: middle;" />
     </a>
   </td>
 </tr>

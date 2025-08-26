@@ -75,6 +75,8 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
   const filters = { deleted: 0 };
   if (req.params?.sr == 'not-assign') filters.salesRepId = null;
   else if (req.params?.sr == 'assign') filters.salesRepId = { [Op.ne]: null };
+  else if (req.params?.sr == 'assigned-employee') filters.employeeId = { [Op.ne]: null };
+  else if (req.params?.sr == 'not-assigned-employee') filters.employeeId = { [Op.ne]: null };
 
   if (req.params?.srId) filters.salesRepId = req.params?.srId;
 

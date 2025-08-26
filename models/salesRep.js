@@ -137,25 +137,31 @@ module.exports = (sequelize) => {
     },
   );
 
-  // // Hook to exclude deletedAt and updatedAt from query results
-  // salesRep.addHook('beforeFind', (options) => {
-  //   if (options.attributes) {
-  //     options.attributes.exclude = ['deletedAt', 'updatedAt'];
-  //   }
-  // });
 
-  // // Hook to hash password before create or update
-  // salesRep.addHook('beforeCreate', async (input) => {
-  //   if (input.password) {
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //   }
-  // });
+  const SALT_ROUNDS = 10; 
 
-  // salesRep.addHook('beforeUpdate', async (input) => {
-  //   if (input.password) {
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //   }
-  // });
+  // Create
+  salesRep.addHook('beforeCreate', (instance) => {
+    if (instance.password) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+    }
+  });
+
+  // Update (only if changed)
+  salesRep.addHook('beforeUpdate', (instance) => {
+    if (instance.changed('password')) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+    }
+  });
+
+  // If you ever bulk-create users with plaintext passwords:
+  salesRep.addHook('beforeBulkCreate', (instances) => {
+    for (const i of instances) {
+      if (i.password) {
+        i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);
+      }
+    }
+  });
 
   // Associations models
   salesRep.associate = (models) => {

@@ -1,4 +1,5 @@
 const AppError = require('../utils/appError');
+require('dotenv').config();
 
 const handleSequelizeValidationErrorDB = (err) => {
   console.error('ERROR 💥', err);

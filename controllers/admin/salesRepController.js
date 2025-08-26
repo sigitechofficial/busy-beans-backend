@@ -326,8 +326,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
     },
     attributes: [
       [
-        fn(
-          'FORMAT',
           literal(`
           (
             SELECT SUM(adminReceivableAmount)
@@ -336,24 +334,17 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.adminReceivableStatus = true
           )
         `),
-          2,
-        ),
         'paidToAdmin',
       ],
       // Total sales (offline)
       [
-        fn(
-          'FORMAT',
           literal(`
           (
             SELECT SUM(totalBill)
             FROM orders
             WHERE orders.salesRepId = salesRep.id
-              AND orders.createdBy = 'sales-rep'
           )
         `),
-          2,
-        ),
         'totalSales',
       ],
       [
@@ -386,8 +377,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
           SELECT SUM(items.wholesalePrice)
           FROM orders
           JOIN items ON items.orderId = orders.id
-          WHERE orders.salesRepId = salesRep.id
-            AND orders.createdBy = 'sales-rep'
+          WHERE orders.salesRepId = salesRep.id 
         )
       `),
         'wholesalePrice',
@@ -402,8 +392,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
             SELECT SUM(items.price - items.wholesalePrice)
             FROM orders
             JOIN items ON items.orderId = orders.id
-            WHERE orders.salesRepId = salesRep.id
-              AND orders.createdBy = 'sales-rep'
+            WHERE orders.salesRepId = salesRep.id 
               AND orders.paymentStatus = 'done'
               AND orders.paymentMethod != 'card'
           )
@@ -414,19 +403,14 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       ],
       // Number of sold products (offline)
       [
-        fn(
-          'FORMAT',
           literal(`
           (
             SELECT SUM(items.qty)
             FROM orders
             JOIN items ON items.orderId = orders.id
-            WHERE orders.salesRepId = salesRep.id
-              AND orders.createdBy = 'sales-rep'
+            WHERE orders.salesRepId = salesRep.id 
           )
         `),
-          2,
-        ),
         'numberOfSoldProducts',
       ],
 

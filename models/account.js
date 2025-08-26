@@ -57,18 +57,29 @@ module.exports = (sequelize, DataTypes) => {
     models.employee.belongsTo(account);
   };
 
-  // // Hook to hash password before create or update
-  // account.addHook('beforeCreate', async (input) => {
-  //   if (input.password) {
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //   }
-  // });
-
-  // account.addHook('beforeUpdate', async (input) => {
-  //   if (input.password) {
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //   }
-  // });
+  const SALT_ROUNDS =10
+    // Create
+    account.addHook('beforeCreate', (instance) => {
+      if (instance.password) {
+        instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+      }
+    });
+  
+    // Update (only if changed)
+    account.addHook('beforeUpdate', (instance) => {
+      if (instance.changed('password')) {
+        instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+      }
+    });
+  
+    // If you ever bulk-create users with plaintext passwords:
+    account.addHook('beforeBulkCreate', (instances) => {
+      for (const i of instances) {
+        if (i.password) {
+          i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);
+        }
+      }
+    });
 
   return account;
 };

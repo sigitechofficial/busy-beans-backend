@@ -1,3 +1,4 @@
+require('dotenv').config();
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const { Op } = require('sequelize');

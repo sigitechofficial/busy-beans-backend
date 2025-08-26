@@ -136,26 +136,31 @@ module.exports = (sequelize) => {
     },
   );
 
-  // // Hook to exclude deletedAt and updatedAt from query results
-  // supplier.addHook('beforeFind', (options) => {
-  //   if (options.attributes) {
-  //     options.attributes.exclude = ['deletedAt', 'updatedAt'];
-  //   }
-  // });
-
-  // // Hook to hash password before create or update
-  // supplier.addHook('beforeCreate', async (input) => {
-  //   if (input.password) {
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //   }
-  // });
-
-  // supplier.addHook('beforeUpdate', async (input) => {
-  //   if (input.password) {
-  //     input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
-  //   }
-  // });
-
+  
+    const SALT_ROUNDS = 10; 
+  
+    // Create
+    supplier.addHook('beforeCreate', (instance) => {
+      if (instance.password) {
+        instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+      }
+    });
+  
+    // Update (only if changed)
+    supplier.addHook('beforeUpdate', (instance) => {
+      if (instance.changed('password')) {
+        instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+      }
+    });
+  
+    // If you ever bulk-create suppliers with plaintext passwords:
+    supplier.addHook('beforeBulkCreate', (instances) => {
+      for (const i of instances) {
+        if (i.password) {
+          i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);
+        }
+      }
+    });
   // Associations models
   supplier.associate = (models) => {
     supplier.hasMany(models.order);

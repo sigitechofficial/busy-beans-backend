@@ -140,7 +140,7 @@ exports.login = catchAsync(async (req, res, next) => {
   if (!customer) {
     return next(new AppError('User Not found!', 200));
   }
-  const isMatch = password == customer?.password;
+  const isMatch = await bcrypt.compare(password, customer?.password)// password == customer?.password;
   if (!user || !isMatch) {
     return next(new AppError('Incorrect email or password', 401));
   }

@@ -1,4 +1,6 @@
 const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env;
+require('dotenv').config();
+
 const Stripe = require('stripe');
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2022-11-15',
@@ -94,11 +96,13 @@ async function attachBankAccountPaymentMethod({ paymentMethodId, customerId }) {
   }
 }
 
+// when no localpatner then adminReceivableAmount
 async function createPaymentIntent({
   adminReceivableAmount,
   localPartnerAccountId,
   localPatnerCommission,
   hasLocalPatner,
+  paymentMethodId=null,
 }) {
   try {
     const input = {
@@ -120,9 +124,18 @@ async function createPaymentIntent({
       input.amount = convertToCents(localPatnerCommission);
     }
 
+    if(paymentMethodId){
+     input.payment_method= paymentMethodId
+      input.confirm= true             // charge now
+      input.off_session= true         // no customer interaction
+      input.capture_method= 'automatic'
+    }
+
     console.log('🚀 ~ createPaymentIntent ~ input:', input);
     const paymentIntent = await stripe.paymentIntents.create(input);
-
+    
+    if(paymentIntent && paymentMethodId)return true
+    
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
@@ -454,7 +467,7 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       line_items.push({
         price_data: {
           currency,
-          product_data: { name: item.product },
+          product_data: { name: item.product || item.productName },
           unit_amount: convertToCents(amount),
         },
         quantity: item.qty,

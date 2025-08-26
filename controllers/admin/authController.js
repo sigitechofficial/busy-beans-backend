@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 const REDIS = require('../../utils/redisHandling');
+require('dotenv').config();
 
 // const { Op, literal, col, fn, where } = require('sequelize');
 const {
@@ -24,7 +25,6 @@ const Event = require('../events/userAccountRelatedEvents');
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
-const { log } = require('console');
 const signToken = (data) =>
   jwt.sign(
     data,
@@ -110,6 +110,11 @@ const login = (Model, entity) => {
     let data = await Model.findOne({
       where: { email, deleted: 0 },
     });
+    if(data){
+      if(Model == account)entity = 'admin'
+      else if(Model == salesRep)entity = 'localPartner'
+      else if(Model == supplier)entity = 'supplier'
+    }
     console.log('🚀 ~ login ~ entityBBBB:', entity);
     if (!data) {
       if(entity == 'admin' || entity == 'localPartner'){
@@ -125,12 +130,12 @@ const login = (Model, entity) => {
       }
     }
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
-    // if (!data || !(await bcrypt.compare(password, data?.password))) {
-    //   return next(new AppError('Incorrect email or password', 400));
-    // }
-    if (!data || password != data.password) {
+    if (!data || !(await bcrypt.compare(password, data?.password))) {
       return next(new AppError('Incorrect email or password', 400));
     }
+    // if (!data || password != data.password) {
+    //   return next(new AppError('Incorrect email or password', 400));
+    // }
     if (!data?.status) {
       return next(new AppError('You are blocked by admin!', 400));
     }
