@@ -59,24 +59,8 @@ const { setOrderFrequency } = require('../admin/orderFrequencyController');
 console.log(typeof setOrderFrequency);
 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
-  let condition = {};
-  if (req.params.srId) condition.salesRepId = req.params.srId;
 
-  // Add visibilityDate condition
-  condition.visibilityDate = {
-    [Op.lte]: new Date(), // or moment().toDate()
-  };
-
-  const doc = await orderFrequency.findAll({
-    where: {
-      ...condition,
-      nextOrderDate: {
-        [Op.notIn]: literal(`
-          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
-        `),
-      },
-    },
-    include: [
+  const included = [
       {
         model: item,
         attributes: [
@@ -97,7 +81,35 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
           'productId',
         ],
       },
-    ],
+    ]
+  let condition = {};
+  if (req.params.srId) condition.salesRepId = req.params.srId;
+  
+  
+  if(req.user.entity == 'adminEmployee' || req.user.entity == 'partnerEmployee'){
+    included.push({
+      model: user,
+      where:{employeeId:req.user?.id},
+      attributes: [],
+    })
+
+    if(condition.salesRepId) delete condition.salesRepId 
+  }
+  // Add visibilityDate condition
+  condition.visibilityDate = {
+    [Op.lte]: new Date(), // or moment().toDate()
+  };
+
+  const doc = await orderFrequency.findAll({
+    where: {
+      ...condition,
+      nextOrderDate: {
+        [Op.notIn]: literal(`
+          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
+        `),
+      },
+    },
+    include: included,
     attributes: [
       'id',
       [

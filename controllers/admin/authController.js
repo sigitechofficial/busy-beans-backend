@@ -117,8 +117,6 @@ const login = (Model, entity) => {
     }
     console.log('🚀 ~ login ~ entityBBBB:', entity);
     if (!data) {
-      if(entity == 'admin' || entity == 'localPartner'){
-
         data = await employee.findOne({
           where: { email, deleted: 0 },
           include: { model: permission, attributes: ['id', 'key'] },
@@ -127,7 +125,6 @@ const login = (Model, entity) => {
         if (data) {
           entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
         }
-      }
     }
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
     if (!data || !(await bcrypt.compare(password, data?.password))) {

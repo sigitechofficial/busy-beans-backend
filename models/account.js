@@ -57,7 +57,7 @@ module.exports = (sequelize, DataTypes) => {
     models.employee.belongsTo(account);
   };
 
-  const SALT_ROUNDS =10
+  const SALT_ROUNDS =12
     // Create
     account.addHook('beforeCreate', (instance) => {
       if (instance.password) {

@@ -183,7 +183,7 @@ module.exports = function ({ email, data }) {
         <td style="padding-left: 37px; padding-right: 37px; padding-top: 10px; font-family: 'Nunito', sans-serif; font-size: 14px; line-height: 1.5;">
           <table width="100%" cellspacing="0" cellpadding="5" style="border-collapse: collapse; background-color: #f3f3f3;">
             <tr style="background-color: #e0e0e0;">
-              <th style="text-align: left; padding: 10px; font-weight: bold;">Code</th>
+              <th style="text-align: left; padding: 10px; font-weight: bold;">SKU</th>
             <th style="text-align: left; padding: 10px; font-weight: bold;">Item</th>
               <th style="text-align: left; padding: 10px; font-weight: bold;">Quantity</th>
             </tr>

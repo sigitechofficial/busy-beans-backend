@@ -137,7 +137,7 @@ module.exports = (sequelize) => {
   );
 
   
-    const SALT_ROUNDS = 10; 
+    const SALT_ROUNDS = 12; 
   
     // Create
     supplier.addHook('beforeCreate', (instance) => {

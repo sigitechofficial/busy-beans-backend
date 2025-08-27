@@ -138,12 +138,13 @@ module.exports = (sequelize) => {
     options.attributes.exclude = Array.from(new Set([...existing, 'deletedAt', 'updatedAt']));
   });
 
-  const SALT_ROUNDS = 10; 
+  const SALT_ROUNDS = 12; 
 
   // Create
   user.addHook('beforeCreate', (instance) => {
     if (instance.password) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
+      console.log("🚀 ~  instance.password:",  instance.password)
     }
   });
 

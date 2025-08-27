@@ -22,6 +22,9 @@ function estimateStripeFeeFromDollars(amountInDollars) {
 function convertToCents(amount) {
   return Math.round(amount * 100);
 }
+function convertToDollars(cents) {
+  return cents / 100;
+}
 /*
  *  1:  Create Customer ________________________
  */
@@ -112,21 +115,25 @@ async function createPaymentIntent({
         enabled: true, // enables card, bank, Apple Pay, etc.
       },
     };
-
+   let stripeFee =  0
+   let localPartnerAmount =  0
+   let adminAmount = adminReceivableAmount 
     if (localPartnerAccountId && hasLocalPatner && localPatnerCommission > 0) {
       input.transfer_data = {
         destination: localPartnerAccountId, // Your connected account ID (acct_...)
       };
-      const stripeFee = estimateStripeFeeFromDollars(localPatnerCommission);
+      stripeFee = estimateStripeFeeFromDollars(localPatnerCommission);
       const adminProfitCents =
         convertToCents(adminReceivableAmount) + convertToCents(stripeFee);
       input.application_fee_amount = adminProfitCents;
+      adminAmount = convertToDollars(adminProfitCents)
+      localPartnerAmount = convertToDollars(localPatnerCommission)
       input.amount = convertToCents(localPatnerCommission);
     }
 
     if(paymentMethodId){
-     input.payment_method= paymentMethodId
-      input.confirm= true             // charge now
+      input.payment_method= paymentMethodId
+       input.confirm= true             // charge now
       input.off_session= true         // no customer interaction
       input.capture_method= 'automatic'
     }
@@ -134,7 +141,16 @@ async function createPaymentIntent({
     console.log('🚀 ~ createPaymentIntent ~ input:', input);
     const paymentIntent = await stripe.paymentIntents.create(input);
     
-    if(paymentIntent && paymentMethodId)return true
+    if(paymentIntent && paymentMethodId){
+      return {
+        status:true,
+        hasLocalPatner:hasLocalPatner,
+        data:{
+          proportionalStripeFee:true,
+          localPatnerCommission:localPartnerAmount
+        }
+      }
+    }
     
     return {
       clientSecret: paymentIntent.client_secret,

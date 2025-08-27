@@ -278,6 +278,11 @@ router.get(
   customerController.customersList,
 );
 
+router.get(
+  '/customer-management/customer-list/employee-id/:empId',
+  customerController.customersList,
+);
+
 router.patch(
   '/customer-management/assign-sale-rep/:id',
   customerController.assignSalesRep,

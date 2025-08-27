@@ -73,7 +73,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     specialChars: false,
   });
 
-  if (!req.body?.info?.registerBy || req.body?.info?.registerBy == 'email') {
+  if (!req.body?.info?.registerBy || req.body?.info?.registerBy != 'email') {
     req.body.info.verifiedAt = Date.now();
   }
 
@@ -113,9 +113,13 @@ exports.signup = catchAsync(async (req, res, next) => {
     });
     return res.status(200).json(
       response({
+        message: 'OTP sent to your email!',
         data: {
           message: 'OTP sent to your email!',
-          data: input,
+          data: {
+            id:input?.id,
+            email:input?.email
+          },
         },
       }),
     );
@@ -136,14 +140,44 @@ exports.login = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({
     where: { email, deleted: 0 },
   });
-  console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
+  console.log('ðŸš€ ~ exports.login=catchAsync ~ customer:', customer);
   if (!customer) {
     return next(new AppError('User Not found!', 200));
+  }else if (!customer.status) {
+    return next(new AppError('User Blocked by Administrator!', 200));
   }
+
   const isMatch = await bcrypt.compare(password, customer?.password)// password == customer?.password;
   if (!user || !isMatch) {
     return next(new AppError('Incorrect email or password', 401));
   }
+
+  if (!customer.verifiedAt) {  
+    const OTP = otpGenerator.generate(4, {
+      lowerCaseAlphabets: false,
+      upperCaseAlphabets: false,
+      specialChars: false,
+    });
+
+    customer.latestOtp = OTP;
+    await customer.save();
+    Event.otpToUsersEvent({
+      email: customer?.email,
+      name: customer.name,
+      otp: OTP,
+    });
+    return res.status(200).json(
+      response({
+        status:'verification-required',
+        message: 'OTP sent to your email!',
+        data: {
+            id:customer?.id,
+            email:customer?.email
+        },
+      }),
+    );
+  }
+
   if (req.body?.tokenId)
     deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
   const customerAddress = await address.findOne({
