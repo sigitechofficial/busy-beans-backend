@@ -326,7 +326,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
     },
     attributes: [
       [
-          literal(`
+        literal(`
           (
             SELECT SUM(adminReceivableAmount)
             FROM orders
@@ -338,7 +338,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       ],
       // Total sales (offline)
       [
-          literal(`
+        literal(`
           (
             SELECT SUM(totalBill)
             FROM orders
@@ -403,7 +403,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       ],
       // Number of sold products (offline)
       [
-          literal(`
+        literal(`
           (
             SELECT SUM(items.qty)
             FROM orders

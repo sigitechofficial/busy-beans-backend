@@ -105,9 +105,28 @@ async function createPaymentIntent({
   localPartnerAccountId,
   localPatnerCommission,
   hasLocalPatner,
-  paymentMethodId=null,
+  paymentMethodId = null,
+  stripeCustomer = null,
+  metadata = null
 }) {
+
   try {
+
+      console.log(`🚀 ~ createPaymentIntent ~ {
+  adminReceivableAmount,
+  localPartnerAccountId,
+  localPatnerCommission,
+  hasLocalPatner,
+  paymentMethodId = null,
+  stripeCustomer = null,
+}:`, {
+  adminReceivableAmount,
+  localPartnerAccountId,
+  localPatnerCommission,
+  hasLocalPatner,
+  paymentMethodId ,
+  stripeCustomer,
+})
     const input = {
       amount: convertToCents(adminReceivableAmount),
       currency: 'usd',
@@ -115,52 +134,98 @@ async function createPaymentIntent({
         enabled: true, // enables card, bank, Apple Pay, etc.
       },
     };
-   let stripeFee =  0
-   let localPartnerAmount =  0
-   let adminAmount = adminReceivableAmount 
+
+    let stripeFee = 0;
+    let localPartnerAmount = 0;
+    let adminAmount = adminReceivableAmount;
+    let totalBill = adminReceivableAmount;
+
     if (localPartnerAccountId && hasLocalPatner && localPatnerCommission > 0) {
       input.transfer_data = {
-        destination: localPartnerAccountId, // Your connected account ID (acct_...)
+        destination: localPartnerAccountId,
       };
-      stripeFee = estimateStripeFeeFromDollars(localPatnerCommission);
+      stripeFee = estimateStripeFeeFromDollars(adminReceivableAmount);
+      adminReceivableAmount = adminReceivableAmount - localPatnerCommission
+      adminAmount = adminReceivableAmount;
+      
       const adminProfitCents =
-        convertToCents(adminReceivableAmount) + convertToCents(stripeFee);
+        convertToCents(adminAmount) + convertToCents(stripeFee);
       input.application_fee_amount = adminProfitCents;
-      adminAmount = convertToDollars(adminProfitCents)
-      localPartnerAmount = convertToDollars(localPatnerCommission)
-      input.amount = convertToCents(localPatnerCommission);
+      localPartnerAmount = localPatnerCommission ;
+      input.amount = convertToCents(totalBill);
     }
 
-    if(paymentMethodId){
-      input.payment_method= paymentMethodId
-       input.confirm= true             // charge now
-      input.off_session= true         // no customer interaction
-      input.capture_method= 'automatic'
+    if (paymentMethodId) {
+      input.customer = stripeCustomer; 
+      input.payment_method = paymentMethodId;
+      input.confirm = true; // charge now
+      input.off_session = true; // no customer interaction
+      input.capture_method = 'automatic';
+      input.metadata = metadata
     }
 
     console.log('🚀 ~ createPaymentIntent ~ input:', input);
     const paymentIntent = await stripe.paymentIntents.create(input);
-    
-    if(paymentIntent && paymentMethodId){
+    // console.error("🚀🚀🚀🚀🚀 ~ createPaymentIntent",paymentIntent);
+
+    if (paymentIntent && paymentMethodId) {
       return {
-        status:true,
-        hasLocalPatner:hasLocalPatner,
-        data:{
-          proportionalStripeFee:true,
-          localPatnerCommission:localPartnerAmount
-        }
-      }
+        status: true,
+        hasLocalPatner,
+        data: {
+          proportionalStripeFee: stripeFee,
+          localPatnerCommission: localPartnerAmount,
+          adminReceivableAmount: adminAmount,
+          adminReceivableStatus:true,
+          paymentStatus	:'done',
+          invoicePaidDate:new Date(),
+          paymentMethod:'card',
+          paymentMethodId:paymentMethodId,
+          paymentIntentId:paymentIntent?.id
+        },
+      };
     }
-    
+
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
     };
   } catch (error) {
+    console.error("🚀🚀🚀🚀🚀 ~ createPaymentIntent",error);
+
+    if (paymentMethodId) {
+      // If Stripe requires authentication (3DS)
+      if (
+        error.code === 'authentication_required' ||
+        (error.payment_intent && error.payment_intent.status === 'requires_action')
+      ) {
+        return {
+          status: false,
+          message: 'Authentication required for this payment method. Please complete 3D Secure authentication or use another card.',
+        };
+      }
+
+        // 🚫 Destination account missing transfers capability
+      if (error?.code === 'insufficient_capabilities_for_transfer') {
+        return {
+          status: false,
+          message:
+            'The local partner’s Stripe account is not fully enabled to receive transfers. Please ask the partner to complete their Stripe onboarding and enable the transfers capability.',
+        };
+      }
+
+      // Otherwise return the raw error message
+      return {
+        status: false,
+        message: error.message || 'Payment failed',
+      };
+    }
+
     console.error(error);
     throw new AppError(`${error.message}`, 200);
   }
 }
+
 
 async function createConnectAccount({ email, country = 'US', returnUrl }) {
   try {

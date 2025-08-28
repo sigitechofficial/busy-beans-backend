@@ -117,8 +117,8 @@ exports.signup = catchAsync(async (req, res, next) => {
         data: {
           message: 'OTP sent to your email!',
           data: {
-            id:input?.id,
-            email:input?.email
+            id: input?.id,
+            email: input?.email,
           },
         },
       }),
@@ -143,16 +143,16 @@ exports.login = catchAsync(async (req, res, next) => {
   console.log('ðŸš€ ~ exports.login=catchAsync ~ customer:', customer);
   if (!customer) {
     return next(new AppError('User Not found!', 200));
-  }else if (!customer.status) {
+  } else if (!customer.status) {
     return next(new AppError('User Blocked by Administrator!', 200));
   }
 
-  const isMatch = await bcrypt.compare(password, customer?.password)// password == customer?.password;
+  const isMatch = await bcrypt.compare(password, customer?.password); // password == customer?.password;
   if (!user || !isMatch) {
     return next(new AppError('Incorrect email or password', 401));
   }
 
-  if (!customer.verifiedAt) {  
+  if (!customer.verifiedAt) {
     const OTP = otpGenerator.generate(4, {
       lowerCaseAlphabets: false,
       upperCaseAlphabets: false,
@@ -168,11 +168,11 @@ exports.login = catchAsync(async (req, res, next) => {
     });
     return res.status(200).json(
       response({
-        status:'verification-required',
+        status: 'verification-required',
         message: 'OTP sent to your email!',
         data: {
-            id:customer?.id,
-            email:customer?.email
+          id: customer?.id,
+          email: customer?.email,
         },
       }),
     );

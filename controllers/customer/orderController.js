@@ -97,7 +97,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
       const discountedPrice = element.price - discountAmount;
 
       element.price = discountedPrice;
-      element.discount = discountAmount;
+      element.discount = parseFloat(discountAmount)
     }
     // Accumulate the total weight and price
     discountOnItemsPrice += element.discount;
@@ -106,7 +106,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
       element.salerCommission =
-        parseFloat(element.price) - parseFloat(element.wholesalePrice);
+        parseFloat(element.price) - parseFloat(element.wholesalePrice); 
     } else {
       element.wholesalePrice = 0;
     }
@@ -138,7 +138,8 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   input.order.discountPrice = discountOnItemsPrice;
   input.order.discountPercentage = percentageDiscount;
   input.order.shippingCharges = shippingCompany?.charges;
-  input.order.totalWeight = totalWeight;
+  input.order.totalWeight = parseFloat(totalWeight);
+  input.order.shippingCompany = input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +

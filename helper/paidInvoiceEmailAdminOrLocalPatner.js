@@ -15,7 +15,7 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
-  console.log('ðŸš€ ~ data:', data);
+  // console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
   console.log('__dirname:', __dirname);
 
@@ -154,11 +154,11 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
           <span style="font-weight: 600">Company Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ''}</span><br />
            <span style="font-weight: 600">Shipping Company:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">FedEx</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ''}</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ''}</span><br />
         </td>
       </tr>
        

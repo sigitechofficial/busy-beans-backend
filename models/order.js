@@ -144,12 +144,14 @@ module.exports = (sequelize) => {
       allowNull: true,
     },
     grossPartnerAmount: {
-      type: DataTypes.STRING,
+      type:DataTypes.DECIMAL(20, 2),
       allowNull: true,
+       defaultValue: 0,
     },
     proportionalStripeFee: {
-      type: DataTypes.STRING,
+      type: DataTypes.DECIMAL(20, 2),
       allowNull: true,
+       defaultValue: 0,
     },
     invoiceDate: {
       type: DataTypes.DATEONLY,

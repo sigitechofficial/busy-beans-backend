@@ -80,7 +80,7 @@ exports.protect = catchAsync(async (req, res, next) => {
 
   // 4) Check if user still exists
   let currentUser = await MODEL[`${decoded.entity}`].findOne({
-    where: { id: decoded?.id,email:decoded.email, deleted: 0 },
+    where: { id: decoded?.id, email: decoded.email, deleted: 0 },
   });
 
   if (!currentUser) {
@@ -100,7 +100,6 @@ exports.protect = catchAsync(async (req, res, next) => {
       ),
     );
   }
-  
 
   currentUser = JSON.parse(JSON.stringify(currentUser));
 

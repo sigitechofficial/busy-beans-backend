@@ -15,7 +15,7 @@ const {
 } = require('../../models');
 const fs = require('fs');
 const path = require('path');
-
+const { paidInvoiceAdminOrLocalPatnerEventAndCustomer } = require('../events/paymentInvoicePaidEvent');
 const { Op, literal, fn, col } = require('sequelize');
 const APIFeatures = require('../../utils/apiFeatures');
 
@@ -173,9 +173,12 @@ exports.getAllSalesRep = factory.getAll(statuses);
 exports.allOrder = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
 
-   if(req.user.entity == 'adminEmployee' || req.user.entity == 'partnerEmployee'){
-    if(req.query.salesRepId) delete req.query.salesRepId  
-   }
+  // if (
+  //   req.user.entity == 'adminEmployee' ||
+  //   req.user.entity == 'partnerEmployee'
+  // ) {
+  //   if (req.query.salesRepId) delete req.query.salesRepId;
+  // }
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
   // Build API features (filter, sort, fields, pagination)
@@ -225,12 +228,15 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     },
   ];
 
-  if(req.user.entity == 'adminEmployee' || req.user.entity == 'partnerEmployee'){
-  queryOptions.include.push({
+  if (
+    req.user.entity == 'adminEmployee' ||
+    req.user.entity == 'partnerEmployee'
+  ) {
+    queryOptions.include.push({
       model: user,
-      where:{employeeId:req.user?.id},
+      where: { employeeId: req.user?.id },
       attributes: [],
-    })
+    });
   }
   // Custom attributes with literal fields
 
@@ -576,6 +582,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           'orderId',
           'productId',
           'wholesalePrice',
+          'type',
         ],
       },
       {
@@ -675,6 +682,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'createdBy',
       'on',
       'createdAt',
+      'shippingCompany',
       'shippingCharges',
       'invoiceNumber',
       'invoiceDate',
@@ -879,7 +887,7 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
 //* UPDATE ORDER
 exports.updateOrder = catchAsync(async (req, res, next) => {
   console.log('🚀 ~ req.body:', req.body);
-  const placedOrder = await order.findOne({
+  const fetchedOrder = await order.findOne({
     where: { id: req.params.orderId },
     attributes: [
       'id',
@@ -906,7 +914,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     ],
   });
 
-  console.log('🚀 ~ exports.updateOrder=catchAsync ~ body.items:', req.body);
+  const placedOrder = JSON.parse(JSON.stringify(fetchedOrder))     
 
   if (!placedOrder) {
     return next(new AppError('Order not found.', 404));
@@ -955,7 +963,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   input.order.hostedInvoiceUrl = null;
   input.items = req.body.items;
 
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
+  // console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
 
   if (input?.items?.length < 1) {
     throw new AppError('Update possible, but no changes were made.', 404);
@@ -999,6 +1007,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     element.qty = qty;
     // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
+    console.log("🚀 ~  element.price :",  element.price )
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.orderId = placedOrder?.id;
@@ -1017,13 +1026,14 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     // Accumulate the total weight and price
     discountOnItemsPrice += element.discount;
     itemsPrice += element.price;
+    console.log("🚀 ~ itemsPrice:", itemsPrice)
     totalWeight += element.weight;
 
     // Handle salesRep commission if applicable
     if (placedOrder?.salesRepId) {
       element.salerCommission =
-      parseFloat(element.price) - parseFloat(element.wholesalePrice);
-      totalLocalPatnerCommission += element.salerCommission || 0
+        parseFloat(element.price) - parseFloat(element.wholesalePrice);
+      totalLocalPatnerCommission += element.salerCommission || 0;
     } else {
       element.wholesalePrice = 0;
       element.salerCommission = 0;
@@ -1042,6 +1052,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       element.code = obj.code;
       element.qty = obj.qty;
       element.price = obj.price;
+      console.log("🚀 ~  element.price = obj.typeCharges;:",obj.price)
       element.productName = obj.name;
       element.orderId = placedOrder?.id;
       element.type = 'charges';
@@ -1049,11 +1060,12 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       element.discount = 0;
 
       itemsPrice += parseFloat(element?.price || 0);
+      console.log("🚀 ~ itemsPrice TYPR CHARGES:", itemsPrice)
 
       // Handle salesRep commission if applicable
       if (placedOrder?.salesRepId) {
         element.salerCommission = parseFloat(element?.price);
-        totalLocalPatnerCommission += element.salerCommission || 0
+        totalLocalPatnerCommission += element.salerCommission || 0;
       } else {
         element.wholesalePrice = 0;
         element.salerCommission = 0;
@@ -1092,7 +1104,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   input.order.discountPrice = discountOnItemsPrice;
   input.order.discountPercentage = percentageDiscount;
   input.order.invoiceNumber = req.body?.order?.invoiceNumber;
-  input.order.totalWeight = totalWeight;
+  input.order.totalWeight = parseFloat(totalWeight);
+  input.order.shippingCompany = input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
   input.order.invoicePdf = 1;
   input.order.shippingCharges =
     req.body?.order?.shippingCharges || shippingCompany?.charges;
@@ -1127,28 +1140,51 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   });
-  console.log('🚀 ~ input?.order?.emailInvoiceToCustomer:', input?.order);
-  
-  if(input?.order?.paymentCardId){
-    const payment = Stripe.createPaymentIntent({
-      adminReceivableAmount:  input.order.totalBill,
-      hasLocalPatner:placedOrder.salesRepId,
-      localPartnerAccountId:placedOrder.connectAccountId,
-      localPatnerCommission:totalLocalPatnerCommission,
-      paymentMethodId:input?.order?.paymentCardId
-    })
-  
-    if(payment.status){
+ 
+ 
+ 
+  if (input?.order?.paymentCardId) {
+    const payment = await Stripe.createPaymentIntent({
+      adminReceivableAmount: input.order.totalBill,
+      hasLocalPatner: placedOrder.salesRepId,
+      localPartnerAccountId: placedOrder.connectAccountId,
+      localPatnerCommission: totalLocalPatnerCommission,
+      paymentMethodId: input?.order?.paymentCardId,
+      stripeCustomer: placedOrder?.stripeCustomerId,
+      metadata:{
+        orderId:placedOrder.id
+      }
+    });
 
+    // console.log("🚀 ~ payment:", payment)
+ 
+
+    if (payment && payment?.status) {
+     await order.update(payment?.data, { where: { id: placedOrder?.id } });
+     paidInvoiceAdminOrLocalPatnerEventAndCustomer({orderId:placedOrder?.id})
+     return res.status(200).json({
+        status: 'success',
+        message:"Payment capture success",
+        data: { id: req.params.orderId },
+      });
+    }else{
+      return res.status(200).json({
+        status: 'success',
+        message: payment?.message || "Payment failed",
+        data: { id: req.params.orderId },
+      });
     }
-  
   }
 
-  if (input?.order?.emailInvoiceToCustomer && !input?.order?.attemptImmediatePayment) {
+  if (
+    input?.order?.emailInvoiceToCustomer &&
+    !input?.order?.attemptImmediatePayment
+  ) {
     sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
   }
   return res.status(200).json({
     status: 'success',
+    message:"success",
     data: { id: req.params.orderId },
   });
 });
@@ -1170,7 +1206,7 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
            FROM orders
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
-           ${employeeId ? `AND users.employeeId = ${employeeId}` : ''})`
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ''})`,
         ),
         'count',
       ],
@@ -1185,35 +1221,35 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
     [Op.lte]: new Date(), // or moment().toDate()
   };
 
-const upcommingOrderCount = employeeId? await orderFrequency.count({
-  where: {
-    ...condition,
-    nextOrderDate: {
-      [Op.not]: literal(`
+  const upcommingOrderCount = employeeId
+    ? await orderFrequency.count({
+        where: {
+          ...condition,
+          nextOrderDate: {
+            [Op.not]: literal(`
         (SELECT DATE(orders.on)
          FROM orders
          JOIN users ON users.id = orders.userId 
          WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
          AND orders.orderFrequencyId = orderFrequency.id
          ${employeeId ? `AND users.employeeId = ${employeeId}` : ''})
-      `)
-    },
-  },
-}):await orderFrequency.count({
-    where: {
-      ...condition,
-      nextOrderDate: {
-        [Op.notIn]: literal(`
+      `),
+          },
+        },
+      })
+    : await orderFrequency.count({
+        where: {
+          ...condition,
+          nextOrderDate: {
+            [Op.notIn]: literal(`
           (SELECT DATE(orders.on)
           FROM orders
           WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
           AND orders.orderFrequencyId = orderFrequency.id)
         `),
-      },
-    },
-  });
-
-
+          },
+        },
+      });
 
   const output = JSON.parse(JSON.stringify(data));
 
@@ -1237,12 +1273,12 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
     }
 
     // Define the literals for both scenarios
-    const employeeFilterLiteral = employeeId 
-      ? `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})` 
+    const employeeFilterLiteral = employeeId
+      ? `AND orders.salesRepId = ${req.params?.srId} AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`
       : `AND orders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
 
-    const upcomingOrderCountLiteral = employeeId 
-      ? `AND orders.userId IN (SELECT id FROM users WHERE employeeId = ${employeeId})` 
+    const upcomingOrderCountLiteral = employeeId
+      ? `AND orders.salesRepId = ${req.params?.srId} AND orders.userId IN (SELECT id FROM users WHERE employeeId = ${employeeId})`
       : `AND orders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
 
     // Query to count orders based on employeeId (handling both cases for employeeId)
@@ -1255,7 +1291,7 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
             `(SELECT COUNT(orders.id) 
              FROM orders 
              WHERE orders.statusId = statuses.id 
-             ${employeeFilterLiteral})`
+             ${employeeFilterLiteral})`,
           ),
           'count',
         ],
@@ -1298,9 +1334,8 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
       status: 'success',
       data: output,
     });
-  }
+  },
 );
-
 
 exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
   const data = await statuses.findAll({
@@ -1360,7 +1395,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
   }
 
   Stripe.blockCheckoutSession(placedOrder?.invoiceId);
- 
+
   await order.destroy({ where: { id: placedOrder?.id } });
 
   await item.destroy({

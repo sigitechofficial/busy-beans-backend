@@ -39,9 +39,18 @@ router.post(
   manageOrderController.fetchInvoice,
 );
 
-router.post('/login', authController.adminLogin);
-router.post('/login/sales-rep', authController.salesRepLogin);
-router.post('/login/supplier', authController.supplierLogin);
+router.post('/login', (req, res, next) => {
+    req.params.entity =  'admin';
+    next();
+  }, authController.allLogin);
+router.post('/login/sales-rep',  (req, res, next) => {
+    req.params.entity = 'localPartner';
+    next();
+  },authController.allLogin);
+router.post('/login/supplier', (req, res, next) => {
+    req.params.entity = 'supplier';
+    next();
+  }, authController.allLogin);
 
 router.post('/forgot-password', authController.adminForgotPassword);
 router.post(

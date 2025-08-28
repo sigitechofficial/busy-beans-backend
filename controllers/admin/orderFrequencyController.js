@@ -8,6 +8,7 @@ const {
   salesRep,
   shippingCompanies,
   product,
+  employee
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -59,41 +60,43 @@ const { setOrderFrequency } = require('../admin/orderFrequencyController');
 console.log(typeof setOrderFrequency);
 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
-
   const included = [
-      {
-        model: item,
-        attributes: [
-          [
-            literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'product',
-          ],
-          [
-            literal(
-              `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'price',
-          ],
-
-          'qty',
-          'productId',
+    {
+      model: item,
+      attributes: [
+        [
+          literal(
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+          ),
+          'product',
         ],
-      },
-    ]
+        [
+          literal(
+            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
+          ),
+          'price',
+        ],
+
+        'qty',
+        'productId',
+      ],
+    },
+  ];
   let condition = {};
   if (req.params.srId) condition.salesRepId = req.params.srId;
-  
-  
-  if(req.user.entity == 'adminEmployee' || req.user.entity == 'partnerEmployee'){
+
+  if (
+    req.user.entity == 'adminEmployee' ||
+    req.user.entity == 'partnerEmployee'
+  ) {
     included.push({
       model: user,
-      where:{employeeId:req.user?.id},
+      where: { employeeId: req.user?.id },
       attributes: [],
-    })
-
-    if(condition.salesRepId) delete condition.salesRepId 
+    });
+const worker =  await employee.findOne({where:{id: req.user?.id}})
+if(worker && worker?.salesRepId)condition.salesRepId = worker?.salesRepId
+  // if (condition.salesRepId) delete condition.salesRepId;
   }
   // Add visibilityDate condition
   condition.visibilityDate = {
@@ -210,6 +213,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       '---------------------------------creditLimit',
       credit?.creditLimit,
     );
+
     if (percentage >= 80) {
       throw new AppError(
         `You've used over 80% of your credit limit. Please clear your balance before placing further orders.`,
@@ -308,7 +312,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.discountPrice = discountOnItemsPrice;
   input.order.discountPercentage = percentageDiscount;
   input.order.shippingCharges = shippingCompany?.charges;
-  input.order.totalWeight = totalWeight;
+  input.order.totalWeight = parseFloat(totalWeight || 0);
+  input.order.shippingCompany = input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +
@@ -622,7 +627,8 @@ const frequencyBookOrder = async ({ id }) => {
       productsPrice +
       parseFloat(result?.vat || 0) +
       parseFloat(shippingCompany?.charges || 0);
-    result.totalWeight = totalWeight;
+    result.totalWeight = parseFloat(totalWeight || 0);
+    result.shippingCompany = result.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
     result.statusId = 1;
     result.salesRepId = result?.salesRepId;
     result.createdBy = 'sales-rep';

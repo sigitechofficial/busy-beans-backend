@@ -137,8 +137,7 @@ module.exports = (sequelize) => {
     },
   );
 
-
-  const SALT_ROUNDS = 12; 
+  const SALT_ROUNDS = 12;
 
   // Create
   salesRep.addHook('beforeCreate', (instance) => {

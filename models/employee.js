@@ -69,7 +69,7 @@ module.exports = (sequelize) => {
     },
   );
 
-  const SALT_ROUNDS = 12; 
+  const SALT_ROUNDS = 12;
 
   // Create
   employee.addHook('beforeCreate', (instance) => {
@@ -100,7 +100,7 @@ module.exports = (sequelize) => {
 
     employee.hasMany(models.permission);
     models.permission.belongsTo(employee);
-    
+
     employee.hasMany(models.user);
     models.user.belongsTo(employee);
   };

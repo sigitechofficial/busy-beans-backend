@@ -130,21 +130,25 @@ module.exports = (sequelize) => {
         },
       ],
     },
-  ); 
-// Hide fields in queries
+  );
+  // Hide fields in queries
   user.addHook('beforeFind', (options) => {
     if (!options.attributes) options.attributes = {};
-    const existing = Array.isArray(options.attributes.exclude) ? options.attributes.exclude : [];
-    options.attributes.exclude = Array.from(new Set([...existing, 'deletedAt', 'updatedAt']));
+    const existing = Array.isArray(options.attributes.exclude)
+      ? options.attributes.exclude
+      : [];
+    options.attributes.exclude = Array.from(
+      new Set([...existing, 'deletedAt', 'updatedAt']),
+    );
   });
 
-  const SALT_ROUNDS = 12; 
+  const SALT_ROUNDS = 12;
 
   // Create
   user.addHook('beforeCreate', (instance) => {
     if (instance.password) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
-      console.log("🚀 ~  instance.password:",  instance.password)
+      console.log('🚀 ~  instance.password:', instance.password);
     }
   });
 

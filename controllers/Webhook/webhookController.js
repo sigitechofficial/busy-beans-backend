@@ -6,6 +6,7 @@ const { order } = require('../../models');
 const {
   paidInvoiceEmailEvent,
   paidInvoiceAdminOrLocalPatnerEvent,
+  paidInvoiceAdminOrLocalPatnerEventAndCustomer
 } = require('../events/paymentInvoicePaidEvent');
 
 const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8`; //LIVE
@@ -62,8 +63,8 @@ const invoicePaid = async (event) => {
       { where: { id: orderId } },
     );
 
-    paidInvoiceEmailEvent({ orderId });
-    paidInvoiceAdminOrLocalPatnerEvent({ orderId });
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId });
+    // paidInvoiceAdminOrLocalPatnerEvent({ orderId });
     //   if(!localPartnerId) {
     //   return true
     //   }

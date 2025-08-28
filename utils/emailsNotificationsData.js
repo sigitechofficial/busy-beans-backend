@@ -209,6 +209,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
       'createdAt',
       'userId',
       'paymentMethodId',
+      'shippingCompany',
       'shippingCharges',
       'poNumber',
       'hostedInvoiceUrl',
