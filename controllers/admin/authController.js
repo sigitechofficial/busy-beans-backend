@@ -23,6 +23,15 @@ const otpGenerator = require('otp-generator');
 const EmailResetPasswordOtpToAll = require('../../helper/ResetPasswordOtpToAll');
 const Event = require('../events/userAccountRelatedEvents');
 
+const MODEL = {
+  user: user,
+  admin: account,
+  supplier: supplier,
+  localPartner: salesRep,
+  adminEmployee: employee,
+  partnerEmployee: employee,
+};
+
 const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
@@ -100,9 +109,9 @@ const login = (Model) => {
   return catchAsync(async (req, res, next) => {
     // console.log('🚀 ~ login ~ entity:BEFORE', entity);
     const { email, password } = req.body;
-    console.log("🚀 ~ login ~ req.params.entity:", req.params.entity)
-    entity  =  req.params.entity
-    console.log("🚀 ~ login ~ entity:AFTER", entity)
+    console.log('🚀 ~ login ~ req.params.entity:', req.params.entity);
+    entity = req.params.entity;
+    console.log('🚀 ~ login ~ entity:AFTER', entity);
     console.log('🚀 ~ exports.login=catchAsync ~ req.body;:', req.body);
     // 1) Check if email and password exist
     if (!email || !password) {
@@ -113,24 +122,24 @@ const login = (Model) => {
     let data = await Model.findOne({
       where: { email, deleted: 0 },
     });
- 
+
     console.log('🚀 ~ login ~ entityBBBB:', entity);
     if (!data) {
-
-      if(entity == 'admin' || entity == 'localPartner'){
-        const condition = { email, deleted: 0 }
-        if(entity == 'admin')condition.salesRepId= { [Op.is]: null }
-        else condition.accountId= { [Op.is]: null }
+      if (entity == 'admin' || entity == 'localPartner') {
+        const condition = { email, deleted: 0 };
+        if (entity == 'admin') condition.salesRepId = { [Op.is]: null };
+        else condition.accountId = { [Op.is]: null };
         console.log('🚀 ~ login ~ condition:EMPLOYEE', condition);
 
         data = await employee.findOne({
-        where: condition,
-        include: { model: permission, attributes: ['id', 'key'] },
-      });
-      // console.log('🚀 ~ login ~ data:', data);
-      if (data) {
-        entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
-      }}
+          where: condition,
+          include: { model: permission, attributes: ['id', 'key'] },
+        });
+        // console.log('🚀 ~ login ~ data:', data);
+        if (data) {
+          entity = data.accountId ? 'adminEmployee' : 'partnerEmployee';
+        }
+      }
     }
     console.log('🚀 ~ exports.login=catchAsync ~ data:', data);
     if (!data || !(await bcrypt.compare(password, data?.password))) {
@@ -312,10 +321,10 @@ const resetPassword = (Model, entity) =>
     createSendToken(data, 200, req, res, req.params.tokenId, entity);
   });
 
-exports.allLogin = login(account);
-// exports.adminLogin = login(account, 'admin');
-// exports.salesRepLogin = login(salesRep, 'localPartner');
-// exports.supplierLogin = login(supplier, 'supplier');
+// exports.allLogin = login(account);
+exports.adminLogin = login(account);
+exports.salesRepLogin = login(salesRep);
+exports.supplierLogin = login(supplier);
 
 exports.adminForgotPassword = forgotPassword(account, 'admin');
 exports.salesRepForgotPassword = forgotPassword(salesRep, 'localPartner');

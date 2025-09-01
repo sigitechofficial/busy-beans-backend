@@ -34,7 +34,7 @@ const signToken = (data) =>
   );
 
 const createSendToken = (input, statusCode, req, res, tokenId = '') => {
-  console.log('🚀 ~ createSendToken ~ input:', input);
+  console.log('ðŸš€ ~ createSendToken ~ input:', input);
   const token = signToken({
     id: input.id,
     name: input.name,
@@ -65,7 +65,7 @@ const createSendToken = (input, statusCode, req, res, tokenId = '') => {
 };
 
 exports.signup = catchAsync(async (req, res, next) => {
-  console.log('🚀 ~ exports.signup=catchAsync ~  req.body:', req.body);
+  console.log('ðŸš€ ~ exports.signup=catchAsync ~  req.body:', req.body);
 
   const OTP = otpGenerator.generate(4, {
     lowerCaseAlphabets: false,
@@ -84,7 +84,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   if (sr && sr.length === 1) {
     req.body.info.salesRepId = sr[0]?.id;
   }
-  console.log('🚀 ~ exports.signup=catchAsync ~ sr:', sr?.id);
+  console.log('ðŸš€ ~ exports.signup=catchAsync ~ sr:', sr?.id);
   req.body.info.latestOtp = OTP;
   const newUser = await user.create(req.body?.info);
 
@@ -93,7 +93,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   const defaultAddress = await address.create(req.body?.address);
   billingAddress.create(req.body?.billingAddress);
   console.log(
-    '🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:',
+    'ðŸš€ ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:',
     defaultAddress,
   );
 
@@ -119,6 +119,7 @@ exports.signup = catchAsync(async (req, res, next) => {
           data: {
             id: input?.id,
             email: input?.email,
+            email: newUser?.password,
           },
         },
       }),
@@ -140,14 +141,23 @@ exports.login = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({
     where: { email, deleted: 0 },
   });
-  console.log('ðŸš€ ~ exports.login=catchAsync ~ customer:', customer);
+  //   console.log('Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ customer:', customer);
   if (!customer) {
     return next(new AppError('User Not found!', 200));
   } else if (!customer.status) {
     return next(new AppError('User Blocked by Administrator!', 200));
   }
-
+  console.log('Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ password:', password);
+  console.log(
+    'Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ customer?.password:',
+    customer?.password,
+  );
+  //   const isMatch = password == customer?.password;
   const isMatch = await bcrypt.compare(password, customer?.password); // password == customer?.password;
+  console.log(
+    'Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ isMatch?.isMatch:',
+    isMatch,
+  );
   if (!user || !isMatch) {
     return next(new AppError('Incorrect email or password', 401));
   }
@@ -229,7 +239,7 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
       exclude: [`deleted`, `updatedAt`, `deletedAt`],
     },
   });
-  console.log('🚀 ~ exports.login=catchAsync ~ customer:', customer);
+  console.log('ðŸš€ ~ exports.login=catchAsync ~ customer:', customer);
 
   if (!customer) {
     return next(new AppError('User not found', 200));
@@ -247,6 +257,8 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
       name: customer.name,
     });
   } else if (customer.latestOtp == otp) {
+    customer.verifiedAt = Date.now(); //HAVE TO CHANGE
+    await customer.save();
     return res.status(200).json(
       response({
         data: {

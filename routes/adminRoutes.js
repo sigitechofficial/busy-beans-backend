@@ -39,18 +39,30 @@ router.post(
   manageOrderController.fetchInvoice,
 );
 
-router.post('/login', (req, res, next) => {
-    req.params.entity =  'admin';
+router.post(
+  '/login',
+  (req, res, next) => {
+    req.params.entity = 'admin';
     next();
-  }, authController.allLogin);
-router.post('/login/sales-rep',  (req, res, next) => {
+  },
+  authController.adminLogin,
+);
+router.post(
+  '/login/sales-rep',
+  (req, res, next) => {
     req.params.entity = 'localPartner';
     next();
-  },authController.allLogin);
-router.post('/login/supplier', (req, res, next) => {
+  },
+  authController.salesRepLogin,
+);
+router.post(
+  '/login/supplier',
+  (req, res, next) => {
     req.params.entity = 'supplier';
     next();
-  }, authController.allLogin);
+  },
+  authController.supplierLogin,
+);
 
 router.post('/forgot-password', authController.adminForgotPassword);
 router.post(
@@ -140,6 +152,8 @@ router.put(
   employeeController.updateEmployee,
 );
 
+router.get('/category/', categoryController.getAllCatagories);
+
 //!MIDDLEWARE PRIVATE ROUTES
 router.use(protect);
 
@@ -204,10 +218,7 @@ router
 
 //! Category Management
 
-router
-  .route('/category/')
-  .get(categoryController.getAllCatagories) // For fetching all categories
-  .post(categoryController.createCatagory); // For creating a new category
+router.route('/category/').post(categoryController.createCatagory); // For creating a new category
 
 // Category by ID routes
 router

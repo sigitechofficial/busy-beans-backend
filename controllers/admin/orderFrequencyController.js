@@ -8,7 +8,7 @@ const {
   salesRep,
   shippingCompanies,
   product,
-  employee
+  employee,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -94,9 +94,9 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       where: { employeeId: req.user?.id },
       attributes: [],
     });
-const worker =  await employee.findOne({where:{id: req.user?.id}})
-if(worker && worker?.salesRepId)condition.salesRepId = worker?.salesRepId
-  // if (condition.salesRepId) delete condition.salesRepId;
+    const worker = await employee.findOne({ where: { id: req.user?.id } });
+    if (worker && worker?.salesRepId) condition.salesRepId = worker?.salesRepId;
+    // if (condition.salesRepId) delete condition.salesRepId;
   }
   // Add visibilityDate condition
   condition.visibilityDate = {
@@ -313,7 +313,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.discountPercentage = percentageDiscount;
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight || 0);
-  input.order.shippingCompany = input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
+  input.order.shippingCompany =
+    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +
@@ -628,7 +629,8 @@ const frequencyBookOrder = async ({ id }) => {
       parseFloat(result?.vat || 0) +
       parseFloat(shippingCompany?.charges || 0);
     result.totalWeight = parseFloat(totalWeight || 0);
-    result.shippingCompany = result.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
+    result.shippingCompany =
+      result.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
     result.statusId = 1;
     result.salesRepId = result?.salesRepId;
     result.createdBy = 'sales-rep';

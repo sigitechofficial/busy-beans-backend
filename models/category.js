@@ -36,6 +36,9 @@ module.exports = (sequelize, DataTypes) => {
     category.hasMany(models.product);
     models.product.belongsTo(category);
 
+    category.hasMany(models.userDiscount);
+    models.userDiscount.belongsTo(category);
+
     category.hasMany(models.item);
     models.item.belongsTo(category);
   };

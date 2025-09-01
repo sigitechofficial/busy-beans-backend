@@ -124,7 +124,7 @@ function generateFooterHtml({
       </tr>
       <tr>
         <td align="center" style="padding-top: 20px">
-          <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer">
+          <a href="https://busybeancoffee.com" target="_blank" rel="noopener noreferrer">
           <img
             src="cid:logo"
             alt="Powered by"

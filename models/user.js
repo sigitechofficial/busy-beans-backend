@@ -170,6 +170,9 @@ module.exports = (sequelize) => {
   // NOTE: For bulk updates, use { individualHooks: true } so beforeUpdate runs.
   // Associations models
   user.associate = (models) => {
+    user.hasMany(models.userDiscount);
+    models.userDiscount.belongsTo(user);
+
     user.hasMany(models.address);
     models.address.belongsTo(user);
 

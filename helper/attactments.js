@@ -81,7 +81,6 @@ function attachments() {
     confirm: [attachment.confirm],
     trim: [attachment.trim],
     footer: [
-      attachment.logo,
       attachment.facebook,
       attachment.twitter,
       attachment.instagram,

@@ -182,7 +182,7 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          If you'd like to place an order or need a customized package, feel free to visit our <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+          If you'd like to place an order or need a customized package, feel free to visit our <a href="https://busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
   website
 </a>. We're happy to serve you quality coffee, delivered fresh.<br>If you have any questions or need further details, please reply to this email. 
         </td>

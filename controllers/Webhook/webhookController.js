@@ -6,10 +6,10 @@ const { order } = require('../../models');
 const {
   paidInvoiceEmailEvent,
   paidInvoiceAdminOrLocalPatnerEvent,
-  paidInvoiceAdminOrLocalPatnerEventAndCustomer
+  paidInvoiceAdminOrLocalPatnerEventAndCustomer,
 } = require('../events/paymentInvoicePaidEvent');
 
-const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8`; //LIVE
+const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN`; //LIVE
 // const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN` //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature'];

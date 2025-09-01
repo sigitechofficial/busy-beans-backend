@@ -96,7 +96,7 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
         >
          A new order <strong>#${data.id}</strong> has been placed by <strong>${data?.companyName}</strong> on 
       <strong>
-        <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+        <a href="https://busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
           Busy Bean Coffee
         </a>
       </strong>.

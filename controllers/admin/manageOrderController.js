@@ -15,7 +15,9 @@ const {
 } = require('../../models');
 const fs = require('fs');
 const path = require('path');
-const { paidInvoiceAdminOrLocalPatnerEventAndCustomer } = require('../events/paymentInvoicePaidEvent');
+const {
+  paidInvoiceAdminOrLocalPatnerEventAndCustomer,
+} = require('../events/paymentInvoicePaidEvent');
 const { Op, literal, fn, col } = require('sequelize');
 const APIFeatures = require('../../utils/apiFeatures');
 
@@ -110,12 +112,12 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
   );
 
   if (details?.paymentIntentId || details?.paymentStatus == 'done') {
-    return next(
-      new AppError(
+    return res.status(200).json({
+      status: 'already-paid',
+      message:
         'As the payment for the order has already been made, we are unable to send an invoice at this point.',
-        404,
-      ),
-    );
+      data: {},
+    });
   }
 
   let checkSession = false;
@@ -129,12 +131,13 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
         { paymentMethod: 'card', paymentStatus: 'done' },
         { where: { id: req.params.orderId } },
       );
-      return next(
-        new AppError(
+
+      return res.status(200).json({
+        status: 'already-paid',
+        message:
           'As the payment for the order has already been made, we are unable to send an invoice at this point.',
-          404,
-        ),
-      );
+        data: {},
+      });
     } else if (session == 'open') {
       checkSession = true;
     }
@@ -161,7 +164,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
   );
 
   // sentPaymentInvoiceEvent({email:to,data:details,invoice})
-  res.status(200).json({
+  return res.status(200).json({
     status: 'success',
     data: {
       order: invoice,
@@ -384,6 +387,12 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
           `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         'customerName',
+      ],
+      [
+        literal(
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        'companyName',
       ],
       [
         literal(
@@ -914,7 +923,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     ],
   });
 
-  const placedOrder = JSON.parse(JSON.stringify(fetchedOrder))     
+  const placedOrder = JSON.parse(JSON.stringify(fetchedOrder));
 
   if (!placedOrder) {
     return next(new AppError('Order not found.', 404));
@@ -1007,7 +1016,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     element.qty = qty;
     // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
-    console.log("🚀 ~  element.price :",  element.price )
+    console.log('🚀 ~  element.price :', element.price);
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.orderId = placedOrder?.id;
@@ -1026,7 +1035,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     // Accumulate the total weight and price
     discountOnItemsPrice += element.discount;
     itemsPrice += element.price;
-    console.log("🚀 ~ itemsPrice:", itemsPrice)
+    console.log('🚀 ~ itemsPrice:', itemsPrice);
     totalWeight += element.weight;
 
     // Handle salesRep commission if applicable
@@ -1052,7 +1061,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       element.code = obj.code;
       element.qty = obj.qty;
       element.price = obj.price;
-      console.log("🚀 ~  element.price = obj.typeCharges;:",obj.price)
+      console.log('🚀 ~  element.price = obj.typeCharges;:', obj.price);
       element.productName = obj.name;
       element.orderId = placedOrder?.id;
       element.type = 'charges';
@@ -1060,7 +1069,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       element.discount = 0;
 
       itemsPrice += parseFloat(element?.price || 0);
-      console.log("🚀 ~ itemsPrice TYPR CHARGES:", itemsPrice)
+      console.log('🚀 ~ itemsPrice TYPR CHARGES:', itemsPrice);
 
       // Handle salesRep commission if applicable
       if (placedOrder?.salesRepId) {
@@ -1105,7 +1114,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   input.order.discountPercentage = percentageDiscount;
   input.order.invoiceNumber = req.body?.order?.invoiceNumber;
   input.order.totalWeight = parseFloat(totalWeight);
-  input.order.shippingCompany = input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
+  input.order.shippingCompany =
+    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
   input.order.invoicePdf = 1;
   input.order.shippingCharges =
     req.body?.order?.shippingCharges || shippingCompany?.charges;
@@ -1140,9 +1150,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   });
- 
- 
- 
+
   if (input?.order?.paymentCardId) {
     const payment = await Stripe.createPaymentIntent({
       adminReceivableAmount: input.order.totalBill,
@@ -1151,26 +1159,27 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       localPatnerCommission: totalLocalPatnerCommission,
       paymentMethodId: input?.order?.paymentCardId,
       stripeCustomer: placedOrder?.stripeCustomerId,
-      metadata:{
-        orderId:placedOrder.id
-      }
+      metadata: {
+        orderId: placedOrder.id,
+      },
     });
 
     // console.log("🚀 ~ payment:", payment)
- 
 
     if (payment && payment?.status) {
-     await order.update(payment?.data, { where: { id: placedOrder?.id } });
-     paidInvoiceAdminOrLocalPatnerEventAndCustomer({orderId:placedOrder?.id})
-     return res.status(200).json({
-        status: 'success',
-        message:"Payment capture success",
-        data: { id: req.params.orderId },
+      await order.update(payment?.data, { where: { id: placedOrder?.id } });
+      paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+        orderId: placedOrder?.id,
       });
-    }else{
       return res.status(200).json({
         status: 'success',
-        message: payment?.message || "Payment failed",
+        message: 'Payment capture success',
+        data: { id: req.params.orderId },
+      });
+    } else {
+      return res.status(200).json({
+        status: 'success',
+        message: payment?.message || 'Payment failed',
         data: { id: req.params.orderId },
       });
     }
@@ -1184,7 +1193,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   }
   return res.status(200).json({
     status: 'success',
-    message:"success",
+    message: 'success',
     data: { id: req.params.orderId },
   });
 });

@@ -107,26 +107,27 @@ async function createPaymentIntent({
   hasLocalPatner,
   paymentMethodId = null,
   stripeCustomer = null,
-  metadata = null
+  metadata = null,
 }) {
-
   try {
-
-      console.log(`🚀 ~ createPaymentIntent ~ {
+    console.log(
+      `🚀 ~ createPaymentIntent ~ {
   adminReceivableAmount,
   localPartnerAccountId,
   localPatnerCommission,
   hasLocalPatner,
   paymentMethodId = null,
   stripeCustomer = null,
-}:`, {
-  adminReceivableAmount,
-  localPartnerAccountId,
-  localPatnerCommission,
-  hasLocalPatner,
-  paymentMethodId ,
-  stripeCustomer,
-})
+}:`,
+      {
+        adminReceivableAmount,
+        localPartnerAccountId,
+        localPatnerCommission,
+        hasLocalPatner,
+        paymentMethodId,
+        stripeCustomer,
+      },
+    );
     const input = {
       amount: convertToCents(adminReceivableAmount),
       currency: 'usd',
@@ -145,23 +146,23 @@ async function createPaymentIntent({
         destination: localPartnerAccountId,
       };
       stripeFee = estimateStripeFeeFromDollars(adminReceivableAmount);
-      adminReceivableAmount = adminReceivableAmount - localPatnerCommission
+      adminReceivableAmount = adminReceivableAmount - localPatnerCommission;
       adminAmount = adminReceivableAmount;
-      
+
       const adminProfitCents =
         convertToCents(adminAmount) + convertToCents(stripeFee);
       input.application_fee_amount = adminProfitCents;
-      localPartnerAmount = localPatnerCommission ;
+      localPartnerAmount = localPatnerCommission;
       input.amount = convertToCents(totalBill);
     }
 
     if (paymentMethodId) {
-      input.customer = stripeCustomer; 
+      input.customer = stripeCustomer;
       input.payment_method = paymentMethodId;
       input.confirm = true; // charge now
       input.off_session = true; // no customer interaction
       input.capture_method = 'automatic';
-      input.metadata = metadata
+      input.metadata = metadata;
     }
 
     console.log('🚀 ~ createPaymentIntent ~ input:', input);
@@ -176,12 +177,12 @@ async function createPaymentIntent({
           proportionalStripeFee: stripeFee,
           localPatnerCommission: localPartnerAmount,
           adminReceivableAmount: adminAmount,
-          adminReceivableStatus:true,
-          paymentStatus	:'done',
-          invoicePaidDate:new Date(),
-          paymentMethod:'card',
-          paymentMethodId:paymentMethodId,
-          paymentIntentId:paymentIntent?.id
+          adminReceivableStatus: true,
+          paymentStatus: 'done',
+          invoicePaidDate: new Date(),
+          paymentMethod: 'card',
+          paymentMethodId: paymentMethodId,
+          paymentIntentId: paymentIntent?.id,
         },
       };
     }
@@ -191,21 +192,23 @@ async function createPaymentIntent({
       paymentIntentId: paymentIntent.id,
     };
   } catch (error) {
-    console.error("🚀🚀🚀🚀🚀 ~ createPaymentIntent",error);
+    console.error('🚀🚀🚀🚀🚀 ~ createPaymentIntent', error);
 
     if (paymentMethodId) {
       // If Stripe requires authentication (3DS)
       if (
         error.code === 'authentication_required' ||
-        (error.payment_intent && error.payment_intent.status === 'requires_action')
+        (error.payment_intent &&
+          error.payment_intent.status === 'requires_action')
       ) {
         return {
           status: false,
-          message: 'Authentication required for this payment method. Please complete 3D Secure authentication or use another card.',
+          message:
+            'Authentication required for this payment method. Please complete 3D Secure authentication or use another card.',
         };
       }
 
-        // 🚫 Destination account missing transfers capability
+      // 🚫 Destination account missing transfers capability
       if (error?.code === 'insufficient_capabilities_for_transfer') {
         return {
           status: false,
@@ -225,7 +228,6 @@ async function createPaymentIntent({
     throw new AppError(`${error.message}`, 200);
   }
 }
-
 
 async function createConnectAccount({ email, country = 'US', returnUrl }) {
   try {
@@ -507,8 +509,8 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //       payment_method_types: ['card'],
 //       mode: 'payment',
 //       line_items,
-//       success_url: 'https://orders.busybeancoffee.com/product?status=success',
-//       cancel_url: 'https://orders.busybeancoffee.com/product?status=cancel',
+//       success_url: 'https://busybeancoffee.com/product?status=success',
+//       cancel_url: 'https://busybeancoffee.com/product?status=cancel',
 
 //       // No customer passed (Stripe auto-creates one in connected account)
 //       // No application_fee
@@ -595,8 +597,8 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       mode: 'payment',
       customer: order?.stripeCustomerId,
       line_items,
-      success_url: 'https://orders.busybeancoffee.com/product?status=success',
-      cancel_url: `https://orders.busybeancoffee.com/product?status=cancel`,
+      success_url: 'https://www.busybeancoffee.com/product?status=success',
+      cancel_url: `https://www.busybeancoffee.com/product?status=cancel`,
       metadata: {
         orderId: order?.id,
       },

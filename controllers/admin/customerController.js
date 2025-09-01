@@ -1,4 +1,12 @@
-const { user, address, order, billingAddress, item } = require('../../models');
+const {
+  user,
+  address,
+  order,
+  billingAddress,
+  item,
+  userDiscount,
+  category,
+} = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const factory = require('../handlerFactory');
@@ -265,6 +273,19 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
           exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
         },
       },
+      {
+        model: userDiscount,
+        attributes: [
+          'categoryId',
+          'percentage',
+          [
+            literal(
+              `(SELECT categories.name FROM categories WHERE userDiscounts.categoryId= categories.id LIMIT 1)`,
+            ),
+            'employee',
+          ],
+        ],
+      },
     ],
   });
 
@@ -287,6 +308,7 @@ exports.updateCutomer = catchAsync(async (req, res, next) => {
       REDIS.revokeAllTokensForUser(req.params.id);
     await user.update(req.body.info, {
       where: { id: req.params.id },
+      individualHooks: true,
     });
   }
   if (req.body?.address) {
@@ -298,6 +320,16 @@ exports.updateCutomer = catchAsync(async (req, res, next) => {
     await billingAddress.update(req.body.billingAddress, {
       where: { userId: req.params.id },
     });
+  }
+
+  if (req.body?.userDiscount && req.body?.userDiscount.length > 0) {
+    req.body?.userDiscount.forEach((obj) => {
+      obj.userId = req.params.id;
+    });
+    await userDiscount.destroy({
+      where: { deleted: 0, userId: req.params.id },
+    });
+    await userDiscount.bulkCreate(req.body?.userDiscount);
   }
 
   res.status(200).json({

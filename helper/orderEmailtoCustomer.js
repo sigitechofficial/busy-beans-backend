@@ -120,7 +120,7 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
             line-height: 1.5;
           "
         >
-          A new order has been placed on <strong><a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+          A new order has been placed on <strong><a href="https://busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
   Busy Bean Coffee
 </a></strong>.
         </td>

@@ -5,7 +5,7 @@ const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
 const { footer } = require('./footer');
-const { header } = require('./footer');
+const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
 module.exports = function ({ email, name = '', otp = '' }) {
@@ -14,8 +14,7 @@ module.exports = function ({ email, name = '', otp = '' }) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: [`${email}`, 'sigidevelopers@gmail.com'], //`${email}` list of receivers
-      subject: `${hiCustomer}! We found a request for forgot password.
-       Its okay! its happens. Use this OTP for reset your password.`, // Subject line
+      subject: `Password Reset OTP Code – Busy Bean Coffee Inc.`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>
 <html lang="en">
@@ -53,21 +52,6 @@ module.exports = function ({ email, name = '', otp = '' }) {
       </tr>
       <tr>
         <td
-          align="center"
-          style="
-            padding: 20px;
-            font-family: 'Chivo', sans-serif;
-            color: #000000;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1.5;
-          "
-        >
-          OTP Verification Email
-        </td>
-      </tr>
-      <tr>
-        <td
           style="
             padding-left: 37px;
             padding-right: 37px;
@@ -93,7 +77,8 @@ module.exports = function ({ email, name = '', otp = '' }) {
             line-height: 1.5;
           "
         >
-          Your One-Time Password (OTP) for reset password is:
+          We received a request to reset your <b>Busy Bean Coffee Inc.</b> account password.  
+          Please use the following One-Time Password (OTP) to proceed:
         </td>
       </tr>
       <tr>
@@ -124,8 +109,8 @@ module.exports = function ({ email, name = '', otp = '' }) {
             line-height: 1.5;
           "
         >
-          This code is valid for 15 minutes. Do not share it
-          with anyone.
+          This code is valid for <b>15 minutes</b>.  
+          If you didn’t request a password reset, please ignore this email.
         </td>
       </tr>
       <tr>

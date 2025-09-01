@@ -18,6 +18,7 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 // }
 module.exports = async function ({ email, data, invoice }) {
   // console.log('ðŸš€ ~ data:', data);
+  const on = emailDateFormate(data?.on || data?.createdAt);
   const lcoalPatner = data?.salesRep;
   if (lcoalPatner) {
     footer = generateFooterHtml({
@@ -59,7 +60,7 @@ module.exports = async function ({ email, data, invoice }) {
     },
   ];
   let items = [];
-  const on = emailDateFormate(data?.on);
+
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
@@ -77,7 +78,7 @@ module.exports = async function ({ email, data, invoice }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      to: ['sigidevelopers@gmail.com', `${email}`], //`${email}` list of receivers
       subject: `We’ve Received Your Payment for Invoice #${data?.invoiceNumber || ''} – Thank You!`, // Subject line
       replyTo: data?.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
@@ -168,7 +169,7 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="font-weight: 600">Company Name:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ''}</span><br />
            <span style="font-weight: 600">Shipping Company:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany ||''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ''}</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ''}</span><br />
         </td>
@@ -211,7 +212,7 @@ module.exports = async function ({ email, data, invoice }) {
             line-height: 1.5;
           "
         >
-          If you'd like to place an order or need a customized package, feel free to visit our <a href="https://orders.busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+          If you'd like to place an order or need a customized package, feel free to visit our <a href="https://busybeancoffee.com" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
             website
           </a>. We're happy to serve you quality coffee, delivered fresh.<br>If you have any questions or need further details, please reply to this email.
         </td>

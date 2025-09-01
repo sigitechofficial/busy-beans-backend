@@ -17,6 +17,7 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 module.exports = async function ({ email, data, invoice }) {
   // console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
+  const on = emailDateFormate(data?.on || data?.createdAt);
   console.log('__dirname:', __dirname);
 
   const folderPath = path.join(__dirname, '..', 'public', 'invoicePDFs');
@@ -48,7 +49,7 @@ module.exports = async function ({ email, data, invoice }) {
     },
   ];
   let items = [];
-  const on = emailDateFormate(data?.on);
+
   data?.items.forEach((ele) => {
     let temp = `
             <tr>

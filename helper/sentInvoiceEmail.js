@@ -40,7 +40,8 @@ module.exports = async function ({ email, data, invoice }) {
   }
   // console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
-  let SessionUrl = `https://backendbb.trimworldwide.com/view/pay-order-invoice?orderId=${data?.id}`;
+  let SessionUrl = `https://busybeancoffee.com/paymentCheck?orderId=${data?.id}`;
+  let SessionUrlToShow = `https://busybeancoffee.com/pay-order-invoice?orderId=${data?.id}`;
   console.log('__dirname:', __dirname);
 
   const folderPath = path.join(__dirname, '..', 'public', 'invoicePDFs');
@@ -88,7 +89,7 @@ module.exports = async function ({ email, data, invoice }) {
   const mainContent = data?.invoiceReminder
     ? `This is a gentle reminder that your invoice for order is still pending. We appreciate your prompt attention.
 Please review the invoice below and complete your payment at your earliest convenience.`
-    : `Dear ${data?.companyName || ''},<br><br>Please find the attached invoice ${data.invoiceNumber || ''} from Busy Bean Coffee, Inc.<br>View and pay the invoice click the following button.`;
+    : `Dear ${data?.companyName || ''},<br><br>Please find the attached invoice ${data.invoiceNumber || ''} from Busy Bean Coffee, Inc.<br>View and pay the invoice click the following link.`;
   const bottomContent = data?.invoiceReminder
     ? `If you have already made the payment, please disregard this message. Otherwise, we look forward to receiving your payment soon.
 Need help or want a custom order? Just reply to this email or call us!`
@@ -103,8 +104,8 @@ Need help or want a custom order? Just reply to this email or call us!`
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, //`${email}` list of receivers
       subject: data?.invoiceReminder
-        ? `Payment Reminder: Complete Payment for Invoice #${data?.invoiceNumber || ''}`
-        : `Your Invoice ${data?.invoiceNumber || ''} Please Complete Your Payment`, // Subject line
+        ? `Payment Reminder: Complete Payment for Invoice ${data?.invoiceNumber || ''}`
+        : `Your Invoice ${data?.invoiceNumber || ''}`, // Subject line
       replyTo: data.patnerEmail || 'info@busybeancoffee.com',
       attachments: emailAttachments,
       html: `<!DOCTYPE html>
@@ -156,7 +157,38 @@ Need help or want a custom order? Just reply to this email or call us!`
            ${heading}
         </td>
       </tr>
-           <tr>
+
+       <tr align="center">
+        <td
+          style="
+            padding-left: 37px;
+            padding-right: 37px;
+            padding-top: 20px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+          "
+        >
+         <a
+            href="${SessionUrl}"
+            style="
+              padding: 10px 20px;
+              background-color: #86644c;
+              color: #ffffff;
+              text-decoration: none;
+              border-radius: 5px;
+              font-family: 'Chivo', sans-serif;
+              font-size: 16px;
+            "
+          >
+            Pay Invoice
+          </a>
+          
+        </td>
+        </tr>
+        <tr>
         <td
           style="
             padding-left: 37px;
@@ -187,16 +219,10 @@ Need help or want a custom order? Just reply to this email or call us!`
           <a
             href="${SessionUrl}"
             style="
-              padding: 10px 20px;
-              background-color: #86644c;
-              color: #ffffff;
-              text-decoration: none;
-              border-radius: 5px;
-              font-family: 'Chivo', sans-serif;
-              font-size: 16px;
+              
             "
           >
-            Pay Invoice
+            ${SessionUrlToShow}
           </a>
           
         </td>

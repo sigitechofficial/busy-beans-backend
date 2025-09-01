@@ -33,7 +33,6 @@ exports.paidInvoiceAdminOrLocalPatnerEvent = async ({ orderId }) => {
   }
 };
 
-
 exports.paidInvoiceAdminOrLocalPatnerEventAndCustomer = async ({ orderId }) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId);
