@@ -18,6 +18,7 @@ const Stripe = require('../stripe');
 exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
   async (req, res, next) => {
     const patner = await salesRep.findOne({ where: { id: req.params.srId } });
+    // console.log('🚀 ~ patner:', patner);
 
     const { amount, orderList } = req.body;
     console.log(
@@ -26,8 +27,10 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
     );
 
     const orderIds = orderList.map((order) => order.id);
+    const invoiceNumbers = orderList.map((order) => order.invoiceNumber);
+    console.log('🚀 ~ orderIds:', orderIds);
 
-    if (!patner.defaultBankAccount) {
+    if (!patner?.defaultBankAccount) {
       return next(
         new AppError(
           'Payments can’t be pulled because the partner has no default bank account attached.',
@@ -41,12 +44,15 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
       customerId: patner?.stripeCustomerId,
       savedPaymentMethodId: patner?.defaultBankAccount,
       orders: orderIds,
+      invoiceNumbers: invoiceNumbers,
+      partner: patner,
     });
 
     console.log(
       '🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:',
       pullouts,
     );
+
     if (pullouts) {
       console.log(
         '🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:',
@@ -83,7 +89,7 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
     console.log('🚀 ~ pullPaymentsFromPartnersBank ~ orderList:', orderList);
 
     const orderIds = orderList.map((order) => order.id);
-
+    const invoiceNumbers = orderList.map((order) => order.invoiceNumber);
     // Step 1: Check if partner has a default bank account
     if (!patner?.defaultBankAccount) {
       throw new AppError(
@@ -98,6 +104,8 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
       customerId: patner?.stripeCustomerId,
       savedPaymentMethodId: patner?.defaultBankAccount,
       orders: orderIds,
+      invoiceNumbers: invoiceNumbers,
+      partner: patner,
     });
 
     // Step 3: If payment successful, update orders
@@ -209,6 +217,7 @@ async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
         'paymentStatus',
         'adminReceivableStatus',
         'shippingCharges',
+        'invoiceNumber',
       ],
     });
 

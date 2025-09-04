@@ -141,7 +141,7 @@
         $<%= order?.totalBill || '0.00' %> due amount
       </p>
       <a
-        href="https://backendbb.trimworldwide.com/view/pay-order-invoice?orderId=<%= order?.id %>"
+        href="https://busybeancoffee.com/paymentCheck?orderId=<%=order?.id%>"
         style="color: #1a73e8; font-size: 14px; text-decoration: underline"
       >
         Pay online
@@ -172,7 +172,7 @@
         <tr>
           <td style="padding: 8px"><%= item?.productCode || '' %></td>
           <td style="padding: 8px; font-weight: 600">
-            <%= item?.product || '' %>
+            <%= item?.product || item?.productName %>
           </td>
           <td style="padding: 8px; text-align: center">
             <%= item?.qty || '0' %>

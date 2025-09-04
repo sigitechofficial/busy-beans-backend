@@ -32,7 +32,6 @@ const MODEL = {
   partnerEmployee: employee,
 };
 
-const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
 const signToken = (data) =>

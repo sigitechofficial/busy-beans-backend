@@ -25,14 +25,6 @@ const auth = require('../middlewares/protect');
 const { protect } = auth;
 const router = express.Router();
 // LAMDA FUNCTION
-router.post(
-  '/lambda-function/pending-pullout-fromlocal-patner-banks',
-  pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts,
-);
-router.post(
-  '/lambda-function/create-upcomming-orders',
-  orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
-);
 
 router.post(
   '/order-management/fetch-invoice/:orderId',
@@ -90,6 +82,14 @@ router.post('/reset-password/sales-rep', authController.salesRepResendOtp);
 router.post('/reset-password/supplier', authController.supplierResetPassword);
 
 router.get('/product', productController.getAllProducts);
+router.post(
+  '/lambda-function/pending-pullout-fromlocal-patner-banks',
+  pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts,
+);
+router.post(
+  '/lambda-function/create-upcomming-orders',
+  orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
+);
 
 //! Country Management
 router.get('/address-management/country/', addressController.getAllCountries);
@@ -543,6 +543,15 @@ router.get(
   dashboardsController.salesRepDashboard,
 );
 
+router.get(
+  '/dashboard/local-partner-employee',
+  dashboardsController.employeeDashboardlocalPartner,
+);
+
+router.get(
+  '/dashboard/admin-employee',
+  dashboardsController.employeeDashboardAdmin,
+);
 router.get('/supplier-dashboard/:id', dashboardsController.supplierDashboard);
 
 router.get(
@@ -593,5 +602,7 @@ router.get(
 router.get('/view-customer-detail/:id', customerController.customerDetail);
 
 router.delete('/delete-customer/:id', customerController.deleteCustomer);
+
+router.delete('/customer-discounts/:userId', customerController.dicounts);
 
 module.exports = router;

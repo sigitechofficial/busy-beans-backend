@@ -23,18 +23,16 @@ const { createPaymentIntent } = require('../stripe');
 const Stripe = require('../stripe');
 const { Op, literal } = require('sequelize');
 const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
+// discount;
+
+const {
+  dataForEmailAndNotifications,
+} = require('../../utils/emailsNotificationsData');
 
 exports.notificationTesting = async (req, res, next) => {
-  const customerNotification = {
-    title: `JUST TESTING `,
-    body: `Your appointment has been confirmed. Looking forward to seeing you!`,
-  };
-
-  ThrowNotification(req.body.to, customerNotification, {
-    appointment: 1,
-  });
-
-  return res.status(200).json(response({ data: {} }));
+  const orderData = await dataForEmailAndNotifications(req.body.id);
+  orderEvents({ orderId: req.body.id });
+  return res.status(200).json(response({ data: { orderData } }));
 };
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
@@ -48,7 +46,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   }
   const customer = await user.findOne({
     where: { id: input?.order?.userId },
-    attributes: ['salesRepId', 'defaultDiscount'],
+    attributes: ['id', 'salesRepId', 'defaultDiscount'],
   });
   input.order.statusId = 1;
   input.order.salesRepId = customer?.salesRepId;
@@ -63,17 +61,45 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
         [Op.in]: productIds,
       },
     },
+    attributes: [
+      `id`,
+      `name`,
+      `quantity`,
+      `price`,
+      `categoryId`,
+      `wholesalePrice`,
+      `weight`,
+      `sku`,
+      `grind`,
+      `productCode`,
+      [
+        literal(`
+            (SELECT percentage
+            FROM userDiscounts
+            WHERE userDiscounts.categoryId = product.categoryId
+              AND userDiscounts.userId = ${customer.id}
+            LIMIT 1)
+          `),
+        'discountPercentage',
+      ],
+    ],
   });
   // return res.json(products)
-  console.log(
-    '🚀 ~ exports.bookOrder=catchAsync ~ products:',
-    products?.length,
-  );
+  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products);
 
-  let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
+  // let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
 
   const finalItems = products.map((obj) => {
     const element = {};
+    const percentageDiscount = parseFloat(
+      obj.dataValues?.discountPercentage || 0,
+    );
+    console.log(
+      '🚀 ~ obj.dataValues?.percentageDiscount:',
+      obj.dataValues?.percentageDiscount,
+    );
+    console.log('🚀 ~ percentageDiscount:', percentageDiscount);
+    console.log('🚀 ~ percentageDiscount:', percentageDiscount);
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
@@ -136,11 +162,11 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
-  input.order.discountPercentage = percentageDiscount;
+  // input.order.discountPercentage = percentageDiscount;//!Later
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight);
   input.order.shippingCompany =
-    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
+    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx';
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +

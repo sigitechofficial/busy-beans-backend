@@ -30,7 +30,7 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
              <tr>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
-              <td style="padding: 10px;">$${ele.price / ele.qty}</td>
+              <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
             </tr>
             `;

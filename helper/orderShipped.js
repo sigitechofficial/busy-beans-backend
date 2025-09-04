@@ -35,7 +35,7 @@ module.exports = async function ({ email, data, invoice }) {
             <tr>
               <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
               <td style="padding: 10px;">${ele.qty}</td>
-              <td style="padding: 10px;">$${ele.price / ele.qty}</td>
+              <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
             </tr>
             `;

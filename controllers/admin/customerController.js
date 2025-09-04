@@ -282,7 +282,7 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
             literal(
               `(SELECT categories.name FROM categories WHERE userDiscounts.categoryId= categories.id LIMIT 1)`,
             ),
-            'employee',
+            'categoryName',
           ],
         ],
       },
@@ -383,3 +383,25 @@ exports.fetchSavedCards = async (req, res, next) => {
 
   return res.status(200).json(output);
 };
+
+exports.dicounts = catchAsync(async (req, res, next) => {
+  const data = await userDiscount.findAll({
+    where: { userId: req.params?.id },
+    attributes: [
+      'id',
+      'categoryId',
+      'percentage',
+      [
+        literal(
+          `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`,
+        ),
+        'categoryName',
+      ],
+    ],
+  });
+
+  return res.status(200).json({
+    status: 'success',
+    data: data,
+  });
+});

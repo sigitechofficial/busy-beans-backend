@@ -4,6 +4,8 @@ const {
   supplier,
   orderHistory,
   skuSupplier,
+  userDiscount,
+  category,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -44,18 +46,46 @@ exports.addProduct = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllProducts = factory.getAll(product);
+
 exports.getAllProductsUser = catchAsync(async (req, res, next) => {
-  const data = await product.findOne({
-    where: { status: 0, deleted: 0 },
-    attributes: { exclude: ['deleted', 'deletedAt', 'updatedAt'] },
+  const data = await product.findAll({
+    where: { status: 1, deleted: 0 },
+    attributes: {
+      exclude: ['deleted', 'deletedAt', 'updatedAt', 'wholesalePrice'],
+    },
+    raw: true, // return plain objects instead of Sequelize instances
   });
 
-  if (!data) {
-    return next(new AppError('Product Not Found', 400));
-  }
+  const activeCategories = await userDiscount.findAll({
+    where: { userId: req.params.userId },
+    attributes: ['percentage', 'categoryId'],
+    raw: true,
+  });
+
+  // build a lookup map for faster access
+  const discountMap = activeCategories.reduce((map, item) => {
+    map[item.categoryId] = parseFloat(item.percentage);
+    return map;
+  }, {});
+
+  // apply discounts
+  const productsWithDiscount = data.map((prod) => {
+    const discount = discountMap[prod.categoryId] || 0;
+    const originalPrice = parseFloat(prod.price);
+    const discountedPrice = discount
+      ? (originalPrice - (originalPrice * discount) / 100).toFixed(2)
+      : originalPrice.toFixed(2);
+
+    prod.price = discountedPrice;
+    return {
+      ...prod,
+      appliedDiscount: discount,
+    };
+  });
+
   res.status(200).json({
     status: 'success',
-    data: { product: data },
+    data: { data: productsWithDiscount },
   });
 });
 

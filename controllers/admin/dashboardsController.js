@@ -9,6 +9,9 @@ const {
   cityInSystem,
   countryInSystem,
   skuSupplier,
+  employee,
+  statuses,
+  orderFrequency,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -352,6 +355,177 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: { dashboard, topProducts },
+  });
+});
+
+exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
+  let employeeId = req.user?.id;
+
+  // Query to count orders based on employeeId
+  const data = await statuses.findAll({
+    attributes: [
+      'id',
+      'orderStatus',
+      [
+        literal(
+          `(SELECT COUNT(orders.id) 
+           FROM orders
+           JOIN users ON users.id = orders.userId 
+           WHERE orders.statusId = statuses.id
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ''})`,
+        ),
+        'count',
+      ],
+    ],
+  });
+
+  let condition = {};
+  if (req.params.srId) condition.salesRepId = req.params.srId;
+
+  // Add visibilityDate condition
+  condition.visibilityDate = {
+    [Op.lte]: new Date(), // or moment().toDate()
+  };
+
+  const upcommingOrderCount = employeeId
+    ? await orderFrequency.count({
+        where: {
+          ...condition,
+          nextOrderDate: {
+            [Op.not]: literal(`
+        (SELECT DATE(orders.on)
+         FROM orders
+         JOIN users ON users.id = orders.userId 
+         WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
+         AND orders.orderFrequencyId = orderFrequency.id
+         ${employeeId ? `AND users.employeeId = ${employeeId}` : ''})
+      `),
+          },
+        },
+      })
+    : await orderFrequency.count({
+        where: {
+          ...condition,
+          nextOrderDate: {
+            [Op.notIn]: literal(`
+          (SELECT DATE(orders.on)
+          FROM orders
+          WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
+          AND orders.orderFrequencyId = orderFrequency.id)
+        `),
+          },
+        },
+      });
+
+  const output = JSON.parse(JSON.stringify(data));
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const overDueInvoices = await order.count({
+    where: {
+      createdAt: { [Op.gte]: thirtyDaysAgo }, // uses time too
+      paymentStatus: 'pending',
+    },
+    include: { model: user, where: { employeeId: req.user.id } },
+  });
+
+  output.push({
+    id: 7,
+    orderStatus: 'Upcomming Orders',
+    count: upcommingOrderCount,
+  });
+  output.push({
+    id: 8,
+    orderStatus: 'Overdue Invoices',
+    count: overDueInvoices,
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: { output },
+  });
+});
+
+exports.employeeDashboardlocalPartner = catchAsync(async (req, res, next) => {
+  let employeeId = req.user?.id;
+  const worker = await employee.findOne({ where: { id: employeeId } });
+
+  // Define the literals for both scenarios
+  const employeeFilterLiteral = employeeId
+    ? `AND orders.salesRepId = ${worker.salesRepId} AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`
+    : `AND orders.salesRepId = ${worker.salesRepId}`; // If employeeId is null, check for salesRepId
+
+  const upcomingOrderCountLiteral = employeeId
+    ? `AND orders.salesRepId = ${worker.salesRepId} AND orders.userId IN (SELECT id FROM users WHERE employeeId = ${employeeId})`
+    : `AND orders.salesRepId = ${worker.salesRepId}`; // If employeeId is null, check for salesRepId
+
+  // Query to count orders based on employeeId (handling both cases for employeeId)
+  const data = await statuses.findAll({
+    attributes: [
+      'id',
+      'orderStatus',
+      [
+        literal(
+          `(SELECT COUNT(orders.id) 
+             FROM orders 
+             WHERE orders.statusId = statuses.id 
+             ${employeeFilterLiteral})`,
+        ),
+        'count',
+      ],
+    ],
+  });
+
+  const condition = {};
+  condition.salesRepId = worker.salesRepId;
+
+  // Add visibilityDate condition
+  condition.visibilityDate = {
+    [Op.lte]: new Date(), // or moment().toDate()
+  };
+
+  // Handle upcoming order count based on employeeId
+  const upcommingOrderCount = await orderFrequency.count({
+    where: {
+      ...condition,
+      nextOrderDate: {
+        [Op.notIn]: literal(`
+            (SELECT DATE(orders.on)
+             FROM orders
+             WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
+             AND orders.orderFrequencyId = orderFrequency.id
+             ${upcomingOrderCountLiteral})
+          `),
+      },
+    },
+  });
+
+  const output = JSON.parse(JSON.stringify(data));
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const overDueInvoices = await order.count({
+    where: {
+      createdAt: { [Op.gte]: thirtyDaysAgo }, // uses time too
+      paymentStatus: 'pending',
+      salesRepId: worker.salesRepId,
+    },
+    include: { model: user, where: { employeeId: req.user.id } },
+  });
+
+  output.push({
+    id: 7,
+    orderStatus: 'Upcomming Orders',
+    count: upcommingOrderCount,
+  });
+
+  output.push({
+    id: 8,
+    orderStatus: 'Overdue Invoices',
+    count: overDueInvoices,
+  });
+
+  return res.status(200).json({
+    status: 'success',
+    data: output,
   });
 });
 

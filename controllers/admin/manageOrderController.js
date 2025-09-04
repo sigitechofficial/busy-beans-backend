@@ -12,6 +12,7 @@ const {
   billingAddress,
   salesRep,
   orderFrequency,
+  userDiscount,
 } = require('../../models');
 const fs = require('fs');
 const path = require('path');
@@ -278,10 +279,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       'totalQuantity',
     ],
     [
-      literal(`COALESCE(
-         (SELECT SUM(wholesalePrice)
+      literal(`
+        COALESCE(order.totalBill, 0) - COALESCE((
+          SELECT SUM(salerCommission)
           FROM items
-          WHERE items.orderId = order.id ), 0)`),
+          WHERE items.orderId = order.id
+        ), 0)
+      `),
       'adminEarnings',
     ],
     [
@@ -296,6 +300,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
         `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
       ),
       'salesRepName',
+    ],
+    [
+      literal(
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = order.statusId AND orderHistories.orderId = order.id LIMIT 1)`,
+      ),
+      'deliveredOn',
     ],
     'totalBill',
     'subTotal',
@@ -347,7 +357,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 
 exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
   let condition = {
-    paymentStatus: 'done',
+    // paymentStatus: 'done',
     adminReceivableStatus: false,
     // localPatnerCommission: 0.0,
     // paymentMethod: { [Op.not]: 'card'},
@@ -459,6 +469,16 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'createdAt',
       'shippingCharges',
       'invoiceNumber',
+      'invoiceDate',
+      'invoiceReminder',
+      'invoicePaidDate',
+      'termDays',
+      [
+        literal(
+          `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
+        ),
+        'overdueInvoice',
+      ],
     ],
   });
   if (!doc) {
@@ -698,6 +718,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'invoiceReminder',
       'invoicePaidDate',
       'termDays',
+      'salesRepId',
     ],
   });
   if (!doc) {
@@ -857,11 +878,22 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     weight,
   );
   const customer = req.params?.id
-    ? await user.findOne({
-        where: { id: req.params?.id },
-        attributes: ['id', 'salesRepId', 'defaultDiscount'],
+    ? await userDiscount.findAll({
+        where: { userId: req.params?.id },
+        attributes: [
+          'categoryId',
+          'percentage',
+          // [
+          //   literal(
+          //     `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`,
+          //   ),
+          //   'categoryName',
+          // ],
+        ],
       })
-    : null;
+    : [];
+  console.log('🚀 ~ customer:', customer);
+  console.log('🚀 ~ req.params?.id:', req.params?.id);
   // Find the shipping company where the weight is between weightFrom and weightTo
   const shippingCompany = await shippingCompanies.findOne({
     where: {
@@ -888,7 +920,7 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       charges: shippingCompany?.charges,
-      discountPercentage: customer?.defaultDiscount || null,
+      discountPercentage: customer || [],
     },
   });
 });
@@ -908,6 +940,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       'invoiceDate',
       'invoiceReminder',
       'invoicePaidDate',
+      'invoiceNumber',
+      'userId',
       [
         literal(
           `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
@@ -991,11 +1025,33 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
         [Op.in]: productIds,
       },
     },
+    attributes: [
+      `id`,
+      `name`,
+      `quantity`,
+      `price`,
+      `categoryId`,
+      `wholesalePrice`,
+      `weight`,
+      `sku`,
+      `grind`,
+      `productCode`,
+      [
+        literal(`
+            (SELECT percentage
+            FROM userDiscounts
+            WHERE userDiscounts.categoryId = product.categoryId
+              AND userDiscounts.userId = ${placedOrder?.userId}
+            LIMIT 1)
+          `),
+        'discountPercentage',
+      ],
+    ],
   });
 
-  let percentageDiscount = input?.order?.discountPercentage
-    ? input.order?.discountPercentage
-    : 0;
+  // let percentageDiscount = input?.order?.discountPercentage
+  //   ? input.order?.discountPercentage
+  //   : 0;
 
   console.log(
     '🚀 ~ exports.bookOrder=catchAsync ~ products:',
@@ -1004,6 +1060,9 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   const finalItems = products.map((obj) => {
     const element = {};
+    const percentageDiscount = parseFloat(
+      obj.dataValues?.discountPercentage || 0,
+    );
     element.productId = obj.id;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
 
@@ -1060,7 +1119,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       const element = {};
       element.code = obj.code;
       element.qty = obj.qty;
-      element.price = obj.price;
+      element.price = obj.total;
       console.log('🚀 ~  element.price = obj.typeCharges;:', obj.price);
       element.productName = obj.name;
       element.orderId = placedOrder?.id;
@@ -1111,11 +1170,11 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
-  input.order.discountPercentage = percentageDiscount;
+  // input.order.discountPercentage = percentageDiscount;
   input.order.invoiceNumber = req.body?.order?.invoiceNumber;
   input.order.totalWeight = parseFloat(totalWeight);
   input.order.shippingCompany =
-    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
+    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx';
   input.order.invoicePdf = 1;
   input.order.shippingCharges =
     req.body?.order?.shippingCharges || shippingCompany?.charges;
@@ -1161,6 +1220,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       stripeCustomer: placedOrder?.stripeCustomerId,
       metadata: {
         orderId: placedOrder.id,
+        invoiceNumber: placedOrder.invoiceNumber,
       },
     });
 
@@ -1440,3 +1500,4 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
     data: {},
   });
 });
+// Apply discount

@@ -4,10 +4,12 @@ const orderController = require('../controllers/customer/orderController');
 const profileController = require('../controllers/customer/profileController');
 const manageOrderController = require('../controllers/admin/manageOrderController');
 const productController = require('../controllers/admin/productController');
+const customerController = require('../controllers/admin/customerController');
 const Authorization = require('../middlewares/protect');
 
 const router = express.Router();
 
+router.get(`/product/:userId`, productController.getAllProductsUser);
 router.post('/signup', authController.signup);
 router.post('/login', authController.login);
 router.post('/logout', authController.logout);
@@ -23,6 +25,7 @@ router.post('/throw-notification', orderController.notificationTesting);
 
 router.post('/sync-customer-to-stripe', orderController.createStripeCustomers);
 router.post('/sheet-upload', orderController.SheetUplod);
+router.get(`/product`, productController.getAllProducts);
 
 router.use(Authorization.protect);
 
@@ -38,6 +41,6 @@ router.post('/address/add-new/:id', profileController.addAddress);
 router.get('/address/view-all', profileController.getAllAddress);
 // router.get('/product', profileController.productController);
 router.get(`/product`, productController.getAllProducts);
-router.get(`/product/:userId`, productController.getAllProducts);
+router.get('/view-customer-detail/:id', customerController.customerDetail);
 
 module.exports = router;

@@ -9,8 +9,8 @@ const {
   paidInvoiceAdminOrLocalPatnerEventAndCustomer,
 } = require('../events/paymentInvoicePaidEvent');
 
-const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN`; //LIVE
-// const endpointSecret = `whsec_1Xqm67Agpa70u6fqQt85NergNgJmsQAN` //SANDBOX
+const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8`; //LIVE
+// const endpointSecret = `whsec_PgzwORQviUKawaKDIXDeRbSSHINHQRik`; //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature'];
 
@@ -39,6 +39,9 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
       break;
     case 'invoice.paid': //not needed yet  "_" add underscore to prevent tranfers for now
       await invoicePaid(event);
+      break;
+    case 'payment_intent.succeeded': //not needed yet  "_" add underscore to prevent tranfers for now
+      await onPaymentIntentSucceeded(event);
       break;
     default:
       console.log(`Unhandled event type ${event.type}`);
@@ -95,9 +98,100 @@ const invoicePaid = async (event) => {
     //       });
     //       await order.update({paymentStatus:'done',localPatnerCommission:totalWholesalePrice},{where:{orderId}})
     //   }
+
+    const session = event.data.object;
+
+    // Expand to get the PaymentIntent
+    const pi = await stripe.paymentIntents.retrieve(session.payment_intent, {
+      expand: ['charges'],
+    });
+
+    const platformChargeId = pi.latest_charge || pi.charges?.data?.[0]?.id;
+    if (!platformChargeId) return;
+
+    // Retrieve platform charge with transfer expanded
+    const platformCharge = await stripe.charges.retrieve(platformChargeId, {
+      expand: ['transfer'],
+    });
+
+    const transferId =
+      typeof platformCharge.transfer === 'string'
+        ? platformCharge.transfer
+        : platformCharge.transfer?.id;
+
+    if (!transferId) return;
+
+    // Get transfer to find connected account + destination payment
+    const transfer = await stripe.transfers.retrieve(transferId);
+    const connectedAccountId = transfer?.destination; // acct_xxx
+    const destinationPaymentId = transfer?.destination_payment; // ch_xxx or py_xxx
+
+    if (connectedAccountId && destinationPaymentId) {
+      await stripe.charges.update(
+        destinationPaymentId,
+        {
+          description: `Payment for invoice ${pi.metadata?.invoiceNumber || ''} — Busy Bean Coffee Inc.`,
+          metadata: {
+            orderId: pi.metadata?.orderId || '',
+            invoiceNumber: pi.metadata?.invoiceNumber || '',
+            partnerId: pi.metadata?.partnerId || '',
+            salesRepId: pi.metadata?.salesRepId || '',
+            type: pi.metadata?.type || 'checkout-session',
+            platform: pi.metadata?.platform || 'Busy Bean Coffee Inc.',
+          },
+        },
+        { stripeAccount: connectedAccountId }, // apply update on connected account
+      );
+    }
+
     return true;
   } catch (error) {
     console.error('Error handling invoice.paid:', error);
+  }
+};
+
+// assuming: const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+const onPaymentIntentSucceeded = async (event) => {
+  const pi = event.data.object;
+
+  // grab the platform charge id
+  const platformChargeId = pi.latest_charge || pi.charges?.data?.[0]?.id;
+  if (!platformChargeId) return;
+
+  // retrieve platform charge with transfer expanded
+  const platformCharge = await stripe.charges.retrieve(platformChargeId, {
+    expand: ['transfer'],
+  });
+
+  const transferId =
+    typeof platformCharge.transfer === 'string'
+      ? platformCharge.transfer
+      : platformCharge.transfer?.id;
+
+  if (!transferId) return;
+
+  // get transfer to find connected account + destination payment
+  const transfer = await stripe.transfers.retrieve(transferId);
+  const connectedAccountId = transfer?.destination; // acct_xxx
+  const destinationPaymentId = transfer?.destination_payment; // ch_xxx or py_xxx
+
+  if (connectedAccountId && destinationPaymentId) {
+    await stripe.charges.update(
+      destinationPaymentId,
+      {
+        description: `Payment for invoice ${pi.metadata?.invoiceNumber || ''} — Busy Bean Coffee Inc.`,
+        metadata: {
+          orderId: pi.metadata?.orderId || '',
+          invoiceNumber: pi.metadata?.invoiceNumber || '',
+          partnerId: pi.metadata?.partnerId || '',
+          salesRepId: pi.metadata?.salesRepId || '',
+          type: pi.metadata?.type || 'checkout-session',
+          platform: pi.metadata?.platform || 'Busy Bean Coffee Inc.',
+        },
+      },
+      { stripeAccount: connectedAccountId }, // apply update on the connected account
+    );
   }
 };
 

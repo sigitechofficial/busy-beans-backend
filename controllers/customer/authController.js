@@ -19,7 +19,6 @@ const Email = require('../../utils/email');
 const otpGenerator = require('otp-generator');
 const EmailResetPasswordOtpToAll = require('../../helper/ResetPasswordOtpToAll');
 const Event = require('../events/userAccountRelatedEvents');
-const EmailWelcome = require('../../helper/WelcomeForBoth');
 const { response } = require('../../utils/response');
 const bcrypt = require('bcryptjs');
 const Stripe = require('../stripe');

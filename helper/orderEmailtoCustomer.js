@@ -12,6 +12,7 @@ const { header } = require('./header');
 
 module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
   const lcoalPatner = data?.salesRep;
+  console.log('🚀 ~ lcoalPatner:', lcoalPatner);
   if (lcoalPatner) {
     footer = generateFooterHtml({
       address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
@@ -42,7 +43,7 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
              <tr>
               <td style="padding: 10px;">${ele.product}</td>
               <td style="padding: 10px;">${ele.qty}</td>
-              <td style="padding: 10px;">$${ele.price / ele.qty}</td>
+              <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
             </tr>
             `;

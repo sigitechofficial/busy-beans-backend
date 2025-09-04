@@ -160,9 +160,15 @@ async function createPaymentIntent({
       input.customer = stripeCustomer;
       input.payment_method = paymentMethodId;
       input.confirm = true; // charge now
+      // input.statement_descriptor = 'BUSYBEANCOFFEE';
+      input.description = `Payment captured for invoice ${metadata.invoiceNumber} using card on file.`;
       input.off_session = true; // no customer interaction
       input.capture_method = 'automatic';
-      input.metadata = metadata;
+      input.metadata = {
+        platform: 'Busy Beans Coffee inc.',
+        type: 'saved-card',
+        ...metadata,
+      };
     }
 
     console.log('🚀 ~ createPaymentIntent ~ input:', input);
@@ -599,9 +605,6 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       line_items,
       success_url: 'https://www.busybeancoffee.com/product?status=success',
       cancel_url: `https://www.busybeancoffee.com/product?status=cancel`,
-      metadata: {
-        orderId: order?.id,
-      },
       saved_payment_method_options: {
         payment_method_save: 'enabled',
       },
@@ -613,12 +616,17 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
         transfer_data: {
           destination: order.connectAccountId, // e.g. $30 to partner
         },
+
         setup_future_usage: 'off_session',
+        description: `Payment for invoice ${order?.invoiceNumber}.`,
         metadata: {
           orderId: order?.id,
-          partnerId: order?.connectAccountId,
-          salesRepId: order?.salesRepId,
-          stripeFee: `${stripeFee}`,
+          invoiceNumber: order?.invoiceNumber || '',
+          partnerId: order?.connectAccountId || '',
+          salesRepId: order?.salesRepId || '',
+          // stripeFee: `${stripeFee}`,
+          type: `checkout-session`,
+          platform: `Busy Bean Cofee Inc.`,
         },
       };
     }
@@ -803,6 +811,8 @@ async function pullAmountPaymentIntentFromBankAccount({
   savedPaymentMethodId,
   customerId,
   orders = [],
+  invoiceNumbers = [],
+  partner,
 }) {
   try {
     const cents = convertToCents(amount);
@@ -812,18 +822,26 @@ async function pullAmountPaymentIntentFromBankAccount({
     );
 
     const metadata = {
+      platform: 'Busy Beans Coffee Inc.',
+      localPatner: partner?.srName || '',
+      territoryName: partner?.territoryName || '',
       message: 'Payment for these orders has been pulled out',
+      type: 'bank-pullout',
+      orders: orders.map((id) => `#${id}`).join(', '),
+      invoices: invoiceNumbers.map((invoice) => `${invoice}`).join(', '),
     };
-
-    orders.forEach((orderId, index) => {
-      metadata[`order`] = `#${orderId}`;
-    });
+    console.log(
+      '🚀 ~ pullAmountPaymentIntentFromBankAccount ~ metadata:',
+      metadata,
+    );
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: cents,
       currency: 'usd',
       customer: customerId,
       payment_method: savedPaymentMethodId,
+      statement_descriptor: 'BUSYBEANCOFFEE',
+      description: `Payment pulled for invoices ${metadata.invoices}`,
       payment_method_types: ['us_bank_account'],
       off_session: true,
       confirm: true,

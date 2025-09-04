@@ -10,6 +10,7 @@ const {
   product,
   employee,
 } = require('../../models');
+
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const { nextFrequencyDate } = require('../../utils/nextFrequencyDate');
@@ -236,18 +237,43 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         [Op.in]: productIds,
       },
     },
+    attributes: [
+      `id`,
+      `name`,
+      `quantity`,
+      `price`,
+      `categoryId`,
+      `wholesalePrice`,
+      `weight`,
+      `sku`,
+      `grind`,
+      `productCode`,
+      [
+        literal(`
+            (SELECT percentage
+            FROM userDiscounts
+            WHERE userDiscounts.categoryId = product.categoryId
+              AND userDiscounts.userId = ${customer.id}
+            LIMIT 1)
+          `),
+        'discountPercentage',
+      ],
+    ],
   });
   // return res.json(products)
   console.log(
     '🚀 ~ exports.bookOrder=catchAsync ~ products:',
     products?.length,
   );
-  let percentageDiscount = input?.order?.discountPercentage
-    ? parseFloat(input?.order?.discountPercentage)
-    : parseFloat(customer?.defaultDiscount);
+  // let percentageDiscount = input?.order?.discountPercentage
+  //   ? parseFloat(input?.order?.discountPercentage)
+  //   : parseFloat(customer?.defaultDiscount);
 
   const finalItems = products.map((obj) => {
     const element = {};
+    const percentageDiscount = parseFloat(
+      obj.dataValues?.discountPercentage || 0,
+    );
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
@@ -310,11 +336,11 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
-  input.order.discountPercentage = percentageDiscount;
+  // input.order.discountPercentage = percentageDiscount;
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight || 0);
   input.order.shippingCompany =
-    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
+    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx';
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +
@@ -515,6 +541,7 @@ const frequencyBookOrder = async ({ id }) => {
             ],
             'qty',
             'productId',
+            'categoryId',
           ],
         },
       ],
@@ -618,8 +645,8 @@ const frequencyBookOrder = async ({ id }) => {
     });
 
     result.shippingCharges = shippingCompany?.charges || 0;
-    console.log('🚀 ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
-    console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
+    // console.log('🚀 ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
+    // console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
     result.itemsPrice = productsPrice;
     result.discountPrice = discountOnItemsPrice;
     result.discountPercentage = percentageDiscount;
@@ -630,7 +657,7 @@ const frequencyBookOrder = async ({ id }) => {
       parseFloat(shippingCompany?.charges || 0);
     result.totalWeight = parseFloat(totalWeight || 0);
     result.shippingCompany =
-      result.totalWeight > 400 ? `Shipping By Truck` : 'FedEx Ground E';
+      result.totalWeight > 400 ? `Shipping By Truck` : 'FedEx';
     result.statusId = 1;
     result.salesRepId = result?.salesRepId;
     result.createdBy = 'sales-rep';
@@ -655,16 +682,21 @@ const frequencyBookOrder = async ({ id }) => {
       currentDate: result?.on,
       frequency: result.frequency,
     });
+    console.log(
+      '🚀 ~ frequencyBookOrder ~ nextOrderDate, visibilityDate:',
+      nextOrderDate,
+      visibilityDate,
+    );
 
     const updateFrequencyData = {
       nextOrderDate,
       visibilityDate,
       orderDate: result?.on,
     };
+    await orderFrequency.update(updateFrequencyData, { where: { id: id } });
 
-    orderFrequency.update(updateFrequencyData, { where: { id: id } });
-
-    console.log('ðŸš€ ~ frequencyBookOrder ~ result:', result);
+    console.log('ðŸš€ ~ frequencyBookOrder ~ result:', updateFrequencyData);
+    return true;
   } catch (error) {
     console.log('ðŸš€ ~ exports.frequencyBookOrder = ~ error:', error);
   }
