@@ -8,6 +8,7 @@ const {
   supplier,
   billingAddress,
   deviceToken,
+  account,
 } = require('../models');
 const { Op, literal } = require('sequelize');
 const { emailDateFormate } = require('./emailDateFormate');
@@ -313,6 +314,10 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     parseFloat(output?.totalBill || 0) -
     parseFloat(output.localPatnerCommission || 0);
 
+  const admin = await account.findOne({
+    attributes: { exclude: ['password', 'status'] },
+  });
+  output.admin = admin;
   return {
     details: output,
     email: output?.email,

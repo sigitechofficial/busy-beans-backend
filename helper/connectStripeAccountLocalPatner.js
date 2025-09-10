@@ -4,16 +4,16 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+let Footer = require('./footer');
 
-module.exports = function ({ email, name = '', boardingLink = '', password }) {
+module.exports = async function ({
+  email,
+  name = '',
+  boardingLink = '',
+  password,
+}) {
   console.log('🚀 ~ boardingLink:', boardingLink);
-  console.log('🚀 ~ boardingLink:', boardingLink);
-  console.log('🚀 ~ boardingLink:', boardingLink);
-  console.log('🚀 ~ boardingLink:', boardingLink);
-  console.log('🚀 ~ boardingLink:', boardingLink);
-  console.log('🚀 ~ boardingLink:', boardingLink);
-  console.log('🚀 ~ boardingLink:', boardingLink);
+  let footer = await Footer();
   let hiUser = `Hi ${name}!`;
   transporter.sendMail(
     {

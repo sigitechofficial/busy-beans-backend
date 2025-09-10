@@ -4,14 +4,19 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-let { footer } = require('./footer');
 const generateFooterHtml = require('./footerLocalpatner');
-
+let Footer = require('./footer');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const { header } = require('./header');
 
-module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
+module.exports = async function ({
+  email,
+  data,
+  satge = 'Confirmed',
+  invoice,
+}) {
   const lcoalPatner = data?.salesRep;
+  let footer = await Footer();
   console.log('🚀 ~ lcoalPatner:', lcoalPatner);
   if (lcoalPatner) {
     footer = generateFooterHtml({
@@ -41,7 +46,7 @@ module.exports = function ({ email, data, satge = 'Confirmed', invoice }) {
   data?.items.forEach((ele) => {
     let temp = `
              <tr>
-              <td style="padding: 10px;">${ele.product}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>

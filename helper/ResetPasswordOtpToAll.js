@@ -4,11 +4,12 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
 const { header } = require('./header');
-
-module.exports = function (OTP, data, type) {
+let Footer = require('./footer');
+module.exports = async function (OTP, data, type) {
   console.log('🚀 ~ OTP:', OTP);
+  let footer = await Footer();
+
   let heading = `Reset password`;
   let preOtpText = `We found a request for forgot password.
   Its okay! its happens. Use this OTP for

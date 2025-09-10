@@ -1,13 +1,20 @@
 const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env;
 const stripe = require('stripe')(STRIPE_SECRET_KEY);
 const Stripe = require('../stripe');
-const { user, salesRep, transfersToSalesRep, item } = require('../../models');
-const { order } = require('../../models');
+const {
+  user,
+  salesRep,
+  transfersToSalesRep,
+  item,
+  order,
+} = require('../../models');
+const { parseOrderString } = require('../../utils/webhookHelpersFunctions');
 const {
   paidInvoiceEmailEvent,
   paidInvoiceAdminOrLocalPatnerEvent,
   paidInvoiceAdminOrLocalPatnerEventAndCustomer,
 } = require('../events/paymentInvoicePaidEvent');
+const { Op, literal } = require('sequelize');
 
 const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8`; //LIVE
 // const endpointSecret = `whsec_PgzwORQviUKawaKDIXDeRbSSHINHQRik`; //SANDBOX
@@ -56,10 +63,39 @@ const invoicePaid = async (event) => {
     let localPatnerAccount = invoice.metadata?.localPatnerAccount;
     const orderId = invoice.metadata?.orderId;
     console.log('🚀 ~ invoicePaid ~ orderId:', orderId);
-
+    const condition = { invoiceId: invoice?.id };
+    if (orderId) condition.id = orderId;
+    condition.invoiceId = invoice?.id;
+    const orderPlaced = await order.findOne({
+      where: condition,
+      attributes: [
+        'id',
+        [
+          literal(`COALESCE(
+             (SELECT SUM(salerCommission)
+              FROM items
+              WHERE items.orderId = order.id ), 0)`),
+          'totalSalerCommission',
+        ],
+        [
+          literal(`
+            COALESCE(order.totalBill, 0) - COALESCE((
+              SELECT SUM(salerCommission)
+              FROM items
+              WHERE items.orderId = order.id
+            ), 0)
+          `),
+          'adminEarnings',
+        ],
+      ],
+      raw: true,
+    });
     await order.update(
       {
         paymentMethod: 'card',
+        localPatnerCommission: orderPlaced?.totalSalerCommission,
+        adminReceivableAmount: orderPlaced?.adminEarnings,
+        adminReceivableStatus: true,
         paymentStatus: 'done',
         invoicePaidDate: Date.now(),
       },

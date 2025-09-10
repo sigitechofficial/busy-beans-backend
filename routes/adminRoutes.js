@@ -15,6 +15,7 @@ const salesRepReportsController = require('../controllers/admin/salesRepReportsC
 const dashboardsController = require('../controllers/admin/dashboardsController');
 const shippingCompanyController = require('../controllers/admin/shippingCompanyController');
 const employeeController = require('../controllers/admin/employeeController');
+const adminController = require('../controllers/admin/adminController');
 
 const pulloutPaymentsController = require('../controllers/admin/pulloutPaymentsController');
 
@@ -156,6 +157,18 @@ router.get('/category/', categoryController.getAllCatagories);
 
 //!MIDDLEWARE PRIVATE ROUTES
 router.use(protect);
+
+router.get(
+  '/profile/',
+  auth.restrictTo('admin', 'salesRep'),
+  adminController.getAdmin,
+);
+router.patch(
+  '/profile-update/:id',
+  auth.restrictTo('admin', 'salesRep'),
+  adminController.updateAdmin,
+);
+// router.get('/profile/', adminController.getAdmin);
 
 const productsImage = multer.diskStorage({
   destination: (req, file, cb) => {

@@ -5,7 +5,7 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-let { footer } = require('./footer');
+let Footer = require('./footer');
 const generateFooterHtml = require('./footerLocalpatner');
 
 const { header } = require('./header');
@@ -18,6 +18,8 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 // }
 module.exports = async function ({ email, data, invoice }) {
   // console.log('ðŸš€ ~ data:', data);
+  let footer = await Footer();
+
   const on = emailDateFormate(data?.on || data?.createdAt);
   const lcoalPatner = data?.salesRep;
   if (lcoalPatner) {

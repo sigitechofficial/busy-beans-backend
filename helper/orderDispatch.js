@@ -5,7 +5,7 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-let { footer } = require('./footer');
+let Footer = require('./footer');
 const generateFooterHtml = require('./footerLocalpatner');
 const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
@@ -18,6 +18,7 @@ const { emailDateFormate } = require('../utils/emailDateFormate');
 module.exports = async function ({ email, data, invoice }) {
   console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
+  let footer = await Footer();
   const lcoalPatner = data?.salesRep;
   if (lcoalPatner) {
     footer = generateFooterHtml({

@@ -33,6 +33,42 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: true,
       },
+      country: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      city: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      state: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      territoryName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      zipCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      phoneNumber: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      countryCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      address: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      supportEmail: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
     },
     {
       tableName: 'accounts',

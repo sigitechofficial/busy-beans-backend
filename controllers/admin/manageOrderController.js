@@ -55,7 +55,8 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     );
   }
   console.log('🚀 ~ req.body:', req.body);
-  await order.update(req.body, { where: { id: req.params?.orderId } });
+  await order.update(req.body.order, { where: { id: req.params?.orderId } });
+
   sentPaymentInvoiceEvent({ orderId: req.params?.orderId });
 
   //   let checkSession = false
@@ -97,7 +98,7 @@ exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
       console.log('🚀 ~ sendInvoiceMultiple ~ orderId:', ele);
       sentPaymentInvoiceEvent({ orderId: ele.orderId });
 
-      order.update(ele, { where: { id: ele.orderId } });
+      await order.update(ele, { where: { id: ele.orderId } });
     }
   }
 
@@ -334,6 +335,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     'invoiceReminder',
     'invoicePaidDate',
     'termDays',
+    'pulloutIntentId',
     [
       literal(
         `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
@@ -473,6 +475,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'invoiceReminder',
       'invoicePaidDate',
       'termDays',
+      'pulloutIntentId',
       [
         literal(
           `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
@@ -719,6 +722,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'invoicePaidDate',
       'termDays',
       'salesRepId',
+      'pulloutIntentId',
     ],
   });
   if (!doc) {

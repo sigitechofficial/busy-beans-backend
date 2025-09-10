@@ -4,13 +4,16 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-let { footer } = require('./footer');
+let Footer = require('./footer');
+
 const generateFooterHtml = require('./footerLocalpatner');
 const { header } = require('./header');
 
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email, data, lcoalPatner }) {
+module.exports = async function ({ email, data, lcoalPatner }) {
+  let footer = await Footer();
+
   if (lcoalPatner) {
     footer = generateFooterHtml({
       address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,

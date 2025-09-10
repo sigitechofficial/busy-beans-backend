@@ -5,7 +5,8 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-let { footer } = require('./footer');
+let Footer = require('./footer');
+
 const generateFooterHtml = require('./footerLocalpatner');
 const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
@@ -16,10 +17,9 @@ const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
-  console.log('🚀 ~ data:', data?.salesRep);
   console.log('🚀 ~ email:', email);
   const baseDate = new Date(data?.on || data?.createdAt);
-
+  let footer = await Footer();
   // Add 30 days
   const plus30Days = new Date(baseDate);
   plus30Days.setDate(baseDate.getDate() + 30);

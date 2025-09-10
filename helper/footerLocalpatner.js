@@ -126,7 +126,7 @@ function generateFooterHtml({
         <td align="center" style="padding-top: 20px">
           <a href="https://busybeancoffee.com" target="_blank" rel="noopener noreferrer">
           <img
-            src="cid:logo"
+            src="https://backendbb.trimworldwide.com/helper/images/logo.png"
             alt="Powered by"
             width="150"
             style="border-radius: 16px; object"

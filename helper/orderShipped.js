@@ -5,7 +5,7 @@ dotenv.config({ path: '../.env' });
 
 const { attachments } = require('./attactments');
 const { transporter } = require('./transpoter');
-let { footer } = require('./footer');
+let Footer = require('./footer');
 const generateFooterHtml = require('./footerLocalpatner');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 const { header } = require('./header');
@@ -16,6 +16,7 @@ const { header } = require('./header');
 // }
 
 module.exports = async function ({ email, data, invoice }) {
+  let footer = await Footer();
   let hiSupplierName = `Hi ${data.customerName}`;
   const lcoalPatner = data?.salesRep;
   if (lcoalPatner) {

@@ -59,7 +59,10 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
         pullouts,
       );
       order.update(
-        { adminReceivableStatus: true },
+        {
+          adminReceivableStatus: true,
+          pulloutIntentId: pullouts.paymentIntentId,
+        },
         { where: { id: orderIds } },
       );
       for (const ele of orderList) {
@@ -112,7 +115,10 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
     if (pullouts) {
       // Set adminReceivableStatus true for all involved orders
       await order.update(
-        { adminReceivableStatus: true },
+        {
+          adminReceivableStatus: true,
+          pulloutIntentId: pullouts.paymentIntentId,
+        },
         { where: { id: orderIds } },
       );
 

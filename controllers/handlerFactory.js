@@ -63,8 +63,7 @@ exports.updateOne = (Model) =>
     }
     const doc = await Model.update(input, {
       where: { id: req.params.id },
-      returning: true,
-      plain: true,
+      individualHooks: true,
     });
 
     if (Model == supplier) {
@@ -90,14 +89,10 @@ exports.updateOne = (Model) =>
       });
     }
 
-    if (!doc[1]) {
-      return next(new AppError('No document found with that ID', 404));
-    }
-
     res.status(200).json({
       status: 'success',
       data: {
-        data: doc[1],
+        data: doc,
       },
     });
   });

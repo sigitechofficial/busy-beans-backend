@@ -4,12 +4,12 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+const Footer = require('./footer');
 
-module.exports = function (data) {
+module.exports = async function (data) {
   console.log('🚀 ~ data:', data);
   let firstParagraph = `${data.content}`;
-
+  let footer = await Footer();
   let secondParagraph = `Thank you for choosing Trim! We look forward to supporting your salon's success.`;
 
   let greetings = `${data.greetings}`;

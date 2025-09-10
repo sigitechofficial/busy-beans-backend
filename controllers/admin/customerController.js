@@ -28,6 +28,11 @@ exports.customersList = catchAsync(async (req, res, next) => {
   if (req.params?.srId) filters.salesRepId = req.params?.srId;
   if (req.params?.empId) filters.employeeId = req.params?.empId;
 
+  if (req.user?.employeeOf == 'Local Partner') {
+    filters.salesRepId = req.user?.salesRepId;
+  }
+  console.log('🚀 ~ filters:', filters);
+
   const data = await user.findAll({
     where: filters,
     attributes: [

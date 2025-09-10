@@ -4,12 +4,13 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+const Footer = require('./footer');
 const { header } = require('./header');
 const { emailDateFormate } = require('../utils/emailDateFormate');
 
-module.exports = function ({ email, name = '' }) {
+module.exports = async function ({ email, name = '' }) {
   let hiCustomer = `Hi ${name}!`;
+  let footer = await Footer();
 
   transporter.sendMail(
     {

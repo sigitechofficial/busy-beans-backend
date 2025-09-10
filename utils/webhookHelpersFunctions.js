@@ -9,3 +9,4 @@ function parseOrderString(orderStr) {
     .filter(Boolean) // remove any accidental empty strings
     .map(Number); // convert to numbers
 }
+module.exports = { parseOrderString };

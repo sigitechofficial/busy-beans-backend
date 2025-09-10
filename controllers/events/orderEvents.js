@@ -60,7 +60,6 @@ exports.orderEventsToLocalPatnerOrAdmin = async ({ orderId }) => {
       email: details?.patnerEmail || 'info@busybeancoffee.com',
       data: details,
       stage: 'Confirmed',
-      invoice,
     });
 
     console.log(

@@ -170,6 +170,10 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: 30,
     },
+    pulloutIntentId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   });
 
   // Hook to exclude deletedAt and updatedAt from query results

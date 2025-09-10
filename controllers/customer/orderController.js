@@ -32,7 +32,33 @@ const {
 exports.notificationTesting = async (req, res, next) => {
   const orderData = await dataForEmailAndNotifications(req.body.id);
   orderEvents({ orderId: req.body.id });
-  return res.status(200).json(response({ data: { orderData } }));
+
+  const orderPlaced = await order.findOne({
+    where: { id: req.body.id },
+    attributes: [
+      'id',
+      [
+        literal(`COALESCE(
+         (SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id ), 0)`),
+        'totalSalerCommission',
+      ],
+      [
+        literal(`
+        COALESCE(order.totalBill, 0) - COALESCE((
+          SELECT SUM(salerCommission)
+          FROM items
+          WHERE items.orderId = order.id
+        ), 0)
+      `),
+        'adminEarnings',
+      ],
+    ],
+    raw: true,
+  });
+  console.log('🚀 ~ orderPlaced:', orderPlaced?.adminEarnings);
+  return res.status(200).json(response({ data: { orderPlaced } }));
 };
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
