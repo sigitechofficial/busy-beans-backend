@@ -16,7 +16,7 @@ const {
 } = require('../events/paymentInvoicePaidEvent');
 const { Op, literal } = require('sequelize');
 
-const endpointSecret = `whsec_9YDoVbh7hFbMrPZVHvVesbCycZ2GZNa8`; //LIVE
+const endpointSecret = `whsec_9M5iAefqoU2A9GvmGcpwIgolrldMsZ2P`; //LIVE
 // const endpointSecret = `whsec_PgzwORQviUKawaKDIXDeRbSSHINHQRik`; //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -62,10 +62,10 @@ const invoicePaid = async (event) => {
     const localPartnerId = invoice.metadata?.salesRepId;
     let localPatnerAccount = invoice.metadata?.localPatnerAccount;
     const orderId = invoice.metadata?.orderId;
-    console.log('🚀 ~ invoicePaid ~ orderId:', orderId);
     const condition = { invoiceId: invoice?.id };
     if (orderId) condition.id = orderId;
-    condition.invoiceId = invoice?.id;
+
+    console.log('🚀 ~ invoicePaid ~ orderId:', condition);
     const orderPlaced = await order.findOne({
       where: condition,
       attributes: [
@@ -90,6 +90,7 @@ const invoicePaid = async (event) => {
       ],
       raw: true,
     });
+    console.log('🚀 ~ invoicePaid ~ orderId:', orderPlaced);
     await order.update(
       {
         paymentMethod: 'card',
@@ -98,11 +99,12 @@ const invoicePaid = async (event) => {
         adminReceivableStatus: true,
         paymentStatus: 'done',
         invoicePaidDate: Date.now(),
+        pulloutDate: Date.now(),
       },
-      { where: { id: orderId } },
+      { where: { id: orderPlaced?.id } },
     );
 
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId });
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId: orderPlaced?.id });
     // paidInvoiceAdminOrLocalPatnerEvent({ orderId });
     //   if(!localPartnerId) {
     //   return true

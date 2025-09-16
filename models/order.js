@@ -165,6 +165,10 @@ module.exports = (sequelize) => {
       type: DataTypes.DATEONLY,
       allowNull: true,
     },
+    pulloutDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
     termDays: {
       type: DataTypes.INTEGER,
       allowNull: true,

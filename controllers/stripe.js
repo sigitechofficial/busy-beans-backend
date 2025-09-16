@@ -186,6 +186,7 @@ async function createPaymentIntent({
           adminReceivableStatus: true,
           paymentStatus: 'done',
           invoicePaidDate: new Date(),
+          pulloutDate: Date.now(),
           paymentMethod: 'card',
           paymentMethodId: paymentMethodId,
           paymentIntentId: paymentIntent?.id,
@@ -592,12 +593,8 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
     const stripeFeeInCents = convertToCents(stripeFee);
 
     const adminProfitCents = platformFeeInCents + stripeFeeInCents;
-    console.log(
-      '🚀 ~ createInvoiceWithItems ~ order.adminReceivableAmount:',
-      order.adminReceivableAmount,
-    );
 
-    // Step 2: Create Checkout Session with split
+    // Step 2: Base Checkout Session
     const input = {
       payment_method_types: ['card'],
       mode: 'payment',
@@ -608,28 +605,29 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       saved_payment_method_options: {
         payment_method_save: 'enabled',
       },
-    };
-
-    if (order.connectAccountId) {
-      input.payment_intent_data = {
-        application_fee_amount: adminProfitCents, // e.g. $90 to platform
-        transfer_data: {
-          destination: order.connectAccountId, // e.g. $30 to partner
-        },
-
-        setup_future_usage: 'off_session',
+      // Always include metadata & description
+      payment_intent_data: {
         description: `Payment for invoice ${order?.invoiceNumber}.`,
         metadata: {
           orderId: order?.id,
           invoiceNumber: order?.invoiceNumber || '',
           partnerId: order?.connectAccountId || '',
           salesRepId: order?.salesRepId || '',
-          // stripeFee: `${stripeFee}`,
           type: `checkout-session`,
-          platform: `Busy Bean Cofee Inc.`,
+          platform: `Busy Bean Coffee Inc.`,
         },
+      },
+    };
+
+    // Add transfer logic if connectAccountId exists
+    if (order.connectAccountId) {
+      input.payment_intent_data.application_fee_amount = adminProfitCents;
+      input.payment_intent_data.transfer_data = {
+        destination: order.connectAccountId,
       };
+      input.payment_intent_data.setup_future_usage = 'off_session';
     }
+
     const session = await stripe.checkout.sessions.create(input);
 
     return {
@@ -761,14 +759,13 @@ async function retrieveConnectAccount({ accountId }) {
   try {
     const account = await stripe.accounts.retrieve(accountId);
 
-    // Check if the account can handle charges
-    if (!account.charges_enabled) {
-      throw new AppError('Charges are not enabled for this account.', 400);
-    }
-
     // Check if the account can handle payouts
     if (!account.payouts_enabled) {
       throw new AppError('Payouts are not enabled for this account.', 400);
+    }
+    // Check if the account can handle charges
+    if (!account.charges_enabled) {
+      throw new AppError('Charges are not enabled for this account.', 400);
     }
 
     // Check if the account details have been fully submitted
@@ -788,7 +785,7 @@ async function retrieveConnectAccount({ accountId }) {
     }
 
     // If all checks pass, return the account information
-    console.log('🚀 ~ retrieveConnectAccount ~ account:', account);
+    // console.log('🚀 ~ retrieveConnectAccount ~ account:', account);
     return account;
   } catch (error) {
     console.error(error);
@@ -801,7 +798,7 @@ async function createStripeLoginLink({ accountId }) {
     const loginLink = await stripe.accounts.createLoginLink(accountId);
     return loginLink.url;
   } catch (error) {
-    console.error('Error creating login link:', error);
+    console.error('++++++++++++++++Error creating login link:', error);
     return null;
   }
 }

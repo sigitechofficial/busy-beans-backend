@@ -114,10 +114,10 @@ exports.createFinancialConnectionsSession = catchAsync(
       customerId: stripeCustomerId,
     });
 
-    console.log(
-      'ðŸš€ ~ exports.createFinancialConnectionsSession=catchAsync ~ session:',
-      session,
-    );
+    // console.log(
+    //   'ðŸš€ ~ exports.createFinancialConnectionsSession=catchAsync ~ session:',
+    //   session,
+    // );
 
     return res.status(200).json({
       status: 'success',

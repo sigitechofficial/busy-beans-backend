@@ -163,9 +163,9 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     '🚀 ~ exports.bookNewOrder=catchAsync ~ input:',
     input?.order?.userId,
   );
-  if (input?.items?.length < 1) {
-    throw new AppError('Cart is empty add products to place order', 404);
-  }
+  // if (input?.items?.length < 1) {
+  //   throw new AppError('Cart is empty add products to place order', 404);
+  // }
 
   const customer = await user.findOne({ where: { id: input?.order?.userId } });
   console.log('🚀 ~ exports.bookNewOrder=customer ~ customer:', customer?.id);
@@ -223,7 +223,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     }
   }
 
-  input.order.statusId = 1;
+  input.order.statusId = input.order?.invoiceOnly ? 5 : 1;
   input.order.userId = customer.id;
   input.order.salesRepId = customer?.salesRepId;
   let itemsPrice = 0;
@@ -313,17 +313,19 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     return element; // Return the transformed element
   });
 
-  const shippingCompany = await shippingCompanies.findOne({
-    where: {
-      weightFrom: {
-        [Op.lte]: totalWeight, // Less than or equal to the weight
-      },
-      weightTo: {
-        [Op.gte]: totalWeight, // Greater than or equal to the weight
-      },
-    },
-    attributes: ['charges'],
-  });
+  const shippingCompany = input.order?.invoiceOnly
+    ? { charges: 0 }
+    : await shippingCompanies.findOne({
+        where: {
+          weightFrom: {
+            [Op.lte]: totalWeight, // Less than or equal to the weight
+          },
+          weightTo: {
+            [Op.gte]: totalWeight, // Greater than or equal to the weight
+          },
+        },
+        attributes: ['charges'],
+      });
 
   if (!shippingCompany) {
     return next(
@@ -334,6 +336,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     );
   }
 
+  console.log('🚀 ~ shippingCompany:', shippingCompany);
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
   // input.order.discountPercentage = percentageDiscount;

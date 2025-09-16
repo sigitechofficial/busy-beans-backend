@@ -336,6 +336,8 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     'invoicePaidDate',
     'termDays',
     'pulloutIntentId',
+    'paymentIntentId',
+    'pulloutDate',
     [
       literal(
         `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
@@ -476,6 +478,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       'invoicePaidDate',
       'termDays',
       'pulloutIntentId',
+      'pulloutDate',
       [
         literal(
           `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
@@ -723,6 +726,8 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       'termDays',
       'salesRepId',
       'pulloutIntentId',
+      'paymentIntentId',
+      'pulloutDate',
     ],
   });
   if (!doc) {
