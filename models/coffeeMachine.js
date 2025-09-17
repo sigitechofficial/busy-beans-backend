@@ -1,10 +1,10 @@
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
-  const skuSupplier = sequelize.define(
-    'skuSupplier',
+  const coffeeMachine = sequelize.define(
+    'coffeeMachine',
     {
-      supplierSku: {
+      name: {
         type: DataTypes.STRING,
         allowNull: false,
       },
@@ -22,12 +22,12 @@ module.exports = (sequelize) => {
     {
       indexes: [
         {
-          fields: ['supplierSku'],
-          name: 'supplierSku_index',
+          fields: ['coffeeMachine'],
+          name: 'name_index',
         },
       ],
     },
   );
 
-  return skuSupplier;
+  return coffeeMachine;
 };

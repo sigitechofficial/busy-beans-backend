@@ -182,6 +182,7 @@ exports.commissionSummaryReport = catchAsync(async (req, res, next) => {
 
 exports.customerReport = catchAsync(async (req, res, next) => {
   const srid = req.params?.srId;
+
   const doc = await user.findAll({
     where: literal(`
         EXISTS (

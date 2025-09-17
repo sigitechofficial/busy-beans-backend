@@ -100,6 +100,7 @@ const invoicePaid = async (event) => {
         paymentStatus: 'done',
         invoicePaidDate: Date.now(),
         pulloutDate: Date.now(),
+        paymentIntentId: invoice.payment_intent,
       },
       { where: { id: orderPlaced?.id } },
     );

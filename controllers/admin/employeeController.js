@@ -132,6 +132,7 @@ exports.updateEmployee = async (req, res, next) => {
 
 exports.deleteEmployee = async (req, res, next) => {
   const emp = await employee.findByPk(req.params.employeeId);
+
   if (!emp) {
     return res.status(404).json({ message: 'Employee not found' });
   }

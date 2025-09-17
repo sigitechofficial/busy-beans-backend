@@ -418,6 +418,7 @@ exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
       });
 
   const output = JSON.parse(JSON.stringify(data));
+
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const overDueInvoices = await order.count({

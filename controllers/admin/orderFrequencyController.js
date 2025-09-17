@@ -373,8 +373,11 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       orderData: newOrder,
       salesRepId: customer?.salesRepId,
     });
-  orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
-  orderEvents({ orderId: newOrder?.id });
+
+  if (input?.items && input.items?.length > 0) {
+    orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
+    orderEvents({ orderId: newOrder?.id });
+  }
   return res.status(200).json({
     status: 'success',
     data: { id: newOrder?.id },

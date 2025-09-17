@@ -14,6 +14,7 @@ const {
   orderFrequency,
   userDiscount,
 } = require('../../models');
+
 const fs = require('fs');
 const path = require('path');
 const {
@@ -173,19 +174,27 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
     },
   });
 });
+
 exports.getAllSalesRep = factory.getAll(statuses);
 
 exports.allOrder = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
 
-  // if (
-  //   req.user.entity == 'adminEmployee' ||
-  //   req.user.entity == 'partnerEmployee'
-  // ) {
-  //   if (req.query.salesRepId) delete req.query.salesRepId;
-  // }
+  if (
+    req.user.entity == 'adminEmployee' ||
+    req.user.entity == 'partnerEmployee'
+  ) {
+    if (req.query.salesRepId) delete req.query.salesRepId;
+  }
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
+  console.log('🚀 ~ condition:', condition);
+  console.log('🚀 ~ condition:', condition);
+  console.log('🚀 ~ condition:', condition);
+  console.log('🚀 ~ condition:', condition);
+  console.log('🚀 ~ condition:', condition);
+  console.log('🚀 ~ condition:', condition);
+  console.log('🚀 ~ condition:', condition);
   // Build API features (filter, sort, fields, pagination)
   const features = new APIFeatures(order, req.query)
     .filter()
@@ -233,6 +242,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     },
   ];
 
+  console.log('🚀 ~ req.user.entity:', req.user.entity);
+  console.log('🚀 ~ req.user.entity:', req.user.entity);
+  console.log('🚀 ~ req.user.entity:', req.user.entity);
+  console.log('🚀 ~ req.user.entity:', req.user.entity);
+  console.log('🚀 ~ req.user.entity:', req.user.entity);
+  console.log('🚀 ~ req.user.entity:', req.user.entity);
+  console.log('🚀 ~ req.user.entity:', req.user.entity);
   if (
     req.user.entity == 'adminEmployee' ||
     req.user.entity == 'partnerEmployee'
@@ -1017,7 +1033,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   // console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
 
-  if (input?.items?.length < 1) {
+  if (input?.items?.length < 1 && input?.typeCharges?.length < 1) {
     throw new AppError('Update possible, but no changes were made.', 404);
   }
 
@@ -1352,11 +1368,11 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
 
     // Define the literals for both scenarios
     const employeeFilterLiteral = employeeId
-      ? `AND orders.salesRepId = ${req.params?.srId} AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`
+      ? `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`
       : `AND orders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
 
     const upcomingOrderCountLiteral = employeeId
-      ? `AND orders.salesRepId = ${req.params?.srId} AND orders.userId IN (SELECT id FROM users WHERE employeeId = ${employeeId})`
+      ? `AND orders.userId IN (SELECT id FROM users WHERE employeeId = ${employeeId})`
       : `AND orders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
 
     // Query to count orders based on employeeId (handling both cases for employeeId)

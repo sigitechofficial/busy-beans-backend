@@ -6,7 +6,7 @@ const server = require('./app');
 const serverPort = process.env.PORT || 8011;
 const serverHost = process.env.HOST || '192.168.18.34'; // Accept connections from anywhere
 
-const syncDb = 1;
+const syncDb = 0;
 
 if (syncDb) {
   db.sequelize
