@@ -15,7 +15,7 @@ const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
 const { nextFrequencyDate } = require('../../utils/nextFrequencyDate');
 const factory = require('../handlerFactory');
-const { Op, literal, fn, col } = require('sequelize');
+const { Op, literal, fn, col, where } = require('sequelize');
 const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
@@ -289,6 +289,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     element.price = obj.price * qty;
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
+    element.categoryId = obj.categoryId;
     element.discount = 0;
     if (percentageDiscount > 0) {
       // Calculate discount amount
@@ -306,7 +307,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
       element.salerCommission =
-        parseFloat(element.price) - parseFloat(element.wholesalePrice);
+        parseFloat(element.price) - parseFloat(element.wholesalePrice || 0);
     } else {
       element.wholesalePrice = 0;
     }
@@ -520,6 +521,7 @@ const frequencyBookOrder = async ({ id }) => {
       include: [
         {
           model: item,
+          // where: { productId: { [Op.ne]: null } },
           attributes: [
             [
               literal(
@@ -548,7 +550,17 @@ const frequencyBookOrder = async ({ id }) => {
             'qty',
             'productId',
             'categoryId',
+            [
+              literal(
+                `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`,
+              ),
+              'percentageDiscount',
+            ],
+            ['price', 'servicePrice'],
+            'productName',
+            'type',
           ],
+          raw: true,
         },
       ],
       attributes: [
@@ -559,12 +571,12 @@ const frequencyBookOrder = async ({ id }) => {
           ),
           'addressId',
         ],
-        //  [
-        //    literal(
-        //      `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-        //    ),
-        //    'orderFrequencyId',
-        //  ],
+        [
+          literal(
+            `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+          ),
+          'orderFrequencyId',
+        ],
         [
           literal(
             `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
@@ -597,6 +609,7 @@ const frequencyBookOrder = async ({ id }) => {
     });
 
     const result = JSON.parse(JSON.stringify(doc));
+    // console.log('🚀 ~ frequencyBookOrder ~ result:', result);
     const customer = await user.findOne({
       where: { id: result.userId, deleted: 0 },
       attributes: ['salesRepId', 'defaultDiscount'],
@@ -609,15 +622,20 @@ const frequencyBookOrder = async ({ id }) => {
       return false;
     }
     let productsPrice = 0;
-    let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
+    // let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
     let totalWeight = 0;
     let discountOnItemsPrice = 0;
 
     result?.items.forEach((item) => {
+      const percentageDiscount = parseFloat(item.percentageDiscount || 0);
       item.weight = parseFloat(item?.weight || 0) * (item?.qty * 1);
-      item.price = parseFloat(item?.price) * (item?.qty * 1);
+      console.log('🚀 ~ frequencyBookOrder BEFORE ~ item?.price:', item?.price);
+      item.price = item?.price
+        ? parseFloat(item?.price) * (item?.qty * 1)
+        : parseFloat(item?.servicePrice);
+      console.log('🚀 ~ frequencyBookOrder AFTER ~ item?.price:', item?.price);
       item.discount = 0;
-      if (percentageDiscount > 0) {
+      if (percentageDiscount > 0 && item?.productId) {
         // Calculate discount amount
         const discountAmount = (item.price * percentageDiscount) / 100;
         // Calculate final price after discount
@@ -630,9 +648,28 @@ const frequencyBookOrder = async ({ id }) => {
       productsPrice += item.price;
       totalWeight += item.weight;
       if (result?.salesRepId) {
+        console.log(
+          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
+          item?.price,
+        );
+        console.log(
+          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
+          item?.price,
+        );
+        console.log(
+          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
+          item?.price,
+        );
+        console.log(
+          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
+          item?.price,
+        );
+        const currentPrice = item?.price
+          ? item?.price
+          : parseFloat(item?.servicePrice);
         item.salerCommission =
-          parseFloat(item?.price) * item?.qty -
-          parseFloat(item?.wholesalePrice) * item?.qty; // Multiply weight by quantity
+          currentPrice - parseFloat(item?.wholesalePrice || 0) * item?.qty; // Multiply weight by quantity
+        item.wholesalePrice = parseFloat(item?.wholesalePrice || 0) * item?.qty;
       } else {
         item.wholesalePrice = 0;
       }
@@ -655,7 +692,7 @@ const frequencyBookOrder = async ({ id }) => {
     // console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
     result.itemsPrice = productsPrice;
     result.discountPrice = discountOnItemsPrice;
-    result.discountPercentage = percentageDiscount;
+    // result.discountPercentage = percentageDiscount;
     result.subTotal = productsPrice + parseFloat(result?.vat || 0);
     result.totalBill =
       productsPrice +
@@ -667,7 +704,9 @@ const frequencyBookOrder = async ({ id }) => {
     result.statusId = 1;
     result.salesRepId = result?.salesRepId;
     result.createdBy = 'sales-rep';
+    console.log('🚀 ~ frequencyBookOrder ~ result:', result);
 
+    // return true;
     const newOrder = await order.create(result);
     newOrder.invoiceNumber = `INV00${newOrder?.id}`;
     await newOrder.save();
@@ -676,6 +715,7 @@ const frequencyBookOrder = async ({ id }) => {
       item.orderId = newOrder.id;
     });
 
+    console.log('🚀 ~ frequencyBookOrder ~ result.items:', result.items);
     item.bulkCreate(result.items);
 
     orderHistory.create({

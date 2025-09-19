@@ -1099,6 +1099,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     console.log('🚀 ~ finalItems ~ qty:', qty);
     element.qty = qty;
     // Calculate price, wholesalePrice, and weight for the item
+    element.categoryId = obj.categoryId;
     element.price = obj.price * qty;
     console.log('🚀 ~  element.price :', element.price);
     element.wholesalePrice = obj.wholesalePrice * qty;

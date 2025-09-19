@@ -903,7 +903,16 @@ async function cards(customerId) {
   }
 }
 
+async function deleteConnectAccount(connectAccountId) {
+  try {
+    const account = await stripe.accounts.del(connectAccountId);
+    return account;
+  } catch (error) {
+    throw new AppError(`${error.message} `, 200);
+  }
+}
 module.exports = {
+  deleteConnectAccount,
   blockCheckoutSession,
   cards,
   checkCheckoutSessionStatus,
