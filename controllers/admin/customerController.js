@@ -240,6 +240,12 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
+          `(SELECT employeeOf FROM employees WHERE user.employeeId = employees.id LIMIT 1)`,
+        ),
+        'employeeOf',
+      ],
+      [
+        literal(
           `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         'salesRepState',
@@ -308,6 +314,13 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
 // exports.getAllProducts = factory.getAll(product);
 // exports.getProduct = factory.getOne(product);
 exports.updateCutomer = catchAsync(async (req, res, next) => {
+  console.log('🚀 ~ req.body:', req.body);
+  console.log('🚀 ~ req.body:', req.body);
+  console.log('🚀 ~ req.body:', req.body);
+  console.log('🚀 ~ req.body:', req.body);
+  console.log('🚀 ~ req.body:', req.body);
+  console.log('🚀 ~ req.body:', req.body);
+  console.log('🚀 ~ req.body:', req.body);
   if (req.body?.info) {
     if (req.body.info?.status == false)
       REDIS.revokeAllTokensForUser(req.params.id);
@@ -316,9 +329,14 @@ exports.updateCutomer = catchAsync(async (req, res, next) => {
       individualHooks: true,
     });
   }
-  if (req.body?.address) {
-    await address.update(req.body.address, {
-      where: { userId: req.params.id },
+
+  if (req.body?.newAddressess) {
+    await address.bulkCreate(req.body?.newAddressess);
+  }
+
+  if (req.body?.addresses) {
+    await address.update(req.body.addresses, {
+      where: { id: req.body?.addresses?.id },
     });
   }
   if (req.body?.billingAddress) {

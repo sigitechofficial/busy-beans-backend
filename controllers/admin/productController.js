@@ -130,20 +130,22 @@ exports.updateProduct = catchAsync(async (req, res, next) => {
   }
   await product.update(input, { where: { id: req.params?.id } });
 
-  await skuSupplier.destroy({
-    where: {
-      productId: req.params?.id,
-    },
-  });
-  const supplierAndSkus = JSON.parse(input?.supplierAndSkus);
-  if (supplierAndSkus && supplierAndSkus?.length > 0) {
-    // Add productId to each object
-    const enrichedSkus = supplierAndSkus.map((element) => ({
-      ...element,
-      productId: req.params?.id,
-    }));
+  if (input?.supplierAndSkus) {
+    await skuSupplier.destroy({
+      where: {
+        productId: req.params?.id,
+      },
+    });
+    const supplierAndSkus = JSON.parse(input?.supplierAndSkus);
+    if (supplierAndSkus && supplierAndSkus?.length > 0) {
+      // Add productId to each object
+      const enrichedSkus = supplierAndSkus.map((element) => ({
+        ...element,
+        productId: req.params?.id,
+      }));
 
-    await skuSupplier.bulkCreate(enrichedSkus);
+      await skuSupplier.bulkCreate(enrichedSkus);
+    }
   }
   res.status(200).json({
     status: 'success',
