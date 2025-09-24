@@ -16,6 +16,7 @@ const globalErrorHandler = require('./controllers/errorController');
 const userRouter = require('./routes/userRoutes');
 const adminRouter = require('./routes/adminRoutes');
 const webhookRoute = require('./routes/webhooks');
+const qboRoutes = require('./routes/qboRoutes');
 app.use((req, res, next) => {
   console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
   console.log(`📥 Incoming Header: ${req.headers}`);
@@ -104,7 +105,7 @@ app.use((req, res, next) => {
 // 3) ROUTES
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/admin', adminRouter);
-
+app.use('/qbo', qboRoutes);
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });

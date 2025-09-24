@@ -116,6 +116,27 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: 0,
       },
+      qboCustomerId: {
+        type: DataTypes.STRING(32), // QBO Customer Id
+        allowNull: true,
+      },
+      qboSyncToken: {
+        type: DataTypes.STRING(16), // needed for UPDATEs
+        allowNull: true,
+      },
+      qboSyncStatus: {
+        type: DataTypes.ENUM('pending', 'synced', 'error'),
+        allowNull: false,
+        defaultValue: 'pending',
+      },
+      qboSyncError: {
+        type: DataTypes.TEXT, // last error blob (debug)
+        allowNull: true,
+      },
+      qboLastSyncedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
     },
     {
       tableName: 'users',

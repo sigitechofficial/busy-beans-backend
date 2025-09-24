@@ -19,9 +19,12 @@ console.log('🚀 ~ literal:', process.env.BASE_URL);
 
 exports.createEmployee = catchAsync(async (req, res, next) => {
   // Only allow admin or salesRep to create an employee
-  if (req.user.entity === 'admin') req.body.accountId = req.user?.id;
-  else if (req.user.entity === 'localPartner')
+  if (req.user.entity === 'admin') {
+    req.body.accountId = req.user?.id;
+    req.body.employeeOf = 'Admin';
+  } else if (req.user.entity === 'localPartner') {
     req.body.salesRepId = req.user?.id;
+  }
 
   let exist = req.body?.email
     ? await account.findOne({ where: { email: req.body?.email } })
