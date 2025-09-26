@@ -22,7 +22,7 @@ module.exports = (sequelize) => {
     {
       indexes: [
         {
-          fields: ['coffeeMachine'],
+          fields: ['name'],
           name: 'name_index',
         },
       ],

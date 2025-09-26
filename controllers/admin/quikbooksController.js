@@ -2,93 +2,233 @@
 // Thin handlers that use the core QBO controller
 const QBO = require('../quickBooks');
 const { user, billingAddress, qboToken } = require('../../models');
-
+const axios = require('axios');
+function pickBillingAddress(list) {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  // Prefer first "active" and not deleted; else just first
+  const active = list.find(
+    (a) => a && a.status !== false && a.deleted !== true,
+  );
+  return active || list[0] || null;
+}
 // GET /qbo/auth/login
-exports.authLogin = async (_req, res) => {
-  const url = await QBO.getAuthUrl();
-  return res.redirect(url);
-};
-
-// GET /qbo/auth/callback
-exports.authCallback = async (req, res) => {
+exports.authLogin = async (req, res) => {
   try {
-    await QBO.handleCallback(req.url);
-    return res.send('QuickBooks connected!');
+    // Optional: accept state from client; otherwise generate here
+    const state =
+      (req.query.state && String(req.query.state)) || `csrf-${Date.now()}`;
+
+    // If you want to validate state on callback, persist it:
+    // await saveState(state);
+
+    const url = await QBO.getAuthUrl(state);
+    return res.status(200).json({
+      status: 'success',
+      data: { authUrl: url, state },
+    });
   } catch (e) {
     console.error(e);
-    return res.status(500).send('OAuth error');
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to generate QuickBooks auth URL',
+      detail: e?.message,
+    });
   }
 };
 
-// GET /qbo/status  (optional helper)
+// GET /qbo/auth/callback
+// controllers/qbo.routes.controller.js
+exports.authCallback = async (req, res) => {
+  try {
+    if (req.query?.error) {
+      const httpStatus = 400;
+      return res.status(httpStatus).json({
+        status: 'error',
+        httpStatus,
+        error: String(req.query.error),
+        message: String(req.query.error_description || 'Authorization failed'),
+        state: req.query.state || null,
+      });
+    }
+    await QBO.handleCallback(req.url);
+    return res
+      .status(200)
+      .json({ status: 'success', data: { connected: true } });
+  } catch (e) {
+    const httpStatus = e?.response?.status || 500;
+    const body = e?.response?.data || {};
+    const fault = body?.fault?.error?.[0];
+    return res.status(httpStatus).json({
+      status: 'error',
+      httpStatus,
+      error: body?.error || fault?.code || e?.code || 'oauth_callback_error',
+      message:
+        body?.error_description ||
+        fault?.message ||
+        body?.message ||
+        e?.message ||
+        'OAuth callback failed',
+      detail:
+        fault?.detail ||
+        body?.detail ||
+        (typeof body === 'string' ? body : undefined),
+    });
+  }
+};
+
 exports.status = async (_req, res) => {
   try {
     const row = await qboToken.findOne();
-    return res.json({
-      connected: !!row,
-      realmId: row?.realmId || null,
-      accessExpiresInSec: row
-        ? Math.max(
-            0,
-            Math.floor(
-              (new Date(row.accessTokenExpiresAt) - Date.now()) / 1000,
-            ),
-          )
-        : null,
+    if (!row) {
+      return res
+        .status(200)
+        .json({ status: 'success', data: { connected: false } });
+    }
+
+    const now = Date.now();
+    const accessLeftSec = Math.max(
+      0,
+      Math.floor((new Date(row.accessTokenExpiresAt) - now) / 1000),
+    );
+    const refreshLeftSec = Math.max(
+      0,
+      Math.floor((new Date(row.refreshTokenExpiresAt) - now) / 1000),
+    );
+
+    // If refresh token is expired -> wipe tokens (disconnected)
+    if (refreshLeftSec === 0) {
+      await row.destroy();
+      return res
+        .status(200)
+        .json({ status: 'success', data: { connected: false } });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        connected: true,
+        realmId: row.realmId,
+        accessExpiresInSec: accessLeftSec,
+        refreshExpiresInSec: refreshLeftSec,
+      },
     });
   } catch (e) {
-    return res.json({ connected: false });
+    return res
+      .status(200)
+      .json({ status: 'success', data: { connected: false } });
   }
 };
 
 // POST /qbo/customers/import  (bulk import existing users)
-exports.importCustomers = async (_req, res) => {
+// controllers/qbo.routes.controller.js
+exports.importCustomers = async (req, res) => {
+  // (optional) prevent super long hangs
+  res.setTimeout(120000); // 2 minutes
+
+  const startedAt = Date.now();
   try {
     const users = await user.findAll({
-      where: { deleted: false },
-      include: [{ model: billingAddress, as: 'billingAddress' }],
+      where: {
+        id: req.body.ids,
+        deleted: 0,
+      },
+      include: [{ model: billingAddress, required: false }],
+      limit: 2,
     });
+    console.log('🚀 ~ users:', JSON.parse(JSON.stringify(users)));
+    console.log(
+      '🚀 ~ users:billingAddress',
+      JSON.parse(JSON.stringify(users?.billingAddress || {})),
+    );
 
     const results = [];
+
+    // IMPORTANT: for…of (NOT forEach)
     for (const u of users) {
-      if (u.qboCustomerId) {
-        results.push({
-          userId: u.id,
-          status: 'already_synced',
-          qboCustomerId: u.qboCustomerId,
-        });
-        continue;
-      }
+      const addr = pickBillingAddress(u.billingAddresses);
+      console.log('🚀 ~ addr:', addr);
+      console.log('🚀 ~ addr:', addr);
+      console.log('🚀 ~ addr:', addr);
+
       try {
-        const out = await QBO.createQboCustomerFromUser(u, u.billingAddress);
-        await u.update({
-          qboCustomerId: out.id,
-          qboSyncStatus: 'synced',
-          qboSyncError: null,
-        });
-        results.push({ userId: u.id, status: 'synced', qboCustomerId: out.id });
-      } catch (err) {
+        if (u.qboCustomerId) {
+          // update on QBO (if you want upsert behavior)
+          const { syncToken } = await QBO.updateQboCustomerFromUser(
+            u,
+            addr,
+            u.qboSyncToken,
+          );
+          await u.update({
+            qboSyncToken: syncToken || u.qboSyncToken,
+            qboSyncStatus: 'ok',
+            qboSyncError: null,
+            qboLastSyncedAt: new Date(),
+          });
+          results.push({
+            userId: u.id,
+            status: 'ok',
+            action: 'updated',
+            qboCustomerId: u.qboCustomerId,
+          });
+        } else {
+          // create on QBO
+          const { id } = await QBO.createQboCustomerFromUser(u, addr);
+          await u.update({
+            qboCustomerId: id,
+            qboSyncStatus: 'ok',
+            qboSyncError: null,
+            qboLastSyncedAt: new Date(),
+          });
+          results.push({
+            userId: u.id,
+            status: 'ok',
+            action: 'created',
+            qboCustomerId: id,
+          });
+        }
+      } catch (e) {
+        // if tokens got revoked mid-run, stop and ask to reconnect
+        if (e.code === 'QBO_TOKEN_REVOKED') {
+          return res.status(428).json({
+            status: 'auth-require',
+            error: 'qbo_token_revoked',
+            message: 'QuickBooks connection was revoked. Please connect again.',
+            reconnectUrlEndpoint: '/qbo/auth/login',
+          });
+        }
+
+        const st = e?.httpStatus || e?.response?.status || 500;
+        const err0 = e?.response?.data?.fault?.error?.[0];
+        const code = err0?.code || e?.code || 'qbo_error';
+        const message = err0?.message || e?.message || 'QBO error';
+        const detail = err0?.detail || e?.response?.data || null;
+
+        // record per-user failure but keep going
+        results.push({ userId: u.id, status: 'error', code, message });
         await u.update({
           qboSyncStatus: 'error',
-          qboSyncError: JSON.stringify(
-            err?.response?.data || err?.message || err,
-          ),
-        });
-        results.push({
-          userId: u.id,
-          status: 'error',
-          error: err?.response?.data || err?.message,
+          qboSyncError: JSON.stringify({ code, message, detail }),
+          qboLastSyncedAt: null,
         });
       }
     }
 
-    return res.json({ message: 'Bulk import finished', results });
+    // SINGLE response at the end
+    return res.status(200).json({
+      status: 'success',
+      message: 'Bulk import finished',
+      count: results.length,
+      tookMs: Date.now() - startedAt,
+      results,
+    });
   } catch (e) {
-    console.error(e);
-    return res.status(500).json({ error: e?.message || 'Bulk import failed' });
+    // catch anything else (DB, coding errors, etc.)
+    return res.status(500).json({
+      status: 'error',
+      message: e?.message || 'Import failed',
+    });
   }
 };
-
 // POST /qbo/customers/sync/:userId  (sync specific user)
 exports.syncCustomerById = async (req, res) => {
   try {
@@ -263,5 +403,62 @@ exports.updateCustomerById = async (req, res) => {
       error: 'Update failed',
       detail: e?.response?.data || e?.message,
     });
+  }
+};
+
+exports.debugWhereTokenWorks = async (_req, res) => {
+  try {
+    const row = await qboToken.findOne();
+    if (!row)
+      return res
+        .status(400)
+        .json({ status: 'error', message: 'No tokens saved' });
+    const { accessToken, realmId } = row;
+
+    const hosts = [
+      'https://sandbox-quickbooks.api.intuit.com',
+      'https://quickbooks.api.intuit.com',
+    ];
+    const results = [];
+
+    for (const h of hosts) {
+      const url = `${h}/v3/company/${realmId}/companyinfo/${realmId}?minorversion=${process.env.QBO_MINOR_VERSION || '75'}`;
+      try {
+        const r = await axios.get(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+          },
+          validateStatus: () => true,
+        });
+        results.push({
+          host: h,
+          status: r.status,
+          ok: r.status >= 200 && r.status < 300,
+          wwwAuthenticate: r.headers?.['www-authenticate'] || null,
+          body: r.data || null,
+        });
+      } catch (err) {
+        results.push({
+          host: h,
+          status: err?.response?.status || null,
+          ok: false,
+          wwwAuthenticate: err?.response?.headers?.['www-authenticate'] || null,
+          body: err?.response?.data || String(err),
+        });
+      }
+    }
+
+    return res.json({
+      env: process.env.QBO_ENV,
+      hostFromEnv:
+        process.env.QBO_ENV === 'production'
+          ? 'https://quickbooks.api.intuit.com'
+          : 'https://sandbox-quickbooks.api.intuit.com',
+      realmId,
+      results,
+    });
+  } catch (e) {
+    return res.status(500).json({ status: 'error', message: e?.message });
   }
 };

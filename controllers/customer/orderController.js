@@ -8,6 +8,7 @@ const {
   address,
   billingAddress,
   shippingCompanies,
+  qboToken,
 } = require('../../models');
 const catchAsync = require('../../utils/catchAsync');
 const AppError = require('../../utils/appError');
@@ -32,99 +33,101 @@ const {
 exports.notificationTesting = async (req, res, next) => {
   // const orderData = await dataForEmailAndNotifications(req.body.id);
   // orderEvents({ orderId: req.body.id });
-  const { id } = req.body;
-  const doc = await orderFrequency.findByPk(id, {
-    include: [
-      {
-        model: item,
-        // where: { productId: { [Op.ne]: null } },
-        attributes: [
-          [
-            literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'product',
-          ],
-          [
-            literal(
-              `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'price',
-          ],
-          [
-            literal(
-              `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'wholesalePrice',
-          ],
-          [
-            literal(
-              `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
-            ),
-            'weight',
-          ],
-          'qty',
-          'productId',
-          'categoryId',
-          [
-            literal(
-              `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`,
-            ),
-            'percentageDiscount',
-          ],
-          ['price', 'servicePrice'],
-          'productName',
-          'type',
-        ],
-        raw: true,
-      },
-    ],
-    attributes: [
-      ['id', 'orderFrequencyId'],
-      [
-        literal(
-          `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
-        ),
-        'addressId',
-      ],
-      [
-        literal(
-          `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
-        ),
-        'orderFrequencyId',
-      ],
-      [
-        literal(
-          `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
-        ),
-        'paymentMethodId',
-      ],
-      [
-        literal(
-          `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
-        ),
-        'paymentMethod',
-      ],
-      [
-        literal(
-          `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
-        ),
-        'on',
-      ],
-      [
-        literal(
-          `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
-        ),
-        'vat',
-      ],
-      ['nextOrderDate', 'on'],
-      'frequency',
-      'userId',
-      'salesRepId',
-    ],
-  });
-  const acc = await Stripe.deleteConnectAccount(req.body.connectAccountId);
-  return res.status(200).json(response({ data: { doc, acc } }));
+  // const { id } = req.body;
+  // const doc = await orderFrequency.findByPk(id, {
+  //   include: [
+  //     {
+  //       model: item,
+  //       // where: { productId: { [Op.ne]: null } },
+  //       attributes: [
+  //         [
+  //           literal(
+  //             `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+  //           ),
+  //           'product',
+  //         ],
+  //         [
+  //           literal(
+  //             `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
+  //           ),
+  //           'price',
+  //         ],
+  //         [
+  //           literal(
+  //             `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
+  //           ),
+  //           'wholesalePrice',
+  //         ],
+  //         [
+  //           literal(
+  //             `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
+  //           ),
+  //           'weight',
+  //         ],
+  //         'qty',
+  //         'productId',
+  //         'categoryId',
+  //         [
+  //           literal(
+  //             `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`,
+  //           ),
+  //           'percentageDiscount',
+  //         ],
+  //         ['price', 'servicePrice'],
+  //         'productName',
+  //         'type',
+  //       ],
+  //       raw: true,
+  //     },
+  //   ],
+  //   attributes: [
+  //     ['id', 'orderFrequencyId'],
+  //     [
+  //       literal(
+  //         `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+  //       ),
+  //       'addressId',
+  //     ],
+  //     [
+  //       literal(
+  //         `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+  //       ),
+  //       'orderFrequencyId',
+  //     ],
+  //     [
+  //       literal(
+  //         `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+  //       ),
+  //       'paymentMethodId',
+  //     ],
+  //     [
+  //       literal(
+  //         `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+  //       ),
+  //       'paymentMethod',
+  //     ],
+  //     [
+  //       literal(
+  //         `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+  //       ),
+  //       'on',
+  //     ],
+  //     [
+  //       literal(
+  //         `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+  //       ),
+  //       'vat',
+  //     ],
+  //     ['nextOrderDate', 'on'],
+  //     'frequency',
+  //     'userId',
+  //     'salesRepId',
+  //   ],
+  // });
+  // const acc = await Stripe.deleteConnectAccount(req.body.connectAccountId);
+
+  const row = await qboToken.findOne();
+  return res.status(200).json(response({ data: { row } }));
 };
 
 exports.bookOrder = catchAsync(async (req, res, next) => {

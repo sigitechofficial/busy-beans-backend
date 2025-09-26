@@ -1,5 +1,6 @@
 // models/QboToken.js
-module.exports = (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+module.exports = (sequelize) => {
   const qboToken = sequelize.define('qboToken', {
     realmId: { type: DataTypes.STRING, allowNull: true },
     accessToken: { type: DataTypes.TEXT, allowNull: true },
