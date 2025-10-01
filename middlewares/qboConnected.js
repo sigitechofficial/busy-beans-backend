@@ -71,7 +71,7 @@ module.exports = async (req, res, next) => {
     // If we got here without throwing, health is OK
     return next();
   } catch (e) {
-    console.log('🚀 ~ e:', e);
+    console.log('🚀 ~ err:', e);
     const wa = (e?.response?.headers?.['www-authenticate'] || '') + '';
     const isHeaderRevoked = /invalid_token|token revoked/i.test(wa);
 

@@ -7,21 +7,21 @@ const {
   salesFromPatners,
   stateInSystem,
   billingAddress,
-} = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const Stripe = require('../stripe');
-const factory = require('../handlerFactory');
-const { sendQuotationEvent } = require('../events/sendQuotationEvents');
+} = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const Stripe = require("../stripe");
+const factory = require("../handlerFactory");
+const { sendQuotationEvent } = require("../events/sendQuotationEvents");
 const {
   connectStripeAccountEvent,
-} = require('../events/connectStripeAccountEvent');
-const { response } = require('../../utils/response');
-const { Op, literal, fn, col } = require('sequelize');
+} = require("../events/connectStripeAccountEvent");
+const { response } = require("../../utils/response");
+const { Op, literal, fn, col } = require("sequelize");
 const {
   deleteDeviceTokenMultiple,
   deleteDeviceTokenSingle,
-} = require('../../utils/deviceTokenDelete');
+} = require("../../utils/deviceTokenDelete");
 
 exports.getAllSalesRep = factory.getAll(salesRep);
 
@@ -33,19 +33,19 @@ exports.updateSalesRep = factory.updateOne(salesRep);
 
 exports.createSalesRep = catchAsync(async (req, res, next) => {
   const input = req.body;
-  console.log('ðŸš€ ~ exports.createSalesRep=catchAsync ~ input:', input);
+  console.log("ðŸš€ ~ exports.createSalesRep=catchAsync ~ input:", input);
 
   const condition = { deleted: 0 };
   condition.email = input?.email;
   // condition.state = input?.state
   const exist = await salesRep.findOne({
     where: condition,
-    attributes: ['id'],
+    attributes: ["id"],
   });
 
   if (exist) {
     if (exist.email == input.email) {
-      return next(new AppError('Email already exist', 400));
+      return next(new AppError("Email already exist", 400));
     }
     // else{
     //   return next(new AppError('State already has a local Patner', 400));
@@ -55,12 +55,12 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
   if (req.file) {
     // throw new  'Image not uploaded', 'Please upload image';
     const tmpPath = req.file.path;
-    const imagePath = tmpPath.replace(/\\/g, '/');
+    const imagePath = tmpPath.replace(/\\/g, "/");
     input.image = imagePath;
-    console.log('ðŸš€ ~ catchAsync ~ nput.image:', input.image);
+    console.log("ðŸš€ ~ catchAsync ~ nput.image:", input.image);
   } else {
     input.image = undefined;
-    console.log('ðŸš€ ~ c ~ input.image:', input.image);
+    console.log("ðŸš€ ~ c ~ input.image:", input.image);
   }
 
   const stripeCustomer = await Stripe.addCustomer({
@@ -72,13 +72,13 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
   const doc = await salesRep.create(input);
   await stateInSystem.update(
     { salesRepId: doc?.id },
-    { where: { name: input?.state } },
+    { where: { name: input?.state } }
   );
 
   connectStripeAccountEvent({ patner: doc });
 
   return res.status(201).json({
-    status: 'success',
+    status: "success",
     data: {
       data: doc,
     },
@@ -90,7 +90,7 @@ exports.createFinancialConnectionsSession = catchAsync(
     const patner = await salesRep.findOne({ where: { id: req.params.srId } });
     if (patner?.defaultBankAccount) {
       return res.status(200).json({
-        status: 'success',
+        status: "success",
         message: `Your bank account is connected. You're all set`,
         data: { clientSecret: null, setputIntendId: null },
       });
@@ -106,8 +106,8 @@ exports.createFinancialConnectionsSession = catchAsync(
       stripeCustomerId = stripeCustomer;
     }
     console.log(
-      'ðŸš€ ~ exports.createFinancialConnectionsSession=catchAsync ~ stripeCustomerId:',
-      stripeCustomerId,
+      "ðŸš€ ~ exports.createFinancialConnectionsSession=catchAsync ~ stripeCustomerId:",
+      stripeCustomerId
     );
 
     const session = await Stripe.financialConnectionsSession({
@@ -120,13 +120,13 @@ exports.createFinancialConnectionsSession = catchAsync(
     // );
 
     return res.status(200).json({
-      status: 'success',
+      status: "success",
       data: {
         clientSecret: session?.client_secret,
         setputIntendId: session.id,
       },
     });
-  },
+  }
 );
 
 exports.attachBankAccount = catchAsync(async (req, res, next) => {
@@ -142,7 +142,7 @@ exports.attachBankAccount = catchAsync(async (req, res, next) => {
   await patner.save();
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { attach },
   });
 });
@@ -152,27 +152,27 @@ exports.deleteSalesRep = catchAsync(async (req, res, next) => {
     { deleted: true },
     {
       where: { id: req.params.id },
-    },
+    }
   );
 
   await user.update(
     { salesRepId: null },
     {
       where: { salesRepId: req.params.id },
-    },
+    }
   );
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {},
   });
 });
 
 exports.addCustomer = catchAsync(async (req, res, next) => {
   req.body.info.verifiedAt = new Date();
-  console.log('🚀 ~ exports.addCustomer=catchAsync ~ req.body:', req.body);
+  console.log("🚀 ~ exports.addCustomer=catchAsync ~ req.body:", req.body);
   req.body.info.salesRepId = req.params?.srId || null;
-  req.body.info.createdBy = req.params?.srId ? 'sales-rep' : 'admin';
+  req.body.info.createdBy = req.params?.srId ? "sales-rep" : "admin";
   const newUser = await user.create(req.body?.info);
 
   req.body.address.userId = newUser?.id;
@@ -181,8 +181,8 @@ exports.addCustomer = catchAsync(async (req, res, next) => {
   await billingAddress.create(req.body?.billingAddress);
 
   console.log(
-    '🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:',
-    defaultAddress,
+    "🚀 ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:",
+    defaultAddress
   );
 
   const stripeCustomerId = await Stripe.addCustomer({
@@ -195,17 +195,17 @@ exports.addCustomer = catchAsync(async (req, res, next) => {
   return res.status(200).json(
     response({
       data: {
-        message: 'Customer added successfully.',
+        message: "Customer added successfully.",
         data: { id: newUser.id },
       },
-    }),
+    })
   );
 });
 
 exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
   const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
-    return next(new AppError('Data not Found!', 404));
+    return next(new AppError("Data not Found!", 404));
   }
 
   const connectAccount = await Stripe.createConnectAccount({
@@ -219,19 +219,19 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
   return res.status(200).json(
     response({
       data: {
-        message: 'Connect Account.',
+        message: "Connect Account.",
         data: connectAccount,
       },
-    }),
+    })
   );
 });
 
 exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
   const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
-    return next(new AppError('Data not Found!', 404));
+    return next(new AppError("Data not Found!", 404));
   }
-  console.log('ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
+  console.log("ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr);
 
   const connectAccount = await Stripe.createStripeAccountLink({
     accountId: sr.connectAccountId,
@@ -241,19 +241,19 @@ exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
   return res.status(200).json(
     response({
       data: {
-        message: 'Connect Account.',
+        message: "Connect Account.",
         data: { connectAccount },
       },
-    }),
+    })
   );
 });
 
 exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
   const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
-    return next(new AppError('Data not Found!', 404));
+    return next(new AppError("Data not Found!", 404));
   }
-  console.log('ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
+  console.log("ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr);
 
   const connectAccount = await Stripe.createStripeLoginLink({
     accountId: sr.connectAccountId,
@@ -262,22 +262,22 @@ exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
   return res.status(200).json(
     response({
       data: {
-        message: 'Connect Account.',
+        message: "Connect Account.",
         data: { connectAccount },
       },
-    }),
+    })
   );
 });
 
 exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
   const sr = await salesRep.findOne({ where: { id: req.params.srId } });
   if (!sr) {
-    return next(new AppError('Data not Found!', 404));
+    return next(new AppError("Data not Found!", 404));
   }
   if (!sr.connectAccountId) {
-    return next(new AppError('Stripe Account not connect!', 404));
+    return next(new AppError("Stripe Account not connect!", 404));
   }
-  console.log('ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:', sr);
+  console.log("ðŸš€ ~ exports.stripeConnectAccount=catchAsync ~ sr:", sr);
 
   const connectAccount = await Stripe.retrieveConnectAccount({
     accountId: sr.connectAccountId,
@@ -285,21 +285,21 @@ exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
   if (connectAccount)
     await salesRep.update(
       { isAccountConnected: true },
-      { where: { id: req.params.srId } },
+      { where: { id: req.params.srId } }
     );
 
   return res.status(200).json(
     response({
-      message: 'Connect Account.',
+      message: "Connect Account.",
       data: { isAccountConnected: true, connectAccount: connectAccount.id },
-    }),
+    })
   );
 });
 
 exports.sendQuotation = catchAsync(async (req, res, next) => {
   console.log(req.body);
 
-  console.log('🚀 ~ req.params?.srId:', req.params?.srId);
+  console.log("🚀 ~ req.params?.srId:", req.params?.srId);
   const localPatner = req.params?.srId
     ? await salesRep.findOne({
         where: { id: req.params?.srId },
@@ -314,7 +314,7 @@ exports.sendQuotation = catchAsync(async (req, res, next) => {
   });
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {},
   });
 });
@@ -334,7 +334,7 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.adminReceivableStatus = true
           )
         `),
-        'paidToAdmin',
+        "paidToAdmin",
       ],
       // Total sales (offline)
       [
@@ -345,11 +345,11 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
             WHERE orders.salesRepId = salesRep.id
           )
         `),
-        'totalSales',
+        "totalSales",
       ],
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
       (
         SELECT SUM(
@@ -365,9 +365,9 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
             AND o.adminReceivableStatus = 0
       )
     `),
-          2,
+          2
         ),
-        'toBePaid',
+        "toBePaid",
       ],
 
       // Wholesale price (offline)
@@ -380,13 +380,13 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
           WHERE orders.salesRepId = salesRep.id 
         )
       `),
-        'wholesalePrice',
+        "wholesalePrice",
       ],
 
       // Saler Commission (offline)
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
           (
             SELECT SUM(items.price - items.wholesalePrice)
@@ -397,9 +397,9 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.paymentMethod != 'card'
           )
         `),
-          2,
+          2
         ),
-        'salerCommission',
+        "salerCommission",
       ],
       // Number of sold products (offline)
       [
@@ -411,13 +411,13 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
             WHERE orders.salesRepId = salesRep.id 
           )
         `),
-        'numberOfSoldProducts',
+        "numberOfSoldProducts",
       ],
 
       // Total Sales (online)
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
           (
             SELECT SUM(totalBill)
@@ -426,9 +426,9 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'customer'
           )
         `),
-          2,
+          2
         ),
-        'totalSalesOnline',
+        "totalSalesOnline",
       ],
 
       // Wholesale price (online)
@@ -442,13 +442,13 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
             AND orders.createdBy = 'customer'
         )
       `),
-        'wholesalePriceOnline',
+        "wholesalePriceOnline",
       ],
 
       // Saler Commission (online)
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
           (
             SELECT SUM(items.price - items.wholesalePrice)
@@ -458,15 +458,15 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'customer'
           )
         `),
-          2,
+          2
         ),
-        'salerCommissionOnline',
+        "salerCommissionOnline",
       ],
 
       // Number of sold products (online)
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
           (
             SELECT SUM(items.qty)
@@ -476,19 +476,19 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
               AND orders.createdBy = 'customer'
           )
         `),
-          2,
+          2
         ),
-        'numberOfSoldProductsOnline',
+        "numberOfSoldProductsOnline",
       ],
     ],
   });
 
   if (!doc) {
-    return next(new AppError('Data not Found!', 404));
+    return next(new AppError("Data not Found!", 404));
   }
 
   const result = JSON.parse(JSON.stringify(doc));
-  const paidToAdmin = await salesFromPatners.sum('amount', {
+  const paidToAdmin = await salesFromPatners.sum("amount", {
     where: {
       salesRepId: req.params.srId,
     },
@@ -499,10 +499,10 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       id: req.params.srId,
     },
     attributes: [
-      'creditLimit',
+      "creditLimit",
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(items.price)
@@ -512,16 +512,16 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-          2,
+          2
         ),
-        'creditUsed',
+        "creditUsed",
       ],
     ],
   });
 
   // Return response
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { ...result, credit },
   });
 });

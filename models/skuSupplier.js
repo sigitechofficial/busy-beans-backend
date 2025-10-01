@@ -1,8 +1,8 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
   const skuSupplier = sequelize.define(
-    'skuSupplier',
+    "skuSupplier",
     {
       supplierSku: {
         type: DataTypes.STRING,
@@ -22,11 +22,11 @@ module.exports = (sequelize) => {
     {
       indexes: [
         {
-          fields: ['supplierSku'],
-          name: 'supplierSku_index',
+          fields: ["supplierSku"],
+          name: "supplierSku_index",
         },
       ],
-    },
+    }
   );
 
   return skuSupplier;

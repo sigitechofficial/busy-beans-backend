@@ -1,19 +1,19 @@
-const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
+const { DataTypes } = require("sequelize");
+const bcrypt = require("bcryptjs");
 
 module.exports = (sequelize) => {
   const salesRep = sequelize.define(
-    'salesRep',
+    "salesRep",
     {
       srName: {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
           notNull: {
-            msg: 'Sales Resentative Name is Required',
+            msg: "Sales Resentative Name is Required",
           },
           notEmpty: {
-            msg: 'Sales Resentative Name cannot be empty',
+            msg: "Sales Resentative Name cannot be empty",
           },
         },
       },
@@ -21,17 +21,17 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
         unique: {
-          msg: 'User already exists with this email',
+          msg: "User already exists with this email",
         },
         validate: {
           notNull: {
-            msg: 'Email is Required',
+            msg: "Email is Required",
           },
           notEmpty: {
-            msg: 'Email cannot be empty',
+            msg: "Email cannot be empty",
           },
           isEmail: {
-            msg: 'Please provide a valid email address',
+            msg: "Please provide a valid email address",
           },
         },
       },
@@ -87,9 +87,14 @@ module.exports = (sequelize) => {
         defaultValue: new Date(),
       },
       registerBy: {
-        type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
+        type: DataTypes.ENUM("email", "google", "apple", "facebook"),
         allowNull: false,
-        defaultValue: 'email',
+        defaultValue: "email",
+      },
+      partnerType: {
+        type: DataTypes.ENUM("direct-partner", "dropship-partner"),
+        allowNull: false,
+        defaultValue: "dropship-partner",
       },
       connectAccountId: {
         type: DataTypes.STRING(),
@@ -126,31 +131,31 @@ module.exports = (sequelize) => {
       timestamps: true,
       indexes: [
         {
-          fields: ['email'],
-          name: 'email_index',
+          fields: ["email"],
+          name: "email_index",
         },
       ],
-    },
+    }
   );
 
   const SALT_ROUNDS = 12;
 
   // Create
-  salesRep.addHook('beforeCreate', (instance) => {
+  salesRep.addHook("beforeCreate", (instance) => {
     if (instance.password) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
   // Update (only if changed)
-  salesRep.addHook('beforeUpdate', (instance) => {
-    if (instance.changed('password')) {
+  salesRep.addHook("beforeUpdate", (instance) => {
+    if (instance.changed("password")) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
   // If you ever bulk-create users with plaintext passwords:
-  salesRep.addHook('beforeBulkCreate', (instances) => {
+  salesRep.addHook("beforeBulkCreate", (instances) => {
     for (const i of instances) {
       if (i.password) {
         i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);

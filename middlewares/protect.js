@@ -17,7 +17,7 @@ const MODEL = {
 
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
-  console.log('🚀 ~ protect:');
+ 
 
   // 1) Get token from Authorization header or cookies
   if (
@@ -42,6 +42,7 @@ exports.protect = catchAsync(async (req, res, next) => {
     );
   }
   // 2) Verify JWT
+   console.log('🚀 ~ protect >>>>>>:',token);
   let decoded;
   try {
     decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
