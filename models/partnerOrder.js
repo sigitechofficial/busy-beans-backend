@@ -202,8 +202,8 @@ module.exports = (sequelize) => {
 
   // Associations models
   partnerOrder.associate = (models) => {
-    partnerOrder.hasMany(models.patnerOrderItem);
-    models.patnerOrderItem.belongsTo(partnerOrder);
+    partnerOrder.hasMany(models.partnerOrderItem);
+    models.partnerOrderItem.belongsTo(partnerOrder);
 
     partnerOrder.hasMany(models.orderHistory);
     models.orderHistory.belongsTo(partnerOrder);

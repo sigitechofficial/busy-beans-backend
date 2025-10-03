@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   const product = sequelize.define(
-    'product',
+    "product",
     {
       name: {
         type: DataTypes.STRING,
@@ -61,23 +61,26 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
     {
-      tableName: 'products',
+      tableName: "products",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['name'],
-          name: 'name_index',
+          fields: ["name"],
+          name: "name_index",
         },
       ],
-    },
+    }
   );
 
   product.associate = (models) => {
     product.hasMany(models.item);
     models.item.belongsTo(product);
+
+    product.hasMany(models.partnerOrderItem);
+    models.partnerOrderItem.belongsTo(product);
 
     product.hasMany(models.skuSupplier);
     models.skuSupplier.belongsTo(product);

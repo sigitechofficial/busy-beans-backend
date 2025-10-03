@@ -9,50 +9,50 @@ const {
   billingAddress,
   deviceToken,
   account,
-} = require('../models');
-const { Op, literal } = require('sequelize');
-const { emailDateFormate } = require('./emailDateFormate');
+} = require("../models");
+const { Op, literal } = require("sequelize");
+const { emailDateFormate } = require("./emailDateFormate");
 // const { Op, literal, fn, col } = require('sequelize');
 
 exports.dataForEmailAndNotifications = async (orderId) => {
   console.log(
-    'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ orderId:',
-    orderId,
+    "ðŸš€ ~ exports.dataForEmailAndNotifications= ~ orderId:",
+    orderId
   );
 
   let itemAttributes = [
-    'id',
+    "id",
     [
       literal(
-        `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+        `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
       ),
-      'product',
+      "product",
     ],
-    'qty',
-    'productName',
-    'price',
-    'discount',
-    'orderId',
-    'type',
-    'productId',
+    "qty",
+    "productName",
+    "price",
+    "discount",
+    "orderId",
+    "type",
+    "productId",
     [
       literal(
-        `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
+        `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`
       ),
-      'sku',
+      "sku",
     ],
 
     [
       literal(
-        `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
+        `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`
       ),
-      'productCode',
+      "productCode",
     ],
     [
       literal(
-        `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`,
+        `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`
       ),
-      'grind',
+      "grind",
     ],
     [
       literal(`
@@ -62,7 +62,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
               AND skuSuppliers.supplierId = order.supplierId
             LIMIT 1)
           `),
-      'supplierSku',
+      "supplierSku",
     ],
   ];
 
@@ -70,73 +70,73 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     where: { id: orderId },
 
     attributes: [
-      'id',
+      "id",
       [
         literal(
-          `(SELECT users.countryCode FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.countryCode FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'countryCountry',
+        "countryCountry",
       ],
       [
         literal(
-          `(SELECT users.phoneNumber FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.phoneNumber FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'phoneNumber',
+        "phoneNumber",
       ],
       [
         literal(
-          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'customerName',
+        "customerName",
       ],
       [
         literal(
-          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'companyName',
+        "companyName",
       ],
       [
         literal(
-          `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'stripeCustomerId',
+        "stripeCustomerId",
       ],
       [
         literal(
-          `(SELECT users.email FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.email FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'email',
+        "email",
       ],
       [
         literal(
-          `(SELECT users.billingAddress FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.billingAddress FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'billingAddress',
+        "billingAddress",
       ],
       [
         literal(
-          `(SELECT users.emailToSendInvoices FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.emailToSendInvoices FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'emailToSendInvoices',
+        "emailToSendInvoices",
       ],
       [
         literal(
-          `(SELECT users.dispatchEmail FROM users WHERE users.id = order.userId LIMIT 1)`,
+          `(SELECT users.dispatchEmail FROM users WHERE users.id = order.userId LIMIT 1)`
         ),
-        'dispatchEmail',
+        "dispatchEmail",
       ],
       [
         literal(
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
         ),
-        'orderCurrentStatus',
+        "orderCurrentStatus",
       ],
       [
         literal(`COALESCE(
          (SELECT SUM(salerCommission)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-        'localPatnerCommission',
+        "localPatnerCommission",
       ],
       [
         literal(`
@@ -146,84 +146,84 @@ exports.dataForEmailAndNotifications = async (orderId) => {
               WHERE items.orderId = order.id
             ), 0)
           `),
-        'adminReceivableAmount',
+        "adminReceivableAmount",
       ],
       [
         literal(
-          `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
+          `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`
         ),
-        'supplierName',
+        "supplierName",
       ],
       [
         literal(
-          `(SELECT supplier.email FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
+          `(SELECT supplier.email FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`
         ),
-        'supplierEmail',
+        "supplierEmail",
       ],
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
+          `(SELECT salesReps.srName FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
         ),
-        'srName',
+        "srName",
       ],
       [
         literal(
-          `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
+          `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
         ),
-        'connectAccountId',
+        "connectAccountId",
       ],
       [
         literal(
-          `(SELECT salesReps.email FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
+          `(SELECT salesReps.email FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
         ),
-        'patnerEmail',
+        "patnerEmail",
       ],
       [
         literal(`COALESCE(
               (SELECT SUM(qty)
                 FROM items
                 WHERE items.orderId = order.id ), 0)`),
-        'totalQuantity',
+        "totalQuantity",
       ],
-      'totalBill',
-      'subTotal',
-      'discountPrice',
-      'discountPercentage',
-      'itemsPrice',
-      'vat',
-      'totalWeight',
-      'note',
-      'paymentMethod',
-      'poNumber',
-      'frequency',
-      'statusId',
-      'trackingNumber',
-      'paymentStatus',
-      'on',
-      'salesRepId',
-      'supplierId',
-      'adminReceivableStatus',
-      'adminReceivableAmount',
-      'localPatnerCommission',
-      'invoicePdf',
-      'invoiceId',
-      'createdAt',
-      'userId',
-      'paymentMethodId',
-      'shippingCompany',
-      'shippingCharges',
-      'poNumber',
-      'hostedInvoiceUrl',
-      'invoiceNumber',
-      'invoiceDate',
-      'invoiceReminder',
-      'invoicePaidDate',
+      "totalBill",
+      "subTotal",
+      "discountPrice",
+      "discountPercentage",
+      "itemsPrice",
+      "vat",
+      "totalWeight",
+      "note",
+      "paymentMethod",
+      "poNumber",
+      "frequency",
+      "statusId",
+      "trackingNumber",
+      "paymentStatus",
+      "on",
+      "salesRepId",
+      "supplierId",
+      "adminReceivableStatus",
+      "adminReceivableAmount",
+      "localPatnerCommission",
+      "invoicePdf",
+      "invoiceId",
+      "createdAt",
+      "userId",
+      "paymentMethodId",
+      "shippingCompany",
+      "shippingCharges",
+      "poNumber",
+      "hostedInvoiceUrl",
+      "invoiceNumber",
+      "invoiceDate",
+      "invoiceReminder",
+      "invoicePaidDate",
     ],
     include: [
       {
         model: address,
         attributes: {
-          exclude: ['createdAt', 'updatedAt', 'userId', 'deleted', 'deletedAt'],
+          exclude: ["createdAt", "updatedAt", "userId", "deleted", "deletedAt"],
         },
       },
       {
@@ -234,11 +234,11 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         model: salesRep,
         attributes: {
           exclude: [
-            'createdAt',
-            'updatedAt',
-            'deleted',
-            'deletedAt',
-            'password',
+            "createdAt",
+            "updatedAt",
+            "deleted",
+            "deletedAt",
+            "password",
           ],
         },
       },
@@ -246,26 +246,26 @@ exports.dataForEmailAndNotifications = async (orderId) => {
         model: user,
         attributes: {
           exclude: [
-            'createdAt',
-            'updatedAt',
-            'latestOtp',
-            'password',
-            'deleted',
-            'deletedAt',
-            'stripeCustomerId',
-            'verifiedAt',
-            'status',
+            "createdAt",
+            "updatedAt",
+            "latestOtp",
+            "password",
+            "deleted",
+            "deletedAt",
+            "stripeCustomerId",
+            "verifiedAt",
+            "status",
           ],
         },
         include: {
           model: billingAddress,
           attributes: {
             exclude: [
-              'createdAt',
-              'updatedAt',
-              'userId',
-              'deleted',
-              'deletedAt',
+              "createdAt",
+              "updatedAt",
+              "userId",
+              "deleted",
+              "deletedAt",
             ],
           },
         },
@@ -274,8 +274,8 @@ exports.dataForEmailAndNotifications = async (orderId) => {
   });
   const output = JSON.parse(JSON.stringify(doc));
   console.log(
-    'ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:',
-    output?.id,
+    "ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:",
+    output?.id
   );
 
   const tokenCondition = {
@@ -306,7 +306,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     .filter((t) => t.salesRepId === order.salesRepId)
     .map((t) => t.tokenId);
 
-  output.localPatnerCommission = await item.sum('salerCommission', {
+  output.localPatnerCommission = await item.sum("salerCommission", {
     where: { orderId: output.id },
   });
 
@@ -315,7 +315,7 @@ exports.dataForEmailAndNotifications = async (orderId) => {
     parseFloat(output.localPatnerCommission || 0);
 
   const admin = await account.findOne({
-    attributes: { exclude: ['password', 'status'] },
+    attributes: { exclude: ["password", "status"] },
   });
   output.admin = admin;
   return {

@@ -3,152 +3,120 @@
   <head>
     <meta charset="UTF-8" />
     <title>Invoice</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   </head>
   <body
     style="
-      font-family: Arial, sans-serif;
+      font-family:  'Inter', Arial, 'Helvetica Neue', sans-serif;;
       color: #000;
       padding: 40px;
-      max-width: 800px;
+      max-width: 1000px;
       margin: auto;
     "
   >
-    <!-- Header -->
-    <div
-      style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 40px;
-      "
-    >
-      <h1 style="font-size: 28px; margin: 0">INVOICE</h1>
-      <img
-        src="https://admin.busybeancoffee.com/images/logocoffee.png"
-        alt="Busy Bean Coffee"
-        style="height: 100px "
-      />
+    <!-- Header (new style like screenshot 2) -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 24px">
+      <h1 style="margin:0; font-size:56px; line-height:1; letter-spacing:1px; color:#4a4f54">INVOICE</h1>
+      <img src="https://admin.busybeancoffee.com/images/logocoffee.png" alt="Busy Bean Coffee" style="height: 64px; margin-top: 8px" />
     </div>
+<% /* put this once near the top (helper) */ 
+function formatUSPhone(val){
+  if (!val) return '';
+  var digits = String(val).replace(/\D+/g,'');
+  if (digits.length === 11 && digits[0] === '1') digits = digits.slice(1);
+  if (digits.length === 10) return digits.slice(0,3) + '-' + digits.slice(3,6) + '-' + digits.slice(6);
+  return String(val); // fallback if not a US 10/11-digit number
+}
+%>
+    <!-- Top three-column header block (matches screenshot 2 layout) -->
+    <div style="display:grid; grid-template-columns: 1fr 2fr 2fr; column-gap: 24px; row-gap: 6px; margin-bottom: 28px">
+      <!-- Left: metadata -->
+      <div>
+        <div style="font-size:14px; color:#6b7280; margin:6px 0">Invoice # <span style="color:#111; font-weight:600"> <%= order?.invoiceNumber || '' %></span></div>
+        <div style="font-size:14px; color:#6b7280; margin:6px 0">Order # <span style="color:#111; font-weight:600"> <%= order?.orderNumber || order?.invoiceNumber || '' %></span></div>
+<%
+  var termDays = Number(order?.termDays) || 30;
 
-    <!-- Invoice Metadata -->
-    <div style="margin-bottom: 30px">
-      <p style="margin: 4px 0; font-size: 14px">
-        <strong>Invoice number:</strong> <%= order?.invoiceNumber || '' %>
-      </p>
-      <p style="margin: 4px 0; font-size: 14px">
-        <strong>Date of issue:</strong> <%= order?.on || '' %>
-      </p>
-      <p style="margin: 4px 0; font-size: 14px">
-        <strong>PO Number:</strong> <%= order?.poNumber || '' %>
-      </p>
-    </div>
+  function parseDMY(val) {
+    if (!val) return null;
+    if (Object.prototype.toString.call(val) === '[object Date]') return val;
 
-    <!-- From and Bill To -->
-    <div
-      style="display: flex; justify-content: space-between; margin-bottom: 30px"
-    >
-      <div style="width: 45%">
-        <% if (order?.salesRep) { %>
-        <p
-          style="
-            margin: 0;
-            font-size: 14px;
-            font-weight: bold;
-            text-transform: uppercase;
-          "
-        >
-          Remit To
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order.salesRep.srName || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order.salesRep.address || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order.salesRep.city || '' %>, <%= order.salesRep.state || '' %>
-          <%= order.salesRep.zipCode || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order.salesRep.country || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px">
-          <%= order.salesRep.phoneNumber || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px">
-          <%= order.salesRep.email || '' %>
-        </p>
-        <% } else { %>
-        <div>
-          <div style="font-size: 14px; font-weight: bold">Remit To</div>
-          <div style="font-size: 14px; text-transform: uppercase">
-            Busy Bean Coffee Inc.
-          </div>
-          <div style="font-size: 14px; text-transform: uppercase">
-            1141 CAINHOY RD 350
-          </div>
-          <div style="font-size: 14px; text-transform: uppercase">
-            WAREHOUSE 1
-          </div>
-          <div style="font-size: 14px; text-transform: uppercase">
-            CHARLESTON SC 29492, USA
-          </div>
-          <div style="font-size: 14px; text-transform: uppercase">
-            +1 833-843-2326
-          </div>
-          <div style="font-size: 14px">info@busybeancoffee.com</div>
+    if (typeof val === 'string') {
+      // ISO first
+      if (/^\d{4}-\d{2}-\d{2}/.test(val)) return new Date(val);
+      // Assume D/M/YYYY (day-first) like "03/10/2025" = 3 Oct 2025
+      var m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+    }
+
+    var d = new Date(val);
+    return isNaN(d) ? null : d;
+  }
+
+  var invDate = parseDMY(order?.on);
+  var dueDateText = order?.paymentDue || '';
+  if (!dueDateText && invDate) {
+    var due = new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate() + termDays);
+    // Display as D/M/YYYY to match expectation: 03/10/2025 + 30 days => 2/11/2025
+    dueDateText = due.getDate() + '/' + (due.getMonth()+1) + '/' + due.getFullYear();
+  }
+%>
+<div style="font-size:14px; color:#6b7280; margin:6px 0">
+  Invoice Date <span style="color:#111; font-weight:600"> <%= order?.on || '' %></span>
+</div>
+<div style="font-size:14px; color:#6b7280; margin:6px 0">
+  Terms <span style="color:#111; font-weight:600"> <%= termDays %> Days</span>
+</div>
+<div style="font-size:14px; color:#6b7280; margin:6px 0">
+  Payment Due <span style="color:#111; font-weight:600"> <%= dueDateText %></span>
+</div>
+        <div style="font-size:14px; color:#6b7280; margin:6px 0">P.O. # <span style="color:#111; font-weight:600"> <%= order?.poNumber || '' %></span></div>
+      </div>
+
+      <!-- Middle: Invoice To (customer) -->
+      <div>
+        <div style="font-size:14px; color:#6b7280; margin:6px 0">Invoice To
+          <div style="color:#111; text-transform:uppercase; font-weight:500; margin-top:2px"><%= order?.user?.companyName || '' %></div>
         </div>
-        <% } %>
+        <div style="font-size:14px; text-transform:uppercase; margin:4px 0"><%= order?.user?.billingAddresses?.[0]?.addressLineOne || '' %></div>
+        <div style="font-size:14px; text-transform:uppercase; margin:4px 0">
+          <%= order?.user?.billingAddresses?.[0]?.town || '' %>
+          <%= order?.user?.billingAddresses?.[0]?.state ? ' ' + order.user.billingAddresses[0].state : '' %>
+          <%= order?.user?.billingAddresses?.[0]?.zipCode ? ' ' + order.user.billingAddresses[0].zipCode : '' %>
+        </div>
+        <div style="font-size:14px; text-transform:uppercase; margin:4px 0"><%= order?.user?.billingAddresses?.[0]?.country || '' %></div>
+        <div style="font-size:14px; margin:4px 0">Phone: <%= formatUSPhone(order?.user?.phoneNumber)|| '' %></div>
+        <div style="font-size:14px; margin:4px 0">Email: <%= order?.user?.email || '' %></div>
       </div>
 
-      <div style="width: 45%">
-        <p
-          style="
-            margin: 0;
-            font-size: 14px;
-            font-weight: bold;
-            text-transform: uppercase;
-          "
-        >
-          Bill to
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order?.user?.name || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order?.user?.billingAddresses?.[0]?.addressLineOne || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order?.user?.billingAddresses?.[0]?.town || '' %>, <%=
-          order?.user?.billingAddresses?.[0]?.state || '' %> <%=
-          order?.user?.billingAddresses?.[0]?.zipCode || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px; text-transform: uppercase">
-          <%= order?.user?.billingAddresses?.[0]?.country || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px">
-          <%= order?.user?.phoneNumber || '' %>
-        </p>
-        <p style="margin: 4px 0; font-size: 14px">
-          <%= order?.user?.email || '' %>
-        </p>
-      </div>
+      <!-- Right: Company contact (as in screenshot 2) -->
+    <div style="text-align:right">
+  <% if (order?.salesRep) { %>
+    <div style="font-size:14px; color:#111; font-weight:500">
+      <%= order.salesRep.territoryName || order.salesRep.srName || '' %>
     </div>
-
-    <!-- Amount Due -->
-    <div style="margin-bottom: 30px">
-      <p style="font-size: 20px; font-weight: bold; margin: 0">
-        $<%= order?.totalBill || '0.00' %> due amount
-      </p>
-      <a
-        href="https://busybeancoffee.com/paymentCheck?orderId=<%=order?.id%>"
-        style="color: #1a73e8; font-size: 14px; text-decoration: underline"
-      >
-        Pay online
-      </a>
+    <div style="font-size:14px">
+      <%= order.salesRep.address || '' %>
+    </div>
+    <div style="font-size:14px">
+      <%= [order?.salesRep?.city, order?.salesRep?.state, order?.salesRep?.zipCode].filter(Boolean).join(' ') %>
+    </div>
+    <div style="font-size:14px">
+      <%= formatUSPhone(order.salesRep.phoneNumber) || '' %>
+    </div>
+  <% } else { %>
+    <div style="font-size:14px; color:#111; font-weight:500">
+      Busy Bean Coffee of Central Florida
+    </div>
+    <div style="font-size:14px">1776 Cinnamon Circle</div>
+    <div style="font-size:14px">Casselberry, FL 32707</div>
+    <div style="font-size:14px">407-625-7843</div>
+  <% } %>
+</div>
 
     </div>
-
+  
     <!-- Items Table -->
     <table
       style="
@@ -159,7 +127,7 @@
       "
     >
       <thead>
-        <tr style="border-bottom: 2px solid #000">
+        <tr style="border-bottom: 1px solid #000">
           <th style="text-align: left; padding: 8px">Code</th>
           <th style="text-align: left; padding: 8px">Item</th>
           <th style="text-align: center; padding: 8px">Quantity</th>
@@ -168,21 +136,17 @@
         </tr>
       </thead>
       <tbody>
-        <% (order?.items || []).forEach(item => { %>
-        <tr>
-          <td style="padding: 8px"><%= item?.productCode || '' %></td>
-          <td style="padding: 8px; font-weight: 600">
-            <%= item?.product || item?.productName %>
-          </td>
-          <td style="padding: 8px; text-align: center">
-            <%= item?.qty || '0' %>
-          </td>
-          <td style="padding: 8px; text-align: right">
-            $<%= ((item?.price / item?.qty) || 0).toFixed(2) %>
-          </td>
-          <td style="padding: 8px; text-align: right">
-            $<%= item?.price || '0.00' %>
-          </td>
+        <% (order?.items || []).forEach(function(item){
+             var qty = Number(item?.qty) || 0;
+             var price = Number(item?.price) || 0;
+             var unit = qty ? (price/qty) : 0;
+        %>
+        <tr style="border-bottom: 1px solid #e5e5e5">
+          <td style="padding: 10px 8px"><%= item?.productCode || '' %></td>
+          <td style="padding: 10px 8px; font-weight: 600"><%= item?.product || item?.productName || '' %></td>
+          <td style="padding: 10px 8px; text-align: center"><%= qty %></td>
+          <td style="padding: 10px 8px; text-align: right">$<%= unit.toFixed(2) %></td>
+          <td style="padding: 10px 8px; text-align: right">$<%= price.toFixed(2) %></td>
         </tr>
         <% }); %>
       </tbody>
@@ -190,26 +154,45 @@
 
     <!-- Totals -->
     <div style="width: 100%; display: flex; justify-content: flex-end">
-      <table style="width: 300px; font-size: 14px">
+      <table style="width: 320px; font-size: 14px">
         <tr>
-          <td style="padding: 4px">Subtotal</td>
-          <td style="padding: 4px; text-align: right">
-            $<%= order?.subTotal || '0.00' %>
-          </td>
+          <td style="padding: 6px">Subtotal</td>
+          <td style="padding: 6px; text-align: right">$<%= (typeof order?.subTotal === 'number' ? order.subTotal.toFixed(2) : (order?.subTotal || '0.00')) %></td>
         </tr>
         <tr>
-          <td style="padding: 4px">Shipping Charges</td>
-          <td style="padding: 4px; text-align: right">
-            $<%= order?.shippingCharges || '0.00' %>
-          </td>
+          <td style="padding: 6px">Shipping Charges</td>
+          <td style="padding: 6px; text-align: right">$<%= (typeof order?.shippingCharges === 'number' ? order.shippingCharges.toFixed(2) : (order?.shippingCharges || '0.00')) %></td>
         </tr>
         <tr>
-          <td style="padding: 4px; font-weight: bold">Total</td>
-          <td style="padding: 4px; text-align: right; font-weight: bold">
-            $<%= order?.totalBill || '0.00' %>
-          </td>
+          <td style="padding: 6px; font-weight: bold">Total</td>
+          <td style="padding: 6px; text-align: right; font-weight: bold">$<%= (typeof order?.totalBill === 'number' ? order.totalBill.toFixed(2) : (order?.totalBill || '0.00')) %></td>
         </tr>
       </table>
+    </div>
+
+    <!-- Footer (from working version) -->
+    <div class="section" style="font-size: 14px; margin-top: 28px">
+      <p>Here's your invoice! Thank you for your continued support.</p>
+     <p>
+        Please remit payment to:<br />
+        <% if (order?.salesRep) { %>
+            <%= order.salesRep.territoryName || order.salesRep.srName || 'Busy Bean Coffee' %><br />
+            <%= order.salesRep.address || '' %><br />
+            <%= [order?.salesRep?.city, order?.salesRep?.state, order?.salesRep?.zipCode].filter(Boolean).join(' ') %><br />
+           <% if (order?.salesRep?.phoneNumber) { %><%= formatUSPhone(order.salesRep.phoneNumber) %><% } %>
+        <% } else { %>
+            Busy Bean Coffee of Central Florida<br />
+            1776 Cinnamon Circle<br />
+            Casselberry, FL 32707<br />
+            407-625-7843<br />
+        <% } %>
+    </p>
+    <br />
+    <p>Thanks for your business!</p>
+    <p>Busy Bean Coffee of Central Florida</p>
+      <p>
+        <a href="https://busybeancoffee.com/paymentCheck?orderId=<%=order?.id%>">Pay Online using Credit/Debit Card</a>
+      </p>
     </div>
   </body>
 </html>

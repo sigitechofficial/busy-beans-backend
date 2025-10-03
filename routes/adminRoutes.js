@@ -16,6 +16,7 @@ const dashboardsController = require("../controllers/admin/dashboardsController"
 const shippingCompanyController = require("../controllers/admin/shippingCompanyController");
 const employeeController = require("../controllers/admin/employeeController");
 const adminController = require("../controllers/admin/adminController");
+const patnerOrderController = require("../controllers/admin/partnerOrderController");
 
 const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsController");
 
@@ -617,5 +618,12 @@ router.get("/view-customer-detail/:id", customerController.customerDetail);
 router.delete("/delete-customer/:id", customerController.deleteCustomer);
 
 router.delete("/customer-discounts/:userId", customerController.dicounts);
+
+router.post(
+  "/partner-order/book-new-order",
+  patnerOrderController.bookNewPartnerOrder
+);
+
+router.get("/partner-order/orders-list", patnerOrderController.allPartnerOrder);
 
 module.exports = router;

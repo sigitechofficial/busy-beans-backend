@@ -174,6 +174,9 @@ module.exports = (sequelize) => {
     salesRep.hasMany(models.order);
     models.order.belongsTo(salesRep);
 
+    salesRep.hasMany(models.partnerOrder);
+    models.partnerOrder.belongsTo(salesRep);
+
     salesRep.hasMany(models.salesFromPatners);
     models.salesFromPatners.belongsTo(salesRep);
 

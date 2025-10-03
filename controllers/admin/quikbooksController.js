@@ -163,24 +163,24 @@ exports.importCustomers = async (req, res) => {
     }
 
     // quick sanity ping (helps catch 3200 immediately)
-    try {
-      await QBO.getCompanyInfoWithToken(accessToken, realmId);
-      console.log("[ROUTE:/qbo/customers/import] sanity ping OK");
-    } catch (e) {
-      const st = e?.response?.status || e?.httpStatus || 500;
-      console.error(
-        "[ROUTE:/qbo/customers/import] sanity ping FAIL status=",
-        st,
-        "body=",
-        e?.response?.data || e?.body || e?.message
-      );
-      return res.status(st).json({
-        status: "error",
-        httpStatus: st,
-        message: "Auth failed on ping (check keys/env/redirect & token).",
-        detail: e?.response?.data || e?.body || e?.message,
-      });
-    }
+    // try {
+    //   //   await QBO.getCompanyInfoWithToken(accessToken, realmId);
+    //   console.log("[ROUTE:/qbo/customers/import] sanity ping OK");
+    // } catch (e) {
+    //   const st = e?.response?.status || e?.httpStatus || 500;
+    //   console.error(
+    //     "[ROUTE:/qbo/customers/import] sanity ping FAIL status=",
+    //     st,
+    //     "body=",
+    //     e?.response?.data || e?.body || e?.message
+    //   );
+    //   return res.status(st).json({
+    //     status: "error",
+    //     httpStatus: st,
+    //     message: "Auth failed on ping (check keys/env/redirect & token).",
+    //     detail: e?.response?.data || e?.body || e?.message,
+    //   });
+    // }
 
     const where = { qboCustomerId: null };
     if (Array.isArray(req.body?.ids) && req.body.ids.length)
