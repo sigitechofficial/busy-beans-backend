@@ -9,26 +9,26 @@ const {
   billingAddress,
   shippingCompanies,
   qboToken,
-} = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const ThrowNotification = require('../../utils/throwNotification');
-const factory = require('../handlerFactory');
-const { response } = require('../../utils/response');
-const { setOrderFrequency } = require('../admin/orderFrequencyController');
+} = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const ThrowNotification = require("../../utils/throwNotification");
+const factory = require("../handlerFactory");
+const { response } = require("../../utils/response");
+const { setOrderFrequency } = require("../admin/orderFrequencyController");
 const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
-} = require('../events/orderEvents');
-const { createPaymentIntent } = require('../stripe');
-const Stripe = require('../stripe');
-const { Op, literal } = require('sequelize');
-const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
+} = require("../events/orderEvents");
+const { createPaymentIntent } = require("../stripe");
+const Stripe = require("../stripe");
+const { Op, literal } = require("sequelize");
+const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
 // discount;
 
 const {
   dataForEmailAndNotifications,
-} = require('../../utils/emailsNotificationsData');
+} = require("../../utils/emailsNotificationsData");
 
 exports.notificationTesting = async (req, res, next) => {
   // const orderData = await dataForEmailAndNotifications(req.body.id);
@@ -133,15 +133,15 @@ exports.notificationTesting = async (req, res, next) => {
 exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
-    '🚀 ~ exports.bookOrderbookOrderbookOrderbookOrderbookOrderbookOrder=catchAsync ~ input:',
-    input,
+    "🚀 ~ exports.bookOrderbookOrderbookOrderbookOrderbookOrderbookOrder=catchAsync ~ input:",
+    input
   );
   if (input?.items?.length < 1) {
-    throw new AppError('Cart is empty add products to place order', 404);
+    throw new AppError("Cart is empty add products to place order", 404);
   }
   const customer = await user.findOne({
     where: { id: input?.order?.userId },
-    attributes: ['id', 'salesRepId', 'defaultDiscount'],
+    attributes: ["id", "salesRepId", "defaultDiscount"],
   });
   input.order.statusId = 1;
   input.order.salesRepId = customer?.salesRepId;
@@ -149,7 +149,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   let discountOnItemsPrice = 0;
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
   const products = await product.findAll({
     where: {
       id: {
@@ -175,26 +175,26 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
               AND userDiscounts.userId = ${customer.id}
             LIMIT 1)
           `),
-        'discountPercentage',
+        "discountPercentage",
       ],
     ],
   });
   // return res.json(products)
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products);
 
   // let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
 
   const finalItems = products.map((obj) => {
     const element = {};
     const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0,
+      obj.dataValues?.discountPercentage || 0
     );
     console.log(
-      '🚀 ~ obj.dataValues?.percentageDiscount:',
-      obj.dataValues?.percentageDiscount,
+      "🚀 ~ obj.dataValues?.percentageDiscount:",
+      obj.dataValues?.percentageDiscount
     );
-    console.log('🚀 ~ percentageDiscount:', percentageDiscount);
-    console.log('🚀 ~ percentageDiscount:', percentageDiscount);
+    console.log("🚀 ~ percentageDiscount:", percentageDiscount);
+    console.log("🚀 ~ percentageDiscount:", percentageDiscount);
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
@@ -204,7 +204,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
     // Set the qty from input.items or default to 1 if not found
     let qty = prod ? parseInt(prod.qty) : 1;
-    console.log('🚀 ~ finalItems ~ qty:', qty);
+    console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
     // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
@@ -243,15 +243,15 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
         [Op.gte]: totalWeight, // Greater than or equal to the weight
       },
     },
-    attributes: ['charges'],
+    attributes: ["charges"],
   });
 
   if (!shippingCompany) {
     return next(
       new AppError(
-        'Not dealing in such weights. Contact customer support for this order.',
-        400,
-      ),
+        "Not dealing in such weights. Contact customer support for this order.",
+        400
+      )
     );
   }
 
@@ -261,7 +261,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight);
   input.order.shippingCompany =
-    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx';
+    input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +
@@ -286,7 +286,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 
   await item.bulkCreate(finalItems);
 
-  if (newOrder.frequency != 'just-onces')
+  if (newOrder.frequency != "just-onces")
     setOrderFrequency({
       orderData: newOrder,
       salesRepId: customer?.salesRepId,
@@ -294,7 +294,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
   orderEvents({ orderId: newOrder?.id });
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { id: newOrder?.id },
   });
 });
@@ -302,22 +302,22 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
 exports.SheetUplod = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
-    '🚀 ~ exports.bookOrderbookOrderbookOrderbookOrderbookOrderbookOrder=catchAsync ~ input:',
-    input,
+    "🚀 ~ exports.bookOrderbookOrderbookOrderbookOrderbookOrderbookOrder=catchAsync ~ input:",
+    input
   );
   if (input?.items?.length < 1) {
-    throw new AppError('Cart is empty add products to place order', 404);
+    throw new AppError("Cart is empty add products to place order", 404);
   }
   const customer = await user.findOne({
     where: { id: input?.order?.userId },
-    attributes: ['salesRepId'],
+    attributes: ["salesRepId"],
   });
   input.order.statusId = 5;
   input.order.salesRepId = customer?.salesRepId;
   let itemsPrice = 0;
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
   const products = await product.findAll({
     where: {
       id: {
@@ -326,7 +326,7 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
     },
   });
   // return res.json(products)
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products.length);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products.length);
   const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
@@ -337,7 +337,7 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
 
     // Set the qty from input.items or default to 1 if not found
     let qty = prod ? parseInt(prod.qty) : 1;
-    console.log('🚀 ~ finalItems ~ qty:', qty);
+    console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
     // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
@@ -405,26 +405,26 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
   await item.bulkCreate(finalItems);
   // if(newOrder.frequency != 'just-onces')setOrderFrequency({orderData:newOrder,salesRepId:customer?.salesRepId})
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { id: newOrder?.id, input: input },
   });
 });
 
 exports.paymentIntent = catchAsync(async (req, res, next) => {
   const input = req.body;
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ input:", input);
   if (input?.items?.length < 1) {
-    throw new AppError('Cart is empty add products to place order', 404);
+    throw new AppError("Cart is empty add products to place order", 404);
   }
   const customer = await user.findOne({
     where: { id: input?.order?.userId },
     attributes: [
-      'salesRepId',
+      "salesRepId",
       [
         literal(
-          `(SELECT salesReps.connectAccountId FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+          `(SELECT salesReps.connectAccountId FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
         ),
-        'connectAccountId',
+        "connectAccountId",
       ],
     ],
   });
@@ -432,7 +432,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
   let itemsPrice = 0;
   let productIds = input?.items.map((item) => item.productId);
   let totalWeight = 0;
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
   const products = await product.findAll({
     where: {
       id: {
@@ -445,7 +445,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
   // Find the shipping company where the weight is between weightFrom and weightTo
 
   const hasLocalPatner = customer?.salesRepId ? true : false;
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ products:', products.length);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products.length);
   const finalItems = products.map((obj) => {
     const element = {};
     element.productId = obj.id;
@@ -456,7 +456,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
 
     // Set the qty from input.items or default to 1 if not found
     let qty = prod ? parseInt(prod.qty) : 1;
-    console.log('🚀 ~ finalItems ~ qty:', qty);
+    console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
     // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
@@ -479,8 +479,8 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
   });
 
   console.log(
-    '🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:',
-    totalWeight,
+    "🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:",
+    totalWeight
   );
   const shippingCompany = await shippingCompanies.findOne({
     where: {
@@ -491,14 +491,14 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
         [Op.gte]: totalWeight, // Greater than or equal to the weight
       },
     },
-    attributes: ['charges'],
+    attributes: ["charges"],
   });
   if (!shippingCompany) {
     return next(
       new AppError(
-        'Not dealing in such weights. Contact customer support for this order.',
-        400,
-      ),
+        "Not dealing in such weights. Contact customer support for this order.",
+        400
+      )
     );
   }
   input.order.itemsPrice = itemsPrice;
@@ -509,8 +509,8 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
     parseFloat(input?.order?.vat || 0) +
     parseFloat(shippingCompany?.charges || 0);
   console.log(
-    '🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:',
-    shippingCompany?.charges,
+    "🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:",
+    shippingCompany?.charges
   );
 
   let adminReceivableAmount = input.order.totalBill;
@@ -520,8 +520,8 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
   let adminReceivableStatus = false;
   let localPartnerAccountId = customer.dataValues.connectAccountId;
   console.log(
-    '🚀 ~ exports.paymentIntent=catchAsync ~ localPartnerAccountId:',
-    localPartnerAccountId,
+    "🚀 ~ exports.paymentIntent=catchAsync ~ localPartnerAccountId:",
+    localPartnerAccountId
   );
 
   if (hasLocalPatner && localPatnerCommission > 0) {
@@ -536,7 +536,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
       hasLocalPatner,
       localPartnerAccountId,
       localPatnerCommission,
-    },
+    }
   );
   const output = await createPaymentIntent({
     adminReceivableAmount,
@@ -546,7 +546,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
   });
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {
       shippingCharges: shippingCompany?.charges,
       adminReceivableAmount,
@@ -569,7 +569,7 @@ async function syncStripeCustomers({ usersWithoutCustomerId }) {
         if (customer) {
           await user.update(
             { stripeCustomerId: customer },
-            { where: { id: item.id } },
+            { where: { id: item.id } }
           );
           console.log(`✅ Stripe customer created for ${item.email}`);
         } else {
@@ -578,12 +578,12 @@ async function syncStripeCustomers({ usersWithoutCustomerId }) {
       } catch (innerErr) {
         console.error(
           `❌ Error creating Stripe customer for ${item.email}:`,
-          innerErr.message,
+          innerErr.message
         );
       }
     }
   } catch (err) {
-    console.error('❌ Failed to fetch users:', err.message);
+    console.error("❌ Failed to fetch users:", err.message);
   }
 }
 
@@ -601,7 +601,7 @@ exports.createStripeCustomers = catchAsync(async (req, res, next) => {
   });
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { userCount: StripeAccount },
   });
 });

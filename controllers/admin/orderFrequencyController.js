@@ -9,23 +9,24 @@ const {
   shippingCompanies,
   product,
   employee,
-} = require('../../models');
+} = require("../../models");
 
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const { nextFrequencyDate } = require('../../utils/nextFrequencyDate');
-const factory = require('../handlerFactory');
-const { Op, literal, fn, col, where } = require('sequelize');
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const { nextFrequencyDate } = require("../../utils/nextFrequencyDate");
+const factory = require("../handlerFactory");
+const { Op, literal, fn, col, where } = require("sequelize");
 const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
-} = require('../events/orderEvents');
-const { supplierNewOrderEvent } = require('../events/orderToSupplierEvents');
+} = require("../events/orderEvents");
+const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
 
 exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
   //orderData is
   try {
     if (!orderData) return false;
+
     const input = JSON.parse(JSON.stringify(orderData));
 
     const { nextOrderDate, visibilityDate } = nextFrequencyDate({
@@ -42,22 +43,22 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
     const frequency = await orderFrequency.create(input);
     order.update(
       { orderFrequencyId: frequency?.id },
-      { where: { id: orderData?.id } },
+      { where: { id: orderData?.id } }
     );
     item.update(
       { orderFrequencyId: frequency?.id },
-      { where: { orderId: orderData?.id } },
+      { where: { orderId: orderData?.id } }
     );
 
     return true;
   } catch (error) {
-    console.log('ðŸš€ ~ exports.onlineAppointmentConfirm= ~ error:', error);
+    console.log("ðŸš€ ~ exports.onlineAppointmentConfirm= ~ error:", error);
   }
 };
 
 //* Pending order according to their frequency cycle
 
-const { setOrderFrequency } = require('../admin/orderFrequencyController');
+const { setOrderFrequency } = require("../admin/orderFrequencyController");
 console.log(typeof setOrderFrequency);
 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
@@ -67,19 +68,19 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       attributes: [
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
           ),
-          'product',
+          "product",
         ],
         [
           literal(
-            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
+            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
           ),
-          'price',
+          "price",
         ],
 
-        'qty',
-        'productId',
+        "qty",
+        "productId",
       ],
     },
   ];
@@ -87,8 +88,8 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   if (req.params.srId) condition.salesRepId = req.params.srId;
 
   if (
-    req.user.entity == 'adminEmployee' ||
-    req.user.entity == 'partnerEmployee'
+    req.user.entity == "adminEmployee" ||
+    req.user.entity == "partnerEmployee"
   ) {
     included.push({
       model: user,
@@ -115,42 +116,42 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     },
     include: included,
     attributes: [
-      'id',
+      "id",
       [
         literal(
-          `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
+          `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
         ),
-        'customerName',
+        "customerName",
       ],
       [
         literal(
-          `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
+          `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
         ),
-        'companyName',
+        "companyName",
       ],
       [
         literal(`COALESCE(
          (SELECT SUM(qty)
           FROM items
           WHERE items.orderId = orderFrequency.orderId ), 0)`),
-        'totalQuantity',
+        "totalQuantity",
       ],
       [
         literal(
-          `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
+          `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
         ),
-        'email',
+        "email",
       ],
-      'status',
-      'orderDate',
-      'nextOrderDate',
-      'frequency',
-      'visibilityDate',
+      "status",
+      "orderDate",
+      "nextOrderDate",
+      "frequency",
+      "visibilityDate",
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {
       order: doc,
     },
@@ -160,25 +161,25 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
 exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
-    '🚀 ~ exports.bookNewOrder=catchAsync ~ input:',
-    input?.order?.userId,
+    "🚀 ~ exports.bookNewOrder=catchAsync ~ input:",
+    input?.order?.userId
   );
   // if (input?.items?.length < 1) {
   //   throw new AppError('Cart is empty add products to place order', 404);
   // }
 
   const customer = await user.findOne({ where: { id: input?.order?.userId } });
-  console.log('🚀 ~ exports.bookNewOrder=customer ~ customer:', customer?.id);
+  console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
   if (!customer) {
-    return next(new AppError('Customer not found.', 404));
+    return next(new AppError("Customer not found.", 404));
   }
 
   if (!input?.order?.shippingCharges) {
     return next(
       new AppError(
-        'Not dealing in such weights. Contact customer support for this order.',
-        400,
-      ),
+        "Not dealing in such weights. Contact customer support for this order.",
+        400
+      )
     );
   }
 
@@ -188,7 +189,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         id: customer?.salesRepId,
       },
       attributes: [
-        'creditLimit',
+        "creditLimit",
         [
           literal(`
               (
@@ -199,7 +200,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-          'creditUsed',
+          "creditUsed",
         ],
       ],
     });
@@ -207,18 +208,18 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     let percentage =
       (credit?.dataValues?.creditUsed / credit?.creditLimit) * 100;
     console.log(
-      '---------------------------------creaditUed',
-      credit?.dataValues?.creditUsed,
+      "---------------------------------creaditUed",
+      credit?.dataValues?.creditUsed
     );
     console.log(
-      '---------------------------------creditLimit',
-      credit?.creditLimit,
+      "---------------------------------creditLimit",
+      credit?.creditLimit
     );
 
     if (percentage >= 80) {
       throw new AppError(
         `You've used over 80% of your credit limit. Please clear your balance before placing further orders.`,
-        404,
+        404
       );
     }
   }
@@ -230,7 +231,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   let discountOnItemsPrice = 0;
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
-  console.log('🚀 ~ exports.bookOrder=catchAsync ~ productIds:', productIds);
+  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
   const products = await product.findAll({
     where: {
       id: {
@@ -256,14 +257,14 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
               AND userDiscounts.userId = ${customer.id}
             LIMIT 1)
           `),
-        'discountPercentage',
+        "discountPercentage",
       ],
     ],
   });
   // return res.json(products)
   console.log(
-    '🚀 ~ exports.bookOrder=catchAsync ~ products:',
-    products?.length,
+    "🚀 ~ exports.bookOrder=catchAsync ~ products:",
+    products?.length
   );
   // let percentageDiscount = input?.order?.discountPercentage
   //   ? parseFloat(input?.order?.discountPercentage)
@@ -272,7 +273,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const finalItems = products.map((obj) => {
     const element = {};
     const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0,
+      obj.dataValues?.discountPercentage || 0
     );
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
@@ -283,7 +284,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
     // Set the qty from input.items or default to 1 if not found
     let qty = prod ? parseInt(prod.qty) : 1;
-    console.log('🚀 ~ finalItems ~ qty:', qty);
+    console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
     // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
@@ -325,26 +326,26 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
             [Op.gte]: totalWeight, // Greater than or equal to the weight
           },
         },
-        attributes: ['charges'],
+        attributes: ["charges"],
       });
 
   if (!shippingCompany) {
     return next(
       new AppError(
-        'Not dealing in such weights. Contact customer support for this order.',
-        400,
-      ),
+        "Not dealing in such weights. Contact customer support for this order.",
+        400
+      )
     );
   }
 
-  console.log('🚀 ~ shippingCompany:', shippingCompany);
+  console.log("🚀 ~ shippingCompany:", shippingCompany);
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
   // input.order.discountPercentage = percentageDiscount;
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight || 0);
   input.order.shippingCompany =
-    input.order.totalWeight > 400 ? `Shipping By Truck` : 'FedEx';
+    input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +
@@ -369,7 +370,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   await item.bulkCreate(finalItems);
 
-  if (newOrder.frequency != 'just-onces')
+  if (newOrder.frequency != "just-onces")
     setOrderFrequency({
       orderData: newOrder,
       salesRepId: customer?.salesRepId,
@@ -380,7 +381,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     orderEvents({ orderId: newOrder?.id });
   }
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { id: newOrder?.id },
   });
 });
@@ -525,86 +526,86 @@ const frequencyBookOrder = async ({ id }) => {
           attributes: [
             [
               literal(
-                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
               ),
-              'product',
+              "product",
             ],
             [
               literal(
-                `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
+                `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
               ),
-              'price',
+              "price",
             ],
             [
               literal(
-                `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
+                `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`
               ),
-              'wholesalePrice',
+              "wholesalePrice",
             ],
             [
               literal(
-                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
+                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
               ),
-              'weight',
+              "weight",
             ],
-            'qty',
-            'productId',
-            'categoryId',
+            "qty",
+            "productId",
+            "categoryId",
             [
               literal(
-                `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`,
+                `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`
               ),
-              'percentageDiscount',
+              "percentageDiscount",
             ],
-            ['price', 'servicePrice'],
-            'productName',
-            'type',
+            ["price", "servicePrice"],
+            "productName",
+            "type",
           ],
           raw: true,
         },
       ],
       attributes: [
-        ['id', 'orderFrequencyId'],
+        ["id", "orderFrequencyId"],
         [
           literal(
-            `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+            `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
           ),
-          'addressId',
+          "addressId",
         ],
         [
           literal(
-            `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+            `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
           ),
-          'orderFrequencyId',
+          "orderFrequencyId",
         ],
         [
           literal(
-            `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+            `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
           ),
-          'paymentMethodId',
+          "paymentMethodId",
         ],
         [
           literal(
-            `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+            `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
           ),
-          'paymentMethod',
+          "paymentMethod",
         ],
         [
           literal(
-            `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+            `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
           ),
-          'on',
+          "on",
         ],
         [
           literal(
-            `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
+            `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
           ),
-          'vat',
+          "vat",
         ],
-        ['nextOrderDate', 'on'],
-        'frequency',
-        'userId',
-        'salesRepId',
+        ["nextOrderDate", "on"],
+        "frequency",
+        "userId",
+        "salesRepId",
       ],
     });
 
@@ -612,12 +613,12 @@ const frequencyBookOrder = async ({ id }) => {
     // console.log('🚀 ~ frequencyBookOrder ~ result:', result);
     const customer = await user.findOne({
       where: { id: result.userId, deleted: 0 },
-      attributes: ['salesRepId', 'defaultDiscount'],
+      attributes: ["salesRepId", "defaultDiscount"],
     });
     if (!customer) {
       await orderFrequency.update(
         { status: 0 },
-        { where: { id: result.orderFrequencyId } },
+        { where: { id: result.orderFrequencyId } }
       );
       return false;
     }
@@ -629,11 +630,11 @@ const frequencyBookOrder = async ({ id }) => {
     result?.items.forEach((item) => {
       const percentageDiscount = parseFloat(item.percentageDiscount || 0);
       item.weight = parseFloat(item?.weight || 0) * (item?.qty * 1);
-      console.log('🚀 ~ frequencyBookOrder BEFORE ~ item?.price:', item?.price);
+      console.log("🚀 ~ frequencyBookOrder BEFORE ~ item?.price:", item?.price);
       item.price = item?.price
         ? parseFloat(item?.price) * (item?.qty * 1)
         : parseFloat(item?.servicePrice);
-      console.log('🚀 ~ frequencyBookOrder AFTER ~ item?.price:', item?.price);
+      console.log("🚀 ~ frequencyBookOrder AFTER ~ item?.price:", item?.price);
       item.discount = 0;
       if (percentageDiscount > 0 && item?.productId) {
         // Calculate discount amount
@@ -649,20 +650,20 @@ const frequencyBookOrder = async ({ id }) => {
       totalWeight += item.weight;
       if (result?.salesRepId) {
         console.log(
-          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
-          item?.price,
+          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
+          item?.price
         );
         console.log(
-          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
-          item?.price,
+          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
+          item?.price
         );
         console.log(
-          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
-          item?.price,
+          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
+          item?.price
         );
         console.log(
-          '🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:',
-          item?.price,
+          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
+          item?.price
         );
         const currentPrice = item?.price
           ? item?.price
@@ -684,7 +685,7 @@ const frequencyBookOrder = async ({ id }) => {
           [Op.gte]: totalWeight, // Greater than or equal to the weight
         },
       },
-      attributes: ['charges'],
+      attributes: ["charges"],
     });
 
     result.shippingCharges = shippingCompany?.charges || 0;
@@ -700,11 +701,11 @@ const frequencyBookOrder = async ({ id }) => {
       parseFloat(shippingCompany?.charges || 0);
     result.totalWeight = parseFloat(totalWeight || 0);
     result.shippingCompany =
-      result.totalWeight > 400 ? `Shipping By Truck` : 'FedEx';
+      result.totalWeight > 400 ? `Shipping By Truck` : "UPS";
     result.statusId = 1;
     result.salesRepId = result?.salesRepId;
-    result.createdBy = 'sales-rep';
-    console.log('🚀 ~ frequencyBookOrder ~ result:', result);
+    result.createdBy = "sales-rep";
+    console.log("🚀 ~ frequencyBookOrder ~ result:", result);
 
     // return true;
     const newOrder = await order.create(result);
@@ -715,7 +716,7 @@ const frequencyBookOrder = async ({ id }) => {
       item.orderId = newOrder.id;
     });
 
-    console.log('🚀 ~ frequencyBookOrder ~ result.items:', result.items);
+    console.log("🚀 ~ frequencyBookOrder ~ result.items:", result.items);
     item.bulkCreate(result.items);
 
     orderHistory.create({
@@ -729,9 +730,9 @@ const frequencyBookOrder = async ({ id }) => {
       frequency: result.frequency,
     });
     console.log(
-      '🚀 ~ frequencyBookOrder ~ nextOrderDate, visibilityDate:',
+      "🚀 ~ frequencyBookOrder ~ nextOrderDate, visibilityDate:",
       nextOrderDate,
-      visibilityDate,
+      visibilityDate
     );
 
     const updateFrequencyData = {
@@ -741,10 +742,10 @@ const frequencyBookOrder = async ({ id }) => {
     };
     await orderFrequency.update(updateFrequencyData, { where: { id: id } });
 
-    console.log('ðŸš€ ~ frequencyBookOrder ~ result:', updateFrequencyData);
+    console.log("ðŸš€ ~ frequencyBookOrder ~ result:", updateFrequencyData);
     return true;
   } catch (error) {
-    console.log('ðŸš€ ~ exports.frequencyBookOrder = ~ error:', error);
+    console.log("ðŸš€ ~ exports.frequencyBookOrder = ~ error:", error);
   }
 };
 
@@ -752,7 +753,7 @@ exports.bookOrderAccordingToFrequency = catchAsync(async (req, res, next) => {
   const { ids } = req.body;
 
   if (!ids || ids.length === 0) {
-    return next(new AppError('No IDs provided!', 400));
+    return next(new AppError("No IDs provided!", 400));
   }
 
   //!USED IN LAMDA FUNCTION
@@ -768,39 +769,39 @@ exports.bookOrderAccordingToFrequency = catchAsync(async (req, res, next) => {
   });
 
   res.status(200).json({
-    status: 'success',
-    message: 'Orders booked according to frequency successfully.',
+    status: "success",
+    message: "Orders booked according to frequency successfully.",
   });
 });
 
 exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
   async (req, res, next) => {
-    const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
-    console.log('🚀🚀🚀🚀🚀🚀 ~ today:', today);
+    const today = new Date().toISOString().split("T")[0]; // 'YYYY-MM-DD'
+    console.log("🚀🚀🚀🚀🚀🚀 ~ today:", today);
     const pendingOrders = await orderFrequency.findAll({
       where: { visibilityDate: today, status: 1 },
-      attributes: ['id'],
+      attributes: ["id"],
     });
-    console.log('🚀 ~ pendingOrders:', pendingOrders);
+    console.log("🚀 ~ pendingOrders:", pendingOrders);
 
     if (!pendingOrders || pendingOrders.length === 0) {
-      console.log('❌ No pending frequency orders for today.');
+      console.log("❌ No pending frequency orders for today.");
       return res.status(200).json({
-        status: 'fail',
-        message: 'No pending frequency orders for today.',
+        status: "fail",
+        message: "No pending frequency orders for today.",
         processed: 0,
       });
     }
 
     for (const order of pendingOrders) {
-      console.log('🔁~processing order', order?.id);
+      console.log("🔁~processing order", order?.id);
       await frequencyBookOrder({ id: order?.id });
     }
 
     return res.status(200).json({
-      status: 'success',
-      message: 'Orders booked according to frequency successfully.',
+      status: "success",
+      message: "Orders booked according to frequency successfully.",
       processed: pendingOrders.length,
     });
-  },
+  }
 );

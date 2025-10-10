@@ -1,7 +1,7 @@
 // routes/qbo.js
 const r = require("express").Router();
 const ctrl = require("../controllers/admin/quikbooksController");
-const QBO = require("../controllers/quickbooks");
+const QBO = require("../controllers/quickBooks");
 
 r.get("/auth/login", ctrl.authLogin);
 // r.get('/auth/callback', ctrl.authCallback);

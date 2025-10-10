@@ -157,7 +157,7 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   input.order.shippingCharges = shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight || 0);
   input.order.shippingCompany =
-    input.order.totalWeight > 400 ? `Shipping By Truck` : "FedEx";
+    input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
   input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
   input.order.totalBill =
     parseFloat(itemsPrice) +

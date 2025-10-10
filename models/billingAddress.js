@@ -1,11 +1,11 @@
 module.exports = (sequelize, DataTypes) => {
   const billingAddress = sequelize.define(
-    'billingAddress',
+    "billingAddress",
     {
       companyaddress: {
         type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: '',
+        defaultValue: "",
       },
       addressLineOne: {
         type: DataTypes.STRING,
@@ -51,18 +51,18 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
     {
-      tableName: 'billingAddresses',
+      tableName: "billingAddresses",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['town'],
-          name: 'town_index',
+          fields: ["town"],
+          name: "town_index",
         },
       ],
-    },
+    }
   );
 
   return billingAddress;

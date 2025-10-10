@@ -191,6 +191,9 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.employee);
     models.employee.belongsTo(salesRep);
+
+    salesRep.hasMany(models.billingAddress);
+    models.billingAddress.belongsTo(salesRep);
   };
 
   return salesRep;

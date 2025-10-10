@@ -1,11 +1,11 @@
 module.exports = (sequelize, DataTypes) => {
   const address = sequelize.define(
-    'address',
+    "address",
     {
       companyaddress: {
         type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: '',
+        defaultValue: "",
       },
       addressLineOne: {
         type: DataTypes.STRING,
@@ -51,23 +51,26 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
     {
-      tableName: 'addresses',
+      tableName: "addresses",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['town'],
-          name: 'town_index',
+          fields: ["town"],
+          name: "town_index",
         },
       ],
-    },
+    }
   );
 
   address.associate = (models) => {
     address.hasMany(models.order);
     models.order.belongsTo(address);
+
+    address.hasMany(models.partnerOrder);
+    models.partnerOrder.belongsTo(address);
 
     address.hasMany(models.orderFrequency);
     models.orderFrequency.belongsTo(address);

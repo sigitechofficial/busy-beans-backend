@@ -5,7 +5,7 @@
 // - GET  /qbo/ping              -> headers x-qbo-access / x-qbo-realmid OR query/body
 // - POST /qbo/customers/import  -> same headers with token/realm; imports users without qboCustomerId
 
-const QBO = require("../quickbooks"); // adjust path if needed
+const QBO = require("../quickBooks"); // adjust path if needed
 const { user, billingAddress, address } = require("../../models"); // adjust path if needed
 
 function getTokenFromReq(req) {
