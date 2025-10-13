@@ -1,14 +1,14 @@
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const fs = require("fs");
+const path = require("path");
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
-const { transporter } = require('./transpoter');
-let Footer = require('./footer');
-const generateFooterHtml = require('./footerLocalpatner');
-const { emailDateFormate } = require('../utils/emailDateFormate');
-const { header } = require('./header');
+const { attachments } = require("./attactments");
+const { transporter } = require("./transpoter");
+let Footer = require("./footer");
+const generateFooterHtml = require("./footerLocalpatner");
+const { emailDateFormate } = require("../utils/emailDateFormate");
+const { header } = require("./header");
 
 // async function downloadPDF(pdfUrl, outputPath) {
 //   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
@@ -27,14 +27,14 @@ module.exports = async function ({ email, data, invoice }) {
     });
     // console.log("🚀 ~ footer:", footer)
   }
-  console.log('Ã°Å¸Å¡â‚¬ ~ data:', data);
+  console.log("Ã°Å¸Å¡â‚¬ ~ data:", data);
   //will use from env BASE URL
 
   let items = [];
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
-              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ""}</td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
@@ -44,16 +44,16 @@ module.exports = async function ({ email, data, invoice }) {
     return temp;
   });
 
-  items = items.join('');
+  items = items.join("");
   const on = emailDateFormate(data?.on);
 
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      to: ["sigidevelopers@gmail.com", email], //`${email}` list of receivers
       subject: `Your Busy Bean Coffee order #${data.id} has been shipped.`, // Subject line
       attachments: attachments().footer,
-      replyTo: data.supplierEmail || 'info@busybeancoffee.com',
+      replyTo: data.supplierEmail || "info@busybeancoffee.com",
       html: `<!DOCTYPE html>
   <html lang="en">
   <head>
@@ -146,15 +146,15 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
           <span style="font-weight: 600">Po Number:</span>
-          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
+          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ""}</span><br />
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
           <span style="font-weight: 600">Company Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ""}</span><br />
            <span style="font-weight: 600">Shipping Company:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ""}</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ""}</span><br />
         </td> 
       </tr>
        
@@ -207,6 +207,6 @@ module.exports = async function ({ email, data, invoice }) {
       } else {
         console.log(info);
       }
-    },
+    }
   );
 };

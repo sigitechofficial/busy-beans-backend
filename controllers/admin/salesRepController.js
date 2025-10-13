@@ -25,10 +25,97 @@ const {
 
 exports.getAllSalesRep = factory.getAll(salesRep);
 
-exports.getSalesRep = factory.getOne(salesRep);
+exports.getSalesRepForOrderCreation = catchAsync(async (req, res, next) => {
+  const condition = { partnerType: "direct-partner", deleted: 0 };
+  if (req.query.salesRepId) {
+    condition.id = req.query.salesRepId;
+  }
+  const data = await salesRep.findAll({
+    where: condition,
+    attributes: ["id", "srName", "email", "state", "territoryName"],
+    include: [
+      {
+        model: address,
+        attributes: { exclude: ["createdAt", "userId", "updatedAt"] },
+      },
+      //   {
+      //     model: billingAddress,
+      //     attributes: { exclude: ["createdAt", "userId", "updatedAt"] },
+      //   },
+    ],
+  });
+
+  res.status(200).json({
+    status: "success",
+    data: data,
+  });
+});
+
+exports.getSalesRep = catchAsync(async (req, res, next) => {
+  console.log("🚀 ~ req.body:", req.body);
+  console.log("🚀 ~ req.body:", req.body);
+
+  const data = await salesRep.findOne({
+    where: { id: req.params.id, deleted: 0 },
+    attributes: { exclude: ["password", "updatedAt"] },
+    include: [
+      {
+        model: address,
+        attributes: { exclude: ["createdAt", "userId", "updatedAt"] },
+      },
+      {
+        model: billingAddress,
+        attributes: { exclude: ["createdAt", "userId", "updatedAt"] },
+      },
+    ],
+  });
+
+  res.status(200).json({
+    status: "success",
+    data: data,
+  });
+});
 
 // exports.createSalesRep = factory.createOne(salesRep);
+exports.updateAddresses = catchAsync(async (req, res, next) => {
+  console.log("🚀 ~ req.body:", req.body);
+  console.log("🚀 ~ req.body:", req.body);
 
+  if (req.body?.newAddressess) {
+    await address.bulkCreate(req.body?.newAddressess);
+  }
+
+  if (req.body?.addresses) {
+    await address.update(req.body.addresses, {
+      where: { id: req.body?.addresses?.id },
+    });
+  }
+  if (req.body?.billingAddress) {
+    const userId = Number(req.params.id);
+    const [affected] = await billingAddress.update(req.body.billingAddress, {
+      where: { userId },
+    });
+
+    if (affected === 0) {
+      await billingAddress.create({ userId, ...req.body.billingAddress });
+    }
+  }
+
+  //   if (req.body?.userDiscount && req.body?.userDiscount.length > 0) {
+  //     req.body?.userDiscount.forEach((obj) => {
+  //       obj.userId = req.params.id;
+  //     });
+  //     await userDiscount.destroy({
+  //       where: { deleted: 0, userId: req.params.id },
+  //     });
+  //     await userDiscount.bulkCreate(req.body?.userDiscount);
+  //   }
+
+  res.status(200).json({
+    status: "success",
+    data: {},
+  });
+});
 exports.updateSalesRep = factory.updateOne(salesRep);
 
 exports.createSalesRep = catchAsync(async (req, res, next) => {

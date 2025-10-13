@@ -414,6 +414,21 @@ router
   .patch(uploadSupplierImage.single("image"), supplierController.updateSupplier) // For updating category by ID
   .delete(supplierController.deleteSupplier); // For deleting a category by ID
 
+router.patch(
+  "/sales-rep/address-update/:srId",
+  salesRepController.updateAddresses
+);
+
+router.get(
+  "/sales-rep/for-order-creation",
+  salesRepController.getSalesRepForOrderCreation
+);
+
+router.get(
+  "/sales-rep/for-order-creation/:srId",
+  salesRepController.getSalesRepForOrderCreation
+);
+
 router
   .route("/sales-rep/")
   .get(salesRepController.getAllSalesRep) // For fetching all categories
@@ -625,5 +640,9 @@ router.post(
 );
 
 router.get("/partner-order/orders-list", patnerOrderController.allPartnerOrder);
+router.get(
+  "/partner-order/order-details/:id",
+  patnerOrderController.partnerOrderDetails
+);
 
 module.exports = router;

@@ -1,23 +1,23 @@
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
+const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require('./transpoter');
-const generateFooterHtml = require('./footerLocalpatner');
-let Footer = require('./footer');
-const { emailDateFormate } = require('../utils/emailDateFormate');
-const { header } = require('./header');
+const { transporter } = require("./transpoter");
+const generateFooterHtml = require("./footerLocalpatner");
+let Footer = require("./footer");
+const { emailDateFormate } = require("../utils/emailDateFormate");
+const { header } = require("./header");
 
 module.exports = async function ({
   email,
   data,
-  satge = 'Confirmed',
+  satge = "Confirmed",
   invoice,
 }) {
   const lcoalPatner = data?.salesRep;
   let footer = await Footer();
-  console.log('🚀 ~ lcoalPatner:', lcoalPatner);
+  console.log("🚀 ~ lcoalPatner:", lcoalPatner);
   if (lcoalPatner) {
     footer = generateFooterHtml({
       address: `${lcoalPatner?.address}, ${lcoalPatner?.city}, ${lcoalPatner?.state}, ${lcoalPatner?.zipCode}, ${lcoalPatner?.country}`,
@@ -38,15 +38,15 @@ module.exports = async function ({
   ];
 
   const DeliveryAddress = addressParts
-    .filter((part) => part && part.trim() !== '') // remove null/undefined/empty strings
-    .join(', ')
-    .concat('.');
+    .filter((part) => part && part.trim() !== "") // remove null/undefined/empty strings
+    .join(", ")
+    .concat(".");
 
   let items = [];
   data?.items.forEach((ele) => {
     let temp = `
              <tr>
-              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ""}</td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
@@ -57,14 +57,14 @@ module.exports = async function ({
   });
 
   const on = emailDateFormate(data?.on);
-  items = items.join('');
+  items = items.join("");
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      to: ["sigidevelopers@gmail.com", email], //`${email}` list of receivers
       subject: `Your Busy Beans Coffee Order #${data.id} Has Been Confirmed`, // Subject line
       attachments: attachment.footer,
-      replyTo: data?.patnerEmail || 'info@busybeancoffee.com',
+      replyTo: data?.patnerEmail || "info@busybeancoffee.com",
       html: ` <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -216,6 +216,6 @@ module.exports = async function ({
       } else {
         console.log(info);
       }
-    },
+    }
   );
 };

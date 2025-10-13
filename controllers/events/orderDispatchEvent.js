@@ -1,8 +1,8 @@
-const orderDispatch = require('../../helper/orderDispatch');
+const orderDispatch = require("../../helper/orderDispatch");
 const {
   dataForEmailAndNotifications,
-} = require('../../utils/emailsNotificationsData');
-const ThrowNotification = require('../../utils/throwNotification');
+} = require("../../utils/emailsNotificationsData");
+const ThrowNotification = require("../../utils/throwNotification");
 
 exports.orderDispatchEvent = async ({ orderId }) => {
   try {
@@ -18,12 +18,12 @@ exports.orderDispatchEvent = async ({ orderId }) => {
         to = to.concat(emailArray);
       }
       to = [...new Set(to)];
-      console.log('🚀 ~ to:', JSON.stringify(to));
+      console.log("🚀 ~ to:", JSON.stringify(to));
       orderDispatch({ email: to, data: details });
     }
-    console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');
+    console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
     return true;
   } catch (error) {
-    console.log('🚀 ~ exports.sendQuotation = ~ error:', error);
+    console.log("🚀 ~ exports.sendQuotation = ~ error:", error);
   }
 };

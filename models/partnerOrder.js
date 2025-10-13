@@ -207,6 +207,9 @@ module.exports = (sequelize) => {
 
     partnerOrder.hasMany(models.orderHistory);
     models.orderHistory.belongsTo(partnerOrder);
+
+    partnerOrder.hasOne(models.chequeDetail);
+    models.chequeDetail.belongsTo(partnerOrder);
   };
 
   return partnerOrder;

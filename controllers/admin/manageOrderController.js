@@ -771,9 +771,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     return next(new AppError("Order not found.", 404));
   }
 
-  if (req.body?.orderData)
+  if (req.body?.orderData) {
+    req.body.orderData.shippingCompany = "UPS";
     await order.update(req.body?.orderData, { where: { id: orderId } });
-
+  }
   if (req.body?.cheque) {
     req.body.cheque.orderId = orderId;
     await chequeDetail.create(req.body?.cheque);
@@ -1526,4 +1527,3 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
     data: {},
   });
 });
-// Apply discount

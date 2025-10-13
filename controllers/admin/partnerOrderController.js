@@ -11,6 +11,9 @@ const {
   partnerOrderItem,
   orderHistory,
   shippingCompanies,
+  supplier,
+  salesRep,
+  chequeDetail,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
@@ -338,6 +341,199 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
     results: doc.length,
     data: {
       data: doc,
+    },
+  });
+});
+
+exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
+  let condition = {};
+  if (req.params.id) condition.id = req.params.id;
+
+  console.log("ðŸš€ ~ exports.allOrder=catchAsync ~ condition:", condition);
+
+  const doc = await partnerOrder.findOne({
+    where: condition,
+    include: [
+      {
+        model: address,
+        attributes: {
+          exclude: ["createdAt", "updatedAt", "userId", "deleted", "deletedAt"],
+        },
+      },
+      {
+        model: supplier,
+        attributes: {
+          exclude: [
+            "createdAt",
+            "updatedAt",
+            "deleted",
+            "deletedAt",
+            "password",
+          ],
+        },
+      },
+      {
+        model: salesRep,
+        attributes: {
+          exclude: [
+            "createdAt",
+            "updatedAt",
+            "deleted",
+            "deletedAt",
+            "password",
+          ],
+        },
+        include: {
+          model: billingAddress,
+          attributes: {
+            exclude: [
+              "createdAt",
+              "updatedAt",
+              "userId",
+              "deleted",
+              "deletedAt",
+            ],
+          },
+        },
+      },
+      {
+        model: chequeDetail,
+        attributes: {
+          exclude: ["createdAt", "updatedAt", "deletedAt"],
+        },
+      },
+      {
+        model: partnerOrderItem,
+        attributes: [
+          "id",
+          [
+            literal(
+              `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+            ),
+            "product",
+          ],
+          [
+            literal(
+              `(SELECT products.weight FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+            ),
+            "singleUnitWeight",
+          ],
+          ["weight", "itemWeights"],
+          [
+            literal(
+              `(SELECT products.productCode FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+            ),
+            "productCode",
+          ],
+          [
+            literal(
+              `(SELECT products.grind FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+            ),
+            "grind",
+          ],
+          [
+            literal(`
+            (SELECT supplierSku
+            FROM skuSuppliers
+            WHERE skuSuppliers.productId = partnerOrderItems.productId
+              AND skuSuppliers.supplierId = partnerOrder.supplierId
+            LIMIT 1)
+          `),
+            "supplierSku",
+          ],
+          "qty",
+          "productName",
+          "price",
+          "discount",
+          "partnerOrderId",
+          "productId",
+          "type",
+        ],
+      },
+      {
+        model: orderHistory,
+        attributes: [
+          "id",
+          [
+            literal(
+              `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+            ),
+            "orderStatus",
+          ],
+          [
+            literal(
+              `(SELECT statuses.discription FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+            ),
+            "discription",
+          ],
+          "on",
+          "statusId",
+        ],
+      },
+    ],
+    attributes: [
+      "id",
+      [
+        literal(
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`
+        ),
+        "orderCurrentStatus",
+      ],
+      [
+        literal(`COALESCE(
+         (SELECT SUM(qty)
+          FROM items
+          WHERE partnerOrderItems.partnerOrderId = partnerOrder.id ), 0)`),
+        "totalQuantity",
+      ],
+      [
+        literal(
+          `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`
+        ),
+        "salesRepName",
+      ],
+      "totalBill",
+      "subTotal",
+      "discountPrice",
+      "discountPercentage",
+      "itemsPrice",
+      "vat",
+      "totalWeight",
+      "note",
+      "paymentMethod",
+      "poNumber",
+      "frequency",
+      "statusId",
+      "trackingNumber",
+      "paymentStatus",
+      "adminReceivableStatus",
+      "adminReceivableAmount",
+      "localPatnerCommission",
+      "invoicePdf",
+      "invoiceId",
+      "createdBy",
+      "on",
+      "createdAt",
+      "shippingCompany",
+      "shippingCharges",
+      "invoiceNumber",
+      "invoiceDate",
+      "invoiceReminder",
+      "invoicePaidDate",
+      "termDays",
+      "salesRepId",
+      "pulloutIntentId",
+      "paymentIntentId",
+      "pulloutDate",
+    ],
+  });
+  if (!doc) {
+    return next(new AppError("Data not found!", 400));
+  }
+  res.status(200).json({
+    status: "success",
+    data: {
+      order: doc,
     },
   });
 });
