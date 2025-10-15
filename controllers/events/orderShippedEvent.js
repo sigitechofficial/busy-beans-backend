@@ -4,6 +4,16 @@ const {
 } = require("../../utils/emailsNotificationsData");
 
 exports.orderShippedEvent = async ({ orderId, orderType = "customer" }) => {
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
   try {
     const orderData = await dataForEmailAndNotifications(orderId, orderType);
     if (!orderData) return false;

@@ -5,6 +5,16 @@ const {
 const ThrowNotification = require("../../utils/throwNotification");
 
 exports.orderDispatchEvent = async ({ orderId, orderType = "customer" }) => {
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
   try {
     const orderData = await dataForEmailAndNotifications(orderId, orderType);
     if (!orderData) return false;
