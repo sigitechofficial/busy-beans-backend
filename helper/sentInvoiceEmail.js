@@ -18,7 +18,7 @@ const GenerateInvoicePdf = require("../utils/generateInvoicePdf");
 // }
 module.exports = async function ({ email, data, invoice }) {
   console.log("🚀 ~ email:", email);
-  const baseDate = new Date(data?.on || data?.createdAt);
+  const baseDate = new Date(data?.invoiceDate || data?.createdAt);
   let footer = await Footer();
   // Add 30 days
   const plus30Days = new Date(baseDate);

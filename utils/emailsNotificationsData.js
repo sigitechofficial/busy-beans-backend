@@ -10,6 +10,7 @@ const {
   deviceToken,
   account,
   partnerOrder,
+  partnerOrderItem,
 } = require("../models");
 const { Op, literal } = require("sequelize");
 const { emailDateFormate } = require("./emailDateFormate");
@@ -283,11 +284,16 @@ const customerOrder = async ({ orderId }) => {
 
 const localPartnerOrder = async ({ orderId }) => {
   try {
+    console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:", orderId);
+    console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:", orderId);
+    console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:");
+    console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:");
+
     let itemAttributes = [
       "id",
       [
         literal(
-          `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
         ),
         "product",
       ],
@@ -295,25 +301,25 @@ const localPartnerOrder = async ({ orderId }) => {
       "productName",
       "price",
       "discount",
-      "orderId",
+      "partnerOrderId",
       "type",
       "productId",
       [
         literal(
-          `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.sku FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
         ),
         "sku",
       ],
 
       [
         literal(
-          `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.sku FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
         ),
         "productCode",
       ],
       [
         literal(
-          `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.grind FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
         ),
         "grind",
       ],
@@ -321,8 +327,8 @@ const localPartnerOrder = async ({ orderId }) => {
         literal(`
             (SELECT supplierSku
             FROM skuSuppliers
-            WHERE skuSuppliers.productId = items.productId
-              AND skuSuppliers.supplierId = order.supplierId
+            WHERE skuSuppliers.productId = partnerOrderItems.productId
+              AND skuSuppliers.supplierId = partnerOrder.supplierId
             LIMIT 1)
           `),
         "supplierSku",
@@ -335,7 +341,7 @@ const localPartnerOrder = async ({ orderId }) => {
         "id",
         [
           literal(
-            `(SELECT users.countryCode FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT countryCode FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
           ),
           "countryCountry",
         ],
@@ -403,7 +409,7 @@ const localPartnerOrder = async ({ orderId }) => {
           literal(`COALESCE(
               (SELECT SUM(qty)
                 FROM items
-                WHERE items.orderId = order.id ), 0)`),
+                WHERE partnerOrderitems.partnerOrderId = partnerOrder.id ), 0)`),
           "totalQuantity",
         ],
         "totalBill",
@@ -429,7 +435,6 @@ const localPartnerOrder = async ({ orderId }) => {
         "invoicePdf",
         "invoiceId",
         "createdAt",
-        "userId",
         "paymentMethodId",
         "shippingCompany",
         "shippingCharges",
@@ -454,7 +459,7 @@ const localPartnerOrder = async ({ orderId }) => {
           },
         },
         {
-          model: item,
+          model: partnerOrderItem,
           attributes: itemAttributes,
         },
         {
@@ -483,6 +488,7 @@ const localPartnerOrder = async ({ orderId }) => {
         },
       ],
     });
+    console.log("🚀 ~ localPartnerOrder ~ doc:", doc.id);
     return JSON.parse(JSON.stringify(doc));
   } catch (err) {
     console.error(err);
@@ -495,11 +501,13 @@ exports.dataForEmailAndNotifications = async (
 ) => {
   const output =
     orderType == "customer"
-      ? customerOrder({ orderId: orderId })
-      : localPartnerOrder({ orderId: orderId });
+      ? await customerOrder({ orderId: orderId })
+      : await localPartnerOrder({ orderId: orderId });
 
-  if (orderType == "localPartner") {
+  if (orderType == "local-partner") {
     output.user = output.salesRep;
+    output.items = output.partnerOrderItems;
+    output.partnerOrderItems = null;
     output.salesRep = null;
   }
   console.log(
@@ -507,14 +515,17 @@ exports.dataForEmailAndNotifications = async (
     output?.id
   );
 
-  const tokenCondition = {
-    [Op.or]: [
-      { supplierId: output?.supplierId },
-      { salesRepId: output?.salesRepId },
-      { accountId: 1 },
-      { userId: output?.userId },
-    ],
-  };
+  const or = [{ accountId: 1 }];
+
+  if (output?.supplierId) {
+    or.push({ supplierId: output.supplierId });
+  } else if (output?.salesRepId) {
+    or.push({ salesRepId: output.salesRepId });
+  } else if (output?.userId) {
+    or.push({ salesRepId: output.userId });
+  }
+
+  const tokenCondition = { [Op.or]: or };
 
   const dvtokens = await deviceToken.findAll({ where: tokenCondition });
 
@@ -535,9 +546,12 @@ exports.dataForEmailAndNotifications = async (
     .filter((t) => t.salesRepId === order.salesRepId)
     .map((t) => t.tokenId);
 
-  output.localPatnerCommission = await item.sum("salerCommission", {
-    where: { orderId: output.id },
-  });
+  output.localPatnerCommission =
+    orderType == "customer"
+      ? await item.sum("salerCommission", {
+          where: { orderId: output.id },
+        })
+      : 0;
 
   output.adminReceivableAmount =
     parseFloat(output?.totalBill || 0) -

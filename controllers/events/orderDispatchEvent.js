@@ -4,9 +4,9 @@ const {
 } = require("../../utils/emailsNotificationsData");
 const ThrowNotification = require("../../utils/throwNotification");
 
-exports.orderDispatchEvent = async ({ orderId }) => {
+exports.orderDispatchEvent = async ({ orderId, orderType = "customer" }) => {
   try {
-    const orderData = await dataForEmailAndNotifications(orderId);
+    const orderData = await dataForEmailAndNotifications(orderId, orderType);
     if (!orderData) return false;
     const { details, email } = orderData;
     let to = email ? [email] : [];

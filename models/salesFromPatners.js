@@ -1,9 +1,9 @@
-const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
+const { DataTypes } = require("sequelize");
+const bcrypt = require("bcryptjs");
 
 module.exports = (sequelize) => {
   const salesFromPatners = sequelize.define(
-    'salesFromPatners',
+    "salesFromPatners",
     {
       amount: {
         type: DataTypes.DECIMAL(20, 2),
@@ -20,12 +20,12 @@ module.exports = (sequelize) => {
       },
     },
     {
-      tableName: 'salesFromPatners',
+      tableName: "salesFromPatners",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
-    },
+    }
   );
 
   return salesFromPatners;

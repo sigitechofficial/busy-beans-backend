@@ -1,9 +1,9 @@
-const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
+const { DataTypes } = require("sequelize");
+const bcrypt = require("bcryptjs");
 
 module.exports = (sequelize) => {
   const countryInSystem = sequelize.define(
-    'countryInSystem',
+    "countryInSystem",
     {
       name: {
         type: DataTypes.STRING,
@@ -22,11 +22,11 @@ module.exports = (sequelize) => {
     {
       indexes: [
         {
-          fields: ['name'],
-          name: 'name_index',
+          fields: ["name"],
+          name: "name_index",
         },
       ],
-    },
+    }
   );
 
   // Associations models

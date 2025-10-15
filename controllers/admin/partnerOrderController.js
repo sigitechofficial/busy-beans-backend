@@ -20,7 +20,10 @@ const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
 const { Op, literal, fn, col, where } = require("sequelize");
 const APIFeatures = require("../../utils/apiFeatures");
-
+const {
+  orderEvents,
+  orderEventsToLocalPatnerOrAdmin,
+} = require("../events/orderEvents");
 exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ input:", input);
@@ -180,22 +183,25 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   ]);
 
   finalItems.forEach((element) => {
-    element.orderId = newOrder.id;
+    element.partnerOrderId = newOrder.id;
   });
   console.log("🚀 ~ finalItems:", finalItems);
 
   await partnerOrderItem.bulkCreate(finalItems);
 
   //   if (newOrder.frequency != "just-onces")
-  // setOrderFrequency({
-  //   orderData: newOrder,
-  //   salesRepId: customer?.salesRepId,
-  // });
+  //     setOrderFrequency({
+  //       orderData: newOrder,
+  //       salesRepId: customer?.salesRepId,
+  //     });
 
-  //   if (input?.items && input.items?.length > 0) {
-  //     orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
-  //     orderEvents({ orderId: newOrder?.id });
-  //   }
+  if (input?.items && input.items?.length > 0) {
+    orderEventsToLocalPatnerOrAdmin({
+      orderId: newOrder?.id,
+      orderType: "local-partner",
+    });
+    orderEvents({ orderId: newOrder?.id, orderType: "local-partner" });
+  }
   return res.status(200).json({
     status: "success",
     data: { id: newOrder?.id },

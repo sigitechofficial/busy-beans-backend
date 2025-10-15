@@ -1,19 +1,19 @@
 module.exports = (sequelize, DataTypes) => {
-  const pushNotification = sequelize.define('pushNotification', {
+  const pushNotification = sequelize.define("pushNotification", {
     at: {
       type: DataTypes.DATE,
       allowNull: true,
     },
     to: {
       type: DataTypes.ENUM(
-        'customer',
-        'supplier',
-        'localPatner',
-        'admin',
-        'all',
+        "customer",
+        "supplier",
+        "localPatner",
+        "admin",
+        "all"
       ),
       allowNull: false,
-      defaultValue: 'all',
+      defaultValue: "all",
     },
     title: {
       type: DataTypes.STRING,
@@ -28,8 +28,8 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     type: {
-      type: DataTypes.ENUM('order', 'permotional'),
-      defaultValue: 'order',
+      type: DataTypes.ENUM("order", "permotional"),
+      defaultValue: "order",
     },
     repliedAt: {
       type: DataTypes.DATE,

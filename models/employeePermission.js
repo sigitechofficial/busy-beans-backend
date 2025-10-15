@@ -1,7 +1,7 @@
 // models/employeePermission.js
 module.exports = (sequelize, DataTypes) => {
   const employeePermission = sequelize.define(
-    'employeePermission',
+    "employeePermission",
     {
       id: {
         type: DataTypes.INTEGER,
@@ -12,42 +12,42 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'employees',
-          key: 'id',
+          model: "employees",
+          key: "id",
         },
-        onUpdate: 'CASCADE',
-        onDelete: 'CASCADE',
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
       },
       permissionId: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'permissions',
-          key: 'id',
+          model: "permissions",
+          key: "id",
         },
-        onUpdate: 'CASCADE',
-        onDelete: 'CASCADE',
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE",
       },
     },
     {
-      tableName: 'employee_permissions',
+      tableName: "employee_permissions",
       timestamps: true,
       indexes: [
         {
           unique: true,
-          fields: ['employeeId', 'permissionId'],
+          fields: ["employeeId", "permissionId"],
         },
       ],
-    },
+    }
   );
 
   // Associations
   employeePermission.associate = (models) => {
     models.employeePermission.belongsTo(models.employee, {
-      foreignKey: 'employeeId',
+      foreignKey: "employeeId",
     });
     models.employeePermission.belongsTo(models.permission, {
-      foreignKey: 'permissionId',
+      foreignKey: "permissionId",
     });
   };
 

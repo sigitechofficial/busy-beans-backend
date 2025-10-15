@@ -13,6 +13,7 @@ const {
   salesRep,
   orderFrequency,
   userDiscount,
+  partnerOrder,
 } = require("../../models");
 
 const fs = require("fs");
@@ -761,22 +762,34 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
 //! dont need this now
 // if(req.body?.orderData?.statusId == 4)processTransferToLocalPartner({orderId:orderId})
 exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
-  const { orderId } = req.body;
+  const { orderId, partnerOrderId } = req.body;
 
-  const doc = await order.findOne({
-    where: { id: orderId },
+  const Model = partnerOrderId ? partnerOrder : order;
+  const isPartnerOrder = partnerOrderId ? true : false;
+  const doc = await Model.findOne({
+    where: { id: orderId || partnerOrderId },
   });
 
   if (!doc) {
     return next(new AppError("Order not found.", 404));
   }
+  const statusId = Number(req.body?.orderData?.statusId);
+  const userId = Number(doc?.userId || 0);
 
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
-    await order.update(req.body?.orderData, { where: { id: orderId } });
+
+    if (statusId === 2 && [267, 279].includes(userId)) {
+      req.body.orderData.supplierId = 4;
+    }
+
+    await Model.update(req.body?.orderData, {
+      where: { id: orderId || partnerOrderId },
+    });
   }
   if (req.body?.cheque) {
     req.body.cheque.orderId = orderId;
+    req.body.cheque.partnerOrderId = partnerOrderId;
     await chequeDetail.create(req.body?.cheque);
   }
 
@@ -786,15 +799,24 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   );
   if (req.body?.orderData?.statusId) {
     if (req.body?.orderData?.statusId == 2) {
-      supplierNewOrderEvent({ orderId: orderId });
+      supplierNewOrderEvent({
+        orderId: orderId || partnerOrderId,
+        orderType: isPartnerOrder ? "partner-order" : "customer",
+      });
     }
 
     // if (req.body?.orderData?.statusId == 4) {
     // }
 
     if (req.body?.orderData?.statusId == 5) {
-      orderShippedEvent({ orderId });
-      orderDispatchEvent({ orderId });
+      orderShippedEvent({
+        orderId: orderId || partnerOrderId,
+        orderType: isPartnerOrder ? "partner-order" : "customer",
+      });
+      orderDispatchEvent({
+        orderId: orderId || partnerOrderId,
+        orderType: isPartnerOrder ? "partner-order" : "customer",
+      });
     }
 
     if (req.body?.orderData?.statusId == 6) {
@@ -804,7 +826,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
         console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session);
 
         if (session == "paid") {
-          await order.update(
+          await Model.update(
             { paymentMethod: "card", paymentStatus: "done" },
             { where: { id: doc.id } }
           );
@@ -851,7 +873,8 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
     await orderHistory.create({
       statusId: req.body?.orderData?.statusId,
-      orderId: orderId,
+      orderId: orderId || null,
+      partnerOrderId: partnerOrderId || null,
       on: Date.now(),
     });
   }
@@ -1211,6 +1234,9 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     parseFloat(input?.order?.vat || 0) +
     parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
 
+  if (placedOrder.invoiceDate) {
+    delete input.order.invoiceDate;
+  }
   await order.update(input?.order, { where: { id: placedOrder?.id } });
   await item.destroy({ where: { orderId: placedOrder?.id } });
   await item.bulkCreate(finalItems);

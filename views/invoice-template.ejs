@@ -72,14 +72,14 @@ function parseDDMMYYYY(val) {
 
 <%
   var termDays = Number(order?.termDays) || 30;
-  var invDate = parseDDMMYYYY(order?.on);
+  var invDate = parseDDMMYYYY(order?.invoiceDate);
   var dueDateObj = order?.paymentDue ? parseDDMMYYYY(order.paymentDue)
                    : (invDate ? new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate() + termDays) : null);
   var dueDateText = dueDateObj ? formatInvoiceDate(dueDateObj) : '';
 %>
 
 <div style="font-size:14px; color:#6b7280; margin:6px 0">
-  Invoice Date <span style="color:#111; font-weight:600; display:block;"><%= formatInvoiceDate(order?.on) %></span>
+  Invoice Date <span style="color:#111; font-weight:600; display:block;"><%= formatInvoiceDate(order?.invoiceDate) %></span>
 </div>
 <div style="font-size:14px; color:#6b7280; margin:6px 0">
   Terms <span style="color:#111; font-weight:600"> <%= termDays %> Days</span>

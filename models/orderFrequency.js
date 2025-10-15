@@ -1,8 +1,8 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
   const orderFrequency = sequelize.define(
-    'orderFrequency',
+    "orderFrequency",
     {
       status: {
         type: DataTypes.BOOLEAN,
@@ -24,13 +24,13 @@ module.exports = (sequelize) => {
 
       frequency: {
         type: DataTypes.ENUM(
-          'just-onces',
-          'weekly',
-          'every-two-weeks',
-          'every-four-weeks',
+          "just-onces",
+          "weekly",
+          "every-two-weeks",
+          "every-four-weeks"
         ),
         allowNull: true,
-        defaultValue: 'just-onces',
+        defaultValue: "just-onces",
       },
     },
     {
@@ -40,11 +40,11 @@ module.exports = (sequelize) => {
       timestamps: true,
       indexes: [
         {
-          fields: ['frequency'],
-          name: 'frequency_index',
+          fields: ["frequency"],
+          name: "frequency_index",
         },
       ],
-    },
+    }
   );
 
   // Associations models

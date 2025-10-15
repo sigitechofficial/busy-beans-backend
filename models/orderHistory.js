@@ -1,8 +1,8 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
   const orderHistory = sequelize.define(
-    'orderHistory',
+    "orderHistory",
     {
       orderStatus: {
         type: DataTypes.STRING,
@@ -19,18 +19,18 @@ module.exports = (sequelize) => {
       },
     },
     {
-      tableName: 'orderHistories',
+      tableName: "orderHistories",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['orderStatus'],
-          name: 'orderHistories_index',
+          fields: ["orderStatus"],
+          name: "orderHistories_index",
         },
       ],
-    },
+    }
   );
 
   return orderHistory;
