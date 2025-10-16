@@ -1,19 +1,19 @@
 const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env;
-require('dotenv').config();
+require("dotenv").config();
 
-const Stripe = require('stripe');
+const Stripe = require("stripe");
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2022-11-15',
+  apiVersion: "2022-11-15",
   // beta: ["financial_connections_sessions_beta"] // ✅ Add this line
 });
 
-const { billingAddress } = require('../models');
+const { billingAddress } = require("../models");
 
-const AppError = require('../utils/appError');
+const AppError = require("../utils/appError");
 
 function estimateStripeFeeFromDollars(amountInDollars) {
   const parsed = parseFloat(amountInDollars);
-  if (isNaN(parsed)) throw new Error('Invalid dollar amount');
+  if (isNaN(parsed)) throw new Error("Invalid dollar amount");
 
   const fee = parsed * 0.029 + 0.3; // 2.9% + $0.30
   return fee; // Return in dollars with 2 decimals
@@ -34,10 +34,10 @@ async function addCustomer({ name, email }) {
       name,
       email,
       address: {
-        country: 'US', // 👈 Sets default country
+        country: "US", // 👈 Sets default country
       },
     });
-    console.log('ðŸš€ ~ addCustomer ~ customer:', customer.id);
+    console.log("ðŸš€ ~ addCustomer ~ customer:", customer.id);
     return customer.id;
   } catch (error) {
     console.error(error);
@@ -49,12 +49,12 @@ async function financialConnectionsSession({ customerId }) {
   try {
     const session = await stripe.setupIntents.create({
       customer: customerId,
-      payment_method_types: ['us_bank_account'],
-      usage: 'off_session',
+      payment_method_types: ["us_bank_account"],
+      usage: "off_session",
       payment_method_options: {
         us_bank_account: {
           financial_connections: {
-            permissions: ['payment_method', 'balances'],
+            permissions: ["payment_method", "balances"],
           },
         },
       },
@@ -73,7 +73,7 @@ async function attachBankAccountPaymentMethod({ paymentMethodId, customerId }) {
   try {
     if (!paymentMethodId) {
       throw new Error(
-        'No payment method found on SetupIntent. Did the user finish connecting the bank?',
+        "No payment method found on SetupIntent. Did the user finish connecting the bank?"
       );
     }
 
@@ -94,7 +94,7 @@ async function attachBankAccountPaymentMethod({ paymentMethodId, customerId }) {
       paymentMethodId,
     };
   } catch (error) {
-    console.error('❌ attachBankAccountPaymentMethod error:', error);
+    console.error("❌ attachBankAccountPaymentMethod error:", error);
     throw new Error(`Bank account linking failed: ${error.message}`);
   }
 }
@@ -126,11 +126,11 @@ async function createPaymentIntent({
         hasLocalPatner,
         paymentMethodId,
         stripeCustomer,
-      },
+      }
     );
     const input = {
       amount: convertToCents(adminReceivableAmount),
-      currency: 'usd',
+      currency: "usd",
       automatic_payment_methods: {
         enabled: true, // enables card, bank, Apple Pay, etc.
       },
@@ -163,15 +163,15 @@ async function createPaymentIntent({
       // input.statement_descriptor = 'BUSYBEANCOFFEE';
       input.description = `Payment captured for invoice ${metadata.invoiceNumber} using card on file.`;
       input.off_session = true; // no customer interaction
-      input.capture_method = 'automatic';
+      input.capture_method = "automatic";
       input.metadata = {
-        platform: 'Busy Beans Coffee inc.',
-        type: 'saved-card',
+        platform: "Busy Beans Coffee inc.",
+        type: "saved-card",
         ...metadata,
       };
     }
 
-    console.log('🚀 ~ createPaymentIntent ~ input:', input);
+    console.log("🚀 ~ createPaymentIntent ~ input:", input);
     const paymentIntent = await stripe.paymentIntents.create(input);
     // console.error("🚀🚀🚀🚀🚀 ~ createPaymentIntent",paymentIntent);
 
@@ -184,10 +184,10 @@ async function createPaymentIntent({
           localPatnerCommission: localPartnerAmount,
           adminReceivableAmount: adminAmount,
           adminReceivableStatus: true,
-          paymentStatus: 'done',
+          paymentStatus: "done",
           invoicePaidDate: new Date(),
           pulloutDate: Date.now(),
-          paymentMethod: 'card',
+          paymentMethod: "card",
           paymentMethodId: paymentMethodId,
           paymentIntentId: paymentIntent?.id,
         },
@@ -199,35 +199,35 @@ async function createPaymentIntent({
       paymentIntentId: paymentIntent.id,
     };
   } catch (error) {
-    console.error('🚀🚀🚀🚀🚀 ~ createPaymentIntent', error);
+    console.error("🚀🚀🚀🚀🚀 ~ createPaymentIntent", error);
 
     if (paymentMethodId) {
       // If Stripe requires authentication (3DS)
       if (
-        error.code === 'authentication_required' ||
+        error.code === "authentication_required" ||
         (error.payment_intent &&
-          error.payment_intent.status === 'requires_action')
+          error.payment_intent.status === "requires_action")
       ) {
         return {
           status: false,
           message:
-            'Authentication required for this payment method. Please complete 3D Secure authentication or use another card.',
+            "Authentication required for this payment method. Please complete 3D Secure authentication or use another card.",
         };
       }
 
       // 🚫 Destination account missing transfers capability
-      if (error?.code === 'insufficient_capabilities_for_transfer') {
+      if (error?.code === "insufficient_capabilities_for_transfer") {
         return {
           status: false,
           message:
-            'The local partner’s Stripe account is not fully enabled to receive transfers. Please ask the partner to complete their Stripe onboarding and enable the transfers capability.',
+            "The local partner’s Stripe account is not fully enabled to receive transfers. Please ask the partner to complete their Stripe onboarding and enable the transfers capability.",
         };
       }
 
       // Otherwise return the raw error message
       return {
         status: false,
-        message: error.message || 'Payment failed',
+        message: error.message || "Payment failed",
       };
     }
 
@@ -236,10 +236,10 @@ async function createPaymentIntent({
   }
 }
 
-async function createConnectAccount({ email, country = 'US', returnUrl }) {
+async function createConnectAccount({ email, country = "US", returnUrl }) {
   try {
     const account = await stripe.accounts.create({
-      type: 'express', // You can use 'express', 'standard', or 'custom' depending on your needs
+      type: "express", // You can use 'express', 'standard', or 'custom' depending on your needs
       country: country, // The country code for the account
       email, // The email address of the account holder
       capabilities: {
@@ -251,9 +251,9 @@ async function createConnectAccount({ email, country = 'US', returnUrl }) {
 
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: 'https://admin.busybeancoffee.com/sign-in',
-      return_url: returnUrl || 'https://google.com',
-      type: 'account_onboarding',
+      refresh_url: "https://admin.busybeancoffee.com/sign-in",
+      return_url: returnUrl || "https://google.com",
+      type: "account_onboarding",
     });
 
     return { accountLink, accountId: account.id };
@@ -267,18 +267,18 @@ async function createStandardConnectAccount({ email, returnUrl }) {
   try {
     // Step 1: Create an account (optional – most often not needed for Standard)
     const account = await stripe.accounts.create({
-      type: 'standard',
+      type: "standard",
       email,
     });
 
     // Step 2: Create an OAuth link
     const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: 'ca_SQfrJvPViMRyHtkd9guC3v7lEWYDzQdq', // From Stripe dashboard (Connect > Settings)
-      scope: 'read_write',
+      response_type: "code",
+      client_id: "ca_SQfrJvPViMRyHtkd9guC3v7lEWYDzQdq", // From Stripe dashboard (Connect > Settings)
+      scope: "read_write",
       redirect_uri:
-        returnUrl || 'https://yourapp.com/stripe/onboarding-complete',
-      'stripe_user[email]': email,
+        returnUrl || "https://yourapp.com/stripe/onboarding-complete",
+      "stripe_user[email]": email,
     });
 
     const accountLink = `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
@@ -291,11 +291,11 @@ async function createStandardConnectAccount({ email, returnUrl }) {
 }
 async function createCheckoutSession(line_items, accountId, applicationFee) {
   const session = await stripe.checkout.sessions.create({
-    payment_method_types: ['card'],
+    payment_method_types: ["card"],
     line_items: line_items,
-    mode: 'payment',
-    success_url: 'https://example.com/success',
-    cancel_url: 'https://example.com/cancel',
+    mode: "payment",
+    success_url: "https://example.com/success",
+    cancel_url: "https://example.com/cancel",
     payment_intent_data: {
       application_fee_amount: applicationFee, // Fee amount in cents
       transfer_data: {
@@ -314,9 +314,9 @@ async function createCheckoutSession(line_items, accountId, applicationFee) {
 async function createStripeAccountLink({ accountId, returnUrl }) {
   const accountLink = await stripe.accountLinks.create({
     account: accountId,
-    refresh_url: 'https://example.com/reauth',
-    return_url: returnUrl || 'https://google.com',
-    type: 'account_onboarding',
+    refresh_url: "https://example.com/reauth",
+    return_url: returnUrl || "https://google.com",
+    type: "account_onboarding",
   });
   return accountLink.url;
 }
@@ -543,8 +543,8 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //   }
 // }
 
-async function createInvoiceWithItems({ order, currency = 'usd' }) {
-  console.log('🚀 ~ createInvoiceWithItems ~ order:', order.totalBill);
+async function createInvoiceWithItems({ order, currency = "usd" }) {
+  console.log("🚀 ~ createInvoiceWithItems ~ order:", order.totalBill);
   try {
     const { items, shippingCharges, vat } = order;
     let totalAmount = 0;
@@ -569,7 +569,7 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       line_items.push({
         price_data: {
           currency,
-          product_data: { name: 'Shipping Charges' },
+          product_data: { name: "Shipping Charges" },
           unit_amount: convertToCents(shippingCharges),
         },
         quantity: 1,
@@ -581,7 +581,7 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       line_items.push({
         price_data: {
           currency,
-          product_data: { name: 'VAT' },
+          product_data: { name: "VAT" },
           unit_amount: convertToCents(vat),
         },
         quantity: 1,
@@ -596,23 +596,23 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
 
     // Step 2: Base Checkout Session
     const input = {
-      payment_method_types: ['card'],
-      mode: 'payment',
+      payment_method_types: ["card"],
+      mode: "payment",
       customer: order?.stripeCustomerId,
       line_items,
-      success_url: 'https://www.busybeancoffee.com/product?status=success',
+      success_url: "https://www.busybeancoffee.com/product?status=success",
       cancel_url: `https://www.busybeancoffee.com/product?status=cancel`,
       saved_payment_method_options: {
-        payment_method_save: 'enabled',
+        payment_method_save: "enabled",
       },
       // Always include metadata & description
       payment_intent_data: {
         description: `Payment for invoice ${order?.invoiceNumber}.`,
         metadata: {
           orderId: order?.id,
-          invoiceNumber: order?.invoiceNumber || '',
-          partnerId: order?.connectAccountId || '',
-          salesRepId: order?.salesRepId || '',
+          invoiceNumber: order?.invoiceNumber || "",
+          partnerId: order?.connectAccountId || "",
+          salesRepId: order?.salesRepId || "",
           type: `checkout-session`,
           platform: `Busy Bean Coffee Inc.`,
         },
@@ -625,7 +625,7 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       input.payment_intent_data.transfer_data = {
         destination: order.connectAccountId,
       };
-      input.payment_intent_data.setup_future_usage = 'off_session';
+      input.payment_intent_data.setup_future_usage = "off_session";
     }
 
     const session = await stripe.checkout.sessions.create(input);
@@ -634,10 +634,10 @@ async function createInvoiceWithItems({ order, currency = 'usd' }) {
       invoiceId: session.id,
       hostedInvoiceUrl: session.url,
       proportionalStripeFee: stripeFee,
-      invoicePdf: '',
+      invoicePdf: "",
     };
   } catch (error) {
-    console.error('❌ Checkout Session creation failed:', error);
+    console.error("❌ Checkout Session creation failed:", error);
     throw new Error(error.message);
   }
 }
@@ -654,17 +654,17 @@ async function transferToLocalPatners({
     const invoice = invoiceId
       ? await stripe.invoices.retrieve(invoiceId)
       : null;
-    console.log('🚀 ~ transferToLocalPatners ~ invoice:', invoice);
+    console.log("🚀 ~ transferToLocalPatners ~ invoice:", invoice);
     const piId = invoice ? invoice?.payment_intent : paymentIntentId;
 
-    if (!piId) throw new Error('No valid PaymentIntent ID found.');
+    if (!piId) throw new Error("No valid PaymentIntent ID found.");
 
     // Step 2: Retrieve PaymentIntent with expanded charges
     const paymentIntent = await stripe.paymentIntents.retrieve(piId, {
-      expand: ['charges'],
+      expand: ["charges"],
     });
 
-    console.log('🚀 ~ transferToLocalPatners ~ paymentIntent:', paymentIntent);
+    console.log("🚀 ~ transferToLocalPatners ~ paymentIntent:", paymentIntent);
 
     // Step 3: Retrieve the charge (either from expanded charges or using latest_charge fallback)
     let charge;
@@ -673,46 +673,46 @@ async function transferToLocalPatners({
     } else if (paymentIntent?.latest_charge) {
       charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
     } else {
-      throw new Error('No charge found in PaymentIntent');
+      throw new Error("No charge found in PaymentIntent");
     }
 
     // Step 4: Retrieve the balance transaction to get Stripe fee
     const balanceTransaction = await stripe.balanceTransactions.retrieve(
-      charge.balance_transaction,
+      charge.balance_transaction
     );
 
     // Step 5: Stripe values are in cents
     const totalAmountCents = balanceTransaction.amount;
     console.log(
-      '🚀 ~ transferToLocalPatners ~ totalAmountCents:',
-      totalAmountCents,
+      "🚀 ~ transferToLocalPatners ~ totalAmountCents:",
+      totalAmountCents
     );
     const stripeFeeCents = balanceTransaction.fee;
     console.log(
-      '🚀 ~ transferToLocalPatners ~ stripeFeeCents:',
-      stripeFeeCents,
+      "🚀 ~ transferToLocalPatners ~ stripeFeeCents:",
+      stripeFeeCents
     );
 
     // Step 6: Convert commission amount to cents
     const commissionCents = convertToCents(amount);
-    console.log('🚀 ~ transferToLocalPatners ~ amount:', amount);
+    console.log("🚀 ~ transferToLocalPatners ~ amount:", amount);
     console.log(
-      '🚀 ~ transferToLocalPatners ~ commissionCents:',
-      commissionCents,
+      "🚀 ~ transferToLocalPatners ~ commissionCents:",
+      commissionCents
     );
 
     // Step 7: Calculate proportional Stripe fee
     const proportionalStripeFee = stripeFeeCents;
     console.log(
-      '🚀 ~ transferToLocalPatners ~ proportionalStripeFee:',
-      proportionalStripeFee,
+      "🚀 ~ transferToLocalPatners ~ proportionalStripeFee:",
+      proportionalStripeFee
     );
 
     // Step 8: Calculate net partner amount
     const netPartnerAmount = commissionCents - proportionalStripeFee;
     console.log(
-      '🚀 ~ transferToLocalPatners ~ netPartnerAmount:',
-      netPartnerAmount,
+      "🚀 ~ transferToLocalPatners ~ netPartnerAmount:",
+      netPartnerAmount
     );
 
     // Step 9: Create description for audit/debug
@@ -721,7 +721,7 @@ async function transferToLocalPatners({
     // Step 10: Create the transfer
     const transfer = await stripe.transfers.create({
       amount: netPartnerAmount,
-      currency: 'usd',
+      currency: "usd",
       destination: localPartnerAccountId,
       transfer_group: invoice?.id || undefined,
       description,
@@ -733,13 +733,13 @@ async function transferToLocalPatners({
       proportionalStripeFee: proportionalStripeFee / 100,
     };
   } catch (error) {
-    console.error('Transfer to local partner failed:', error);
+    console.error("Transfer to local partner failed:", error);
     throw new AppError(`${error?.message}`, 200);
   }
 }
 
 async function getInvoiceDetails({ invoiceId }) {
-  console.log('🚀 ~ getInvoiceDetails ~ getInvoiceDetails:');
+  console.log("🚀 ~ getInvoiceDetails ~ getInvoiceDetails:");
   try {
     const invoice = await stripe.invoices.retrieve(invoiceId);
     return {
@@ -750,7 +750,7 @@ async function getInvoiceDetails({ invoiceId }) {
       total: invoice.amount_due,
     };
   } catch (error) {
-    console.error('Invoice getInvoiceDetails failed:', error);
+    console.error("Invoice getInvoiceDetails failed:", error);
     throw new AppError(`${error?.message}`, 200);
   }
 }
@@ -761,16 +761,16 @@ async function retrieveConnectAccount({ accountId }) {
 
     // Check if the account can handle payouts
     if (!account.payouts_enabled) {
-      throw new AppError('Payouts are not enabled for this account.', 400);
+      throw new AppError("Payouts are not enabled for this account.", 400);
     }
     // Check if the account can handle charges
     if (!account.charges_enabled) {
-      throw new AppError('Charges are not enabled for this account.', 400);
+      throw new AppError("Charges are not enabled for this account.", 400);
     }
 
     // Check if the account details have been fully submitted
     if (!account.details_submitted) {
-      throw new AppError('Account details are not fully submitted.', 400);
+      throw new AppError("Account details are not fully submitted.", 400);
     }
 
     // Check if there are any requirements pending (errors or verification)
@@ -779,8 +779,8 @@ async function retrieveConnectAccount({ accountId }) {
       account?.requirements?.pending_verification?.length > 0
     ) {
       throw new AppError(
-        'There are pending verification or requirements errors.',
-        400,
+        "There are pending verification or requirements errors.",
+        400
       );
     }
 
@@ -798,7 +798,7 @@ async function createStripeLoginLink({ accountId }) {
     const loginLink = await stripe.accounts.createLoginLink(accountId);
     return loginLink.url;
   } catch (error) {
-    console.error('++++++++++++++++Error creating login link:', error);
+    console.error("++++++++++++++++Error creating login link:", error);
     return null;
   }
 }
@@ -814,32 +814,32 @@ async function pullAmountPaymentIntentFromBankAccount({
   try {
     const cents = convertToCents(amount);
     console.log(
-      '🚀 ~ pullAmountPaymentIntentFromBankAccount ~ amount:',
-      amount,
+      "🚀 ~ pullAmountPaymentIntentFromBankAccount ~ amount:",
+      amount
     );
 
     const metadata = {
-      platform: 'Busy Beans Coffee Inc.',
-      localPatner: partner?.srName || '',
-      territoryName: partner?.territoryName || '',
-      message: 'Payment for these orders has been pulled out',
-      type: 'bank-pullout',
-      orders: orders.map((id) => `#${id}`).join(', '),
-      invoices: invoiceNumbers.map((invoice) => `${invoice}`).join(', '),
+      platform: "Busy Beans Coffee Inc.",
+      localPatner: partner?.srName || "",
+      territoryName: partner?.territoryName || "",
+      message: "Payment for these orders has been pulled out",
+      type: "bank-pullout",
+      orders: orders.map((id) => `#${id}`).join(", "),
+      invoices: invoiceNumbers.map((invoice) => `${invoice}`).join(", "),
     };
     console.log(
-      '🚀 ~ pullAmountPaymentIntentFromBankAccount ~ metadata:',
-      metadata,
+      "🚀 ~ pullAmountPaymentIntentFromBankAccount ~ metadata:",
+      metadata
     );
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: cents,
-      currency: 'usd',
+      currency: "usd",
       customer: customerId,
       payment_method: savedPaymentMethodId,
-      statement_descriptor: 'BUSYBEANCOFFEE',
+      statement_descriptor: "BUSYBEANCOFFEE",
       description: `Payment pulled for invoices ${metadata.invoices}`,
-      payment_method_types: ['us_bank_account'],
+      payment_method_types: ["us_bank_account"],
       off_session: true,
       confirm: true,
       metadata,
@@ -851,7 +851,7 @@ async function pullAmountPaymentIntentFromBankAccount({
       status: paymentIntent.status, // likely "processing"
     };
   } catch (error) {
-    console.error('❌ ACH pull failed:', error);
+    console.error("❌ ACH pull failed:", error);
     throw new AppError(`${error.message}`, 200);
   }
 }
@@ -859,26 +859,26 @@ async function pullAmountPaymentIntentFromBankAccount({
 async function checkCheckoutSessionStatus(sessionId) {
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['payment_intent'],
+      expand: ["payment_intent"],
     });
-    console.log('🚀 ~ checkCheckoutSessionStatus ~ session:', session);
+    console.log("🚀 ~ checkCheckoutSessionStatus ~ session:", session);
 
     const expiresAt = session.expires_at * 1000; // Convert to milliseconds
     const now = Date.now();
     const paymentStatus = session.payment_status;
 
-    if (paymentStatus === 'paid') {
-      return 'paid';
+    if (paymentStatus === "paid") {
+      return "paid";
     }
 
     if (expiresAt < now) {
-      return 'expired';
+      return "expired";
     }
 
-    return 'open'; // Still within valid time, not paid yet
+    return "open"; // Still within valid time, not paid yet
   } catch (err) {
-    console.error('❌ Stripe error:', err.message);
-    return 'unknown';
+    console.error("❌ Stripe error:", err.message);
+    return "unknown";
   }
 }
 
@@ -887,7 +887,7 @@ async function blockCheckoutSession(sessionId) {
     await stripe.checkout.sessions.expire(sessionId);
     return true;
   } catch (err) {
-    console.error('❌ Stripe error:', err.message);
+    console.error("❌ Stripe error:", err.message);
   }
 }
 
@@ -895,7 +895,7 @@ async function cards(customerId) {
   try {
     const paymentMethods = await stripe.customers.listPaymentMethods(
       customerId,
-      { type: 'card' },
+      { type: "card" }
     );
     return paymentMethods;
   } catch (error) {

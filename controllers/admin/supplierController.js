@@ -1,9 +1,9 @@
-const { supplier, order } = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const factory = require('../handlerFactory');
-const { Op, literal, where } = require('sequelize');
-const REDIS = require('../../utils/redisHandling');
+const { supplier, order } = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const factory = require("../handlerFactory");
+const { Op, literal, where } = require("sequelize");
+const REDIS = require("../../utils/redisHandling");
 
 exports.getAllSuppliers = factory.getAll(supplier);
 exports.getSupplier = factory.getOne(supplier);
@@ -18,12 +18,12 @@ exports.deleteSupplier = catchAsync(async (req, res, next) => {
         [Op.in]: [2, 3, 4],
       },
     },
-    attributes: ['id'],
+    attributes: ["id"],
   });
 
   if (exist) {
     return next(
-      new AppError('Pending work prevents supplier from being deleted.', 400),
+      new AppError("Pending work prevents supplier from being deleted.", 400)
     );
   }
 
@@ -31,11 +31,11 @@ exports.deleteSupplier = catchAsync(async (req, res, next) => {
     { deleted: true },
     {
       where: { id: req.params.id },
-    },
+    }
   );
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {},
   });
 });

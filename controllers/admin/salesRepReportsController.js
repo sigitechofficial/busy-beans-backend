@@ -5,18 +5,18 @@ const {
   user,
   item,
   product,
-} = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const factory = require('../handlerFactory');
-const { Op, literal, where, fn, col } = require('sequelize');
-const APIFeatures = require('../../utils/apiFeatures');
+} = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const factory = require("../handlerFactory");
+const { Op, literal, where, fn, col } = require("sequelize");
+const APIFeatures = require("../../utils/apiFeatures");
 
 exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
   let condition = {};
   if (req.params.srId) condition.salesRepId = req.params.srId;
-  condition.createdBy = 'sales-rep';
+  condition.createdBy = "sales-rep";
   condition.statusId = {
     [Op.ne]: 6,
   };
@@ -34,47 +34,47 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
   queryOptions.where = { ...(queryOptions.where || {}), ...condition };
 
   queryOptions.attributes = [
-    'id',
-    'vat',
-    'totalBill',
+    "id",
+    "vat",
+    "totalBill",
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
       ),
-      'customerName',
+      "customerName",
     ],
     [
       literal(
-        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
       ),
-      'orderCurrentStatus',
+      "orderCurrentStatus",
     ],
     [
       literal(
-        `(SELECT createdAt FROM orderHistories WHERE orderHistories.orderId = order.id AND orderHistories.statusId = order.statusId LIMIT 1)`,
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.orderId = order.id AND orderHistories.statusId = order.statusId LIMIT 1)`
       ),
-      'assignedAt',
+      "assignedAt",
     ],
     [
       literal(`COALESCE(
          (SELECT SUM(qty)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-      'totalQuantity',
+      "totalQuantity",
     ],
     [
       literal(`COALESCE(
          (SELECT SUM(price)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-      'productsSellingPrice',
+      "productsSellingPrice",
     ],
     [
       literal(`COALESCE(
          (SELECT SUM(wholesalePrice)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-      'productsWholesalePrice',
+      "productsWholesalePrice",
     ],
     [
       literal(`(
@@ -83,19 +83,19 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
       JOIN products p ON p.id = i.productId
       WHERE i.orderId = order.id
     )`),
-      'productNames',
+      "productNames",
     ],
-    ['on', 'orderDate'],
-    'note',
+    ["on", "orderDate"],
+    "note",
   ];
 
   queryOptions.group = [
-    literal('YEAR(orderDate)'),
-    literal('MONTH(orderDate)'),
+    literal("YEAR(orderDate)"),
+    literal("MONTH(orderDate)"),
   ];
   queryOptions.order = [
-    [literal('YEAR(orderDate)'), 'ASC'],
-    [literal('MONTH(orderDate)'), 'ASC'],
+    [literal("YEAR(orderDate)"), "ASC"],
+    [literal("MONTH(orderDate)"), "ASC"],
   ];
 
   // Execute the query
@@ -103,7 +103,7 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
 
   // Return response
   res.status(200).json({
-    status: 'success',
+    status: "success",
     results: doc.length,
     data: {
       data: doc.reverse(),
@@ -112,22 +112,22 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
 });
 
 exports.commissionSummaryReport = catchAsync(async (req, res, next) => {
-  const year = parseInt(req.query?.year) || '2025';
+  const year = parseInt(req.query?.year) || "2025";
   const srid = req.params.srId;
-  console.log('🚀 ~ exports.commissionSummaryReport=catchAsync ~ srid:', srid);
+  console.log("🚀 ~ exports.commissionSummaryReport=catchAsync ~ srid:", srid);
 
   const report = await order.findAll({
     attributes: [
-      [fn('MONTH', col('order.on')), 'month'],
-      [fn('YEAR', col('order.on')), 'year'],
-      [fn('COUNT', fn('DISTINCT', col('order.id'))), 'orderCount'],
+      [fn("MONTH", col("order.on")), "month"],
+      [fn("YEAR", col("order.on")), "year"],
+      [fn("COUNT", fn("DISTINCT", col("order.id"))), "orderCount"],
       [
         literal(`SUM(
         CASE 
           WHEN items.wholesalePrice > 0 THEN items.wholesalePrice
           ELSE 0
         END)`),
-        'wholesaleTotal',
+        "wholesaleTotal",
       ],
       [
         literal(`SUM(
@@ -135,7 +135,7 @@ exports.commissionSummaryReport = catchAsync(async (req, res, next) => {
           WHEN items.wholesalePrice > 0 THEN items.wholesalePrice
           ELSE items.price
         END)`),
-        'totalSales',
+        "totalSales",
       ],
       [
         literal(`SUM(
@@ -143,7 +143,7 @@ exports.commissionSummaryReport = catchAsync(async (req, res, next) => {
           WHEN items.wholesalePrice > 0 THEN (items.price - items.wholesalePrice)
           ELSE 0
         END)`),
-        'commission',
+        "commission",
       ],
       [
         literal(`ROUND(
@@ -153,7 +153,7 @@ exports.commissionSummaryReport = catchAsync(async (req, res, next) => {
             ELSE 0
           END
         ) / COUNT(DISTINCT order.id), 2)`),
-        'avgCommissionPerOrder',
+        "avgCommissionPerOrder",
       ],
     ],
     include: [
@@ -169,13 +169,13 @@ exports.commissionSummaryReport = catchAsync(async (req, res, next) => {
         [Op.lt]: new Date(`${year + 1}-01-01`),
       },
     },
-    group: [fn('MONTH', col('order.createdAt'))],
-    order: [[fn('MONTH', col('order.createdAt')), 'ASC']],
+    group: [fn("MONTH", col("order.createdAt"))],
+    order: [[fn("MONTH", col("order.createdAt")), "ASC"]],
     raw: true,
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: report,
   });
 });
@@ -193,37 +193,37 @@ exports.customerReport = catchAsync(async (req, res, next) => {
         )
       `),
     attributes: [
-      'id',
-      'name',
+      "id",
+      "name",
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(totalBill)
                 FROM orders WHERE orders.userID = user.id
               )
             `),
-          1,
+          1
         ),
-        'totatSpent',
+        "totatSpent",
       ],
       [
         literal(`(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id)`),
-        'numberOfOrders',
+        "numberOfOrders",
       ],
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(totalBill) / NULLIF(COUNT(*), 0)
                 FROM orders WHERE orders.userID = user.id
               )
             `),
-          1,
+          1
         ),
-        'avgSpent',
+        "avgSpent",
       ],
       [
         literal(`
@@ -235,19 +235,19 @@ exports.customerReport = catchAsync(async (req, res, next) => {
                 LIMIT 1
               )
             `),
-        'lastOrderDate',
+        "lastOrderDate",
       ],
       [
         literal(
-          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
+          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`
         ),
-        'outstandingBalance',
+        "outstandingBalance",
       ],
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });
@@ -256,12 +256,12 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findOne({
     where: { id: req.params?.srId },
     attributes: [
-      'id',
-      'srName',
-      'creditLimit',
+      "id",
+      "srName",
+      "creditLimit",
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(items.wholesalePrice)
@@ -271,15 +271,15 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-          1,
+          1
         ),
-        'creditUsed',
+        "creditUsed",
       ],
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });

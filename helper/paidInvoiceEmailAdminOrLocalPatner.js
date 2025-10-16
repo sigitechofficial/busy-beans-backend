@@ -1,14 +1,14 @@
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const fs = require("fs");
+const path = require("path");
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
-const { transporter } = require('./transpoter');
-const Footer = require('./footer');
-const { header } = require('./header');
-const { emailDateFormate } = require('../utils/emailDateFormate');
-const GenerateInvoicePdf = require('../utils/generateInvoicePdf');
+const { attachments } = require("./attactments");
+const { transporter } = require("./transpoter");
+const Footer = require("./footer");
+const { header } = require("./header");
+const { emailDateFormate } = require("../utils/emailDateFormate");
+const GenerateInvoicePdf = require("../utils/generateInvoicePdf");
 
 // async function downloadPDF(pdfUrl, outputPath) {
 //   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
@@ -20,9 +20,9 @@ module.exports = async function ({ email, data, invoice }) {
   let footer = await Footer();
 
   const on = emailDateFormate(data?.on || data?.createdAt);
-  console.log('__dirname:', __dirname);
+  console.log("__dirname:", __dirname);
 
-  const folderPath = path.join(__dirname, '..', 'public', 'invoicePDFs');
+  const folderPath = path.join(__dirname, "..", "public", "invoicePDFs");
   // Create the folder if it doesn't exist
   if (!fs.existsSync(folderPath)) {
     fs.mkdirSync(folderPath, { recursive: true }); // Ensures parent folders are created if missing
@@ -47,7 +47,7 @@ module.exports = async function ({ email, data, invoice }) {
     {
       filename: `invoice-00${data.id}.pdf`,
       path: pdfPath,
-      contentType: 'application/pdf',
+      contentType: "application/pdf",
     },
   ];
   let items = [];
@@ -65,12 +65,12 @@ module.exports = async function ({ email, data, invoice }) {
     return temp;
   });
 
-  items = items.join('');
+  items = items.join("");
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
-      subject: `Busy Bean Coffee Invoice #${data?.invoiceNumber || ''} Payment Completed`, // Subject line
+      to: ["sigidevelopers@gmail.com", email], //`${email}` list of receivers
+      subject: `Busy Bean Coffee Invoice #${data?.invoiceNumber || ""} Payment Completed`, // Subject line
       replyTo: data.email,
       attachments: emailAttachments,
       html: `<!DOCTYPE html>
@@ -153,15 +153,15 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
           <span style="font-weight: 600">Po Number:</span>
-          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
+          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ""}</span><br />
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
           <span style="font-weight: 600">Company Name:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ""}</span><br />
            <span style="font-weight: 600">Shipping Company:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ""}</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ""}</span><br />
         </td>
       </tr>
        
@@ -214,6 +214,6 @@ module.exports = async function ({ email, data, invoice }) {
       } else {
         console.log(info);
       }
-    },
+    }
   );
 };

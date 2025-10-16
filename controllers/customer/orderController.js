@@ -25,7 +25,9 @@ const Stripe = require("../stripe");
 const { Op, literal } = require("sequelize");
 const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
 // discount;
-
+const {
+  paidInvoiceAdminOrLocalPatnerEventAndCustomer,
+} = require("../events/paymentInvoicePaidEvent");
 const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
@@ -36,6 +38,10 @@ exports.notificationTesting = async (req, res, next) => {
     "local-partner"
   );
 
+  paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+    orderId: 15,
+    orderType: true ? "local-partner" : "customer",
+  });
   //   const row = await qboToken.findOne();
   return res
     .status(200)

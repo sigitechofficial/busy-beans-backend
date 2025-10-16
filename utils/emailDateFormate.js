@@ -1,8 +1,8 @@
 exports.emailDateFormate = (dateString, timeString) => {
-  console.log('ðŸš€ ~ dateString, timeString:', dateString, timeString);
+  console.log("ðŸš€ ~ dateString, timeString:", dateString, timeString);
   // Convert the date and time strings to Date objects
   const [customYear, customMonth, customDay] = dateString
-    .split('-')
+    .split("-")
     .map(Number);
 
   // Create a new date object using the components
@@ -11,27 +11,27 @@ exports.emailDateFormate = (dateString, timeString) => {
 
   // Get the day of the week and month names
   const daysOfWeek = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
   ];
   const months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ];
 
   // Get the day of the week, month, and year
@@ -45,7 +45,7 @@ exports.emailDateFormate = (dateString, timeString) => {
   const minute = time.getMinutes();
 
   // Determine AM or PM
-  const ampm = time.getHours() < 12 ? 'am' : 'pm';
+  const ampm = time.getHours() < 12 ? "am" : "pm";
 
   // Construct the formatted string
   const formattedString = `${month} ${dayOfMonth}, ${year}`;

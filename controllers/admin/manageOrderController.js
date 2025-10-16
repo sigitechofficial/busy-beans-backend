@@ -42,6 +42,7 @@ const {
 const {
   processTransferToLocalPartner,
 } = require("../../utils/localPatnerCommissionTranfer");
+const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmailAdminOrLocalPatner");
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const details = await order.findOne({
@@ -766,9 +767,45 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
   const Model = partnerOrderId ? partnerOrder : order;
   const isPartnerOrder = partnerOrderId ? true : false;
-  const doc = await Model.findOne({
+
+  const qry = {
     where: { id: orderId || partnerOrderId },
-  });
+  };
+
+  if (isPartnerOrder) {
+    qry.raw = true;
+    qry.attributes = [
+      "id",
+      "totalBill",
+      "invoiceNumber",
+      "statusId",
+      [
+        literal(
+          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "stripeCustomerId",
+      ],
+      [
+        literal(
+          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "defaultBankAccount",
+      ],
+      [
+        literal(
+          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "srName",
+      ],
+      [
+        literal(
+          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "territoryName",
+      ],
+    ];
+  }
+  const doc = await Model.findOne(qry);
 
   if (!doc) {
     return next(new AppError("Order not found.", 404));
@@ -776,6 +813,28 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const statusId = Number(req.body?.orderData?.statusId);
   const userId = Number(doc?.userId || 0);
 
+  if (statusId == 5 && isPartnerOrder) {
+    //HERE we try to collect payment if order type is local Patrner
+    const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
+      amount: doc.totalBill || 0,
+      customerId: doc?.stripeCustomerId,
+      savedPaymentMethodId: doc?.defaultBankAccount,
+      orders: [doc?.id],
+      invoiceNumbers: [doc?.invoiceNumber],
+      partner: { srName: doc?.srName, territoryName: doc?.territoryName },
+    });
+
+    req.body.orderData.adminReceivableStatus = true;
+    req.body.orderData.pulloutDate = Date.now();
+    req.body.orderData.pulloutIntentId = pullouts?.paymentIntentId;
+    req.body.orderData.paymentIntentId = pullouts?.paymentIntentId;
+    req.body.orderData.paymentStatus = "done";
+
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      orderId: orderId || partnerOrderId,
+      orderType: isPartnerOrder ? "local-partner" : "customer",
+    });
+  }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
 
@@ -801,7 +860,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     if (req.body?.orderData?.statusId == 2) {
       supplierNewOrderEvent({
         orderId: orderId || partnerOrderId,
-        orderType: isPartnerOrder ? "partner-order" : "customer",
+        orderType: isPartnerOrder ? "local-partner" : "customer",
       });
     }
 
@@ -809,13 +868,14 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     // }
 
     if (req.body?.orderData?.statusId == 5) {
+      //HERE we try to collect payment if order type is local Patrner
       orderShippedEvent({
         orderId: orderId || partnerOrderId,
-        orderType: isPartnerOrder ? "partner-order" : "customer",
+        orderType: isPartnerOrder ? "local-partner" : "customer",
       });
       orderDispatchEvent({
         orderId: orderId || partnerOrderId,
-        orderType: isPartnerOrder ? "partner-order" : "customer",
+        orderType: isPartnerOrder ? "local-partner" : "customer",
       });
     }
 

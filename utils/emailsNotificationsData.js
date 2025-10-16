@@ -408,7 +408,7 @@ const localPartnerOrder = async ({ orderId }) => {
         [
           literal(`COALESCE(
               (SELECT SUM(qty)
-                FROM items
+                FROM partnerOrderitems
                 WHERE partnerOrderitems.partnerOrderId = partnerOrder.id ), 0)`),
           "totalQuantity",
         ],
