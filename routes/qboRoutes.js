@@ -7,6 +7,7 @@ r.get("/auth/login", ctrl.authLogin);
 // r.get('/auth/callback', ctrl.authCallback);
 // r.get('/status', ctrl.status);
 r.post("/customers/import", ctrl.importCustomers);
+r.post("/order-invoice/create/:orderId", ctrl.createInvoiceForOrder);
 // r.post('/disconnect', ctrl.disconnect);
 r.post("/ping", ctrl.ping);
 

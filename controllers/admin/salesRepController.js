@@ -90,14 +90,18 @@ exports.updateAddresses = catchAsync(async (req, res, next) => {
       where: { id: req.body?.addresses?.id },
     });
   }
-  if (req.body?.billingAddress) {
-    const userId = Number(req.params.id);
-    const [affected] = await billingAddress.update(req.body.billingAddress, {
-      where: { userId },
-    });
+  console.log("🚀 ~ req.body?.billingAddresses:", req.body?.billingAddresses);
+  console.log("🚀 ~ req:", req.body);
+  if (req.body?.billingAddresses) {
+    const salesRepId = Number(req.params.srId);
 
-    if (affected === 0) {
-      await billingAddress.create({ userId, ...req.body.billingAddress });
+    const affected = await billingAddress.update(req.body.billingAddresses, {
+      where: { salesRepId: salesRepId },
+    });
+    console.log("🚀 ~ affected:", affected);
+
+    if (affected == 0) {
+      await billingAddress.create({ salesRepId, ...req.body.billingAddresses });
     }
   }
 

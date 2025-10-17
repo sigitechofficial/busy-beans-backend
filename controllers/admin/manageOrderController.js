@@ -779,6 +779,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       "totalBill",
       "invoiceNumber",
       "statusId",
+      "paymentStatus",
       [
         literal(
           `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
@@ -813,7 +814,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const statusId = Number(req.body?.orderData?.statusId);
   const userId = Number(doc?.userId || 0);
 
-  if (statusId == 5 && isPartnerOrder) {
+  if (statusId == 5 && isPartnerOrder && doc?.paymentStatus != "done") {
     //HERE we try to collect payment if order type is local Patrner
     const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
       amount: doc.totalBill || 0,

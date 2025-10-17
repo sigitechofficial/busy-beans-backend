@@ -640,9 +640,20 @@ router.post(
 );
 
 router.get("/partner-order/orders-list", patnerOrderController.allPartnerOrder);
+
 router.get(
   "/partner-order/order-details/:id",
   patnerOrderController.partnerOrderDetails
+);
+
+router.patch(
+  "/partner-order/update-order/:orderId",
+  patnerOrderController.updatePartnerOrder
+);
+
+router.get(
+  "/local-partner/payment-methods/:id",
+  patnerOrderController.fetchSavedPaymentMethods
 );
 
 module.exports = router;

@@ -1,15 +1,21 @@
-const sentInvoiceEmail = require('../../helper/sentInvoiceEmail');
+const sentInvoiceEmail = require("../../helper/sentInvoiceEmail");
 const {
   dataForEmailAndNotifications,
-} = require('../../utils/emailsNotificationsData');
+} = require("../../utils/emailsNotificationsData");
 
-exports.sentPaymentInvoiceEvent = async ({ orderId }) => {
+exports.sentPaymentInvoiceEvent = async ({
+  orderId,
+  ordeType = "customer",
+}) => {
   try {
-    const { details, email } = await dataForEmailAndNotifications(orderId);
+    const { details, email } = await dataForEmailAndNotifications(
+      orderId,
+      ordeType
+    );
 
     console.log(
-      '🚀 ~ details?.emailToSendInvoices: before',
-      details?.emailToSendInvoices,
+      "🚀 ~ details?.emailToSendInvoices: before",
+      details?.emailToSendInvoices
     );
     let to = [];
     to.push(email);
@@ -27,11 +33,11 @@ exports.sentPaymentInvoiceEvent = async ({ orderId }) => {
     }
 
     to = [...new Set(to)];
-    console.log('🚀 ~ to:', JSON.stringify(to));
+    console.log("🚀 ~ to:", JSON.stringify(to));
     sentInvoiceEmail({ email: to, data: details });
-    console.log('🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀');
+    console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
     return true;
   } catch (error) {
-    console.log('🚀 ~ exports.sendQuotation = ~ error:', error);
+    console.log("🚀 ~ exports.sendQuotation = ~ error:", error);
   }
 };

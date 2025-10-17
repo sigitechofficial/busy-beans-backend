@@ -6,7 +6,8 @@
 // - POST /qbo/customers/import  -> same headers with token/realm; imports users without qboCustomerId
 
 const QBO = require("../quickBooks"); // adjust path if needed
-const { user, billingAddress, address } = require("../../models"); // adjust path if needed
+const { user, billingAddress, address, order, item } = require("../../models"); // adjust path if needed
+const { Op, literal, fn, col } = require("sequelize");
 
 function getTokenFromReq(req) {
   const accessToken =
@@ -264,3 +265,204 @@ exports.importCustomers = async (req, res) => {
     });
   }
 };
+
+// Create a QBO Invoice for a single order (no ItemIds; we ensure generic items internally)
+// ---- PASTE INTO your qbo route controller file ----
+// Requires: getTokenFromReq(req), QBO (require('./controllers/quickbooks')) already loaded
+
+exports.createInvoiceForOrder = async (req, res) => {
+  const started = Date.now();
+  try {
+    const { accessToken, realmId } = getTokenFromReq(req);
+    console.log(
+      "[ROUTE:/qbo/invoices/create] token=",
+      accessToken ? "yes" : "no",
+      "realmId=",
+      realmId
+    );
+
+    if (!accessToken || !realmId) {
+      return res.status(400).json({
+        status: "error",
+        message:
+          "Provide x-qbo-access and x-qbo-realmid OR ?accessToken=&realmId= OR body accessToken/realmId",
+      });
+    }
+
+    const doc = await order.findOne({
+      where: { id: req.params.orderId },
+      include: [
+        {
+          model: user,
+          attributes: ["id", "qboCustomerId"],
+        },
+        {
+          model: item,
+          attributes: [
+            "id",
+            [
+              literal(
+                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+              ),
+              "product",
+            ],
+            [
+              literal(
+                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+              ),
+              "singleUnitWeight",
+            ],
+            ["weight", "itemWeights"],
+            "qty",
+            "productName",
+            "price",
+            "discount",
+            "orderId",
+            "productId",
+            "wholesalePrice",
+            "type",
+          ],
+        },
+      ],
+      attributes: [
+        "id",
+        [
+          literal(
+            `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+          ),
+          "customerName",
+        ],
+        [
+          literal(
+            `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+          ),
+          "companyName",
+        ],
+        [
+          literal(
+            `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+          ),
+          "salesRepName",
+        ],
+        "totalBill",
+        "vat",
+        "shippingCharges",
+        "invoiceNumber",
+      ],
+    });
+    const orderData = JSON.parse(JSON.stringify(doc));
+
+    if (!orderData) {
+      return res.status(400).json({
+        status: "error",
+        message: "Body must include { order: {...} }",
+      });
+    }
+
+    // optional email via QBO
+    if (req.body?.sendEmail === true) orderData.sendEmail = true;
+
+    // create the invoice (no queries path)
+    const result = await QBO.createInvoiceFromOrderNoQuery(
+      accessToken,
+      realmId,
+      orderData
+    );
+
+    // optionally send email from QBO (separate endpoint) if requested
+    if (orderData.sendEmail === true && result?.id) {
+      const sendUrl = `${HOST}/v3/company/${realmId}/invoice/${result.id}/send?minorversion=${MINOR_VERSION}`;
+      await axios.post(sendUrl, null, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+        validateStatus: () => true,
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Invoice created",
+      tookMs: Date.now() - started,
+      qboInvoiceId: result?.id,
+      qbo: result?.raw,
+    });
+  } catch (e) {
+    const st = e?.httpStatus || e?.response?.status || 500;
+    console.error(
+      "[ROUTE:/qbo/invoices/create] ERROR",
+      st,
+      e?.detail || e?.response?.data || e?.message
+    );
+    return res.status(st).json({
+      status: "error",
+      httpStatus: st,
+      message: e?.message || "Invoice creation failed",
+      detail: e?.detail || e?.response?.data || null,
+    });
+  }
+};
+
+//    const doc = await order.findOne({
+//       where: { id: req.params.orderId },
+//       include: [
+//         {
+//           model: user,
+//           attributes: ["id", "qboCustomerId"],
+//         },
+//         {
+//           model: item,
+//           attributes: [
+//             "id",
+//             [
+//               literal(
+//                 `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+//               ),
+//               "product",
+//             ],
+//             [
+//               literal(
+//                 `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+//               ),
+//               "singleUnitWeight",
+//             ],
+//             ["weight", "itemWeights"],
+//             "qty",
+//             "productName",
+//             "price",
+//             "discount",
+//             "orderId",
+//             "productId",
+//             "wholesalePrice",
+//             "type",
+//           ],
+//         },
+//       ],
+//       attributes: [
+//         "id",
+//         [
+//           literal(
+//             `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+//           ),
+//           "customerName",
+//         ],
+//         [
+//           literal(
+//             `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+//           ),
+//           "companyName",
+//         ],
+//         [
+//           literal(
+//             `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+//           ),
+//           "salesRepName",
+//         ],
+//         "totalBill",
+//         "vat",
+//         "shippingCharges",
+//         "invoiceNumber",
+//       ],
+//     });
+//     const orderData = JSON.parse(JSON.stringify(doc));
