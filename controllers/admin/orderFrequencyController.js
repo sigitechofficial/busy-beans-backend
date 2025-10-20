@@ -168,7 +168,27 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   //   throw new AppError('Cart is empty add products to place order', 404);
   // }
 
-  const customer = await user.findOne({ where: { id: input?.order?.userId } });
+  const customer = await user.findOne({
+    where: { id: input?.order?.userId },
+    attributes: [
+      "id",
+      "salesRepId",
+      "defaultDiscount",
+      [
+        literal(
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        ),
+        "salesRepName",
+      ],
+      [
+        literal(
+          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        ),
+        "partnerType",
+      ],
+    ],
+    raw: true,
+  });
   console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
   if (!customer) {
     return next(new AppError("Customer not found.", 404));
@@ -307,8 +327,13 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     totalWeight += element.weight;
     // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
-      element.salerCommission =
-        parseFloat(element.price) - parseFloat(element.wholesalePrice || 0);
+      if (customer.partnerType == "direct-partner") {
+        element.salerCommission = parseFloat(element.price);
+        element.wholesalePrice = 0;
+      } else {
+        element.salerCommission =
+          parseFloat(element.price) - parseFloat(element.wholesalePrice || 0);
+      }
     } else {
       element.wholesalePrice = 0;
     }
@@ -612,8 +637,25 @@ const frequencyBookOrder = async ({ id }) => {
     const result = JSON.parse(JSON.stringify(doc));
     // console.log('🚀 ~ frequencyBookOrder ~ result:', result);
     const customer = await user.findOne({
-      where: { id: result.userId, deleted: 0 },
-      attributes: ["salesRepId", "defaultDiscount"],
+      where: { id: input?.order?.userId },
+      attributes: [
+        "id",
+        "salesRepId",
+        "defaultDiscount",
+        [
+          literal(
+            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          ),
+          "salesRepName",
+        ],
+        [
+          literal(
+            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          ),
+          "partnerType",
+        ],
+      ],
+      raw: true,
     });
     if (!customer) {
       await orderFrequency.update(
@@ -653,24 +695,20 @@ const frequencyBookOrder = async ({ id }) => {
           "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
           item?.price
         );
-        console.log(
-          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
-          item?.price
-        );
-        console.log(
-          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
-          item?.price
-        );
-        console.log(
-          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
-          item?.price
-        );
+
         const currentPrice = item?.price
           ? item?.price
           : parseFloat(item?.servicePrice);
-        item.salerCommission =
-          currentPrice - parseFloat(item?.wholesalePrice || 0) * item?.qty; // Multiply weight by quantity
-        item.wholesalePrice = parseFloat(item?.wholesalePrice || 0) * item?.qty;
+
+        if (customer.partnerType == "direct-partner") {
+          item.salerCommission = currentPrice;
+          item.wholesalePrice = 0;
+        } else {
+          item.salerCommission =
+            currentPrice - parseFloat(item?.wholesalePrice || 0) * item?.qty; // Multiply weight by quantity
+          item.wholesalePrice =
+            parseFloat(item?.wholesalePrice || 0) * item?.qty;
+        }
       } else {
         item.wholesalePrice = 0;
       }

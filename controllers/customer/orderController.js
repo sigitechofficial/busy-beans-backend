@@ -59,7 +59,24 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   }
   const customer = await user.findOne({
     where: { id: input?.order?.userId },
-    attributes: ["id", "salesRepId", "defaultDiscount"],
+    attributes: [
+      "id",
+      "salesRepId",
+      "defaultDiscount",
+      [
+        literal(
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        ),
+        "salesRepName",
+      ],
+      [
+        literal(
+          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        ),
+        "partnerType",
+      ],
+    ],
+    raw: true,
   });
   input.order.statusId = 1;
   input.order.salesRepId = customer?.salesRepId;
@@ -144,8 +161,13 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     totalWeight += element.weight;
     // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
-      element.salerCommission =
-        parseFloat(element.price) - parseFloat(element.wholesalePrice);
+      if (customer.partnerType == "direct-partner") {
+        element.salerCommission = parseFloat(element.price);
+        element.wholesalePrice = 0;
+      } else {
+        element.salerCommission =
+          parseFloat(element.price) - parseFloat(element.wholesalePrice || 0);
+      }
     } else {
       element.wholesalePrice = 0;
     }

@@ -162,6 +162,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
     : preSession;
 
   console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:", invoice);
+
   if (!checkSession) await order.update(invoice, { where: { id: details.id } });
   console.log(
     "🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:",
@@ -190,12 +191,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   }
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
-  console.log("🚀 ~ condition:", condition);
-  console.log("🚀 ~ condition:", condition);
-  console.log("🚀 ~ condition:", condition);
-  console.log("🚀 ~ condition:", condition);
-  console.log("🚀 ~ condition:", condition);
-  console.log("🚀 ~ condition:", condition);
+
   console.log("🚀 ~ condition:", condition);
   // Build API features (filter, sort, fields, pagination)
   const features = new APIFeatures(order, req.query)
@@ -245,12 +241,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   ];
 
   console.log("🚀 ~ req.user.entity:", req.user.entity);
-  console.log("🚀 ~ req.user.entity:", req.user.entity);
-  console.log("🚀 ~ req.user.entity:", req.user.entity);
-  console.log("🚀 ~ req.user.entity:", req.user.entity);
-  console.log("🚀 ~ req.user.entity:", req.user.entity);
-  console.log("🚀 ~ req.user.entity:", req.user.entity);
-  console.log("🚀 ~ req.user.entity:", req.user.entity);
+
   if (
     req.user.entity == "adminEmployee" ||
     req.user.entity == "partnerEmployee"
@@ -1064,6 +1055,12 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
         ),
         "connectAccountId",
       ],
+      [
+        literal(
+          `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+        ),
+        "partnerType",
+      ],
     ],
   });
 
@@ -1210,9 +1207,15 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
     // Handle salesRep commission if applicable
     if (placedOrder?.salesRepId) {
-      element.salerCommission =
-        parseFloat(element.price) - parseFloat(element.wholesalePrice);
-      totalLocalPatnerCommission += element.salerCommission || 0;
+      if (placedOrder.partnerType == "direct-partner") {
+        element.salerCommission = parseFloat(element.price);
+        totalLocalPatnerCommission += element.salerCommission || 0;
+        element.wholesalePrice = 0;
+      } else {
+        element.salerCommission =
+          parseFloat(element.price) - parseFloat(element.wholesalePrice);
+        totalLocalPatnerCommission += element.salerCommission || 0;
+      }
     } else {
       element.wholesalePrice = 0;
       element.salerCommission = 0;

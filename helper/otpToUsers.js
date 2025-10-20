@@ -1,14 +1,14 @@
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
+const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require('./transpoter');
-let Footer = require('./footer');
-const { header } = require('./header');
-const { emailDateFormate } = require('../utils/emailDateFormate');
+const { transporter } = require("./transpoter");
+let Footer = require("./footer");
+const { header } = require("./header");
+const { emailDateFormate } = require("../utils/emailDateFormate");
 
-module.exports = async function ({ email, name = '', otp = '' }) {
+module.exports = async function ({ email, name = "", otp = "" }) {
   let footer = await Footer();
   let hiCustomer = `Hi ${name}!`;
   transporter.sendMail(
@@ -17,7 +17,7 @@ module.exports = async function ({ email, name = '', otp = '' }) {
       to: [`${email}`], //`${email}` list of receivers
       subject: `${hiCustomer}! Welcome to Busy Bean. We are thrilled to have you on board.`, // Subject line
       attachments: attachment.footer,
-      replyTo: 'noreply@busybeancoffee.com',
+      replyTo: "noreply@busybeancoffee.com",
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -159,6 +159,6 @@ module.exports = async function ({ email, name = '', otp = '' }) {
       } else {
         console.log(info);
       }
-    },
+    }
   );
 };

@@ -12,15 +12,15 @@ const {
   employee,
   statuses,
   orderFrequency,
-} = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
+} = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
 
-const { Op, literal, where, fn, col } = require('sequelize');
+const { Op, literal, where, fn, col } = require("sequelize");
 
 exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });
@@ -38,7 +38,7 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'sales',
+        "sales",
       ],
       // Wholesale Total
       [
@@ -50,7 +50,7 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'wholesalePriceTotal',
+        "wholesalePriceTotal",
       ],
       // Customer Price Total
       [
@@ -62,7 +62,7 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'customerPriceTotal',
+        "customerPriceTotal",
       ],
     ],
     include: [
@@ -84,7 +84,7 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
   const totalPatners = await salesRep.count({ where: { deleted: 0 } });
 
   const revenueSummary = await order.findOne({
-    where: { paymentStatus: 'done' },
+    where: { paymentStatus: "done" },
     attributes: [
       [
         literal(`
@@ -99,7 +99,7 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'revenueCollected',
+        "revenueCollected",
       ],
     ],
     raw: true,
@@ -107,45 +107,45 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
 
   const ordersSummary = await order.findOne({
     attributes: [
-      [literal(`SUM(CASE WHEN statusId = 1 THEN 1 ELSE 0 END)`), 'orderPlaced'],
+      [literal(`SUM(CASE WHEN statusId = 1 THEN 1 ELSE 0 END)`), "orderPlaced"],
       [
         literal(`SUM(CASE WHEN statusId = 2 THEN 1 ELSE 0 END)`),
-        'assignedToSupplier',
+        "assignedToSupplier",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 3 THEN 1 ELSE 0 END)`),
-        'supplierAcknowledged',
+        "supplierAcknowledged",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 4 THEN 1 ELSE 0 END)`),
-        'dispatchedOrders',
+        "dispatchedOrders",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 5 THEN 1 ELSE 0 END)`),
-        'deliveredOrders',
+        "deliveredOrders",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 6 THEN 1 ELSE 0 END)`),
-        'CanceledOrders',
+        "CanceledOrders",
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`,
+          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`
         ),
-        'paymentPending',
+        "paymentPending",
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`,
+          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`
         ),
-        'paymentDone',
+        "paymentDone",
       ],
     ],
     raw: true,
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {
       salesSummary,
       ordersSummary,
@@ -173,7 +173,7 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'sales',
+        "sales",
       ],
       // Wholesale Total
       [
@@ -185,7 +185,7 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'wholesalePriceTotal',
+        "wholesalePriceTotal",
       ],
       // Customer Price Total
       [
@@ -197,7 +197,7 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'customerPriceTotal',
+        "customerPriceTotal",
       ],
     ],
     include: [
@@ -214,7 +214,7 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
   });
 
   const revenueSummary = await order.findOne({
-    where: { paymentStatus: 'done', salesRepId: req.params.srId },
+    where: { paymentStatus: "done", salesRepId: req.params.srId },
     attributes: [
       [
         literal(`
@@ -229,7 +229,7 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        'revenueCollected',
+        "revenueCollected",
       ],
     ],
     raw: true,
@@ -238,38 +238,38 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
   const ordersSummary = await order.findOne({
     where: { salesRepId: req.params.srId },
     attributes: [
-      [literal(`SUM(CASE WHEN statusId = 1 THEN 1 ELSE 0 END)`), 'orderPlaced'],
+      [literal(`SUM(CASE WHEN statusId = 1 THEN 1 ELSE 0 END)`), "orderPlaced"],
       [
         literal(`SUM(CASE WHEN statusId = 2 THEN 1 ELSE 0 END)`),
-        'assignedToSupplier',
+        "assignedToSupplier",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 3 THEN 1 ELSE 0 END)`),
-        'supplierAcknowledged',
+        "supplierAcknowledged",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 4 THEN 1 ELSE 0 END)`),
-        'dispatchedOrders',
+        "dispatchedOrders",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 5 THEN 1 ELSE 0 END)`),
-        'deliveredOrders',
+        "deliveredOrders",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 6 THEN 1 ELSE 0 END)`),
-        'CanceledOrders',
+        "CanceledOrders",
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`,
+          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`
         ),
-        'paymentPending',
+        "paymentPending",
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`,
+          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`
         ),
-        'paymentDone',
+        "paymentDone",
       ],
     ],
     raw: true,
@@ -280,7 +280,7 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { salesSummary, ordersSummary, revenueSummary, totalUser },
   });
 });
@@ -291,39 +291,39 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
     attributes: [
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id)`
         ),
-        'totalOrders',
+        "totalOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 2)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 2)`
         ),
-        'dispatchedToSupplierOrders',
+        "dispatchedToSupplierOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 3)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 3)`
         ),
-        'acknowledgedOrders',
+        "acknowledgedOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 4)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 4)`
         ),
-        'shippedOrders',
+        "shippedOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 5)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 5)`
         ),
-        'deliveredOrders',
+        "deliveredOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 6)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 6)`
         ),
-        'cancelledOrders',
+        "cancelledOrders",
       ],
     ],
     raw: true,
@@ -331,17 +331,17 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
 
   const topProducts = await item.findAll({
     attributes: [
-      'productId',
+      "productId",
       [
         literal(
-          `(SELECT products.name FROM products WHERE products.id = item.productId)`,
+          `(SELECT products.name FROM products WHERE products.id = item.productId)`
         ),
-        'productName',
+        "productName",
       ],
-      [fn('SUM', col('qty')), 'totalSold'],
+      [fn("SUM", col("qty")), "totalSold"],
     ],
-    group: ['productId'],
-    order: [[fn('SUM', col('qty')), 'DESC']],
+    group: ["productId"],
+    order: [[fn("SUM", col("qty")), "DESC"]],
     limit: 5,
     include: [
       {
@@ -353,7 +353,7 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { dashboard, topProducts },
   });
 });
@@ -364,17 +364,17 @@ exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
   // Query to count orders based on employeeId
   const data = await statuses.findAll({
     attributes: [
-      'id',
-      'orderStatus',
+      "id",
+      "orderStatus",
       [
         literal(
           `(SELECT COUNT(orders.id) 
            FROM orders
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
-           ${employeeId ? `AND users.employeeId = ${employeeId}` : ''})`,
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
         ),
-        'count',
+        "count",
       ],
     ],
   });
@@ -398,7 +398,7 @@ exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
          JOIN users ON users.id = orders.userId 
          WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
          AND orders.orderFrequencyId = orderFrequency.id
-         ${employeeId ? `AND users.employeeId = ${employeeId}` : ''})
+         ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})
       `),
           },
         },
@@ -424,24 +424,24 @@ exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
   const overDueInvoices = await order.count({
     where: {
       createdAt: { [Op.gte]: thirtyDaysAgo }, // uses time too
-      paymentStatus: 'pending',
+      paymentStatus: "pending",
     },
     include: { model: user, where: { employeeId: req.user.id } },
   });
 
   output.push({
     id: 7,
-    orderStatus: 'Upcomming Orders',
+    orderStatus: "Upcomming Orders",
     count: upcommingOrderCount,
   });
   output.push({
     id: 8,
-    orderStatus: 'Overdue Invoices',
+    orderStatus: "Overdue Invoices",
     count: overDueInvoices,
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { output },
   });
 });
@@ -462,16 +462,16 @@ exports.employeeDashboardlocalPartner = catchAsync(async (req, res, next) => {
   // Query to count orders based on employeeId (handling both cases for employeeId)
   const data = await statuses.findAll({
     attributes: [
-      'id',
-      'orderStatus',
+      "id",
+      "orderStatus",
       [
         literal(
           `(SELECT COUNT(orders.id) 
              FROM orders 
              WHERE orders.statusId = statuses.id 
-             ${employeeFilterLiteral})`,
+             ${employeeFilterLiteral})`
         ),
-        'count',
+        "count",
       ],
     ],
   });
@@ -506,7 +506,7 @@ exports.employeeDashboardlocalPartner = catchAsync(async (req, res, next) => {
   const overDueInvoices = await order.count({
     where: {
       createdAt: { [Op.gte]: thirtyDaysAgo }, // uses time too
-      paymentStatus: 'pending',
+      paymentStatus: "pending",
       salesRepId: worker.salesRepId,
     },
     include: { model: user, where: { employeeId: req.user.id } },
@@ -514,18 +514,18 @@ exports.employeeDashboardlocalPartner = catchAsync(async (req, res, next) => {
 
   output.push({
     id: 7,
-    orderStatus: 'Upcomming Orders',
+    orderStatus: "Upcomming Orders",
     count: upcommingOrderCount,
   });
 
   output.push({
     id: 8,
-    orderStatus: 'Overdue Invoices',
+    orderStatus: "Overdue Invoices",
     count: overDueInvoices,
   });
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: output,
   });
 });
