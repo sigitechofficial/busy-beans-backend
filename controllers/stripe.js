@@ -320,7 +320,7 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
   });
   return accountLink.url;
 }
-
+//! OLD
 // async function createInvoiceWithItems({ customerId, order, currency = 'usd', dueInDays = 7 }) {
 //   try {
 //     // Step 1: Create invoice items
@@ -543,83 +543,225 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //   }
 // }
 
+//Before Direct And DropShip Local Partner Payment
+// async function createInvoiceWithItems({ order, currency = "usd" }) {
+//   console.log("🚀 ~ createInvoiceWithItems ~ order:", order.totalBill);
+//   try {
+//     const { items, shippingCharges, vat } = order;
+//     let totalAmount = 0;
+//     const line_items = [];
+
+//     // Step 1: Create line items and calculate total
+//     for (const item of items) {
+//       const amount = parseFloat(item.price / item.qty);
+//       totalAmount += amount;
+//       line_items.push({
+//         price_data: {
+//           currency,
+//           product_data: { name: item.product || item.productName },
+//           unit_amount: convertToCents(amount),
+//         },
+//         quantity: item.qty,
+//       });
+//     }
+
+//     if (shippingCharges && parseFloat(shippingCharges) > 0) {
+//       totalAmount += parseFloat(shippingCharges);
+//       line_items.push({
+//         price_data: {
+//           currency,
+//           product_data: { name: "Shipping Charges" },
+//           unit_amount: convertToCents(shippingCharges),
+//         },
+//         quantity: 1,
+//       });
+//     }
+
+//     if (vat && parseFloat(vat) > 0) {
+//       totalAmount += parseFloat(vat);
+//       line_items.push({
+//         price_data: {
+//           currency,
+//           product_data: { name: "VAT" },
+//           unit_amount: convertToCents(vat),
+//         },
+//         quantity: 1,
+//       });
+//     }
+
+//     const platformFeeInCents = convertToCents(order.adminReceivableAmount || 0);
+//     const stripeFee = estimateStripeFeeFromDollars(order.totalBill);
+//     const stripeFeeInCents = convertToCents(stripeFee);
+
+//     const adminProfitCents = platformFeeInCents + stripeFeeInCents;
+
+//     // Step 2: Base Checkout Session
+//     const input = {
+//       payment_method_types: ["card"],
+//       mode: "payment",
+//       customer: order?.stripeCustomerId,
+//       line_items,
+//       success_url: "https://www.busybeancoffee.com/product?status=success",
+//       cancel_url: `https://www.busybeancoffee.com/product?status=cancel`,
+//       saved_payment_method_options: {
+//         payment_method_save: "enabled",
+//       },
+//       // Always include metadata & description
+//       payment_intent_data: {
+//         description: `Payment for invoice ${order?.invoiceNumber}.`,
+//         metadata: {
+//           orderId: order?.id,
+//           invoiceNumber: order?.invoiceNumber || "",
+//           partnerId: order?.connectAccountId || "",
+//           salesRepId: order?.salesRepId || "",
+//           type: `checkout-session`,
+//           platform: `Busy Bean Coffee Inc.`,
+//         },
+//       },
+//     };
+
+//     // Add transfer logic if connectAccountId exists
+//     if (order.connectAccountId) {
+//       input.payment_intent_data.application_fee_amount = adminProfitCents;
+//       input.payment_intent_data.transfer_data = {
+//         destination: order.connectAccountId,
+//       };
+//       input.payment_intent_data.setup_future_usage = "off_session";
+//     }
+
+//     const session = await stripe.checkout.sessions.create(input);
+
+//     return {
+//       invoiceId: session.id,
+//       hostedInvoiceUrl: session.url,
+//       proportionalStripeFee: stripeFee,
+//       invoicePdf: "",
+//     };
+//   } catch (error) {
+//     console.error("❌ Checkout Session creation failed:", error);
+//     throw new Error(error.message);
+//   }
+// }
+
 async function createInvoiceWithItems({ order, currency = "usd" }) {
-  console.log("🚀 ~ createInvoiceWithItems ~ order:", order.totalBill);
+  // Guards
+  if (!order || !Array.isArray(order.items) || order.items.length === 0) {
+    throw new Error("Order with at least one item is required.");
+  }
+
+  const { items, shippingCharges, vat } = order;
+  const line_items = [];
+
+  // Build line items (item.price assumed as LINE TOTAL; unit = price/qty)
+  for (const item of items) {
+    const qty = Number(item.qty);
+    const lineTotal = Number(item.price);
+    if (!qty || !lineTotal) throw new Error("Each item needs qty and price.");
+    const unit = lineTotal / qty;
+
+    line_items.push({
+      price_data: {
+        currency,
+        product_data: { name: item.product || item.productName || "Item" },
+        unit_amount: convertToCents(unit, currency), // must be integer
+      },
+      quantity: qty,
+    });
+  }
+
+  if (shippingCharges && Number(shippingCharges) > 0) {
+    line_items.push({
+      price_data: {
+        currency,
+        product_data: { name: "Shipping Charges" },
+        unit_amount: convertToCents(Number(shippingCharges), currency),
+      },
+      quantity: 1,
+    });
+  }
+
+  if (vat && Number(vat) > 0) {
+    line_items.push({
+      price_data: {
+        currency,
+        product_data: { name: "VAT" },
+        unit_amount: convertToCents(Number(vat), currency),
+      },
+      quantity: 1,
+    });
+  }
+
+  // Base payload common to both flows
+  const base = {
+    payment_method_types: ["card"],
+    mode: "payment",
+    line_items,
+    success_url: "https://www.busybeancoffee.com/product?status=success",
+    cancel_url: "https://www.busybeancoffee.com/product?status=cancel",
+    saved_payment_method_options: { payment_method_save: "enabled" },
+    payment_intent_data: {
+      description: `Payment for invoice ${order?.invoiceNumber}.`,
+      metadata: {
+        orderId: order?.id,
+        invoiceNumber: order?.invoiceNumber || "",
+        partnerId: order?.connectAccountId || "",
+        salesRepId: order?.salesRepId || "",
+        type: "checkout-session",
+        platform: "Busy Bean Coffee Inc.",
+      },
+    },
+  };
+
   try {
-    const { items, shippingCharges, vat } = order;
-    let totalAmount = 0;
-    const line_items = [];
+    // ====== BRANCH 1: DIRECT PARTNER (session on connected account; no platform/customer/fees) ======
+    if (order.partnerType === "direct-partner") {
+      if (!order.connectAccountId) {
+        throw new Error("connectAccountId is required for direct-partner.");
+      }
 
-    // Step 1: Create line items and calculate total
-    for (const item of items) {
-      const amount = parseFloat(item.price / item.qty);
-      totalAmount += amount;
-      line_items.push({
-        price_data: {
-          currency,
-          product_data: { name: item.product || item.productName },
-          unit_amount: convertToCents(amount),
-        },
-        quantity: item.qty,
-      });
+      const directParams = { ...base };
+
+      // DO NOT pass platform customer here:
+      // If you *do* have a customer that actually exists on the connected account, put it in order.connectedCustomerId
+      if (order.connectedCustomerId) {
+        directParams.customer = order.connectedCustomerId;
+        // Optional: save for off_session on that connected account
+        directParams.payment_intent_data.setup_future_usage = "off_session";
+      }
+
+      // No application_fee_amount, no transfer_data — it’s a direct charge on the connected account
+      delete directParams.payment_intent_data.application_fee_amount;
+      delete directParams.payment_intent_data.transfer_data;
+
+      // Create the Checkout Session **on** the connected account
+      const session = await stripe.checkout.sessions.create(
+        directParams,
+        { stripeAccount: order.connectAccountId } // key line: header `Stripe-Account`
+      );
+
+      return {
+        invoiceId: session.id,
+        hostedInvoiceUrl: session.url,
+        proportionalStripeFee: 0, // not calculated in this flow
+        invoicePdf: "",
+      };
     }
 
-    if (shippingCharges && parseFloat(shippingCharges) > 0) {
-      totalAmount += parseFloat(shippingCharges);
-      line_items.push({
-        price_data: {
-          currency,
-          product_data: { name: "Shipping Charges" },
-          unit_amount: convertToCents(shippingCharges),
-        },
-        quantity: 1,
-      });
-    }
-
-    if (vat && parseFloat(vat) > 0) {
-      totalAmount += parseFloat(vat);
-      line_items.push({
-        price_data: {
-          currency,
-          product_data: { name: "VAT" },
-          unit_amount: convertToCents(vat),
-        },
-        quantity: 1,
-      });
-    }
-
-    const platformFeeInCents = convertToCents(order.adminReceivableAmount || 0);
-    const stripeFee = estimateStripeFeeFromDollars(order.totalBill);
-    const stripeFeeInCents = convertToCents(stripeFee);
-
+    // ====== BRANCH 2: EXISTING DROPSHIP / OTHER PARTNERS (destination charge with application fee) ======
+    // Your original logic stays here
+    const platformFeeInCents = convertToCents(
+      order.adminReceivableAmount || 0,
+      currency
+    );
+    const stripeFee = estimateStripeFeeFromDollars(order.totalBill || 0);
+    const stripeFeeInCents = convertToCents(stripeFee, currency);
     const adminProfitCents = platformFeeInCents + stripeFeeInCents;
 
-    // Step 2: Base Checkout Session
     const input = {
-      payment_method_types: ["card"],
-      mode: "payment",
-      customer: order?.stripeCustomerId,
-      line_items,
-      success_url: "https://www.busybeancoffee.com/product?status=success",
-      cancel_url: `https://www.busybeancoffee.com/product?status=cancel`,
-      saved_payment_method_options: {
-        payment_method_save: "enabled",
-      },
-      // Always include metadata & description
-      payment_intent_data: {
-        description: `Payment for invoice ${order?.invoiceNumber}.`,
-        metadata: {
-          orderId: order?.id,
-          invoiceNumber: order?.invoiceNumber || "",
-          partnerId: order?.connectAccountId || "",
-          salesRepId: order?.salesRepId || "",
-          type: `checkout-session`,
-          platform: `Busy Bean Coffee Inc.`,
-        },
-      },
+      ...base,
+      customer: order?.stripeCustomerId || undefined, // platform customer is fine in this flow
     };
 
-    // Add transfer logic if connectAccountId exists
     if (order.connectAccountId) {
       input.payment_intent_data.application_fee_amount = adminProfitCents;
       input.payment_intent_data.transfer_data = {
@@ -636,9 +778,9 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
       proportionalStripeFee: stripeFee,
       invoicePdf: "",
     };
-  } catch (error) {
-    console.error("❌ Checkout Session creation failed:", error);
-    throw new Error(error.message);
+  } catch (err) {
+    console.error("❌ Checkout Session creation failed:", err);
+    throw new Error(err?.message || "Checkout session failed.");
   }
 }
 
@@ -852,6 +994,7 @@ async function pullAmountPaymentIntentFromBankAccount({
     };
   } catch (error) {
     console.error("❌ ACH pull failed:", error);
+
     throw new AppError(`${error.message}`, 200);
   }
 }

@@ -5,12 +5,12 @@ const {
   user,
   item,
   product,
-} = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const factory = require('../handlerFactory');
-const { Op, literal, where, fn } = require('sequelize');
-const APIFeatures = require('../../utils/apiFeatures');
+} = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const factory = require("../handlerFactory");
+const { Op, literal, where, fn } = require("sequelize");
+const APIFeatures = require("../../utils/apiFeatures");
 
 exports.assignedOrdersReport = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
@@ -30,31 +30,31 @@ exports.assignedOrdersReport = catchAsync(async (req, res, next) => {
   queryOptions.where = { ...(queryOptions.where || {}), ...condition };
 
   queryOptions.attributes = [
-    'id',
+    "id",
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
       ),
-      'customerName',
+      "customerName",
     ],
     [
       literal(
-        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
       ),
-      'orderCurrentStatus',
+      "orderCurrentStatus",
     ],
     [
       literal(
-        `(SELECT createdAt FROM orderHistories WHERE orderHistories.orderId = order.id AND orderHistories.statusId = order.statusId LIMIT 1)`,
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.orderId = order.id AND orderHistories.statusId = order.statusId LIMIT 1)`
       ),
-      'assignedAt',
+      "assignedAt",
     ],
     [
       literal(`COALESCE(
          (SELECT SUM(qty)
           FROM items
           WHERE items.orderId = order.id ), 0)`),
-      'totalQuantity',
+      "totalQuantity",
     ],
     [
       literal(`(
@@ -63,10 +63,10 @@ exports.assignedOrdersReport = catchAsync(async (req, res, next) => {
       JOIN products p ON p.id = i.productId
       WHERE i.orderId = order.id
     )`),
-      'productNames',
+      "productNames",
     ],
-    ['on', 'orderDate'],
-    'note',
+    ["on", "orderDate"],
+    "note",
   ];
 
   // Execute the query
@@ -74,7 +74,7 @@ exports.assignedOrdersReport = catchAsync(async (req, res, next) => {
 
   // Return response
   res.status(200).json({
-    status: 'success',
+    status: "success",
     results: doc.length,
     data: {
       data: doc.reverse(),
@@ -85,8 +85,8 @@ exports.assignedOrdersReport = catchAsync(async (req, res, next) => {
 exports.topProductsOrderedReport = catchAsync(async (req, res, next) => {
   const doc = await product.findAll({
     attributes: [
-      'id',
-      'name',
+      "id",
+      "name",
       // [
       //     literal(`
       //       (
@@ -103,7 +103,7 @@ exports.topProductsOrderedReport = catchAsync(async (req, res, next) => {
             JOIN orders o ON o.id = i.orderId
             WHERE i.productId = product.id AND o.statusId = 5 AND o.supplierId = ${req.params?.supId}
           )`),
-        'dispatchedItems',
+        "dispatchedItems",
       ],
       //   [
       //   literal(`
@@ -124,7 +124,7 @@ exports.topProductsOrderedReport = catchAsync(async (req, res, next) => {
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });

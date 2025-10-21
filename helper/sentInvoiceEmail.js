@@ -102,7 +102,7 @@ Need help or want a custom order? Just reply to this email or call us!`
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ["sigidevelopers@gmail.com"], //`${email}` list of receivers
+      to: email, //`${email}` list of receivers
       subject: data?.invoiceReminder
         ? `Payment Reminder: Complete Payment for Invoice ${data?.invoiceNumber || ""}`
         : `Your Invoice ${data?.invoiceNumber || ""}`, // Subject line

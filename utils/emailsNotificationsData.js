@@ -310,7 +310,6 @@ const localPartnerOrder = async ({ orderId }) => {
         ),
         "sku",
       ],
-
       [
         literal(
           `(SELECT products.sku FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
@@ -408,8 +407,8 @@ const localPartnerOrder = async ({ orderId }) => {
         [
           literal(`COALESCE(
               (SELECT SUM(qty)
-                FROM partnerOrderitems
-                WHERE partnerOrderitems.partnerOrderId = partnerOrder.id ), 0)`),
+                FROM partnerOrderItems
+                WHERE partnerOrderItems.partnerOrderId = partnerOrder.id ), 0)`),
           "totalQuantity",
         ],
         "totalBill",
@@ -560,6 +559,7 @@ exports.dataForEmailAndNotifications = async (
   const admin = await account.findOne({
     attributes: { exclude: ["password", "status"] },
   });
+
   output.admin = admin;
   return {
     details: output,
