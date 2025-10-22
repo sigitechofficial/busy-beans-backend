@@ -724,7 +724,7 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
       // DO NOT pass platform customer here:
       // If you *do* have a customer that actually exists on the connected account, put it in order.connectedCustomerId
       if (order.connectedCustomerId) {
-        directParams.customer = order.connectedCustomerId;
+        //! directParams.customer = order.connectedCustomerId;
         // Optional: save for off_session on that connected account
         directParams.payment_intent_data.setup_future_usage = "off_session";
       }

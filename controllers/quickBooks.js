@@ -497,3 +497,174 @@ exports.createInvoiceFromOrderNoQuery = async (accessToken, realmId, order) => {
   const invId = data?.Invoice?.Id;
   return { id: invId, raw: data };
 };
+
+// ...keep your previous imports/helpers (qboPost, ensureServiceItem, etc.)
+
+function mapOrderAddressToQboShipAddr(order) {
+  const a = order?.address || {};
+  // QBO fields: Line1..Line5, City, CountrySubDivisionCode, PostalCode, Country
+  const ShipAddr = {
+    Line1: a.addressLineOne || a.companyaddress || undefined,
+    Line2: a.addressLineTwo || undefined,
+    Line3: a.companyaddress ? `Attn: ${a.companyaddress}` : undefined, // optional
+    City: a.town || a.city || undefined,
+    CountrySubDivisionCode: a.state || undefined, // e.g. "Florida" or "FL"
+    PostalCode: a.zipCode || undefined,
+    Country: a.country || undefined,
+  };
+  // remove undefined keys
+  Object.keys(ShipAddr).forEach(
+    (k) => ShipAddr[k] === undefined && delete ShipAddr[k]
+  );
+  return Object.keys(ShipAddr).length ? ShipAddr : undefined;
+}
+
+exports.createInvoiceFromOrderJSON = async ({
+  accessToken,
+  realmId,
+  order,
+  billEmail,
+  genericItemName = "Coffee Sale",
+  shippingItemName = "Shipping",
+  incomeAccountName = "Sales of Product Income",
+}) => {
+  if (!accessToken || !realmId) throw new Error("Missing accessToken/realmId");
+  if (!order) throw new Error("Missing order");
+
+  // 1) CustomerRef from order JSON
+  const customerId =
+    order.qboCustomerId ||
+    order.qboCustomerid ||
+    order.customerId ||
+    order.qbCustomerId ||
+    order.quickbooksCustomerId;
+  if (!customerId) throw new Error("qboCustomerId not found in order");
+
+  // 2) Ensure items/accounts (same as before)
+  let incomeAccountId =
+    (await findAccountId({ accessToken, realmId, name: incomeAccountName })) ||
+    (await findAccountId({ accessToken, realmId, name: "Sales" }));
+  if (!incomeAccountId) throw new Error("Could not find an Income account.");
+  const genericItemId = await ensureServiceItem({
+    accessToken,
+    realmId,
+    name: genericItemName,
+    incomeAccountId,
+    taxable: false,
+  });
+
+  // 3) Build lines (same logic as before)
+  const Lines = [];
+  const list = Array.isArray(order.items) ? order.items : [];
+  for (const it of list) {
+    const qty = +Number(it.qty || 1).toFixed(4);
+    const lineTotal = +Number(it.price || it.total || 0).toFixed(2);
+    const rate = qty > 0 ? +Number(lineTotal / qty).toFixed(4) : 0;
+    const desc = [
+      it.product || it.productName || "Coffee Product",
+      it.grind && `(${String(it.grind).trim()})`,
+      it.productCode && `Code: ${it.productCode}`,
+      it.singleUnitWeight && `Unit: ${it.singleUnitWeight}`,
+    ]
+      .filter(Boolean)
+      .join(" • ");
+
+    Lines.push({
+      Amount: +Number(qty * rate).toFixed(2),
+      Description: desc,
+      DetailType: "SalesItemLineDetail",
+      SalesItemLineDetail: {
+        ItemRef: { value: String(genericItemId) },
+        Qty: qty,
+        UnitPrice: rate,
+        TaxCodeRef: { value: "NON" },
+      },
+    });
+  }
+
+  // Shipping (if any)
+  const shippingAmt = +Number(order.shippingCharges || 0).toFixed(2);
+  if (shippingAmt > 0) {
+    const shippingItemId = await ensureServiceItem({
+      accessToken,
+      realmId,
+      name: shippingItemName,
+      incomeAccountId,
+      taxable: false,
+    });
+    Lines.push({
+      Amount: shippingAmt,
+      Description: order.shippingCompany || "Shipping",
+      DetailType: "SalesItemLineDetail",
+      SalesItemLineDetail: {
+        ItemRef: { value: String(shippingItemId) },
+        Qty: 1,
+        UnitPrice: shippingAmt,
+        TaxCodeRef: { value: "NON" },
+      },
+    });
+  }
+
+  if (Lines.length === 0) {
+    const total = +Number(order.totalBill || 0).toFixed(2);
+    Lines.push({
+      Amount: total,
+      Description: "Coffee Sale",
+      DetailType: "SalesItemLineDetail",
+      SalesItemLineDetail: {
+        ItemRef: { value: String(genericItemId) },
+        Qty: 1,
+        UnitPrice: total,
+        TaxCodeRef: { value: "NON" },
+      },
+    });
+  }
+
+  // Dates
+  const today = new Date();
+  const txnDate = today.toISOString().slice(0, 10);
+  const due = new Date(today);
+  const termDays = Number(order.termDays || 0);
+  if (termDays > 0) due.setDate(due.getDate() + termDays);
+  const dueDate = due.toISOString().slice(0, 10);
+
+  // ← HERE: map order.address → QBO ShipAddr
+  const ShipAddr = mapOrderAddressToQboShipAddr(order);
+
+  const payload = {
+    CustomerRef: { value: String(customerId) },
+    Line: Lines,
+    CurrencyRef: { value: "USD" },
+    DocNumber: order.invoiceNumber || undefined,
+    TxnDate: txnDate,
+    DueDate: dueDate,
+    PrivateNote: order.note || undefined,
+    BillEmail: billEmail ? { Address: billEmail } : undefined,
+    ShipAddr, // auto-filled from order.address
+    PONumber: order.poNumber || undefined,
+  };
+  Object.keys(payload).forEach(
+    (k) => payload[k] === undefined && delete payload[k]
+  );
+
+  const res = await axios.post(
+    `${QBO(realmId)}/invoice?minorversion=70`,
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    }
+  );
+
+  const inv = res.data?.Invoice || res.data;
+  return {
+    id: inv?.Id,
+    docNumber: inv?.DocNumber,
+    totalAmt: inv?.TotalAmt,
+    dueDate: inv?.DueDate,
+    raw: inv,
+  };
+};

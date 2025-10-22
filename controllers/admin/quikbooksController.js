@@ -270,31 +270,187 @@ exports.importCustomers = async (req, res) => {
 // ---- PASTE INTO your qbo route controller file ----
 // Requires: getTokenFromReq(req), QBO (require('./controllers/quickbooks')) already loaded
 
+// exports.createInvoiceForOrder = async (req, res) => {
+//   const started = Date.now();
+//   try {
+//     const { accessToken, realmId } = getTokenFromReq(req);
+//     console.log(
+//       "[ROUTE:/qbo/invoices/create] token=",
+//       accessToken ? "yes" : "no",
+//       "realmId=",
+//       realmId
+//     );
+
+//     if (!accessToken || !realmId) {
+//       return res.status(400).json({
+//         status: "error",
+//         message:
+//           "Provide x-qbo-access and x-qbo-realmid OR ?accessToken=&realmId= OR body accessToken/realmId",
+//       });
+//     }
+
+//     const doc = await order.findOne({
+//       where: { id: req.params.orderId },
+//       include: [
+//         {
+//           model: user,
+//           attributes: ["id", "qboCustomerId"],
+//         },
+//         {
+//           model: address,
+//         },
+//         {
+//           model: item,
+//           attributes: [
+//             "id",
+//             [
+//               literal(
+//                 `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+//               ),
+//               "product",
+//             ],
+//             [
+//               literal(
+//                 `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+//               ),
+//               "singleUnitWeight",
+//             ],
+//             ["weight", "itemWeights"],
+//             "qty",
+//             "productName",
+//             "price",
+//             "discount",
+//             "orderId",
+//             "productId",
+//             "wholesalePrice",
+//             "type",
+//           ],
+//         },
+//       ],
+//       attributes: [
+//         "id",
+//         [
+//           literal(
+//             `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+//           ),
+//           "customerName",
+//         ],
+//         [
+//           literal(
+//             `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+//           ),
+//           "companyName",
+//         ],
+//         [
+//           literal(
+//             `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+//           ),
+//           "qboCustomerId",
+//         ],
+//         [
+//           literal(
+//             `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+//           ),
+//           "salesRepName",
+//         ],
+//         "totalBill",
+//         "vat",
+//         "shippingCharges",
+//         "invoiceNumber",
+//       ],
+//     });
+//     const orderData = JSON.parse(JSON.stringify(doc));
+
+//     if (!orderData) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Body must include { order: {...} }",
+//       });
+//     }
+
+//     const qboInvoiceId = await QBO.createInvoiceForOrderWithToken(
+//       accessToken,
+//       realmId,
+//       orderData
+//     );
+//   } catch (e) {}
+// };
+function httpError(res, code, message, extra = {}) {
+  return res.status(code).json({
+    status: "error",
+    message,
+    ...extra,
+  });
+}
+
+function pickQboError(err) {
+  // Axios-style error parsing
+  const status = err?.response?.status || 500;
+  const data = err?.response?.data;
+  const headers = err?.response?.headers;
+
+  // QBO often returns { Fault: { Error: [{ Message, Detail, code }], type } }
+  const fault = data?.Fault;
+  const errors = Array.isArray(fault?.Error)
+    ? fault.Error.map((e) => ({
+        code: e?.code,
+        message: e?.Message,
+        detail: e?.Detail,
+      }))
+    : undefined;
+
+  const summary =
+    errors
+      ?.map((e) =>
+        `${e.code || ""} ${e.message || ""} ${e.detail || ""}`.trim()
+      )
+      .join(" | ") ||
+    data?.message ||
+    err?.message ||
+    "Unknown QuickBooks error";
+
+  return {
+    status,
+    summary,
+    // Include raw details but keep them nested
+    raw: {
+      data,
+      headers,
+    },
+  };
+}
+
 exports.createInvoiceForOrder = async (req, res) => {
   const started = Date.now();
-  try {
-    const { accessToken, realmId } = getTokenFromReq(req);
-    console.log(
-      "[ROUTE:/qbo/invoices/create] token=",
-      accessToken ? "yes" : "no",
-      "realmId=",
-      realmId
-    );
 
+  try {
+    // 0) Tokens
+    const { accessToken, realmId } = getTokenFromReq(req) || {};
+    console.log("🚀 ~ accessToken, realmId:", accessToken, realmId);
     if (!accessToken || !realmId) {
-      return res.status(400).json({
-        status: "error",
-        message:
-          "Provide x-qbo-access and x-qbo-realmid OR ?accessToken=&realmId= OR body accessToken/realmId",
-      });
+      return httpError(
+        res,
+        400,
+        "Missing QuickBooks credentials. Provide x-qbo-access and x-qbo-realmid headers OR ?accessToken=&realmId= OR body accessToken/realmId."
+      );
     }
 
+    // 1) Validate param
+    const orderId = Number(req.params.orderId);
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      return httpError(res, 400, "Invalid or missing :orderId path parameter.");
+    }
+
+    // 2) Fetch order with required associations (unchanged, just wrapped)
     const doc = await order.findOne({
       where: { id: req.params.orderId },
       include: [
         {
           model: user,
           attributes: ["id", "qboCustomerId"],
+        },
+        {
+          model: address,
         },
         {
           model: item,
@@ -340,6 +496,12 @@ exports.createInvoiceForOrder = async (req, res) => {
         ],
         [
           literal(
+            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+          ),
+          "qboCustomerId",
+        ],
+        [
+          literal(
             `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
           ),
           "salesRepName",
@@ -350,60 +512,82 @@ exports.createInvoiceForOrder = async (req, res) => {
         "invoiceNumber",
       ],
     });
+
+    if (!doc) {
+      return httpError(res, 404, `Order not found with id=${orderId}.`);
+    }
+
+    // 3) Raw JSON (plain JS object)
     const orderData = JSON.parse(JSON.stringify(doc));
 
-    if (!orderData) {
-      return res.status(400).json({
-        status: "error",
-        message: "Body must include { order: {...} }",
-      });
+    // 4) Validate QuickBooks customer link
+    const qboCustomerId =
+      orderData?.qboCustomerId ||
+      orderData?.user?.qboCustomerId ||
+      orderData?.User?.qboCustomerId; // in case of different casing
+    if (!qboCustomerId) {
+      return httpError(
+        res,
+        400,
+        "This order has no linked QuickBooks customer (qboCustomerId). Please link the customer first."
+      );
     }
 
-    // optional email via QBO
-    if (req.body?.sendEmail === true) orderData.sendEmail = true;
-
-    // create the invoice (no queries path)
-    const result = await QBO.createInvoiceFromOrderNoQuery(
-      accessToken,
-      realmId,
-      orderData
-    );
-
-    // optionally send email from QBO (separate endpoint) if requested
-    if (orderData.sendEmail === true && result?.id) {
-      const sendUrl = `${HOST}/v3/company/${realmId}/invoice/${result.id}/send?minorversion=${MINOR_VERSION}`;
-      await axios.post(sendUrl, null, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-        },
-        validateStatus: () => true,
-      });
-    }
-
-    return res.status(200).json({
-      status: "success",
-      message: "Invoice created",
-      tookMs: Date.now() - started,
-      qboInvoiceId: result?.id,
-      qbo: result?.raw,
+    // 5) Call service to create the invoice in QBO
+    //    Keep the service responsible for mapping order → QBO payload
+    const result = await QBO.createInvoiceFromOrderJSON(accessToken, realmId, {
+      ...orderData,
+      qboCustomerId, // ensure present for the service
     });
-  } catch (e) {
-    const st = e?.httpStatus || e?.response?.status || 500;
-    console.error(
-      "[ROUTE:/qbo/invoices/create] ERROR",
-      st,
-      e?.detail || e?.response?.data || e?.message
-    );
-    return res.status(st).json({
+
+    // 6) Success response
+    const durationMs = Date.now() - started;
+    return res.status(201).json({
+      status: "ok",
+      message: "Invoice created in QuickBooks.",
+      data: {
+        invoiceId: result?.id || result?.Invoice?.Id || null,
+        docNumber: result?.docNumber || result?.Invoice?.DocNumber || null,
+        totalAmt: result?.totalAmt || result?.Invoice?.TotalAmt || null,
+        dueDate: result?.dueDate || result?.Invoice?.DueDate || null,
+        // feel free to include more as needed
+      },
+      meta: {
+        realmId,
+        orderId,
+        durationMs,
+      },
+    });
+  } catch (err) {
+    const durationMs = Date.now() - started;
+
+    // Differentiate axios/QBO error vs generic
+    const qboErr = pickQboError(err);
+    if (
+      qboErr.status !== 500 ||
+      qboErr.summary !== "Unknown QuickBooks error"
+    ) {
+      // Known QBO/API error
+      return res.status(qboErr.status).json({
+        status: "error",
+        message: qboErr.summary,
+        meta: { durationMs },
+        debug: process.env.NODE_ENV === "production" ? undefined : qboErr.raw,
+      });
+    }
+
+    // Unknown/unexpected error
+    return res.status(500).json({
       status: "error",
-      httpStatus: st,
-      message: e?.message || "Invoice creation failed",
-      detail: e?.detail || e?.response?.data || null,
+      message: err?.message || "Internal Server Error",
+      meta: { durationMs },
+      debug:
+        process.env.NODE_ENV === "production"
+          ? undefined
+          : { stack: err?.stack, raw: err },
     });
   }
 };
-
 //    const doc = await order.findOne({
 //       where: { id: req.params.orderId },
 //       include: [
