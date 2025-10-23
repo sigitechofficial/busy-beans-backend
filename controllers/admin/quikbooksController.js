@@ -6,6 +6,7 @@
 // - POST /qbo/customers/import  -> same headers with token/realm; imports users without qboCustomerId
 
 const QBO = require("../quickBooks"); // adjust path if needed
+const QBOINVOICE = require("../quickBooksInvoice"); // adjust path if needed
 const { user, billingAddress, address, order, item } = require("../../models"); // adjust path if needed
 const { Op, literal, fn, col } = require("sequelize");
 
@@ -214,7 +215,7 @@ exports.importCustomers = async (req, res) => {
           u
         );
         // optionally persist the qbo id if your schema has it:
-        if ("qboCustomerId" in u) {
+        if ("qboCustomerId" in u && id) {
           await u.update({ qboCustomerId: id });
         }
         results.push({ userId: u.id, status: "ok", qboCustomerId: id });
@@ -533,11 +534,20 @@ exports.createInvoiceForOrder = async (req, res) => {
       );
     }
 
+    const clientId = process.env.QBO_CLIENT_ID;
+    console.log("🚀 ~ clientId:", clientId);
+    const clientSecret = process.env.QBO_CLIENT_SECRET;
+    console.log("🚀 ~ clientSecret:", clientSecret);
+
     // 5) Call service to create the invoice in QBO
     //    Keep the service responsible for mapping order → QBO payload
-    const result = await QBO.createInvoiceFromOrderJSON(accessToken, realmId, {
-      ...orderData,
-      qboCustomerId, // ensure present for the service
+    const result = await QBOINVOICE.createInvoiceFromOrder({
+      accessToken,
+      realmId,
+      clientId,
+      clientSecret,
+      order: orderData,
+      qboCustomerId,
     });
 
     // 6) Success response
