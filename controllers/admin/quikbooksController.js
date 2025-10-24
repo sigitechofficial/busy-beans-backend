@@ -432,7 +432,7 @@ exports.createInvoiceForOrder = async (req, res) => {
       return httpError(
         res,
         400,
-        "Missing QuickBooks credentials. Provide x-qbo-access and x-qbo-realmid headers OR ?accessToken=&realmId= OR body accessToken/realmId."
+        "Missing QuickBooks credentials please login."
       );
     }
 
@@ -511,6 +511,22 @@ exports.createInvoiceForOrder = async (req, res) => {
         "vat",
         "shippingCharges",
         "invoiceNumber",
+        "quickBooksInvoiceId",
+        "paymentMethod",
+        "paymentIntentId",
+        "paymentStatus",
+        "invoicePaidDate",
+        "invoiceDate",
+        "shippingCompany",
+        "termDays",
+        "note",
+        "trackingNumber",
+        [
+          literal(
+            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
+          ),
+          "shippingDate",
+        ],
       ],
     });
 
@@ -520,7 +536,15 @@ exports.createInvoiceForOrder = async (req, res) => {
 
     // 3) Raw JSON (plain JS object)
     const orderData = JSON.parse(JSON.stringify(doc));
+    console.log("🚀 ~ orderData:", orderData);
 
+    if (orderData.quickBooksInvoiceId) {
+      return httpError(
+        res,
+        400,
+        "This order already has a linked QuickBooks invoice."
+      );
+    }
     // 4) Validate QuickBooks customer link
     const qboCustomerId =
       orderData?.qboCustomerId ||
@@ -552,6 +576,28 @@ exports.createInvoiceForOrder = async (req, res) => {
 
     // 6) Success response
     const durationMs = Date.now() - started;
+    if (result) {
+      if (orderData.paymentStatus == "done") {
+        const method = QBOINVOICE.mapPaymentMethodName(orderData.paymentMethod); // optional mapper
+        const pay = await QBOINVOICE.createPaymentForInvoice({
+          accessToken,
+          realmId,
+          invoiceId: result.id,
+          customerId: orderData.qboCustomerId,
+          amount: result.totalAmt,
+          paymentMethodName: method, // optional
+          refNumber: orderData.invoiceNumber, // optional
+          paidDate: orderData.invoicePaidDate, // optional
+        });
+        console.log("[pay] =>", pay);
+      }
+      await order.update(
+        { quickBooksInvoiceId: result?.id || result?.Invoice?.Id || null },
+        {
+          where: { id: orderId },
+        }
+      );
+    }
     return res.status(201).json({
       status: "ok",
       message: "Invoice created in QuickBooks.",

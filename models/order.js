@@ -1,7 +1,7 @@
-const { DataTypes, Sequelize } = require('sequelize');
+const { DataTypes, Sequelize } = require("sequelize");
 
 module.exports = (sequelize) => {
-  const order = sequelize.define('order', {
+  const order = sequelize.define("order", {
     totalBill: {
       type: DataTypes.DECIMAL(20, 2),
       allowNull: true,
@@ -63,9 +63,9 @@ module.exports = (sequelize) => {
       allowNull: true,
     },
     paymentStatus: {
-      type: DataTypes.ENUM('pending', 'done'),
+      type: DataTypes.ENUM("pending", "done"),
       allowNull: true,
-      defaultValue: 'pending',
+      defaultValue: "pending",
     },
     orderStatus: {
       type: DataTypes.STRING,
@@ -86,13 +86,13 @@ module.exports = (sequelize) => {
     },
     frequency: {
       type: DataTypes.ENUM(
-        'just-onces',
-        'weekly',
-        'every-two-weeks',
-        'every-four-weeks',
+        "just-onces",
+        "weekly",
+        "every-two-weeks",
+        "every-four-weeks"
       ),
       allowNull: true,
-      defaultValue: 'just-onces',
+      defaultValue: "just-onces",
     },
     on: {
       type: DataTypes.DATEONLY,
@@ -100,9 +100,9 @@ module.exports = (sequelize) => {
       defaultValue: Sequelize.NOW,
     },
     createdBy: {
-      type: DataTypes.ENUM('customer', 'sales-rep', 'admin'),
+      type: DataTypes.ENUM("customer", "sales-rep", "admin"),
       allowNull: false,
-      defaultValue: 'customer',
+      defaultValue: "customer",
     },
     invoiceId: {
       type: DataTypes.STRING,
@@ -175,6 +175,10 @@ module.exports = (sequelize) => {
       defaultValue: 30,
     },
     pulloutIntentId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    quickBooksInvoiceId: {
       type: DataTypes.STRING,
       allowNull: true,
     },

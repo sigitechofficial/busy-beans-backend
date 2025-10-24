@@ -37,7 +37,6 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   // if (input?.items?.length < 1) {
   //   throw new AppError('Cart is empty add products to place order', 404);
   // }
-
   //   console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
   //   if (!customer) {
   //     return next(new AppError("Customer not found.", 404));
@@ -190,8 +189,12 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     element.partnerOrderId = newOrder.id;
   });
   console.log("🚀 ~ finalItems:", finalItems);
+  console.log("🚀 ~ finalItems:", finalItems);
+  console.log("🚀 ~ finalItems:", finalItems);
+  console.log("🚀 ~ finalItems:", finalItems);
+  console.log("🚀 ~ finalItems:", finalItems);
 
-  await partnerOrderItem.bulkCreate(finalItems);
+  const allitems = await partnerOrderItem.bulkCreate(finalItems);
 
   //   if (newOrder.frequency != "just-onces")
   //     setOrderFrequency({
@@ -199,7 +202,7 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   //       salesRepId: customer?.salesRepId,
   //     });
 
-  if (input?.items && input.items?.length > 0) {
+  if (finalItems && finalItems?.length > 0) {
     orderEventsToLocalPatnerOrAdmin({
       orderId: newOrder?.id,
       orderType: "local-partner",
@@ -208,7 +211,7 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   }
   return res.status(200).json({
     status: "success",
-    data: { id: newOrder?.id },
+    data: { id: newOrder?.id, allitems },
   });
 });
 
@@ -540,10 +543,16 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
   if (!doc) {
     return next(new AppError("Data not found!", 400));
   }
+  const output = JSON.parse(JSON.stringify(doc));
+  output.items = output.partnerOrderItems;
+  output.partnerOrderItems = undefined;
+  if (req?.user?.entity == "localPartner") {
+    output.selfOrder = true;
+  }
   res.status(200).json({
     status: "success",
     data: {
-      order: doc,
+      order: output,
     },
   });
 });

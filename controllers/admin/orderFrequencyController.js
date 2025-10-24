@@ -365,6 +365,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   console.log("🚀 ~ shippingCompany:", shippingCompany);
   input.order.itemsPrice = itemsPrice;
+  input.order.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
   input.order.discountPrice = discountOnItemsPrice;
   // input.order.discountPercentage = percentageDiscount;
   input.order.shippingCharges = shippingCompany?.charges;
@@ -381,13 +382,27 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   newOrder.invoiceNumber = `INV00${newOrder?.id}`;
   await newOrder.save();
 
-  await orderHistory.bulkCreate([
+  const historyEntry = [
     {
       statusId: 1,
       orderId: newOrder.id,
       on: Date.now(),
     },
-  ]);
+    {
+      statusId: 2,
+      orderId: newOrder.id,
+      on: Date.now(),
+    },
+  ];
+
+  if (customer.partnerType == "direct-partner") {
+    historyEntry.push({
+      statusId: 3,
+      orderId: newOrder.id,
+      on: Date.now(),
+    });
+  }
+  await orderHistory.bulkCreate(historyEntry);
 
   finalItems.forEach((element) => {
     element.orderId = newOrder.id;
@@ -820,6 +835,7 @@ exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
       where: { visibilityDate: today, status: 1 },
       attributes: ["id"],
     });
+
     console.log("🚀 ~ pendingOrders:", pendingOrders);
 
     if (!pendingOrders || pendingOrders.length === 0) {

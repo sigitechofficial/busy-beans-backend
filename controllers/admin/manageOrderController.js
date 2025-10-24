@@ -313,7 +313,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = order.statusId AND orderHistories.orderId = order.id LIMIT 1)`
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
       ),
       "deliveredOn",
     ],

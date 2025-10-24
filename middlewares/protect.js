@@ -1,10 +1,10 @@
-require('dotenv').config();
-const { user, account, supplier, salesRep, employee } = require('../models');
-const AppError = require('../utils/appError');
-const Redis = require('../utils/redisHandling');
-const { promisify } = require('util');
-const jwt = require('jsonwebtoken');
-const catchAsync = require('./../utils/catchAsync');
+require("dotenv").config();
+const { user, account, supplier, salesRep, employee } = require("../models");
+const AppError = require("../utils/appError");
+const Redis = require("../utils/redisHandling");
+const { promisify } = require("util");
+const jwt = require("jsonwebtoken");
+const catchAsync = require("./../utils/catchAsync");
 
 const MODEL = {
   user: user,
@@ -17,39 +17,38 @@ const MODEL = {
 
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
- 
 
   // 1) Get token from Authorization header or cookies
   if (
     req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
+    req.headers.authorization.startsWith("Bearer")
   ) {
-    console.log('🚀 ~ PROTECT MIDDLEWARE authorization Bearer Token:');
+    console.log("🚀 ~ PROTECT MIDDLEWARE authorization Bearer Token:");
 
-    token = req.headers.authorization.split(' ')[1];
+    token = req.headers.authorization.split(" ")[1];
   } else if (req.cookies && req.cookies.jwt) {
-    console.log('🚀 ~ PROTECT MIDDLEWARE cookies:');
+    console.log("🚀 ~ PROTECT MIDDLEWARE cookies:");
     token = req.cookies.jwt;
   }
 
   if (!token) {
     return next(
       new AppError(
-        'You are not logged in! Please log in to get access.',
+        "You are not logged in! Please log in to get access.",
         401,
-        'authentication-fail',
-      ),
+        "authentication-fail"
+      )
     );
   }
   // 2) Verify JWT
-   console.log('🚀 ~ protect >>>>>>:',token);
+  console.log("🚀 ~ protect >>>>>>:", token);
   let decoded;
   try {
     decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
-    console.log('🚀 ~promisify(jwt.verify) decoded:', decoded);
+    console.log("🚀 ~promisify(jwt.verify) decoded:", decoded);
   } catch (err) {
     return next(
-      new AppError('Invalid or expired token.', 401, 'authentication-fail'),
+      new AppError("Invalid or expired token.", 401, "authentication-fail")
     );
   }
   // console.log('🚀 ~ PROTECT MIDDLEWARE decoded:', decoded);
@@ -71,10 +70,10 @@ exports.protect = catchAsync(async (req, res, next) => {
   ) {
     return next(
       new AppError(
-        'Session expired or token revoked.',
+        "Session expired or token revoked.",
         401,
-        'authentication-fail',
-      ),
+        "authentication-fail"
+      )
     );
   }
   // console.log('🚀 ~ AUTH PASS NOW GET USER FROM DB ', decoded?.id);
@@ -87,18 +86,14 @@ exports.protect = catchAsync(async (req, res, next) => {
   if (!currentUser) {
     return next(
       new AppError(
-        'The user belonging to this token no longer exists.',
+        "The user belonging to this token no longer exists.",
         401,
-        'authentication-fail',
-      ),
+        "authentication-fail"
+      )
     );
   } else if (!currentUser.status) {
     return next(
-      new AppError(
-        'User blocked by administrator.',
-        401,
-        'authentication-fail',
-      ),
+      new AppError("User blocked by administrator.", 401, "authentication-fail")
     );
   }
 
@@ -118,8 +113,8 @@ exports.restrictTo = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !allowedRoles.includes(req.user.entity)) {
       return res.status(200).json({
-        status: 'fail',
-        message: 'You do not have permission to perform this action',
+        status: "fail",
+        message: "You do not have permission to perform this action",
       });
     }
     next();
