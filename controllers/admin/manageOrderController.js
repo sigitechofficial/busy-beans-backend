@@ -831,7 +831,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     req.body.orderData.shippingCompany = "UPS";
 
     if (statusId === 2 && [267, 279].includes(userId)) {
-      req.body.orderData.supplierId = 4;
+      req.body.orderData.supplierId = 17;
     }
 
     await Model.update(req.body?.orderData, {
@@ -1598,16 +1598,16 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
       fs.unlink(pdfPath, (unlinkErr) => {
         if (unlinkErr) {
           console.error(
-            `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
+            `❌ ~ Failed to delete invoice PDF for order ${placedOrder.id}:`,
             unlinkErr
           );
         } else {
-          console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
+          console.log(`🗑️ ~ Deleted invoice PDF: ${pdfFilename}`);
         }
       });
     } else {
       console.warn(
-        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`
+        `⚠️ ~ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`
       );
     }
   });

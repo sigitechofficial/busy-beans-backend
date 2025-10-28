@@ -14,6 +14,8 @@ const {
   supplier,
   salesRep,
   chequeDetail,
+  statuses,
+  orderFrequency,
 } = require("../../models");
 const fs = require("fs");
 const path = require("path");
@@ -924,3 +926,173 @@ exports.fetchSavedPaymentMethods = async (req, res, next) => {
 
   return res.status(200).json(output);
 };
+
+exports.partnerOrderNavigationCounts = catchAsync(async (req, res, next) => {
+  let employeeId = null;
+  //   if (req.user.entity == "adminEmployee") {
+  //     employeeId = req.user?.id;
+  //   }
+
+  // Query to count orders based on employeeId
+  const data = await statuses.findAll({
+    attributes: [
+      "id",
+      "orderStatus",
+      [
+        literal(
+          `(SELECT COUNT(partnerOrders.id) 
+           FROM partnerOrders  WHERE partnerOrders.statusId = statuses.id
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
+        ),
+        "count",
+      ],
+    ],
+  });
+
+  let condition = {};
+  if (req.params.srId) condition.salesRepId = req.params.srId;
+
+  // Add visibilityDate condition
+  condition.visibilityDate = {
+    [Op.lte]: new Date(), // or moment().toDate()
+  };
+
+  //   const upcommingOrderCount = employeeId
+  //     ? await orderFrequency.count({
+  //         where: {
+  //           ...condition,
+  //           nextOrderDate: {
+  //             [Op.not]: literal(`
+  //         (SELECT DATE(partnerOrders.on)
+  //          FROM partnerOrders
+  //          JOIN users ON users.id = partnerOrders.userId
+  //          WHERE DATE(partnerOrders.on) = DATE(orderFrequency.nextOrderDate)
+  //          AND partnerOrders.orderFrequencyId = orderFrequency.id
+  //          ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})
+  //       `),
+  //           },
+  //         },
+  //       })
+  //     : await orderFrequency.count({
+  //         where: {
+  //           ...condition,
+  //           nextOrderDate: {
+  //             [Op.notIn]: literal(`
+  //           (SELECT DATE(orders.on)
+  //           FROM orders
+  //           WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate)
+  //           AND orders.orderFrequencyId = orderFrequency.id)
+  //         `),
+  //           },
+  //         },
+  //       });
+
+  const output = JSON.parse(JSON.stringify(data));
+
+  //   output.push({
+  //     id: 7,
+  //     orderStatus: "Upcomming Orders",
+  //     count: upcommingOrderCount,
+  //   });
+
+  return res.status(200).json({
+    status: "success",
+    data: output,
+  });
+});
+
+exports.partnerOrderNavigationCountsLocalPatner = catchAsync(
+  async (req, res, next) => {
+    let employeeId = null;
+    if (req.user.entity === "partnerEmployee") {
+      employeeId = req.user?.id;
+    }
+
+    // Define the literals for both scenarios
+    const employeeFilterLiteral = employeeId
+      ? `AND partnerOrders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`
+      : `AND partnerOrders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
+
+    const upcomingOrderCountLiteral = employeeId
+      ? `AND partnerOrders.userId IN (SELECT id FROM users WHERE employeeId = ${employeeId})`
+      : `AND partnerOrders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
+
+    // Query to count orders based on employeeId (handling both cases for employeeId)
+    const data = await statuses.findAll({
+      attributes: [
+        "id",
+        "orderStatus",
+        [
+          literal(
+            `(SELECT COUNT(partnerOrders.id) 
+             FROM partnerOrders 
+             WHERE partnerOrders.statusId = statuses.id 
+             ${employeeFilterLiteral})`
+          ),
+          "count",
+        ],
+      ],
+    });
+
+    let condition = {};
+    if (req.params.srId) condition.salesRepId = req.params?.srId;
+
+    // Add visibilityDate condition
+    condition.visibilityDate = {
+      [Op.lte]: new Date(), // or moment().toDate()
+    };
+
+    // Handle upcoming order count based on employeeId
+    // const upcommingOrderCount = await orderFrequency.count({
+    //   where: {
+    //     ...condition,
+    //     nextOrderDate: {
+    //       [Op.notIn]: literal(`
+    //         (SELECT DATE(partnerOrders.on)
+    //          FROM partnerOrders
+    //          WHERE DATE(partnerOrders.on) = DATE(orderFrequency.nextOrderDate)
+    //          AND partnerOrders.orderFrequencyId = orderFrequency.id
+    //          ${upcomingOrderCountLiteral})
+    //       `),
+    //     },
+    //   },
+    // });
+
+    const output = JSON.parse(JSON.stringify(data));
+
+    // output.push({
+    //   id: 7,
+    //   orderStatus: "Upcomming Orders",
+    //   count: upcommingOrderCount,
+    // });
+
+    return res.status(200).json({
+      status: "success",
+      data: output,
+    });
+  }
+);
+
+exports.partnerOrderNavigationCountsSupplier = catchAsync(
+  async (req, res, next) => {
+    const data = await statuses.findAll({
+      attributes: [
+        "id",
+        "orderStatus",
+        [
+          literal(
+            `(SELECT COUNT(id) FROM partnerOrders WHERE partnerOrders.statusId = statuses.id AND partnerOrders.supplierId = ${req.params?.id})`
+          ),
+          "count",
+        ],
+      ],
+    });
+
+    const output = JSON.parse(JSON.stringify(data));
+
+    return res.status(200).json({
+      status: "success",
+      data: output,
+    });
+  }
+);

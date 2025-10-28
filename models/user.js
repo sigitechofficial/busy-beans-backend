@@ -1,19 +1,19 @@
-const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
+const { DataTypes } = require("sequelize");
+const bcrypt = require("bcryptjs");
 
 module.exports = (sequelize) => {
   const user = sequelize.define(
-    'user',
+    "user",
     {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
           notNull: {
-            msg: 'First Name is Required',
+            msg: "First Name is Required",
           },
           notEmpty: {
-            msg: 'First Name cannot be empty',
+            msg: "First Name cannot be empty",
           },
         },
       },
@@ -21,17 +21,17 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
         unique: {
-          msg: 'User already exists with this email',
+          msg: "User already exists with this email",
         },
         validate: {
           notNull: {
-            msg: 'Email is Required',
+            msg: "Email is Required",
           },
           notEmpty: {
-            msg: 'Email cannot be empty',
+            msg: "Email cannot be empty",
           },
           isEmail: {
-            msg: 'Please provide a valid email address',
+            msg: "Please provide a valid email address",
           },
         },
       },
@@ -94,14 +94,14 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       registerBy: {
-        type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
+        type: DataTypes.ENUM("email", "google", "apple", "facebook"),
         allowNull: false,
-        defaultValue: 'email',
+        defaultValue: "email",
       },
       createdBy: {
-        type: DataTypes.ENUM('registration', 'sales-rep', 'admin'),
+        type: DataTypes.ENUM("registration", "sales-rep", "admin"),
         allowNull: false,
-        defaultValue: 'registration',
+        defaultValue: "registration",
       },
       preferredPaymentMethod: {
         type: DataTypes.STRING(),
@@ -125,9 +125,9 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       qboSyncStatus: {
-        type: DataTypes.ENUM('pending', 'synced', 'error'),
+        type: DataTypes.ENUM("pending", "synced", "error"),
         allowNull: false,
-        defaultValue: 'pending',
+        defaultValue: "pending",
       },
       qboSyncError: {
         type: DataTypes.TEXT, // last error blob (debug)
@@ -139,49 +139,49 @@ module.exports = (sequelize) => {
       },
     },
     {
-      tableName: 'users',
+      tableName: "users",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['email'],
-          name: 'email_index',
+          fields: ["email"],
+          name: "email_index",
         },
       ],
-    },
+    }
   );
   // Hide fields in queries
-  user.addHook('beforeFind', (options) => {
+  user.addHook("beforeFind", (options) => {
     if (!options.attributes) options.attributes = {};
     const existing = Array.isArray(options.attributes.exclude)
       ? options.attributes.exclude
       : [];
     options.attributes.exclude = Array.from(
-      new Set([...existing, 'deletedAt', 'updatedAt']),
+      new Set([...existing, "deletedAt", "updatedAt"])
     );
   });
 
   const SALT_ROUNDS = 12;
 
   // Create
-  user.addHook('beforeCreate', (instance) => {
+  user.addHook("beforeCreate", (instance) => {
     if (instance.password) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
-      console.log('🚀 ~  instance.password:', instance.password);
+      console.log("🚀 ~  instance.password:", instance.password);
     }
   });
 
   // Update (only if changed)
-  user.addHook('beforeUpdate', (instance) => {
-    if (instance.changed('password')) {
+  user.addHook("beforeUpdate", (instance) => {
+    if (instance.changed("password")) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
   // If you ever bulk-create users with plaintext passwords:
-  user.addHook('beforeBulkCreate', (instances) => {
+  user.addHook("beforeBulkCreate", (instances) => {
     for (const i of instances) {
       if (i.password) {
         i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);

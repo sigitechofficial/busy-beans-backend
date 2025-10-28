@@ -17,7 +17,17 @@
   >
     <!-- Header -->
     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 24px">
-      <h1 style="margin:0; font-size:56px; line-height:1; letter-spacing:1px; color:#4a4f54">INVOICE</h1>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:16px; margin-bottom:24px;">
+  <div style="display:flex; align-items:center; gap:40px;">
+    <h1 style="margin:0; font-size:40px; line-height:1; letter-spacing:1px; color:#4a4f54;">
+      INVOICE
+    </h1>
+    <% if (order?.paymentStatus == 'done') { %>
+      <img style="width:110px;" src="https://admin.busybeancoffee.com/images/paidtag.png" alt="invoice paid logo" />
+    <% } %>
+  </div>
+</div>
+
       <img src="https://admin.busybeancoffee.com/images/logocoffee.png" alt="Busy Bean Coffee" style="height: 64px; margin-top: 8px" />
     </div>
 

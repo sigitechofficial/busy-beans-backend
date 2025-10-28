@@ -656,4 +656,19 @@ router.get(
   patnerOrderController.fetchSavedPaymentMethods
 );
 
+router.get(
+  "/partner-order-navigation-counts",
+  patnerOrderController.partnerOrderNavigationCounts
+);
+
+router.get(
+  "/partner-order-navigation-counts/sales-rep/:srId",
+  patnerOrderController.partnerOrderNavigationCountsLocalPatner
+);
+
+router.get(
+  "/partner-order-navigation-counts/supplier/:id",
+  patnerOrderController.partnerOrderNavigationCountsSupplier
+);
+
 module.exports = router;

@@ -428,10 +428,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
 // exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //   const input = req.body;
-//   console.log(
-//     '🚀 ~ exports.bookNewOrder=catchAsync ~ input:',
-//     input?.order?.userId,
-//   );
+
 //   if (input?.items?.length < 1) {
 //     throw new AppError('Cart is empty add products to place order', 404);
 //   }
