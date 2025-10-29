@@ -810,7 +810,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     parseFloat(input?.order?.vat || 0) +
     parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
 
-  if (placedOrder.invoiceDate) {
+  if (placedOrder?.invoiceDate) {
     delete input.order.invoiceDate;
   }
   await partnerOrder.update(input?.order, { where: { id: placedOrder?.id } });
@@ -880,10 +880,17 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     }
   }
 
-  if (
-    input?.order?.emailInvoiceToCustomer &&
-    !input?.order?.attemptImmediatePayment
-  ) {
+  if (true) {
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
+    console.log("🚀 ~ true:", true);
     sentPaymentInvoiceEvent({
       orderId: placedOrder?.id,
       orderType: "local-partner",
@@ -891,7 +898,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
   }
   return res.status(200).json({
     status: "success",
-    message: "success",
+    message: "success34234",
     data: { id: req.params.orderId },
   });
 });

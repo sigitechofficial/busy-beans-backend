@@ -498,6 +498,8 @@ exports.dataForEmailAndNotifications = async (
   orderId,
   orderType = "customer"
 ) => {
+  console.log("🚀 ~ orderId:", orderId);
+  console.log("🚀 ~ orderType:", orderType);
   const output =
     orderType == "customer"
       ? await customerOrder({ orderId: orderId })
@@ -510,8 +512,8 @@ exports.dataForEmailAndNotifications = async (
     output.salesRep = null;
   }
   console.log(
-    "ðŸš€ ~ exports.dataForEmailAndNotifications= ~ output:",
-    output?.id
+    "ðŸš€ ~ exports.dataForEmailAndNotificati3333333333333333ons= ~ output:",
+    output
   );
 
   const or = [{ accountId: 1 }];
@@ -548,7 +550,7 @@ exports.dataForEmailAndNotifications = async (
   output.localPatnerCommission =
     orderType == "customer"
       ? await item.sum("salerCommission", {
-          where: { orderId: output.id },
+          where: { orderId: output?.id },
         })
       : 0;
 

@@ -5,12 +5,14 @@ const {
 
 exports.sentPaymentInvoiceEvent = async ({
   orderId,
-  ordeType = "customer",
+  orderType = "customer",
 }) => {
+  console.log("🚀 ~ orderId:", orderId);
+  console.log("🚀 ~ ordeType:", orderType);
   try {
     const { details, email } = await dataForEmailAndNotifications(
       orderId,
-      ordeType
+      orderType
     );
 
     console.log(

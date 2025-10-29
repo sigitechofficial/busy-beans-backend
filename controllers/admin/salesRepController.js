@@ -161,12 +161,45 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
   input.stripeCustomerId = stripeCustomer;
 
   const doc = await salesRep.create(input);
+  const toObj = (v) => {
+    if (v == null) return null;
+    if (typeof v === "object") return v; // kabhi kabhi libs already object de deti
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (!s || s === "[object Object]") return null; // client ne stringify nahi kiya
+      try {
+        return JSON.parse(s);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const bAddress = toObj(req.body?.billingAddress);
+  const shippingAddress = toObj(req.body?.shippingAddress);
+
+  console.log("🚀 ~ shippingAddress:", shippingAddress);
+  console.log("🚀 ~ shippingAddress:", shippingAddress);
+  console.log("🚀 ~ bAddress:", bAddress);
+  console.log("🚀 ~ bAddress:", bAddress);
+  console.log("🚀 ~ bAddress:", bAddress);
+  console.log("🚀 ~ bAddress:", bAddress);
+  console.log("🚀 ~ bAddress:", bAddress);
+  if (shippingAddress && bAddress) {
+    shippingAddress.salesRepId = doc.id;
+    console.log("🚀 ~ shippingAddress:", shippingAddress);
+    bAddress.salesRepId = doc.id;
+    console.log("🚀 ~ bAddress:", bAddress);
+    await address.create(shippingAddress);
+    await billingAddress.create(bAddress);
+  }
   await stateInSystem.update(
     { salesRepId: doc?.id },
     { where: { name: input?.state } }
   );
 
-  connectStripeAccountEvent({ patner: doc });
+  //   connectStripeAccountEvent({ patner: doc });
 
   return res.status(201).json({
     status: "success",
