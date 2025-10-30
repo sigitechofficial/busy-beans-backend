@@ -598,6 +598,7 @@ exports.createInvoiceForOrder = async (req, res) => {
         }
       );
     }
+
     return res.status(201).json({
       status: "ok",
       message: "Invoice created in QuickBooks.",

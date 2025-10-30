@@ -2,7 +2,7 @@
 const axios = require("axios");
 const { or } = require("sequelize");
 
-// ---- Base (set QBO_ENV=sandbox for sandbox; else production) ----
+// ---- Base (QBO_ENV=sandbox for sandbox; anything else => prod) ----
 const BASE =
   (process.env.QBO_ENV || "").toLowerCase() === "sandbox"
     ? "https://sandbox-quickbooks.api.intuit.com"
@@ -10,39 +10,137 @@ const BASE =
 const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 const MINOR = 70;
 
+// ---- helpers ----
+// QBO SQL string literal must escape single quotes as ''
+const qboQuote = (s) =>
+  `'${String(s ?? "")
+    .trim()
+    .replace(/'/g, "''")}'`;
+
 // ---- tiny HTTP helpers (no refresh/probe) ----
-async function qboPost({
-  accessToken,
-  url,
-  data,
-  contentType = "application/json",
-}) {
-  return axios.post(url, data, {
+async function qboGet({ accessToken, realmId, path }) {
+  const url = `${QBO(realmId)}${path}`;
+  return axios.get(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": contentType,
       Accept: "application/json",
     },
   });
 }
+
+// Use **GET** with ?query= (URL-encoded) — most robust on production
 async function qboQuery({ accessToken, realmId, query }) {
-  const url = `${QBO(realmId)}/query?minorversion=${MINOR}`;
-  return qboPost({
-    accessToken,
-    url,
-    data: query,
-    contentType: "application/text",
+  const url = `${QBO(realmId)}/query?minorversion=${MINOR}&query=${encodeURIComponent(
+    query
+  )}`;
+  // Optional debug: exact SQL
+  console.log("[QBO][QL] ->", query);
+  return axios.get(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
   });
 }
 
 // ---- lookups / ensure ----
+
+// Exact name match (no lower()), on parse error we’ll just let it return null
 async function findAccountId({ accessToken, realmId, name }) {
-  const safe = String(name || "").replace(/'/g, "\\'");
-  const sql = `select Id, Name from Account where Name = '${safe}'`;
+  if (!name) return null;
+  const sql =
+    `select Id, Name, AccountType, AccountSubType from Account ` +
+    `where Name = ${qboQuote(name)} and Active = true`;
   const r = await qboQuery({ accessToken, realmId, query: sql });
-  const rows = r.data?.QueryResponse?.Account || [];
-  return rows[0]?.Id || null;
+  const row = r.data?.QueryResponse?.Account?.[0];
+  return row?.Id ? String(row.Id) : null;
 }
+
+// Scan Income accounts and match in JS (case-insensitive)
+async function findIncomeAccountIdByScan({ accessToken, realmId, name }) {
+  const target = String(name || "")
+    .trim()
+    .toLowerCase();
+  if (!target) return null;
+  const sql = `select Id, Name from Account where AccountType = 'Income' and Active = true STARTPOSITION 1 MAXRESULTS 200`;
+  const r = await qboQuery({ accessToken, realmId, query: sql });
+  const list = r.data?.QueryResponse?.Account || [];
+  const hit = list.find(
+    (a) =>
+      String(a.Name || "")
+        .trim()
+        .toLowerCase() === target
+  );
+  return hit?.Id ? String(hit.Id) : null;
+}
+
+async function findAnyIncomeAccountId({ accessToken, realmId }) {
+  const sql = `select Id, Name from Account where AccountType = 'Income' and Active = true STARTPOSITION 1 MAXRESULTS 1`;
+  const r = await qboQuery({ accessToken, realmId, query: sql });
+  const row = r.data?.QueryResponse?.Account?.[0];
+  return row?.Id ? String(row.Id) : null;
+}
+
+async function createIncomeAccount({
+  accessToken,
+  realmId,
+  name = "Sales of Product Income",
+}) {
+  const url = `${QBO(realmId)}/account?minorversion=${MINOR}`;
+  const payload = {
+    Name: name,
+    AccountType: "Income",
+    AccountSubType: "SalesOfProductIncome",
+  };
+  const r = await axios.post(url, payload, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+  });
+  const id = r.data?.Account?.Id;
+  return id ? String(id) : null;
+}
+
+async function ensureIncomeAccount({
+  accessToken,
+  realmId,
+  preferredNames = [
+    "Sales of Product Income",
+    "Sales",
+    "Product Sales",
+    "Services",
+    "Service/Fee Income",
+  ],
+}) {
+  // 1) try preferred names (exact)
+  for (const nm of preferredNames) {
+    const id = await findAccountId({ accessToken, realmId, name: nm });
+    if (id) return id;
+  }
+  // 2) case-insensitive scan within Income accounts
+  for (const nm of preferredNames) {
+    const id = await findIncomeAccountIdByScan({
+      accessToken,
+      realmId,
+      name: nm,
+    });
+    if (id) return id;
+  }
+  // 3) any Income account
+  const anyId = await findAnyIncomeAccountId({ accessToken, realmId });
+  if (anyId) return anyId;
+  // 4) create a standard one
+  const created = await createIncomeAccount({
+    accessToken,
+    realmId,
+    name: "Sales of Product Income",
+  });
+  if (created) return created;
+  throw new Error("No Income account available and creation failed.");
+}
+
 async function ensureServiceItem({
   accessToken,
   realmId,
@@ -50,11 +148,10 @@ async function ensureServiceItem({
   incomeAccountId,
   taxable = false,
 }) {
-  const safe = String(name || "").replace(/'/g, "\\'");
-  const findSql = `select Id, Name from Item where Name = '${safe}'`;
+  const findSql = `select Id, Name from Item where Name = ${qboQuote(name)}`;
   const f = await qboQuery({ accessToken, realmId, query: findSql });
   const found = (f.data?.QueryResponse?.Item || [])[0];
-  if (found?.Id) return found.Id;
+  if (found?.Id) return String(found.Id);
 
   const createUrl = `${QBO(realmId)}/item?minorversion=${MINOR}`;
   const payload = {
@@ -64,8 +161,14 @@ async function ensureServiceItem({
     TrackQtyOnHand: false,
     Taxable: Boolean(taxable),
   };
-  const c = await qboPost({ accessToken, url: createUrl, data: payload });
-  return c.data?.Item?.Id;
+  const c = await axios.post(createUrl, payload, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+  });
+  return c.data?.Item?.Id ? String(c.data.Item.Id) : null;
 }
 
 // ---- address mapper ----
@@ -86,42 +189,34 @@ function mapShipAddr(order) {
 }
 
 // ---- PaymentMethod (optional; for Payment) ----
-// Ensure a ShipMethod exists by name; create if missing → return Id
-
-// 1) ID-only resolver (no name-only fallback)
-
-// small helper to append notes safely
-function appendNote(existing, extra) {
-  return [existing, extra].filter(Boolean).join(" | ");
-}
-
-// Ensure a PaymentMethod exists by name; create if missing → return Id
 async function ensurePaymentMethod({ accessToken, realmId, name, type }) {
   if (!name) return null;
   const safe = String(name).trim();
   if (!safe) return null;
 
-  // best-effort type inference if not provided
   let pmType = type; // "CreditCard" | "NonCreditCard"
   if (!pmType) {
     const s = safe.toLowerCase();
     pmType = s.includes("card") ? "CreditCard" : "NonCreditCard";
   }
 
-  // 1) find by exact Name
-  const findSql = `select Id, Name from PaymentMethod where Name = '${safe.replace(/'/g, "\\'")}'`;
+  const findSql = `select Id, Name from PaymentMethod where Name = ${qboQuote(name)}`;
   const r = await qboQuery({ accessToken, realmId, query: findSql });
   const found = (r.data?.QueryResponse?.PaymentMethod || [])[0];
   if (found?.Id) return String(found.Id);
 
-  // 2) create
   const url = `${QBO(realmId)}/paymentmethod?minorversion=${MINOR}`;
-  const payload = { Name: safe, Type: pmType }; // Type optional but good to set
-  const c = await qboPost({ accessToken, url, data: payload });
+  const payload = { Name: safe, Type: pmType };
+  const c = await axios.post(url, payload, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+  });
   return c.data?.PaymentMethod?.Id ? String(c.data.PaymentMethod.Id) : null;
 }
 
-// map "bank check" etc to QBO PaymentMethod
 function mapPaymentMethodName(raw) {
   const s = String(raw || "").toLowerCase();
   if (s.includes("check") || s.includes("cheque") || s.includes("bank check"))
@@ -135,33 +230,16 @@ function mapPaymentMethodName(raw) {
 
 // check if any Payment already linked to this invoice
 async function findPaymentForInvoice({ accessToken, realmId, invoiceId }) {
-  const sql = `select Id, TotalAmt from Payment where Any(LinkedTxn.TxnId) = '${String(invoiceId)}'`;
-  const url = `${QBO(realmId)}/query?minorversion=${MINOR}`;
-  const r = await axios.post(url, sql, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/text",
-    },
-  });
+  const sql = `select Id, TotalAmt from Payment where Any(LinkedTxn.TxnId) = '${String(
+    invoiceId
+  )}' and Any(LinkedTxn.TxnType) = 'Invoice'`;
+  const r = await qboQuery({ accessToken, realmId, query: sql });
   const row = r.data?.QueryResponse?.Payment?.[0];
   return row?.Id || null;
 }
 
-// Agar qboGet nahi hai to add this tiny helper:
-async function qboGet({ accessToken, realmId, path }) {
-  const url = `${QBO(realmId)}${path}`;
-  return axios.get(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
-}
-
 // --- TERMS: map & ensure ---
 function mapOrderTerm(order) {
-  // priority: explicit name -> days
   const d = Number(order.termDays || 0);
   if (d >= 60) return { name: "Net 60", dueDays: 60 };
   if (d >= 30) return { name: "Net 30", dueDays: 30 };
@@ -170,47 +248,33 @@ function mapOrderTerm(order) {
 }
 
 async function ensureTermRef({ accessToken, realmId, name, dueDays }) {
-  const q = `select Id, Name from Term where Name = '${String(name).replace(/'/g, "\\'")}'`;
-  const qUrl = `${QBO(realmId)}/query?minorversion=${MINOR}`;
-  const hTxt = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: "application/json",
-    "Content-Type": "application/text",
-  };
-  const hJson = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
+  const q = `select Id, Name from Term where Name = ${qboQuote(name)}`;
+  const r = await qboQuery({ accessToken, realmId, query: q });
+  const row = r.data?.QueryResponse?.Term?.[0];
+  if (row?.Id) return { value: String(row.Id), name };
 
-  try {
-    const r = await axios.post(qUrl, q, { headers: hTxt });
-    const row = r.data?.QueryResponse?.Term?.[0];
-    if (row?.Id) return { value: String(row.Id), name };
-  } catch (_) {
-    /* ignore */
-  }
-
-  // create if not found
+  // create if not found (may fail on some SKUs — that’s ok)
   try {
     const c = await axios.post(
       `${QBO(realmId)}/term?minorversion=${MINOR}`,
+      { Name: name, DueDays: dueDays, Type: "STANDARD" },
       {
-        Name: name,
-        DueDays: dueDays, // STANDARD terms
-        Type: "STANDARD",
-      },
-      { headers: hJson }
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      }
     );
     const id = c.data?.Term?.Id;
     return id ? { value: String(id), name } : null;
-  } catch (_) {
-    return null; // if creation blocked by company permissions
+  } catch {
+    return null;
   }
 }
 
-// --- SHIP METHOD: id-only (avoid [object Object]) ---
-// --- ID-only resolver (no name-only ref to avoid [object Object]) ---
+// --- SHIP METHOD: id-only helper (name-only fallback happens in payload build) ---
+// --- SHIP METHOD: robust resolver (safe on realms w/out ShipMethod) ---
 async function getShipMethodId({ accessToken, realmId, name }) {
   const safe = String(name || "").trim();
   if (!safe) return null;
@@ -222,50 +286,85 @@ async function getShipMethodId({ accessToken, realmId, name }) {
     "Content-Type": "application/text",
   };
 
+  // 1) Try to find by exact name. If realm doesn't support ShipMethod (4001),
+  // swallow and return null so caller can fallback to CustomField/PrivateNote.
   try {
     const sql = `select Id, Name from ShipMethod where Name = '${safe.replace(/'/g, "\\'")}'`;
-    const r = await axios.post(qUrl, sql, { headers: hTxt });
+    console.log("[QBO][ShipMethod][QL] ->", sql);
+    const r = await axios.post(qUrl, sql, {
+      headers: hTxt,
+      validateStatus: () => true,
+    });
+
+    const fault = r.data?.Fault?.Error?.[0];
+    if (r.status >= 400) {
+      const code = String(fault?.code || "");
+      const detail = String(fault?.Detail || fault?.Message || "");
+      if (code === "4001" && /ShipMethod/i.test(detail)) {
+        console.warn(
+          "[QBO][ShipMethod] Metadata not available in this realm (Shipping feature off or SKU/region limitation). Falling back."
+        );
+        return null; // ← let caller use name-only/custom-field note
+      }
+      if (r.status === 404) {
+        console.warn("[QBO][ShipMethod] Endpoint not available; falling back.");
+        return null;
+      }
+      throw new Error(
+        `QBO ShipMethod query failed: status=${r.status} code=${code} detail=${detail}`
+      );
+    }
+
     const row = r.data?.QueryResponse?.ShipMethod?.[0];
     if (row?.Id) return String(row.Id);
   } catch (e) {
-    const code = e?.response?.data?.Fault?.Error?.[0]?.code;
-    if (String(code) === "4001") return null; // entity unsupported in this realm
+    // Network or unexpected shape – log and fallback, don't block invoice creation
+    console.warn("[QBO][ShipMethod] query threw:", e?.message || e);
+    if (e?.stack) console.warn(e.stack);
+    return null;
   }
 
+  // 2) Try to create only if entity seems supported (no 4001 earlier).
   try {
-    const c = await axios.post(
-      `${QBO(realmId)}/shipmethod?minorversion=${MINOR}`,
-      { Name: safe },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+    const url = `${QBO(realmId)}/shipmethod?minorversion=${MINOR}`;
+    const payload = { Name: safe };
+    console.log("[QBO][ShipMethod][POST] ->", url, payload);
+    const c = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      validateStatus: () => true,
+    });
+
+    const f = c.data?.Fault?.Error?.[0];
+    if (c.status >= 400) {
+      if (String(f?.code || "") === "4001") {
+        console.warn(
+          "[QBO][ShipMethod] Create unsupported in this realm; fallback."
+        );
+        return null;
       }
-    );
+      // If duplicate or minor validation, try to read again by name next time.
+      console.warn(
+        "[QBO][ShipMethod] create failed:",
+        c.status,
+        f?.code,
+        f?.Detail || f?.Message
+      );
+      return null;
+    }
     return c.data?.ShipMethod?.Id ? String(c.data.ShipMethod.Id) : null;
-  } catch {
+  } catch (e) {
+    console.warn("[QBO][ShipMethod] create threw:", e?.message || e);
+    if (e?.stack) console.warn(e.stack);
     return null;
   }
 }
 
-function appendNote(existing, extra) {
-  return [existing, extra].filter(Boolean).join(" | ");
-}
-
-// Helper: safe append to PrivateNote
-function appendNote(existing, extra) {
-  return [existing, extra].filter(Boolean).join(" | ");
-}
-
-// Assumes you already have helpers in same module/file:
-// - QBO(realmId), MINOR
-// - findAccountId({ accessToken, realmId, name })
-// - ensureServiceItem({ accessToken, realmId, name, incomeAccountId, taxable })
-// - ensureShipMethod({ accessToken, realmId, name })
-// - mapShipAddr(order)
-
+// ----------------------------------------------------------------
+// MAIN (unchanged business logic – shipping line, ShipMethodRef, terms, etc.)
 async function createInvoiceFromOrder({
   accessToken,
   realmId,
@@ -274,7 +373,7 @@ async function createInvoiceFromOrder({
   incomeAccountName = "Sales of Product Income",
   genericItemName = "Coffee Sale",
   shippingItemName = "Shipping",
-  shippingTaxable = false, // true if shipping should be taxed
+  shippingTaxable = false,
 }) {
   const rid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const tag = `[QBO][inv:${rid}]`;
@@ -285,7 +384,6 @@ async function createInvoiceFromOrder({
       throw new Error("Missing accessToken/realmId");
     if (!order) throw new Error("Missing order");
 
-    // ---------- Customer ----------
     const customerId =
       order.qboCustomerId ||
       order.qboCustomerid ||
@@ -294,18 +392,11 @@ async function createInvoiceFromOrder({
       order.quickbooksCustomerId;
     if (!customerId) throw new Error("qboCustomerId not found in order");
 
-    // ---------- Income account & generic item ----------
-    let incomeAccountId =
-      (await findAccountId({
-        accessToken,
-        realmId,
-        name: incomeAccountName,
-      })) || (await findAccountId({ accessToken, realmId, name: "Sales" }));
-    if (!incomeAccountId) {
-      throw new Error(
-        "Income account not found (try 'Sales of Product Income' or 'Sales')."
-      );
-    }
+    const incomeAccountId = await ensureIncomeAccount({
+      accessToken,
+      realmId,
+      preferredNames: [incomeAccountName, "Sales of Product Income", "Sales"],
+    });
 
     const genericItemId = await ensureServiceItem({
       accessToken,
@@ -315,12 +406,10 @@ async function createInvoiceFromOrder({
       taxable: false,
     });
 
-    // ---------- Lines (products) ----------
     const Lines = [];
     const list = Array.isArray(order.items) ? order.items : [];
     for (const it of list) {
       const qty = +Number(it.qty || 1).toFixed(4);
-      // NOTE: treating 'price' as LINE TOTAL. If it's unit price, adjust.
       const lineTotal = +Number(it.price || it.total || 0).toFixed(2);
       const rate = qty > 0 ? +Number(lineTotal / qty).toFixed(4) : 0;
 
@@ -341,12 +430,12 @@ async function createInvoiceFromOrder({
           ItemRef: { value: String(genericItemId) },
           Qty: qty,
           UnitPrice: rate,
-          TaxCodeRef: { value: "NON" }, // change if items are taxable
+          TaxCodeRef: { value: "NON" },
         },
       });
     }
 
-    // ---------- Shipping as LINE ITEM ----------
+    // Shipping as LINE ITEM (QBO-supported)
     const shippingAmt = +Number(order.shippingCharges || 0).toFixed(2);
     if (shippingAmt > 0) {
       const shippingItemId = await ensureServiceItem({
@@ -394,13 +483,11 @@ async function createInvoiceFromOrder({
       });
     }
 
-    // ---------- Dates & ShipAddr ----------
     const txnDate = (
       order.invoiceDate ? new Date(order.invoiceDate) : new Date()
     )
       .toISOString()
       .slice(0, 10);
-
     const base = new Date(txnDate);
     const due = new Date(base);
     const termDays = Number(order.termDays || 0);
@@ -409,8 +496,7 @@ async function createInvoiceFromOrder({
 
     const ShipAddr = mapShipAddr(order);
 
-    // ---------- Ship Via (UPDATED LOGIC) ----------
-    // try to resolve an id; if not found, send name-only (free-text realms)
+    // Ship Via (id → name-only fallback)
     let ShipMethodRef;
     if (order.shippingCompany) {
       const shipId = await getShipMethodId({
@@ -420,13 +506,13 @@ async function createInvoiceFromOrder({
       });
       ShipMethodRef = shipId
         ? { value: shipId, name: String(order.shippingCompany) }
-        : { name: String(order.shippingCompany) }; // <= name-only
+        : { name: String(order.shippingCompany) };
     }
 
-    // ---------- Terms (SalesTermRef) ----------
+    // Terms
     let SalesTermRef = null;
     try {
-      const t = mapOrderTerm(order); // e.g., { name: "Net 30", dueDays: 30 }
+      const t = mapOrderTerm(order);
       const termRef = await ensureTermRef({
         accessToken,
         realmId,
@@ -434,18 +520,15 @@ async function createInvoiceFromOrder({
         dueDays: t.dueDays,
       });
       if (termRef?.value) SalesTermRef = termRef;
-    } catch (_) {
-      // ignore; invoice will still post
-    }
+    } catch {}
 
-    // ---------- Ship date & Tracking no. ----------
+    // Ship date & Tracking
     const ShipDate = order.shippingDate
       ? new Date(order.shippingDate).toISOString().slice(0, 10)
       : undefined;
     const TrackingNum =
       order.trackingId || order.trackingNo || order.trackingNumber || undefined;
 
-    // ---------- Payload ----------
     const payload = {
       CustomerRef: { value: String(customerId) },
       Line: Lines,
@@ -466,7 +549,6 @@ async function createInvoiceFromOrder({
       (k) => payload[k] === undefined && delete payload[k]
     );
 
-    // ---------- POST /invoice (retry without ShipMethodRef if rejected) ----------
     const url = `${QBO(realmId)}/invoice?minorversion=${MINOR}`;
     console.log(`${tag} POST ${url}`, {
       hasShipVia: !!ShipMethodRef,
@@ -508,7 +590,6 @@ async function createInvoiceFromOrder({
     }
 
     const inv = invRes.data?.Invoice || invRes.data;
-
     console.log(`${tag} ✓ invoice created`, {
       id: inv?.Id || null,
       doc: inv?.DocNumber || null,
@@ -558,27 +639,26 @@ async function createInvoiceFromOrder({
   }
 }
 
+// ---- Payment (unchanged except robust logging) ----
 async function createPaymentForInvoice({
   accessToken,
   realmId,
   invoiceId,
   customerId,
-  amount, // e.g. inv.totalAmt
-  paymentMethodName, // optional: "Check", "Bank Transfer", ...
-  refNumber, // optional: your INV #
-  paidDate, // optional: 'YYYY-MM-DD'
+  amount,
+  paymentMethodName,
+  refNumber,
+  paidDate,
 }) {
   const rid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const tag = `[QBO][pay:${rid}]`;
   const started = Date.now();
 
   try {
-    // Basic validation
     if (!accessToken || !realmId)
       throw new Error("Missing accessToken/realmId");
-    if (!invoiceId || !customerId || amount == null) {
+    if (!invoiceId || !customerId || amount == null)
       throw new Error("Missing invoiceId/customerId/amount");
-    }
 
     console.log(`${tag} start`, {
       realmId,
@@ -590,14 +670,14 @@ async function createPaymentForInvoice({
       paidDate: paidDate || null,
     });
 
-    // Idempotency: skip if a payment already links to this invoice
     let existing = null;
     try {
-      existing = await findPaymentForInvoice({
+      const existingId = await findPaymentForInvoice({
         accessToken,
         realmId,
         invoiceId,
       });
+      existing = existingId;
       console.log(`${tag} precheck existing payment=`, existing || null);
     } catch (preErr) {
       console.warn(`${tag} precheck failed:`, preErr?.message || preErr);
@@ -609,7 +689,6 @@ async function createPaymentForInvoice({
       return { id: existing, alreadyExisted: true };
     }
 
-    // Optional PaymentMethodRef
     let PaymentMethodRef;
     if (paymentMethodName) {
       try {
@@ -632,7 +711,6 @@ async function createPaymentForInvoice({
       }
     }
 
-    // Build payload
     const TxnDate = paidDate || new Date().toISOString().slice(0, 10);
     const amt = +Number(amount).toFixed(2);
     const payload = {
@@ -647,7 +725,6 @@ async function createPaymentForInvoice({
           LinkedTxn: [{ TxnId: String(invoiceId), TxnType: "Invoice" }],
         },
       ],
-      // DepositToAccountRef: { value: "<ACCOUNT_ID>" }, // optional
     };
     Object.keys(payload).forEach(
       (k) => payload[k] === undefined && delete payload[k]
@@ -678,27 +755,23 @@ async function createPaymentForInvoice({
     console.log(`${tag} done in ${Date.now() - started}ms`);
     return { id: pay?.Id, alreadyExisted: false, raw: pay };
   } catch (err) {
-    // Full error + stack
     console.error(`${tag} ✗ ERROR:`, err?.message || err);
     if (err?.stack) console.error(`${tag} STACK:\n${err.stack}`);
-
-    // Axios response details (if present)
     if (err?.response) {
       const { status, headers, data } = err.response;
       console.error(`${tag} axios.status=`, status);
       if (headers) console.error(`${tag} axios.headers=`, headers);
-      if (data) {
+      if (data)
         console.error(
           `${tag} axios.data=`,
           typeof data === "string" ? data : JSON.stringify(data, null, 2)
         );
-      }
     }
-
     console.error(`${tag} failed in ${Date.now() - started}ms`);
-    throw err; // rethrow for caller to handle
+    throw err;
   }
 }
+
 module.exports = {
   createInvoiceFromOrder,
   createPaymentForInvoice,

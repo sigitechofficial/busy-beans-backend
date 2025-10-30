@@ -45,7 +45,9 @@ const {
 const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmailAdminOrLocalPatner");
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
-  const details = await order.findOne({
+  const model = req.body?.order?.partnerOrderId ? partnerOrder : order;
+
+  const details = await model.findOne({
     where: { id: req.params?.orderId },
   });
 
@@ -58,9 +60,12 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     );
   }
   console.log("🚀 ~ req.body:", req.body);
-  await order.update(req.body.order, { where: { id: req.params?.orderId } });
+  await model.update(req.body.order, { where: { id: req.params?.orderId } });
 
-  sentPaymentInvoiceEvent({ orderId: req.params?.orderId });
+  sentPaymentInvoiceEvent({
+    orderId: req.params?.orderId,
+    orderType: req.body?.order?.partnerOrderId ? "local-partner" : "customer",
+  });
 
   //   let checkSession = false
 

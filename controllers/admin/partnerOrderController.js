@@ -1064,9 +1064,7 @@ exports.partnerOrderNavigationCountsLocalPatner = catchAsync(
     //     },
     //   },
     // });
-
     const output = JSON.parse(JSON.stringify(data));
-
     // output.push({
     //   id: 7,
     //   orderStatus: "Upcomming Orders",
