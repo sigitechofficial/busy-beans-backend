@@ -11,29 +11,33 @@ r.post("/order-invoice/create/:orderId", ctrl.createInvoiceForOrder);
 // r.post('/disconnect', ctrl.disconnect);
 r.post("/ping", ctrl.ping);
 
+const usedCodes = new Set();
+
 r.post("/auth/exchange", async (req, res) => {
   try {
     const fullUrl = String(req.body?.fullUrl || "");
-    console.log("[EXCHANGE] fullUrl=", fullUrl);
-    if (!fullUrl.includes("code=") || !fullUrl.includes("realmId=")) {
-      return res.status(400).json({
+    const u = new URL(fullUrl);
+    const code = u.searchParams.get("code") || "";
+
+    if (!code)
+      return res.status(400).json({ status: "error", error: "missing_code" });
+
+    if (usedCodes.has(code)) {
+      return res.status(409).json({
         status: "error",
-        message:
-          "Send { fullUrl: window.location.href } from the browser after Intuit redirect",
+        error: "already_exchanged",
+        message: "This authorization code was already used.",
       });
     }
+    usedCodes.add(code);
+    setTimeout(() => usedCodes.delete(code), 10 * 60 * 1000); // clean up
+
     const out = await QBO.exchangeFromFullUrl(fullUrl);
-    console.log(
-      "[EXCHANGE] OK realmId=",
-      out.realmId,
-      "access.len=",
-      (out.access_token || "").length
-    );
     return res.status(200).json({ status: "success", data: out });
   } catch (e) {
+    // on hard failures you may want to *not* delete from usedCodes for a short period
     const st = e?.response?.status || 500;
     const body = e?.response?.data || null;
-    console.error("[EXCHANGE] FAIL status=", st, "body=", body || e?.message);
     return res.status(st).json({
       status: "error",
       httpStatus: st,

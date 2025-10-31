@@ -117,8 +117,11 @@ exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
 });
 
 exports.fetchInvoice = catchAsync(async (req, res, next) => {
+  const orderType = req.body?.orderType || "customer";
+
   const { details, email } = await dataForEmailAndNotifications(
-    req.params.orderId
+    req.params.orderId,
+    orderType
   );
 
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
@@ -812,6 +815,17 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
   if (statusId == 5 && isPartnerOrder && doc?.paymentStatus != "done") {
     //HERE we try to collect payment if order type is local Patrner
+    if (!doc?.defaultBankAccount) {
+      await Model.update(req.body?.orderData, {
+        where: { id: orderId || partnerOrderId },
+      });
+      return next(
+        new AppError(
+          "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
+          404
+        )
+      );
+    }
     const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
       amount: doc.totalBill || 0,
       customerId: doc?.stripeCustomerId,
@@ -821,6 +835,17 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       partner: { srName: doc?.srName, territoryName: doc?.territoryName },
     });
 
+    if (!pullouts) {
+      await Model.update(req.body?.orderData, {
+        where: { id: orderId || partnerOrderId },
+      });
+      return next(
+        new AppError(
+          "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
+          404
+        )
+      );
+    }
     req.body.orderData.adminReceivableStatus = true;
     req.body.orderData.pulloutDate = Date.now();
     req.body.orderData.pulloutIntentId = pullouts?.paymentIntentId;

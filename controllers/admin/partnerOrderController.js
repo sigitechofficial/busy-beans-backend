@@ -17,8 +17,10 @@ const {
   statuses,
   orderFrequency,
 } = require("../../models");
+
 const fs = require("fs");
 const path = require("path");
+const Stripe = require("../stripe");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
@@ -28,6 +30,10 @@ const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
 } = require("../events/orderEvents");
+
+const {
+  paidInvoiceAdminOrLocalPatnerEventAndCustomer,
+} = require("../events/paymentInvoicePaidEvent");
 
 const {
   sentPaymentInvoiceEvent,
@@ -548,6 +554,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
   const output = JSON.parse(JSON.stringify(doc));
   output.items = output.partnerOrderItems;
   output.partnerOrderItems = undefined;
+  output.partnerOrderDetail = true;
   if (req?.user?.entity == "localPartner") {
     output.selfOrder = true;
   }
@@ -898,7 +905,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
   }
   return res.status(200).json({
     status: "success",
-    message: "success34234",
+    message: "success",
     data: { id: req.params.orderId },
   });
 });
@@ -1101,3 +1108,110 @@ exports.partnerOrderNavigationCountsSupplier = catchAsync(
     });
   }
 );
+
+exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
+  const { partnerOrderId } = req.params;
+  console.log("🚀 ~ req.params:", req.params);
+  console.log("🚀 ~ req.params:", req.params);
+  console.log("🚀 ~ req.params:", req.params);
+  console.log("🚀 ~ req.params:", req.params);
+  console.log("🚀 ~ req.params:", req.params);
+  console.log("🚀 ~ req.params:", req.params);
+
+  const isPartnerOrder = true;
+
+  const qry = {
+    where: { id: partnerOrderId },
+  };
+
+  if (isPartnerOrder) {
+    qry.raw = true;
+    qry.attributes = [
+      "id",
+      "totalBill",
+      "invoiceNumber",
+      "statusId",
+      "paymentStatus",
+      [
+        literal(
+          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "stripeCustomerId",
+      ],
+      [
+        literal(
+          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "defaultBankAccount",
+      ],
+      [
+        literal(
+          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "srName",
+      ],
+      [
+        literal(
+          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+        ),
+        "territoryName",
+      ],
+    ];
+  }
+
+  const doc = await partnerOrder.findOne(qry);
+  console.log("🚀 ~ doc:", doc);
+  console.log("🚀 ~ doc:", doc);
+
+  if (doc.paymentStatus == "done") {
+    return next(
+      new AppError(
+        "This order has already been paid for and cannot be deleted.",
+        400
+      )
+    );
+  }
+
+  if (isPartnerOrder && doc?.paymentStatus != "done") {
+    //HERE we try to collect payment if order type is local Patrner
+    console.log("🚀 ~ doc?.defaultBankAccount:", doc?.defaultBankAccount);
+    console.log("🚀 ~ doc?.defaultBankAccount:", doc?.defaultBankAccount);
+    if (!doc?.defaultBankAccount) {
+      return next(
+        new AppError("Invalid Bank Account! Cannot collect payment. ", 404)
+      );
+    }
+    const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
+      amount: doc.totalBill || 0,
+      customerId: doc?.stripeCustomerId,
+      savedPaymentMethodId: doc?.defaultBankAccount,
+      orders: [doc?.id],
+      invoiceNumbers: [doc?.invoiceNumber],
+      partner: { srName: doc?.srName, territoryName: doc?.territoryName },
+    });
+
+    if (!pullouts) {
+      return next(
+        new AppError("Invalid Bank Account cannot collect payment. ", 404)
+      );
+    }
+    const data = {};
+    data.pulloutDate = Date.now();
+    data.pulloutIntentId = pullouts?.paymentIntentId;
+    data.paymentIntentId = pullouts?.paymentIntentId;
+    data.paymentStatus = "done";
+
+    await partnerOrder.update(data, {
+      where: { id: partnerOrderId },
+    });
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      orderId: partnerOrderId,
+      orderType: isPartnerOrder ? "local-partner" : "customer",
+    });
+  }
+
+  return res.status(200).json({
+    status: "success",
+    data: {},
+  });
+});

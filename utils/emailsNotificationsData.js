@@ -276,7 +276,10 @@ const customerOrder = async ({ orderId }) => {
         },
       ],
     });
-    return JSON.parse(JSON.stringify(doc));
+
+    const output = JSON.parse(JSON.stringify(doc));
+    output.orderOf = "customer";
+    return output;
   } catch (err) {
     console.error(err);
   }
@@ -286,8 +289,6 @@ const localPartnerOrder = async ({ orderId }) => {
   try {
     console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:", orderId);
     console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:", orderId);
-    console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:");
-    console.log("🚀 ~ localPartnerOrder ~ localPartnerOrder:");
 
     let itemAttributes = [
       "id",
@@ -488,7 +489,9 @@ const localPartnerOrder = async ({ orderId }) => {
       ],
     });
     console.log("🚀 ~ localPartnerOrder ~ doc:", doc.id);
-    return JSON.parse(JSON.stringify(doc));
+    const output = JSON.parse(JSON.stringify(doc));
+    output.orderOf = "local-partner";
+    return output;
   } catch (err) {
     console.error(err);
   }

@@ -1,4 +1,5 @@
-const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY } = process.env;
+const { STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECERET } =
+  process.env;
 const stripe = require("stripe")(STRIPE_SECRET_KEY);
 const Stripe = require("../stripe");
 const {
@@ -7,6 +8,7 @@ const {
   transfersToSalesRep,
   item,
   order,
+  partnerOrder,
 } = require("../../models");
 const { parseOrderString } = require("../../utils/webhookHelpersFunctions");
 const {
@@ -16,7 +18,9 @@ const {
 } = require("../events/paymentInvoicePaidEvent");
 const { Op, literal } = require("sequelize");
 
-const endpointSecret = `whsec_9M5iAefqoU2A9GvmGcpwIgolrldMsZ2P`; //LIVE
+const endpointSecret = `${STRIPE_WEBHOOK_SECERET}`;
+console.log("🚀 ~ endpointSecret:", endpointSecret);
+
 // const endpointSecret = `whsec_PgzwORQviUKawaKDIXDeRbSSHINHQRik`; //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"];
@@ -62,51 +66,69 @@ const invoicePaid = async (event) => {
     const invoice = event.data.object;
     const localPartnerId = invoice.metadata?.salesRepId;
     let localPatnerAccount = invoice.metadata?.localPatnerAccount;
+    let orderType = invoice.metadata?.orderType || "customer";
     const orderId = invoice.metadata?.orderId;
     const condition = { invoiceId: invoice?.id };
     if (orderId) condition.id = orderId;
 
     console.log("🚀 ~ invoicePaid ~ orderId:", condition);
-    const orderPlaced = await order.findOne({
-      where: condition,
-      attributes: [
-        "id",
-        [
-          literal(`COALESCE(
+
+    if (orderType == "local-partner") {
+      await partnerOrder.update(
+        {
+          paymentMethod: "card",
+          adminReceivableStatus: true,
+          paymentStatus: "done",
+          invoicePaidDate: Date.now(),
+          pulloutDate: Date.now(),
+          paymentIntentId: invoice.payment_intent,
+        },
+        { where: { id: orderId } }
+      );
+    } else {
+      const orderPlaced = await order.findOne({
+        where: condition,
+        attributes: [
+          "id",
+          [
+            literal(`COALESCE(
              (SELECT SUM(salerCommission)
               FROM items
               WHERE items.orderId = order.id ), 0)`),
-          "totalSalerCommission",
-        ],
-        [
-          literal(`
+            "totalSalerCommission",
+          ],
+          [
+            literal(`
             COALESCE(order.totalBill, 0) - COALESCE((
               SELECT SUM(salerCommission)
               FROM items
               WHERE items.orderId = order.id
             ), 0)
           `),
-          "adminEarnings",
+            "adminEarnings",
+          ],
         ],
-      ],
-      raw: true,
+        raw: true,
+      });
+      console.log("🚀 ~ invoicePaid ~ orderId:", orderPlaced);
+      await order.update(
+        {
+          paymentMethod: "card",
+          localPatnerCommission: orderPlaced?.totalSalerCommission,
+          adminReceivableAmount: orderPlaced?.adminEarnings,
+          adminReceivableStatus: true,
+          paymentStatus: "done",
+          invoicePaidDate: Date.now(),
+          pulloutDate: Date.now(),
+          paymentIntentId: invoice.payment_intent,
+        },
+        { where: { id: orderPlaced?.id } }
+      );
+    }
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      orderId: orderId,
+      orderType,
     });
-    console.log("🚀 ~ invoicePaid ~ orderId:", orderPlaced);
-    await order.update(
-      {
-        paymentMethod: "card",
-        localPatnerCommission: orderPlaced?.totalSalerCommission,
-        adminReceivableAmount: orderPlaced?.adminEarnings,
-        adminReceivableStatus: true,
-        paymentStatus: "done",
-        invoicePaidDate: Date.now(),
-        pulloutDate: Date.now(),
-        paymentIntentId: invoice.payment_intent,
-      },
-      { where: { id: orderPlaced?.id } }
-    );
-
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId: orderPlaced?.id });
     // paidInvoiceAdminOrLocalPatnerEvent({ orderId });
     //   if(!localPartnerId) {
     //   return true

@@ -488,6 +488,24 @@ async function createInvoiceFromOrder({
     )
       .toISOString()
       .slice(0, 10);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
+    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
     const base = new Date(txnDate);
     const due = new Date(base);
     const termDays = Number(order.termDays || 0);

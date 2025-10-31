@@ -671,4 +671,8 @@ router.get(
   patnerOrderController.partnerOrderNavigationCountsSupplier
 );
 
+router.post(
+  "/partner-order/pull-payment-from-bank/:partnerOrderId",
+  patnerOrderController.pullPartnerOrderPayment
+);
 module.exports = router;

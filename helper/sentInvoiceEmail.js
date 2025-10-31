@@ -40,8 +40,8 @@ module.exports = async function ({ email, data, invoice }) {
   }
   // console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
-  let SessionUrl = `https://busybeancoffee.com/paymentCheck?orderId=${data?.id}`;
-  let SessionUrlToShow = `https://busybeancoffee.com/pay-order-invoice?orderId=${data?.id}`;
+  let SessionUrl = `https://busybeancoffee.com/paymentCheck?orderId=${data?.id}&orderType=${data?.orderOf || "customer"}`;
+  let SessionUrlToShow = `https://busybeancoffee.com/pay-order-invoice`;
   console.log("__dirname:", __dirname);
 
   const folderPath = path.join(__dirname, "..", "public", "invoicePDFs");

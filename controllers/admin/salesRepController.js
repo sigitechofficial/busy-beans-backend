@@ -26,7 +26,7 @@ const {
 exports.getAllSalesRep = factory.getAll(salesRep);
 
 exports.getSalesRepForOrderCreation = catchAsync(async (req, res, next) => {
-  const condition = { partnerType: "direct-partner", deleted: 0 };
+  const condition = { deleted: 0 };
   if (req.query.salesRepId) {
     condition.id = req.query.salesRepId;
   }
@@ -78,7 +78,6 @@ exports.getSalesRep = catchAsync(async (req, res, next) => {
 
 // exports.createSalesRep = factory.createOne(salesRep);
 exports.updateAddresses = catchAsync(async (req, res, next) => {
-  console.log("🚀 ~ req.body:", req.body);
   console.log("🚀 ~ req.body:", req.body);
 
   if (req.body?.newAddressess) {

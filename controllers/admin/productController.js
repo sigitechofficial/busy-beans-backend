@@ -6,11 +6,11 @@ const {
   skuSupplier,
   userDiscount,
   category,
-} = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const factory = require('../handlerFactory');
-const { response } = require('../../utils/response');
+} = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const factory = require("../handlerFactory");
+const { response } = require("../../utils/response");
 
 exports.addProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -18,17 +18,18 @@ exports.addProduct = catchAsync(async (req, res, next) => {
   if (req.file) {
     // throw new  'Image not uploaded', 'Please upload image';
     const tmpPath = req.file.path;
-    const imagePath = tmpPath.replace(/\\/g, '/');
+    const imagePath = tmpPath.replace(/\\/g, "/");
     input.image = imagePath;
-    console.log('ðŸš€ ~ catchAsync ~ nput.image:', input.image);
+    console.log("ðŸš€ ~ catchAsync ~ nput.image:", input.image);
   } else {
     input.image = undefined;
-    console.log('ðŸš€ ~ c ~ input.image:', input.image);
+    console.log("ðŸš€ ~ c ~ input.image:", input.image);
   }
 
   const data = await product.create(input);
 
   const supplierAndSkus = JSON.parse(input?.supplierAndSkus);
+
   if (supplierAndSkus && supplierAndSkus?.length > 0) {
     // Add productId to each object
     const enrichedSkus = supplierAndSkus.map((element) => ({
@@ -40,7 +41,7 @@ exports.addProduct = catchAsync(async (req, res, next) => {
   }
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { product: data },
   });
 });
@@ -51,14 +52,14 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   const data = await product.findAll({
     where: { status: 1, deleted: 0 },
     attributes: {
-      exclude: ['deleted', 'deletedAt', 'updatedAt', 'wholesalePrice'],
+      exclude: ["deleted", "deletedAt", "updatedAt", "wholesalePrice"],
     },
     raw: true, // return plain objects instead of Sequelize instances
   });
 
   const activeCategories = await userDiscount.findAll({
     where: { userId: req.params.userId },
-    attributes: ['percentage', 'categoryId'],
+    attributes: ["percentage", "categoryId"],
     raw: true,
   });
 
@@ -84,7 +85,7 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { data: productsWithDiscount },
   });
 });
@@ -92,18 +93,18 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
 exports.getProduct = catchAsync(async (req, res, next) => {
   const data = await product.findOne({
     where: { id: req.params?.id },
-    attributes: { exclude: ['deleted', 'deletedAt', 'updatedAt'] },
+    attributes: { exclude: ["deleted", "deletedAt", "updatedAt"] },
     include: {
       model: skuSupplier,
-      attributes: { exclude: ['deleted', 'updatedAt', 'status'] },
+      attributes: { exclude: ["deleted", "updatedAt", "status"] },
     },
   });
 
   if (!data) {
-    return next(new AppError('Product Not Found', 400));
+    return next(new AppError("Product Not Found", 400));
   }
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { product: data },
   });
 });
@@ -112,21 +113,21 @@ exports.updateProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
   const exist = await product.findOne({
     where: { id: req.params.id },
-    attributes: ['id'],
+    attributes: ["id"],
   });
   if (!exist) {
-    return next(new AppError('Product Not Found', 400));
+    return next(new AppError("Product Not Found", 400));
   }
 
   if (req.file) {
     // throw new  'Image not uploaded', 'Please upload image';
     const tmpPath = req.file.path;
-    const imagePath = tmpPath.replace(/\\/g, '/');
+    const imagePath = tmpPath.replace(/\\/g, "/");
     input.image = imagePath;
-    console.log('ðŸš€ ~ catchAsync ~ nput.image:', input.image);
+    console.log("ðŸš€ ~ catchAsync ~ nput.image:", input.image);
   } else {
     input.image = undefined;
-    console.log('ðŸš€ ~ c ~ input.image:', input.image);
+    console.log("ðŸš€ ~ c ~ input.image:", input.image);
   }
   await product.update(input, { where: { id: req.params?.id } });
 
@@ -148,7 +149,7 @@ exports.updateProduct = catchAsync(async (req, res, next) => {
     }
   }
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {},
   });
 });

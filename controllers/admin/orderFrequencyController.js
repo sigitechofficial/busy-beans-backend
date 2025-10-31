@@ -364,6 +364,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   }
 
   console.log("🚀 ~ shippingCompany:", shippingCompany);
+
   input.order.itemsPrice = itemsPrice;
   input.order.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
   input.order.discountPrice = discountOnItemsPrice;
@@ -420,6 +421,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
     orderEvents({ orderId: newOrder?.id });
   }
+
   return res.status(200).json({
     status: "success",
     data: { id: newOrder?.id },

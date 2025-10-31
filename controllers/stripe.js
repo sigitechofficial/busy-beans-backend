@@ -706,6 +706,7 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
         invoiceNumber: order?.invoiceNumber || "",
         partnerId: order?.connectAccountId || "",
         salesRepId: order?.salesRepId || "",
+        orderType: order?.orderOf || "Customer",
         type: "checkout-session",
         platform: "Busy Bean Coffee Inc.",
       },

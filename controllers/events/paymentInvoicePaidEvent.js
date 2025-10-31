@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const paidInvoiceEmail = require("../../helper/paidInvoiceEmail");
 const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmailAdminOrLocalPatner");
 const {
@@ -37,6 +39,26 @@ exports.paidInvoiceAdminOrLocalPatnerEventAndCustomer = async ({
   orderId,
   orderType = "customer",
 }) => {
+  const pdfFilename = `invoice-00${orderId}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
+  const pdfPath = path.join(__dirname, "../../public/invoicePDFs", pdfFilename);
+  fs.access(pdfPath, fs.constants.F_OK, (err) => {
+    if (!err) {
+      fs.unlink(pdfPath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error(
+            `❌ ~ Failed to delete invoice PDF for order ${orderId}:`,
+            unlinkErr
+          );
+        } else {
+          console.log(`🗑️ ~ Deleted invoice PDF: ${pdfFilename}`);
+        }
+      });
+    } else {
+      console.warn(
+        `⚠️ ~ No invoice PDF found for order ${orderId} at ${pdfPath}`
+      );
+    }
+  });
   try {
     const orderData = await dataForEmailAndNotifications(orderId, orderType);
     if (!orderData) return false;
