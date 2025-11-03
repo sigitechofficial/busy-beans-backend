@@ -1,6 +1,5 @@
 // services/qboInvoice.min.js
 const axios = require("axios");
-const { or } = require("sequelize");
 
 // ---- Base (QBO_ENV=sandbox for sandbox; anything else => prod) ----
 const BASE =
@@ -11,7 +10,6 @@ const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 const MINOR = 70;
 
 // ---- helpers ----
-// QBO SQL string literal must escape single quotes as ''
 const qboQuote = (s) =>
   `'${String(s ?? "")
     .trim()
@@ -33,7 +31,6 @@ async function qboQuery({ accessToken, realmId, query }) {
   const url = `${QBO(realmId)}/query?minorversion=${MINOR}&query=${encodeURIComponent(
     query
   )}`;
-  // Optional debug: exact SQL
   console.log("[QBO][QL] ->", query);
   return axios.get(url, {
     headers: {
@@ -44,8 +41,6 @@ async function qboQuery({ accessToken, realmId, query }) {
 }
 
 // ---- lookups / ensure ----
-
-// Exact name match (no lower()), on parse error we’ll just let it return null
 async function findAccountId({ accessToken, realmId, name }) {
   if (!name) return null;
   const sql =
@@ -56,7 +51,6 @@ async function findAccountId({ accessToken, realmId, name }) {
   return row?.Id ? String(row.Id) : null;
 }
 
-// Scan Income accounts and match in JS (case-insensitive)
 async function findIncomeAccountIdByScan({ accessToken, realmId, name }) {
   const target = String(name || "")
     .trim()
@@ -114,12 +108,10 @@ async function ensureIncomeAccount({
     "Service/Fee Income",
   ],
 }) {
-  // 1) try preferred names (exact)
   for (const nm of preferredNames) {
     const id = await findAccountId({ accessToken, realmId, name: nm });
     if (id) return id;
   }
-  // 2) case-insensitive scan within Income accounts
   for (const nm of preferredNames) {
     const id = await findIncomeAccountIdByScan({
       accessToken,
@@ -128,10 +120,8 @@ async function ensureIncomeAccount({
     });
     if (id) return id;
   }
-  // 3) any Income account
   const anyId = await findAnyIncomeAccountId({ accessToken, realmId });
   if (anyId) return anyId;
-  // 4) create a standard one
   const created = await createIncomeAccount({
     accessToken,
     realmId,
@@ -228,7 +218,6 @@ function mapPaymentMethodName(raw) {
   return null;
 }
 
-// check if any Payment already linked to this invoice
 async function findPaymentForInvoice({ accessToken, realmId, invoiceId }) {
   const sql = `select Id, TotalAmt from Payment where Any(LinkedTxn.TxnId) = '${String(
     invoiceId
@@ -238,7 +227,6 @@ async function findPaymentForInvoice({ accessToken, realmId, invoiceId }) {
   return row?.Id || null;
 }
 
-// --- TERMS: map & ensure ---
 function mapOrderTerm(order) {
   const d = Number(order.termDays || 0);
   if (d >= 60) return { name: "Net 60", dueDays: 60 };
@@ -252,8 +240,6 @@ async function ensureTermRef({ accessToken, realmId, name, dueDays }) {
   const r = await qboQuery({ accessToken, realmId, query: q });
   const row = r.data?.QueryResponse?.Term?.[0];
   if (row?.Id) return { value: String(row.Id), name };
-
-  // create if not found (may fail on some SKUs — that’s ok)
   try {
     const c = await axios.post(
       `${QBO(realmId)}/term?minorversion=${MINOR}`,
@@ -273,8 +259,6 @@ async function ensureTermRef({ accessToken, realmId, name, dueDays }) {
   }
 }
 
-// --- SHIP METHOD: id-only helper (name-only fallback happens in payload build) ---
-// --- SHIP METHOD: robust resolver (safe on realms w/out ShipMethod) ---
 async function getShipMethodId({ accessToken, realmId, name }) {
   const safe = String(name || "").trim();
   if (!safe) return null;
@@ -286,8 +270,6 @@ async function getShipMethodId({ accessToken, realmId, name }) {
     "Content-Type": "application/text",
   };
 
-  // 1) Try to find by exact name. If realm doesn't support ShipMethod (4001),
-  // swallow and return null so caller can fallback to CustomField/PrivateNote.
   try {
     const sql = `select Id, Name from ShipMethod where Name = '${safe.replace(/'/g, "\\'")}'`;
     console.log("[QBO][ShipMethod][QL] ->", sql);
@@ -304,7 +286,7 @@ async function getShipMethodId({ accessToken, realmId, name }) {
         console.warn(
           "[QBO][ShipMethod] Metadata not available in this realm (Shipping feature off or SKU/region limitation). Falling back."
         );
-        return null; // ← let caller use name-only/custom-field note
+        return null;
       }
       if (r.status === 404) {
         console.warn("[QBO][ShipMethod] Endpoint not available; falling back.");
@@ -318,13 +300,11 @@ async function getShipMethodId({ accessToken, realmId, name }) {
     const row = r.data?.QueryResponse?.ShipMethod?.[0];
     if (row?.Id) return String(row.Id);
   } catch (e) {
-    // Network or unexpected shape – log and fallback, don't block invoice creation
     console.warn("[QBO][ShipMethod] query threw:", e?.message || e);
     if (e?.stack) console.warn(e.stack);
     return null;
   }
 
-  // 2) Try to create only if entity seems supported (no 4001 earlier).
   try {
     const url = `${QBO(realmId)}/shipmethod?minorversion=${MINOR}`;
     const payload = { Name: safe };
@@ -346,7 +326,6 @@ async function getShipMethodId({ accessToken, realmId, name }) {
         );
         return null;
       }
-      // If duplicate or minor validation, try to read again by name next time.
       console.warn(
         "[QBO][ShipMethod] create failed:",
         c.status,
@@ -363,8 +342,6 @@ async function getShipMethodId({ accessToken, realmId, name }) {
   }
 }
 
-// ----------------------------------------------------------------
-// MAIN (unchanged business logic – shipping line, ShipMethodRef, terms, etc.)
 async function createInvoiceFromOrder({
   accessToken,
   realmId,
@@ -488,24 +465,6 @@ async function createInvoiceFromOrder({
     )
       .toISOString()
       .slice(0, 10);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
-    console.log("🚀 ~ createInvoiceFromOrder ~ txnDate:", txnDate);
     const base = new Date(txnDate);
     const due = new Date(base);
     const termDays = Number(order.termDays || 0);

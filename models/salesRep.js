@@ -114,6 +114,7 @@ module.exports = (sequelize) => {
       },
       creditLimit: {
         type: DataTypes.INTEGER,
+        allowNull: true,
         defaultValue: 2000,
       },
       password: {

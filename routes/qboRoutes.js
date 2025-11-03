@@ -1,53 +1,61 @@
-// routes/qbo.js
-const r = require("express").Router();
+const express = require("express");
+const r = express.Router();
+
+// ✅ Middleware (already exists)
+const ensureQboConnection = require("../middlewares/qboAuth");
+
+// ✅ Controller (final integrated version)
 const ctrl = require("../controllers/admin/quikbooksController");
-const QBO = require("../controllers/quickBooks");
 
+// 🔐 AUTH
+// 🔐 Login (OAuth start)
 r.get("/auth/login", ctrl.authLogin);
-// r.get('/auth/callback', ctrl.authCallback);
-// r.get('/status', ctrl.status);
-r.post("/customers/import", ctrl.importCustomers);
-r.post("/order-invoice/create/:orderId", ctrl.createInvoiceForOrder);
-// r.post('/disconnect', ctrl.disconnect);
-r.post("/ping", ctrl.ping);
+// 🔐 Exchange (OAuth callback)
+r.post("/auth/exchange", ctrl.authExchange);
+r.get("/ping", ensureQboConnection, ctrl.ping);
 
-const usedCodes = new Set();
+// 👥 CUSTOMERS
+r.post("/customers/import", ensureQboConnection, ctrl.importCustomers);
 
-r.post("/auth/exchange", async (req, res) => {
+// 🧾 INVOICES
+r.post(
+  "/order-invoice/create/:orderId",
+  ensureQboConnection,
+  ctrl.createInvoiceForOrder
+);
+r.post(
+  "/order-invoice/update/:orderId",
+  ensureQboConnection,
+  ctrl.updateInvoiceForOrder
+);
+
+// 💰 PAYMENTS
+r.post(
+  "/order-payment/sync/:orderId",
+  ensureQboConnection,
+  ctrl.syncOrderPayment
+);
+
+r.get("/test/income-accounts", async (req, res) => {
+  const { QboToken } = require("../models");
+  const { QBO, MINOR, headers } = require("../services/qboHelpers");
+  const axios = require("axios");
+
   try {
-    const fullUrl = String(req.body?.fullUrl || "");
-    const u = new URL(fullUrl);
-    const code = u.searchParams.get("code") || "";
+    const token = await QboToken.findOne();
+    if (!token) throw new Error("No QBO token in DB");
 
-    if (!code)
-      return res.status(400).json({ status: "error", error: "missing_code" });
+    const query = `select Id, Name, AccountType from Account where AccountType = 'Income'`;
+    const url = `${QBO(token.realmId)}/query?minorversion=${MINOR}&query=${encodeURIComponent(query)}`;
 
-    if (usedCodes.has(code)) {
-      return res.status(409).json({
-        status: "error",
-        error: "already_exchanged",
-        message: "This authorization code was already used.",
-      });
-    }
-    usedCodes.add(code);
-    setTimeout(() => usedCodes.delete(code), 10 * 60 * 1000); // clean up
-
-    const out = await QBO.exchangeFromFullUrl(fullUrl);
-    return res.status(200).json({ status: "success", data: out });
-  } catch (e) {
-    // on hard failures you may want to *not* delete from usedCodes for a short period
-    const st = e?.response?.status || 500;
-    const body = e?.response?.data || null;
-    return res.status(st).json({
-      status: "error",
-      httpStatus: st,
-      error: body?.error || e?.code || "oauth_exchange_failed",
-      message:
-        body?.error_description ||
-        body?.message ||
-        e?.message ||
-        "OAuth exchange failed",
-      detail: body,
+    const response = await axios.get(url, {
+      headers: headers(token.accessToken),
+    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+      detail: err.response?.data || null,
     });
   }
 });
