@@ -49,6 +49,7 @@ async function syncPaymentToQuickBooks(orderId) {
       await ord.update({
         quickBooksPaymentId: paymentRes.id,
         paymentSyncedToQBO: true,
+        qboLastSync: new Date(),
       });
     }
 

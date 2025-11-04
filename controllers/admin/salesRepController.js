@@ -123,6 +123,10 @@ exports.updateSalesRep = factory.updateOne(salesRep);
 
 exports.createSalesRep = catchAsync(async (req, res, next) => {
   const input = req.body;
+  console.log("Ã°Å¸Å¡â‚¬ ~ exports.createSalesRep=catchAsync ~ input:", input);
+  if (input?.partnerType == "direct-partner") {
+    input.creditLimit = null;
+  }
   console.log("ðŸš€ ~ exports.createSalesRep=catchAsync ~ input:", input);
 
   const condition = { deleted: 0 };

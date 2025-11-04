@@ -13,6 +13,10 @@ const {
 const {
   refreshAccessTokenIfNeeded,
 } = require("../../services/qboTokenService");
+const {
+  syncInvoiceOnQuikBooks,
+  updateInvoiceOnQuickBooks,
+} = require("../../services/syncInvoiceOnQBO");
 const { order } = require("../../models");
 // Common HTTP response helpers
 function httpError(
@@ -120,14 +124,7 @@ exports.importCustomers = async (req, res) => {
 exports.createInvoiceForOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
-    if (!orderId) return httpError(res, 400, "Missing orderId parameter");
-    const result = await createInvoiceFromOrder(Number(orderId));
-    console.log("🚀 ~ result:", result);
-
-    await order.update(
-      { quickBooksInvoiceId: result?.id },
-      { where: { id: orderId } }
-    );
+    const result = await syncInvoiceOnQuikBooks(Number(orderId));
     return httpSuccess(
       res,
       result,
@@ -147,7 +144,7 @@ exports.updateInvoiceForOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) return httpError(res, 400, "Missing orderId parameter");
-    const result = await updateInvoiceInQuickBooks(Number(orderId));
+    const result = await updateInvoiceOnQuickBooks(Number(orderId));
     return httpSuccess(
       res,
       result,

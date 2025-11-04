@@ -106,6 +106,7 @@ async function getOrderWithAssociations(orderId) {
 
     // Normalize to plain JS object
     const orderData = JSON.parse(JSON.stringify(doc));
+    console.log("🚀 ~ getOrderWithAssociations ~ orderData:", orderData);
 
     return orderData;
   } catch (err) {

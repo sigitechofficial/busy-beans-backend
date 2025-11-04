@@ -3,7 +3,8 @@ const axios = require("axios");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const { getOrderWithAssociations } = require("./orderService");
 const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
-
+const { order } = require("../models");
+const Order = order;
 const BASE =
   (process.env.QBO_ENV || "").toLowerCase() === "sandbox"
     ? "https://sandbox-quickbooks.api.intuit.com"
@@ -18,99 +19,68 @@ const headers = (token) => ({
   "Content-Type": "application/json",
 });
 
-// ---- Invoice creation ----
+// =========================
+// 🔹 Helpers
+// =========================
 
-async function createInvoiceFromOrder(orderId) {
-  if (!orderId) throw new Error("Missing orderId");
-
-  // ✅ 1. Refresh token and get QBO credentials
-  const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
-  if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
-
-  // ✅ 2. Fetch the order details (with items, user, address, etc.)
-  const order = await getOrderWithAssociations(orderId);
-  if (!order) throw new Error(`Order not found with id=${orderId}`);
-  if (order?.quickBooksInvoiceId)
-    throw new Error(
-      "Duplicate invoice detected — this invoice is already recorded in QuickBooks."
-    );
-  // ✅ 3. Warm up QBO base resources (Income account + generic item)
-  const { genericItemId } = await warmupQBOResources({ accessToken, realmId });
-
-  // ✅ 4. Build line items using generic item
-  const Lines = [];
-  const list = Array.isArray(order.items) ? order.items : [];
-
-  for (const it of list) {
-    const qty = +Number(it.qty || 1).toFixed(4);
-    const lineTotal = +Number(it.price || it.total || 0).toFixed(2);
-    const rate = qty > 0 ? +Number(lineTotal / qty).toFixed(4) : 0;
-
-    const desc = [
-      it.product || it.productName || "Coffee Product",
-      it.grind && `(${String(it.grind).trim()})`,
-      it.productCode && `Code: ${it.productCode}`,
-      it.singleUnitWeight && `Unit: ${it.singleUnitWeight}`,
-    ]
-      .filter(Boolean)
-      .join(" • ");
-
-    Lines.push({
-      Amount: +(qty * rate).toFixed(2),
-      Description: desc,
-      DetailType: "SalesItemLineDetail",
-      SalesItemLineDetail: {
-        ItemRef: { value: String(genericItemId) },
-        Qty: qty,
-        UnitPrice: rate,
-        TaxCodeRef: { value: "NON" },
-      },
-    });
-  }
-
-  // ✅ 5. Build invoice payload
-  const payload = {
-    CustomerRef: { value: String(order.qboCustomerId) },
-    Line: Lines,
-    TxnDate: new Date(order.invoiceDate || Date.now())
-      .toISOString()
-      .slice(0, 10),
-    BillEmail: order.user?.email ? { Address: order.user.email } : undefined,
-    DocNumber: order.invoiceNumber || undefined,
-    PrivateNote: order.note || undefined,
-    ShipAddr: order.address
-      ? {
-          Line1: order.address.addressLineOne,
-          Line2: order.address.addressLineTwo,
-          City: order.address.city,
-          CountrySubDivisionCode: order.address.state,
-          PostalCode: order.address.zipCode,
-          Country: order.address.country,
-        }
-      : undefined,
-    ShipMethodRef: order.shippingCompany
-      ? { name: order.shippingCompany }
-      : undefined,
-    DueDate: order.termDays
-      ? new Date(Date.now() + order.termDays * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .slice(0, 10)
-      : undefined,
-  };
-
-  // ✅ 6. Send to QuickBooks
-  const url = `${QBO(realmId)}/invoice?minorversion=${MINOR}`;
-  const res = await axios.post(url, payload, { headers: headers(accessToken) });
-
-  // ✅ 7. Return formatted result
-  const inv = res.data?.Invoice;
-  return {
-    id: inv?.Id,
-    docNumber: inv?.DocNumber,
-    totalAmt: inv?.TotalAmt,
-    raw: inv,
-  };
+/**
+ * Normalize a raw payment method name to a QBO-friendly label
+ */
+function mapPaymentMethodName(raw) {
+  const s = String(raw || "").toLowerCase();
+  if (s.includes("card")) return "Credit Card";
+  if (s.includes("bank")) return "Bank Transfer";
+  if (s.includes("cash")) return "Cash";
+  if (s.includes("check")) return "Check";
+  return "Other";
 }
+
+/**
+ * Ensure a PaymentMethod exists in QBO — fetch or create it
+ */
+async function ensurePaymentMethod({ accessToken, realmId, name }) {
+  try {
+    // 1️⃣ Try to find existing method
+    const query = encodeURIComponent(
+      `select * from PaymentMethod where Name='${name}'`
+    );
+    const res = await axios.get(`${QBO(realmId)}/query?query=${query}`, {
+      headers: headers(accessToken),
+    });
+    const found = res.data?.QueryResponse?.PaymentMethod?.[0];
+    if (found?.Id) {
+      console.log(`[QBO] Found existing PaymentMethod: ${name} (${found.Id})`);
+      return found.Id;
+    }
+
+    // 2️⃣ Not found — create new one
+    const payload = {
+      Name: name,
+      Type: name === "Credit Card" ? "CREDIT_CARD" : "OTHER",
+      Active: true,
+    };
+    const createRes = await axios.post(
+      `${QBO(realmId)}/paymentmethod`,
+      payload,
+      {
+        headers: headers(accessToken),
+      }
+    );
+    const createdId = createRes.data?.PaymentMethod?.Id;
+    console.log(`[QBO] Created new PaymentMethod: ${name} (${createdId})`);
+    return createdId;
+  } catch (err) {
+    console.warn(
+      "[QBO] Failed to ensure PaymentMethod:",
+      err?.response?.data || err.message
+    );
+    return null;
+  }
+}
+
+// =========================
+// 🔸 Main Function
+// =========================
 
 // ---- Payment creation ----
 async function createPaymentForInvoice({
@@ -119,7 +89,7 @@ async function createPaymentForInvoice({
   invoiceId,
   customerId,
   amount,
-  paymentMethodName = "Credit Card",
+  paymentMethodName,
   refNumber,
   paidDate,
 }) {
@@ -127,33 +97,192 @@ async function createPaymentForInvoice({
   if (!invoiceId || !customerId)
     throw new Error("Missing invoice or customer ID");
 
+  const safeAmount = Number(amount) || 0.01;
+  const safeDate = new Date(
+    paidDate && !isNaN(Date.parse(paidDate)) ? paidDate : Date.now()
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  const normalizedName = mapPaymentMethodName(paymentMethodName);
+  const paymentMethodId =
+    (await ensurePaymentMethod({
+      accessToken,
+      realmId,
+      name: normalizedName,
+    })) ||
+    (await ensurePaymentMethod({ accessToken, realmId, name: "Credit Card" }));
+
   const payload = {
     CustomerRef: { value: String(customerId) },
-    TotalAmt: Number(amount),
-    TxnDate: paidDate || new Date().toISOString().slice(0, 10),
-    PaymentRefNum: refNumber || `ref-${invoiceId}`,
-    PaymentMethodRef: { name: paymentMethodName },
+    TotalAmt: safeAmount,
+    TxnDate: safeDate,
+    PaymentRefNum: refNumber || `ref-${invoiceId}-${Date.now()}`,
+    PaymentMethodRef: paymentMethodId
+      ? { value: String(paymentMethodId) }
+      : undefined,
     Line: [
       {
-        Amount: Number(amount),
+        Amount: safeAmount,
         LinkedTxn: [{ TxnId: String(invoiceId), TxnType: "Invoice" }],
       },
     ],
   };
 
-  const url = `${QBO(realmId)}/payment?minorversion=${MINOR}`;
-  const res = await axios.post(url, payload, { headers: headers(accessToken) });
-  return res.data?.Payment || res.data;
+  try {
+    const res = await axios.post(
+      `${QBO(realmId)}/payment?minorversion=${MINOR}`,
+      payload,
+      { headers: headers(accessToken) }
+    );
+
+    const payment = res.data?.Payment;
+    if (!payment?.Id)
+      throw new Error("QuickBooks returned invalid payment response.");
+
+    return {
+      id: payment.Id,
+      totalAmt: payment.TotalAmt,
+      txnDate: payment.TxnDate,
+      raw: payment,
+    };
+  } catch (error) {
+    console.warn(
+      "[QBO] Payment creation failed:",
+      error?.response?.data || error.message
+    );
+    const err = new Error(
+      "Payment could not be created in QuickBooks (invalid or missing references)."
+    );
+    err.isPublic = true;
+    err.statusCode = 400;
+    throw err;
+  }
 }
 
-// ---- Utility: Map payment method ----
-function mapPaymentMethodName(raw) {
-  const s = String(raw || "").toLowerCase();
-  if (s.includes("card")) return "Credit Card";
-  if (s.includes("bank")) return "Bank Transfer";
-  if (s.includes("cash")) return "Cash";
-  if (s.includes("check")) return "Check";
-  return "Other";
+// ---- Invoice creation ----
+async function createInvoiceFromOrder(orderId) {
+  if (!orderId) throw new Error("Missing orderId parameter");
+
+  const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
+  if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
+
+  const order = await getOrderWithAssociations(orderId);
+  if (!order) throw new Error(`Order not found with id=${orderId}`);
+
+  if (!order.qboCustomerId) {
+    const err = new Error(
+      "Customer not linked with QuickBooks. Please sync first."
+    );
+    err.isPublic = true;
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let invoiceId = order.quickBooksInvoiceId;
+  let paymentId = order.quickBooksPaymentId;
+
+  // 🧾 Create Invoice
+  if (!invoiceId) {
+    const { genericItemId } = await warmupQBOResources({
+      accessToken,
+      realmId,
+    });
+
+    const Lines = (order.items || []).map((it) => ({
+      Amount: +Number(it.price || it.total || 0).toFixed(2),
+      Description: `${it.product || "Coffee Product"}${it.grind ? ` • (${it.grind})` : ""}`,
+      DetailType: "SalesItemLineDetail",
+      SalesItemLineDetail: {
+        ItemRef: { value: String(genericItemId) },
+        Qty: Number(it.qty || 1),
+        UnitPrice: Number(it.price || it.total || 0),
+        TaxCodeRef: { value: "NON" },
+      },
+    }));
+
+    // 🟢 Add Shipping Charges if > 0
+    if (Number(order.shippingCharges) > 0) {
+      Lines.push({
+        Amount: +Number(order.shippingCharges).toFixed(2),
+        Description: `Shipping Charges (${order.shippingCompany || "Shipping"})`,
+        DetailType: "SalesItemLineDetail",
+        SalesItemLineDetail: {
+          ItemRef: { value: String(genericItemId) },
+          Qty: 1,
+          UnitPrice: +Number(order.shippingCharges).toFixed(2),
+          TaxCodeRef: { value: "NON" },
+        },
+      });
+    }
+
+    const payload = {
+      CustomerRef: { value: String(order.qboCustomerId) },
+      Line: Lines,
+      TxnDate: new Date(order.invoiceDate || Date.now())
+        .toISOString()
+        .slice(0, 10),
+      DocNumber: order.invoiceNumber || undefined,
+      PrivateNote: order.note || undefined,
+    };
+
+    const invRes = await axios.post(
+      `${QBO(realmId)}/invoice?minorversion=${MINOR}`,
+      payload,
+      {
+        headers: headers(accessToken),
+      }
+    );
+
+    const inv = invRes.data?.Invoice;
+    if (!inv?.Id) throw new Error("Failed to create QuickBooks invoice");
+
+    invoiceId = inv.Id;
+
+    await Order.update(
+      {
+        quickBooksInvoiceId: invoiceId,
+        invoiceSyncedToQBO: true,
+        qboLastSync: new Date(),
+      },
+      { where: { id: orderId } }
+    );
+  }
+
+  // 💳 Create Payment if status is done
+  if (order.paymentStatus?.toLowerCase() === "done") {
+    try {
+      const paymentRes = await createPaymentForInvoice({
+        accessToken,
+        realmId,
+        invoiceId,
+        customerId: order.qboCustomerId,
+        amount: order.totalBill,
+        paymentMethodName: order.paymentMethod,
+        refNumber: order.paymentRef,
+        paidDate: order.invoicePaidDate,
+      });
+
+      if (paymentRes?.id) {
+        paymentId = paymentRes.id;
+        await Order.update(
+          {
+            quickBooksPaymentId: paymentRes.id,
+            paymentSyncedToQBO: true,
+            qboLastSync: new Date(),
+          },
+          { where: { id: orderId } }
+        );
+      }
+    } catch (err) {
+      console.warn("[QBO] Payment creation failed:", err.message);
+      throw err;
+    }
+  } else {
+    await Order.update({ qboLastSync: new Date() }, { where: { id: orderId } });
+  }
+
+  return { invoiceId, paymentId: paymentId || null, qboLastSync: new Date() };
 }
 
 module.exports = {
