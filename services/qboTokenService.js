@@ -65,7 +65,9 @@ async function refreshAccessTokenIfNeeded() {
   if (!record) throw new Error("No QuickBooks token record found.");
 
   const now = new Date();
-  if (record.accessTokenExpiresAt > now) {
+
+  // ✅ 1. If still valid, reuse access token
+  if (record.accessTokenExpiresAt && record.accessTokenExpiresAt > now) {
     return {
       accessToken: record.accessToken,
       realmId: record.realmId,
@@ -74,10 +76,10 @@ async function refreshAccessTokenIfNeeded() {
 
   console.log("[QBO] Access token expired — refreshing…");
 
-  const tokenUrl =
-    (process.env.QBO_ENV || "").toLowerCase() === "sandbox"
-      ? "https://sandbox-accounts.platform.intuit.com/oauth2/v1/tokens/bearer"
-      : "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
+  // ✅ 2. Prepare refresh request
+  const tokenUrl = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
+
+  console.log("🚀 ~ refreshAccessTokenIfNeeded ~ tokenUrl:", tokenUrl);
 
   const body = qs.stringify({
     grant_type: "refresh_token",
@@ -88,32 +90,48 @@ async function refreshAccessTokenIfNeeded() {
     `${process.env.QBO_CLIENT_ID}:${process.env.QBO_CLIENT_SECRET}`
   ).toString("base64");
 
-  const response = await axios.post(tokenUrl, body, {
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-  });
+  try {
+    // ✅ 3. Call QuickBooks to refresh tokens
+    const response = await axios.post(tokenUrl, body, {
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+    });
 
-  const data = response.data;
-  const accessTokenExpiresAt = new Date(Date.now() + data.expires_in * 1000);
-  const refreshTokenExpiresAt = new Date(
-    Date.now() + data.x_refresh_token_expires_in * 1000
-  );
+    const data = response.data;
 
-  await record.update({
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    accessTokenExpiresAt,
-    refreshTokenExpiresAt,
-  });
+    const accessTokenExpiresAt = new Date(Date.now() + data.expires_in * 1000);
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + data.x_refresh_token_expires_in * 1000
+    );
 
-  console.log("[QBO] Refreshed and updated tokens in DB");
+    // ✅ 4. Save new tokens to DB
+    await record.update({
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+    });
 
-  return {
-    accessToken: data.access_token,
-    realmId: record.realmId,
-  };
+    console.log("[QBO] Refreshed and updated tokens in DB");
+
+    return {
+      accessToken: data.access_token,
+      realmId: record.realmId,
+    };
+  } catch (err) {
+    const msg = err?.response?.data || err.message;
+    console.error("[QBO] Failed to refresh token:", msg);
+
+    // Optionally mark as disconnected in DB
+    await record.update({ disconnected: true });
+
+    throw new Error(
+      "QuickBooks refresh token invalid or expired — please reconnect."
+    );
+  }
 }
+
 module.exports = { getActiveToken, saveTokens, refreshAccessTokenIfNeeded };

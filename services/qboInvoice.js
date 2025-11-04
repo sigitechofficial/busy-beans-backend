@@ -30,7 +30,10 @@ async function createInvoiceFromOrder(orderId) {
   // ✅ 2. Fetch the order details (with items, user, address, etc.)
   const order = await getOrderWithAssociations(orderId);
   if (!order) throw new Error(`Order not found with id=${orderId}`);
-
+  if (order?.quickBooksInvoiceId)
+    throw new Error(
+      "Duplicate invoice detected — this invoice is already recorded in QuickBooks."
+    );
   // ✅ 3. Warm up QBO base resources (Income account + generic item)
   const { genericItemId } = await warmupQBOResources({ accessToken, realmId });
 

@@ -745,6 +745,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       "pulloutIntentId",
       "paymentIntentId",
       "pulloutDate",
+      "quickBooksInvoiceId",
     ],
   });
   if (!doc) {

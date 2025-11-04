@@ -13,7 +13,7 @@ const {
 const {
   refreshAccessTokenIfNeeded,
 } = require("../../services/qboTokenService");
-
+const { order } = require("../../models");
 // Common HTTP response helpers
 function httpError(
   res,
@@ -69,17 +69,7 @@ exports.authExchange = async (req, res) => {
   try {
     const { fullUrl } = req.body || {};
     console.log("🚀 ~ req.body:", req.body);
-    console.log("🚀 ~ req.body:", req.body);
-    console.log("🚀 ~ req.body:", req.body);
-    console.log("🚀 ~ req.body:", req.body);
-    console.log("🚀 ~ req.body:", req.body);
-    console.log("🚀 ~ req.body:", req.body);
-    console.log("🚀 ~ req.body:", req.body);
-    console.log("🚀 ~ fullUrl:", fullUrl);
-    console.log("🚀 ~ fullUrl:", fullUrl);
-    console.log("🚀 ~ fullUrl:", fullUrl);
-    console.log("🚀 ~ fullUrl:", fullUrl);
-    console.log("🚀 ~ fullUrl:", fullUrl);
+
     if (!fullUrl)
       return httpError(res, 400, "Missing fullUrl from request body");
     const data = await exchangeFromFullUrl(fullUrl);
@@ -132,6 +122,12 @@ exports.createInvoiceForOrder = async (req, res) => {
     const { orderId } = req.params;
     if (!orderId) return httpError(res, 400, "Missing orderId parameter");
     const result = await createInvoiceFromOrder(Number(orderId));
+    console.log("🚀 ~ result:", result);
+
+    await order.update(
+      { quickBooksInvoiceId: result?.id },
+      { where: { id: orderId } }
+    );
     return httpSuccess(
       res,
       result,

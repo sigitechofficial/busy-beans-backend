@@ -3,10 +3,11 @@ const { refreshAccessTokenIfNeeded } = require("../services/qboTokenService");
 
 module.exports = async function qboAuth(req, res, next) {
   try {
-    // Get a valid token (refreshes if expired)
+    // ✅ Always ensure valid access token (auto-refreshes if expired)
     const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
 
     if (!accessToken || !realmId) {
+      console.warn("[QBO middleware] Missing QuickBooks credentials.");
       return res.status(401).json({
         status: "error",
         error: "missing_token",
@@ -14,16 +15,20 @@ module.exports = async function qboAuth(req, res, next) {
       });
     }
 
-    // Attach token context to request for controllers
+    // ✅ Attach QBO context for downstream services/controllers
     req.qbo = { accessToken, realmId };
-    next();
+
+    return next();
   } catch (err) {
-    console.error("[QBO middleware] failed:", err);
+    console.error("[QBO middleware] Authentication failed:", err.message);
+    // Optional: give full detail in development, minimal in production
+    const isDev = process.env.NODE_ENV !== "production";
     return res.status(401).json({
       status: "error",
-      error: "auth_failed2",
-      message: "QuickBooks authentication failed. Please reconnect.",
-      detail: err.message,
+      error: "auth_failed",
+      message:
+        "QuickBooks authentication failed. Please reconnect your account.",
+      detail: isDev ? err.message : undefined,
     });
   }
 };
