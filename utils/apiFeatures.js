@@ -1,4 +1,16 @@
 const { Op } = require('sequelize');
+const operatorMap = {
+  eq: Op.eq,
+  ne: Op.ne,
+  gt: Op.gt,
+  gte: Op.gte,
+  lt: Op.lt,
+  lte: Op.lte,
+  in: Op.in,
+  notIn: Op.notIn,
+  like: Op.like,
+  notLike: Op.notLike,
+};
 
 class APIFeatures {
   constructor(query, queryString) {
@@ -10,30 +22,66 @@ class APIFeatures {
   filter() {
     const queryObj = { ...this.queryString };
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
-    excludedFields.forEach((el) => delete queryObj[el]);
+    excludedFields.forEach((field) => delete queryObj[field]);
 
-    // Advanced filtering
-    const filterConditions = {};
+    const filterConditions = {
+      deleted: 0,
+    };
+
     Object.keys(queryObj).forEach((key) => {
-      if (
-        queryObj[key].startsWith('gte') ||
-        queryObj[key].startsWith('gt') ||
-        queryObj[key].startsWith('lte') ||
-        queryObj[key].startsWith('lt')
-      ) {
-        const operator = key.match(/(gte|gt|lte|lt)/)[0];
-        filterConditions[key] = {
-          [Op[operator]]: queryObj[key],
-        };
+      const value = queryObj[key];
+
+      // ✅ Handle advanced filtering like: statusId: { ne: '6' }
+      if (typeof value === 'object' && value !== null) {
+        filterConditions[key] = {};
+
+        Object.keys(value).forEach((op) => {
+          const sequelizeOp = operatorMap[op];
+          if (sequelizeOp) {
+            filterConditions[key][sequelizeOp] = this._castValue(value[op]);
+
+            const keys = Reflect.ownKeys(filterConditions[key]);
+            const isSymbolUsed = keys.some((k) => typeof k === 'symbol');
+            if (!isSymbolUsed) {
+              console.warn(
+                `❌ Sequelize operator [${op}] not applied as symbol for ${key}`,
+              );
+            } else {
+              console.log(
+                `✅ Sequelize operator [${op}] correctly applied as symbol for ${key}`,
+              );
+              console.log(`→ Field keys:`, keys);
+            }
+          } else {
+            console.warn(`⚠️ Unsupported Sequelize operator: ${op}`);
+          }
+        });
       } else {
-        filterConditions[key] = queryObj[key];
+        // ✅ Simple equality like paymentStatus=pending
+        filterConditions[key] = this._castValue(value);
       }
     });
 
-    // Apply filter conditions to the query options
+    delete filterConditions.feature;
+    delete filterConditions.sort;
+    delete filterConditions.limit;
+    delete filterConditions.page;
+    delete filterConditions.fields;
     this.queryOptions.where = filterConditions;
-
+    console.dir(filterConditions, { depth: null });
     return this;
+  }
+
+  // Helper method to convert string values to proper types
+
+  _castValue(value) {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    if (!isNaN(value) && value.trim() !== '') return Number(value);
+    if (typeof value === 'string' && value.includes(',')) {
+      return value.split(',').map((v) => this._castValue(v));
+    }
+    return value;
   }
 
   sort() {
@@ -49,7 +97,7 @@ class APIFeatures {
       });
       this.queryOptions.order = sortConditions;
     } else {
-      this.queryOptions.order = [['createdAt', 'DESC']]; // Default sort by createdAt descending
+      this.queryOptions.order = [['id', 'DESC']]; // Default sort by createdAt descending
     }
 
     return this;
@@ -71,11 +119,11 @@ class APIFeatures {
 
   paginate() {
     const page = this.queryString.page * 1 || 1;
-    const limit = this.queryString.limit * 1 || 100;
+    const limit = this.queryString.limit * 1 || undefined;
     const offset = (page - 1) * limit;
 
-    this.queryOptions.limit = limit;
-    this.queryOptions.offset = offset;
+    // this.queryOptions.limit = limit;
+    // this.queryOptions.offset = offset;
 
     return this;
   }

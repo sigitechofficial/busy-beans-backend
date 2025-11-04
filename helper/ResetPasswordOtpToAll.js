@@ -4,13 +4,12 @@ dotenv.config({ path: '../.env' });
 const { attachments } = require('./attactments');
 const attachment = attachments();
 const { transporter } = require('./transpoter');
-const { footer } = require('./footer');
+const { header } = require('./header');
+let Footer = require('./footer');
+module.exports = async function (OTP, data, type) {
+  console.log('🚀 ~ OTP:', OTP);
+  let footer = await Footer();
 
-module.exports = function (OTP, data, type) {
-  console.log('🚀 ~ OTP:', OTP);
-  console.log('🚀 ~ OTP:', OTP);
-  console.log('🚀 ~ OTP:', OTP);
-  console.log('🚀 ~ OTP:', OTP);
   let heading = `Reset password`;
   let preOtpText = `We found a request for forgot password.
   Its okay! its happens. Use this OTP for
@@ -28,7 +27,7 @@ module.exports = function (OTP, data, type) {
   }
   let subject = preOtpText;
   const name = `${data.name}`;
-  const to = [data.email, 'sigidevelopers@gmail.com'];
+  const to = [data.email];
   console.log(
     '🚀 ~ sigidevelopers:',
     attachment.footer.concat(attachment.security),
@@ -40,6 +39,7 @@ module.exports = function (OTP, data, type) {
       to: to, // list of receivers
       subject: subject, // Subject line
       attachments: attachment.footer,
+      replyTo: 'noreply@busybeancoffee.com',
       html: `
       
 <!DOCTYPE html>
@@ -73,13 +73,7 @@ module.exports = function (OTP, data, type) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-          <img
-            src="cid:logo"
-            alt="Image"
-            width="316"
-            height="147"
-            style="border-radius: 16px"
-          />
+          ${header}
         </td>
       </tr>
       <tr>

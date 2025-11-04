@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Invoice</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  </head>
+  <body
+    style="
+      font-family: 'Inter', Arial, 'Helvetica Neue', sans-serif;
+      color: #000;
+      padding: 40px;
+      max-width: 1000px;
+      margin: auto;
+    "
+  >
+    <!-- Header -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 24px">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:16px; margin-bottom:24px;">
+  <div style="display:flex; align-items:center; gap:40px;">
+    <h1 style="margin:0; font-size:40px; line-height:1; letter-spacing:1px; color:#4a4f54;">
+      INVOICE
+    </h1>
+    <% if (order?.paymentStatus == 'done') { %>
+      <img style="width:110px;" src="https://admin.busybeancoffee.com/images/paidtag.png" alt="invoice paid logo" />
+    <% } %>
+  </div>
+</div>
+
+      <img src="https://admin.busybeancoffee.com/images/logocoffee.png" alt="Busy Bean Coffee" style="height: 64px; margin-top: 8px" />
+    </div>
+
+<%
+function formatUSPhone(val){
+  if (!val) return '';
+  var digits = String(val).replace(/\D+/g,'');
+  if (digits.length === 11 && digits[0] === '1') digits = digits.slice(1);
+  if (digits.length === 10) return digits.slice(0,3) + '-' + digits.slice(3,6) + '-' + digits.slice(6);
+  return String(val);
+}
+
+// Parse DD/MM/YYYY and format as "Oct 07, 2025"
+function formatInvoiceDate(val) {
+  if (!val) return '';
+  var s = String(val).trim();
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  var d;
+  if (m) {
+    var day = parseInt(m[1], 10);
+    var month = parseInt(m[2], 10) - 1;
+    var year = parseInt(m[3], 10);
+    d = new Date(year, month, day);
+  } else {
+    d = new Date(s);
+  }
+  if (isNaN(d)) return s;
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric'
+  });
+}
+
+function parseDDMMYYYY(val) {
+  if (!val) return null;
+  if (Object.prototype.toString.call(val) === '[object Date]') return val;
+  var s = String(val).trim();
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+  var d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+%>
+
+    <!-- Top Info -->
+    <div style="display:grid; grid-template-columns: 1fr 2fr 2fr; column-gap: 24px; row-gap: 6px; margin-bottom: 28px">
+      <!-- Left -->
+      <div>
+        <div style="font-size:14px; color:#6b7280; margin:6px 0">Invoice # <span style="color:#111; font-weight:600"> <%= order?.invoiceNumber || '' %></span></div>
+        <div style="font-size:14px; color:#6b7280; margin:6px 0">Order # <span style="color:#111; font-weight:500"> <%= order?.orderNumber || order?.invoiceNumber || '' %></span></div>
+
+<%
+  var termDays = Number(order?.termDays) || 30;
+  var invDate = parseDDMMYYYY(order?.invoiceDate);
+  var dueDateObj = order?.paymentDue ? parseDDMMYYYY(order.paymentDue)
+                   : (invDate ? new Date(invDate.getFullYear(), invDate.getMonth(), invDate.getDate() + termDays) : null);
+  var dueDateText = dueDateObj ? formatInvoiceDate(dueDateObj) : '';
+%>
+
+<div style="font-size:14px; color:#6b7280; margin:6px 0">
+  Invoice Date <span style="color:#111; font-weight:600; display:block;"><%= formatInvoiceDate(order?.invoiceDate) %></span>
+</div>
+<div style="font-size:14px; color:#6b7280; margin:6px 0">
+  Terms <span style="color:#111; font-weight:600"> <%= termDays %> Days</span>
+</div>
+<div style="font-size:14px; color:#6b7280; margin:6px 0">
+  Payment Due <span style="color:#111; font-weight:600; display:block;"><%= dueDateText %></span>
+</div>
+<div style="font-size:14px; color:#6b7280; margin:6px 0">
+  P.O. # <span style="color:#111; font-weight:600"> <%= order?.poNumber || '' %></span>
+</div>
+      </div>
+
+      <!-- Middle: Invoice To -->
+      <div>
+        <div style="font-size:14px; color:#6b7280; margin:6px 0">Invoice To
+          <div style="color:#111; text-transform:uppercase; font-weight:500; margin-top:2px"><%= order?.user?.companyName || '' %></div>
+        </div>
+        <div style="font-size:14px; text-transform:uppercase; margin:4px 0"><%= order?.user?.billingAddresses?.[0]?.addressLineOne || '' %></div>
+        <div style="font-size:14px; text-transform:uppercase; margin:4px 0">
+          <%= order?.user?.billingAddresses?.[0]?.town || '' %>
+          <%= order?.user?.billingAddresses?.[0]?.state ? ' ' + order.user.billingAddresses[0].state : '' %>
+          <%= order?.user?.billingAddresses?.[0]?.zipCode ? ' ' + order.user.billingAddresses[0].zipCode : '' %>
+        </div>
+        <div style="font-size:14px; text-transform:uppercase; margin:4px 0"><%= order?.user?.billingAddresses?.[0]?.country || '' %></div>
+        <div style="font-size:14px; margin:4px 0">Phone: <%= formatUSPhone(order?.user?.phoneNumber)|| '' %></div>
+        <div style="font-size:14px; margin:4px 0">Email: <%= order?.user?.email || '' %></div>
+      </div>
+
+      <!-- Right: Company -->
+      <div style="text-align:right">
+        <% if (order?.salesRep) { %>
+          <div style="font-size:14px; color:#111; font-weight:500">
+            <%= order.salesRep.territoryName || order.salesRep.srName || '' %>
+          </div>
+          <div style="font-size:14px;"><%= order.salesRep.address || '' %></div>
+          <div style="font-size:14px;"><%= [order?.salesRep?.city, order?.salesRep?.state, order?.salesRep?.zipCode].filter(Boolean).join(' ') %></div>
+          <div style="font-size:14px;"><%= formatUSPhone(order.salesRep.phoneNumber) || '' %></div>
+        <% } else { %>
+          <div style="font-size:14px; color:#111; font-weight:500">
+            Busy Bean Coffee of Central Florida
+          </div>
+          <div style="font-size:14px">1776 Cinnamon Circle</div>
+          <div style="font-size:14px">Casselberry, FL 32707</div>
+          <div style="font-size:14px">407-625-7843</div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Items Table -->
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 40px;">
+      <thead>
+        <tr style="border-bottom: 1px solid #000">
+          <th style="text-align: left; padding: 8px">Code</th>
+          <th style="text-align: left; padding: 8px">Item</th>
+          <th style="text-align: center; padding: 8px">Quantity</th>
+          <th style="text-align: right; padding: 8px">Unit price</th>
+          <th style="text-align: right; padding: 8px">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% (order?.items || []).forEach(function(item){
+             var qty = Number(item?.qty) || 0;
+             var price = Number(item?.price) || 0;
+             var unit = qty ? (price/qty) : 0;
+        %>
+        <tr style="border-bottom: 1px solid #e5e5e5">
+          <td style="padding: 10px 8px"><%= item?.productCode || '' %></td>
+          <td style="padding: 10px 8px; font-weight: 600"><%= item?.product || item?.productName || '' %></td>
+          <td style="padding: 10px 8px; text-align: center"><%= qty %></td>
+          <td style="padding: 10px 8px; text-align: right">$<%= unit.toFixed(2) %></td>
+          <td style="padding: 10px 8px; text-align: right">$<%= price.toFixed(2) %></td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div style="width: 100%; display: flex; justify-content: flex-end">
+      <table style="width: 320px; font-size: 14px">
+        <tr><td style="padding: 6px">Subtotal</td><td style="padding: 6px; text-align: right">$<%= (typeof order?.subTotal === 'number' ? order.subTotal.toFixed(2) : (order?.subTotal || '0.00')) %></td></tr>
+        <tr><td style="padding: 6px">Shipping Charges</td><td style="padding: 6px; text-align: right">$<%= (typeof order?.shippingCharges === 'number' ? order.shippingCharges.toFixed(2) : (order?.shippingCharges || '0.00')) %></td></tr>
+        <tr><td style="padding: 6px; font-weight: bold">Total</td><td style="padding: 6px; text-align: right; font-weight: bold">$<%= (typeof order?.totalBill === 'number' ? order.totalBill.toFixed(2) : (order?.totalBill || '0.00')) %></td></tr>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="section" style="font-size: 14px; margin-top: 28px">
+      <p>Here's your invoice! Thank you for your continued support.</p>
+      <p>
+        Please remit payment to:<br />
+        <% if (order?.salesRep) { %>
+            <%= order.salesRep.territoryName || order.salesRep.srName || 'Busy Bean Coffee Inc.' %><br />
+            <%= order.salesRep.address || '' %><br />
+            <%= [order?.salesRep?.city, order?.salesRep?.state, order?.salesRep?.zipCode].filter(Boolean).join(' ') %><br />
+           <% if (order?.salesRep?.phoneNumber) { %><%= formatUSPhone(order.salesRep.phoneNumber) %><% } %>
+        <% } else { %>
+            Busy Bean Coffee of Central Florida<br />
+            1776 Cinnamon Circle<br />
+            Casselberry, FL 32707<br />
+            407-625-7843<br />
+        <% } %>
+      </p>
+      <br />
+      <p>Thanks for your business!</p>
+    <p><%= order?.salesRep?.territoryName || order?.salesRep?.srName || 'Busy Bean Coffee Inc.' %></p>
+      <p>
+        <a href="https://busybeancoffee.com/paymentCheck?orderId=<%=order?.id%>">Pay Online using Credit/Debit Card</a>
+      </p>
+    </div>
+  </body>
+</html>

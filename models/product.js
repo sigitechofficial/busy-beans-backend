@@ -1,18 +1,19 @@
 module.exports = (sequelize, DataTypes) => {
   const product = sequelize.define(
-    'product',
+    "product",
     {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: {
-          args: true,
-          msg: 'This product is already exist.',
-        },
       },
       quantity: {
         type: DataTypes.STRING,
         allowNull: false,
+      },
+      weight: {
+        type: DataTypes.DECIMAL(20, 2),
+        allowNull: true,
+        defaultValue: 0,
       },
       unit: {
         type: DataTypes.STRING,
@@ -27,7 +28,24 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: 0,
       },
+      wholesalePrice: {
+        type: DataTypes.DECIMAL(20, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
       desc: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      sku: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      grind: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      productCode: {
         type: DataTypes.STRING,
         allowNull: true,
       },
@@ -43,23 +61,32 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
     {
-      tableName: 'products',
+      tableName: "products",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['name'],
-          name: 'name_index',
+          fields: ["name"],
+          name: "name_index",
         },
       ],
-    },
+    }
   );
 
   product.associate = (models) => {
     product.hasMany(models.item);
     models.item.belongsTo(product);
+
+    product.hasMany(models.partnerOrderItem);
+    models.partnerOrderItem.belongsTo(product);
+
+    product.hasMany(models.skuSupplier);
+    models.skuSupplier.belongsTo(product);
+
+    product.hasMany(models.userDiscount);
+    models.userDiscount.belongsTo(product);
   };
   return product;
 };

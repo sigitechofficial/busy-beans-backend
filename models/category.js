@@ -5,10 +5,6 @@ module.exports = (sequelize, DataTypes) => {
       name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: {
-          args: true,
-          msg: 'This category is already exist.',
-        },
       },
       deleted: {
         type: DataTypes.BOOLEAN,
@@ -39,6 +35,9 @@ module.exports = (sequelize, DataTypes) => {
   category.associate = (models) => {
     category.hasMany(models.product);
     models.product.belongsTo(category);
+
+    category.hasMany(models.userDiscount);
+    models.userDiscount.belongsTo(category);
 
     category.hasMany(models.item);
     models.item.belongsTo(category);

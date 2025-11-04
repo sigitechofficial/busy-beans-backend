@@ -1,8 +1,14 @@
+require('dotenv').config();
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const { Op } = require('sequelize');
-const { ModelName } = require('../models'); // Replace with your actual model name
+const { salesRep, supplier } = require('../models'); // Replace with your actual model name
 const APIFeatures = require('../utils/apiFeatures');
+const REDIS = require('../utils/redisHandling');
+const {
+  deleteDeviceTokenMultiple,
+  deleteDeviceTokenSingle,
+} = require('../utils/deviceTokenDelete');
 
 exports.deleteOne = (Model) =>
   catchAsync(async (req, res, next) => {
@@ -22,28 +28,14 @@ exports.deleteOne = (Model) =>
     });
   });
 
-exports.updateOne = (Model) =>
+exports.softdelete = (Model, changes) =>
   catchAsync(async (req, res, next) => {
-    const input = req.body;
-    if (req.file) {
-      // throw new  'Image not uploaded', 'Please upload image';
-      const tmpPath = req.file.path;
-      const imagePath = tmpPath.replace(/\\/g, '/');
-      input.image = imagePath;
-      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
-    } else {
-      input.image = undefined;
-      console.log("🚀 ~ c ~ input.image:", input.image)
-    }
+    const input = changes || {};
+    input.deleted = true;
+
     const doc = await Model.update(input, {
       where: { id: req.params.id },
-      returning: true,
-      plain: true,
     });
-
-    if (!doc[1]) {
-      return next(new AppError('No document found with that ID', 404));
-    }
 
     res.status(200).json({
       status: 'success',
@@ -53,18 +45,85 @@ exports.updateOne = (Model) =>
     });
   });
 
-exports.createOne = (Model) =>
+exports.updateOne = (Model) =>
   catchAsync(async (req, res, next) => {
-    const input = req.body
+    console.log('🚀 ~ catchAsync ~ UPDATE input:');
+
+    const input = req.body;
+    // input.password = undefined;
     if (req.file) {
       // throw new  'Image not uploaded', 'Please upload image';
       const tmpPath = req.file.path;
       const imagePath = tmpPath.replace(/\\/g, '/');
       input.image = imagePath;
-      console.log("🚀 ~ catchAsync ~ nput.image:", input.image)
+      console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
     } else {
       input.image = undefined;
-      console.log("🚀 ~ c ~ input.image:", input.image)
+      console.log('🚀 ~ c ~ input.image:', input.image);
+    }
+    const doc = await Model.update(input, {
+      where: { id: req.params.id },
+      individualHooks: true,
+    });
+
+    if (Model == supplier) {
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:');
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:');
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:');
+      console.log('🚀 ~ catchAsync ~ UPDATE SUPPLIER:');
+
+      deleteDeviceTokenMultiple({
+        id: req.params.id,
+        entity: 'supplier',
+        tokenCondition: { supplierId: req.params.id },
+      });
+    } else if (Model == salesRep) {
+      console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:');
+      console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:');
+      console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:');
+      console.log('🚀 ~ catchAsync ~ UPDATE LOCALPATNER:');
+      deleteDeviceTokenMultiple({
+        id: req.params.id,
+        entity: 'localPartner',
+        tokenCondition: { salesRepId: req.params.id },
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        data: doc,
+      },
+    });
+  });
+
+exports.createOne = (Model, checks) =>
+  catchAsync(async (req, res, next) => {
+    const input = req.body;
+    if (checks && checks.length > 0) {
+      const condition = { deleted: 0 };
+      checks.forEach((field) => {
+        if (req.body[field]) {
+          condition[field] = req.body[field];
+        }
+      });
+      const exist = await Model.findOne({
+        where: condition,
+        attributes: ['id'],
+      });
+      if (exist) {
+        return next(new AppError('Already Exist', 400));
+      }
+    }
+    if (req.file) {
+      // throw new  'Image not uploaded', 'Please upload image';
+      const tmpPath = req.file.path;
+      const imagePath = tmpPath.replace(/\\/g, '/');
+      input.image = imagePath;
+      console.log('🚀 ~ catchAsync ~ nput.image:', input.image);
+    } else {
+      input.image = undefined;
+      console.log('🚀 ~ c ~ input.image:', input.image);
     }
 
     const doc = await Model.create(input);
@@ -105,6 +164,8 @@ exports.getAll = (Model, incommingFilter = {}) =>
       .sort()
       .limitFields()
       .paginate();
+
+    console.log('🚀 ~ features:', features);
 
     const doc = await Model.findAll(features.getQuery()); // Apply queryOptions to the findAll method
 

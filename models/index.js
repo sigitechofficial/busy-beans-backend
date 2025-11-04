@@ -1,7 +1,7 @@
 /* eslint-disable global-require */
 /* eslint-disable import/no-dynamic-require */
-
 // 'use strict';
+require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');

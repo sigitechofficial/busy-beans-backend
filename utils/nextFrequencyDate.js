@@ -1,5 +1,4 @@
- 
-exports.nextFrequencyDate = ({ currentDate, frequency   }) => {
+exports.nextFrequencyDate = ({ currentDate, frequency }) => {
   const date = new Date(currentDate); // Ensure we work with a Date object
 
   switch (frequency) {
@@ -16,7 +15,11 @@ exports.nextFrequencyDate = ({ currentDate, frequency   }) => {
       date.setMonth(date.getMonth() + 1);
 
       // If resulting month doesn't have the same day, adjust (e.g., Feb 30 doesn't exist)
-      const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const daysInMonth = new Date(
+        date.getFullYear(),
+        date.getMonth() + 1,
+        0,
+      ).getDate();
       if (originalDay > daysInMonth) {
         date.setDate(daysInMonth);
       } else {
@@ -27,5 +30,12 @@ exports.nextFrequencyDate = ({ currentDate, frequency   }) => {
       throw new Error('Invalid frequency');
   }
 
-  return date;
-}
+  // Calculate visibility date (3 days before next frequency date)
+  const visibilityDate = new Date(date);
+  visibilityDate.setDate(visibilityDate.getDate() - 3);
+
+  return {
+    nextOrderDate: date,
+    visibilityDate: visibilityDate,
+  };
+};

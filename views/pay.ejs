@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pay Your Order</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        padding-top: 100px;
+        background-color: #8f5d46;
+      }
+
+      #loader {
+        font-size: 20px;
+        color: white;
+        background-color: #8f5d46;
+      }
+
+      #content {
+        display: none;
+      }
+
+      button {
+        background-color: #3e342c;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        font-size: 18px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #8f5d46;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loader">
+      <h3>Processing your payment request...</h3>
+    </div>
+
+    <div id="content">
+      <h1>Complete Your Payment</h1>
+      <p>Your order ID is <strong id="order-id"></strong></p>
+      <button id="pay-button">Pay Now</button>
+    </div>
+
+    <script>
+      window.addEventListener('DOMContentLoaded', async () => {
+        const orderId = new URLSearchParams(window.location.search).get(
+          'orderId',
+        );
+        console.log('🚀 ~ window.addEventListener ~ orderId:', orderId);
+        document.getElementById('order-id').innerText = orderId;
+
+        try {
+          const response = await fetch(
+            `https://backendbb.trimworldwide.com/api/v1/admin/order-management/fetch-invoice/${orderId}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            },
+          );
+
+          const result = await response.json();
+          console.log('🚀 ~ API Response:', result);
+
+          if (result?.data?.order?.hostedInvoiceUrl) {
+            window.location.href = result.data.order.hostedInvoiceUrl;
+          } else {
+            window.location.href = `/view/success`;
+          }
+        } catch (error) {
+          console.error('❌ Error calling API:', error);
+          window.location.href = `/view/success`;
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -65,7 +65,12 @@ function attachments() {
       path: __dirname + '/images/star.png',
       cid: 'star',
     },
-  }
+    youtube: {
+      filename: 'youtube.png',
+      path: __dirname + '/images/youtube.png',
+      cid: 'youtube',
+    },
+  };
 
   return {
     welcome: [attachment.welcome],
@@ -76,14 +81,14 @@ function attachments() {
     confirm: [attachment.confirm],
     trim: [attachment.trim],
     footer: [
-      attachment.logo,
       attachment.facebook,
       attachment.twitter,
       attachment.instagram,
       attachment.linkedin,
+      attachment.youtube,
     ],
     // in-case we have other emails
     attachment,
-  }
+  };
 }
-module.exports = { attachments }
+module.exports = { attachments };

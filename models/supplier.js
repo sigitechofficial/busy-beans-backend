@@ -1,19 +1,19 @@
-const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
+const { DataTypes } = require("sequelize");
+const bcrypt = require("bcryptjs");
 
 module.exports = (sequelize) => {
   const supplier = sequelize.define(
-    'supplier',
+    "supplier",
     {
       supplierName: {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
           notNull: {
-            msg: 'Supplier Name is Required',
+            msg: "Supplier Name is Required",
           },
           notEmpty: {
-            msg: 'Supplier Name cannot be empty',
+            msg: "Supplier Name cannot be empty",
           },
         },
       },
@@ -21,17 +21,17 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
         unique: {
-          msg: 'User already exists with this email',
+          msg: "User already exists with this email",
         },
         validate: {
           notNull: {
-            msg: 'Email is Required',
+            msg: "Email is Required",
           },
           notEmpty: {
-            msg: 'Email cannot be empty',
+            msg: "Email cannot be empty",
           },
           isEmail: {
-            msg: 'Please provide a valid email address',
+            msg: "Please provide a valid email address",
           },
         },
       },
@@ -48,6 +48,11 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       zipCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: true,
+      },
+      countryCode: {
         type: DataTypes.STRING,
         allowNull: true,
         defaultValue: true,
@@ -104,53 +109,70 @@ module.exports = (sequelize) => {
         allowNull: true,
       },
       registerBy: {
-        type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
+        type: DataTypes.ENUM("email", "google", "apple", "facebook"),
         allowNull: false,
-        defaultValue: 'email',
+        defaultValue: "email",
       },
       password: {
         type: DataTypes.STRING,
       },
+      latestOtp: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
     },
     {
-      tableName: 'supplier',
+      tableName: "supplier",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['email'],
-          name: 'email_index',
+          fields: ["email"],
+          name: "email_index",
         },
       ],
-    },
+    }
   );
 
-  // Hook to exclude deletedAt and updatedAt from query results
-  supplier.addHook('beforeFind', (options) => {
-    if (options.attributes) {
-      options.attributes.exclude = ['deletedAt', 'updatedAt'];
+  const SALT_ROUNDS = 12;
+
+  // Create
+  supplier.addHook("beforeCreate", (instance) => {
+    if (instance.password) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
-  // Hook to hash password before create or update
-  supplier.addHook('beforeCreate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  // Update (only if changed)
+  supplier.addHook("beforeUpdate", (instance) => {
+    if (instance.changed("password")) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
-  supplier.addHook('beforeUpdate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  // If you ever bulk-create suppliers with plaintext passwords:
+  supplier.addHook("beforeBulkCreate", (instances) => {
+    for (const i of instances) {
+      if (i.password) {
+        i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);
+      }
     }
   });
-
   // Associations models
   supplier.associate = (models) => {
     supplier.hasMany(models.order);
     models.order.belongsTo(supplier);
+
+    supplier.hasMany(models.partnerOrder);
+    models.partnerOrder.belongsTo(supplier);
+
+    supplier.hasMany(models.deviceToken);
+    models.deviceToken.belongsTo(supplier);
+
+    supplier.hasMany(models.skuSupplier);
+    models.skuSupplier.belongsTo(supplier);
   };
 
   return supplier;

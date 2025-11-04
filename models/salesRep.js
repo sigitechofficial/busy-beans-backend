@@ -1,19 +1,19 @@
-const { DataTypes } = require('sequelize');
-const bcrypt = require('bcryptjs');
+const { DataTypes } = require("sequelize");
+const bcrypt = require("bcryptjs");
 
 module.exports = (sequelize) => {
   const salesRep = sequelize.define(
-    'salesRep',
+    "salesRep",
     {
       srName: {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
           notNull: {
-            msg: 'Sales Resentative Name is Required',
+            msg: "Sales Resentative Name is Required",
           },
           notEmpty: {
-            msg: 'Sales Resentative Name cannot be empty',
+            msg: "Sales Resentative Name cannot be empty",
           },
         },
       },
@@ -21,17 +21,17 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
         unique: {
-          msg: 'User already exists with this email',
+          msg: "User already exists with this email",
         },
         validate: {
           notNull: {
-            msg: 'Email is Required',
+            msg: "Email is Required",
           },
           notEmpty: {
-            msg: 'Email cannot be empty',
+            msg: "Email cannot be empty",
           },
           isEmail: {
-            msg: 'Please provide a valid email address',
+            msg: "Please provide a valid email address",
           },
         },
       },
@@ -47,24 +47,25 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      territory: {
+      territoryName: {
         type: DataTypes.STRING,
         allowNull: true,
       },
       zipCode: {
         type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: true,
       },
       phoneNumber: {
         type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: true,
+      },
+      countryCode: {
+        type: DataTypes.STRING,
+        allowNull: true,
       },
       address: {
         type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: true,
       },
       image: {
         type: DataTypes.STRING,
@@ -83,15 +84,45 @@ module.exports = (sequelize) => {
       registerDate: {
         type: DataTypes.DATEONLY,
         allowNull: true,
-        defaultValue: sequelize.NOW,
+        defaultValue: new Date(),
       },
       registerBy: {
-        type: DataTypes.ENUM('email', 'google', 'apple', 'facebook'),
+        type: DataTypes.ENUM("email", "google", "apple", "facebook"),
         allowNull: false,
-        defaultValue: 'email',
+        defaultValue: "email",
+      },
+      partnerType: {
+        type: DataTypes.ENUM("direct-partner", "dropship-partner"),
+        allowNull: false,
+        defaultValue: "dropship-partner",
+      },
+      connectAccountId: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
+      stripeCustomerId: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
+      defaultBankAccount: {
+        type: DataTypes.STRING(),
+        allowNull: true,
+      },
+      isAccountConnected: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
+      creditLimit: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 2000,
       },
       password: {
         type: DataTypes.STRING,
+      },
+      latestOtp: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
       },
     },
     {
@@ -101,34 +132,37 @@ module.exports = (sequelize) => {
       timestamps: true,
       indexes: [
         {
-          fields: ['email'],
-          name: 'email_index',
+          fields: ["email"],
+          name: "email_index",
         },
       ],
-    },
+    }
   );
 
-  // Hook to exclude deletedAt and updatedAt from query results
-  salesRep.addHook('beforeFind', (options) => {
-    if (options.attributes) {
-      options.attributes.exclude = ['deletedAt', 'updatedAt'];
+  const SALT_ROUNDS = 12;
+
+  // Create
+  salesRep.addHook("beforeCreate", (instance) => {
+    if (instance.password) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
-  // Hook to hash password before create or update
-  salesRep.addHook('beforeCreate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  // Update (only if changed)
+  salesRep.addHook("beforeUpdate", (instance) => {
+    if (instance.changed("password")) {
+      instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
-  salesRep.addHook('beforeUpdate', async (input) => {
-    if (input.password) {
-      input.password = await bcrypt.hash(input.password, 6); // Hash the password before saving
+  // If you ever bulk-create users with plaintext passwords:
+  salesRep.addHook("beforeBulkCreate", (instances) => {
+    for (const i of instances) {
+      if (i.password) {
+        i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);
+      }
     }
   });
-  
-  
 
   // Associations models
   salesRep.associate = (models) => {
@@ -137,6 +171,33 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.orderFrequency);
     models.orderFrequency.belongsTo(salesRep);
+
+    salesRep.hasMany(models.order);
+    models.order.belongsTo(salesRep);
+
+    salesRep.hasMany(models.partnerOrder);
+    models.partnerOrder.belongsTo(salesRep);
+
+    salesRep.hasMany(models.salesFromPatners);
+    models.salesFromPatners.belongsTo(salesRep);
+
+    salesRep.hasOne(models.transfersToSalesRep);
+    models.transfersToSalesRep.belongsTo(salesRep);
+
+    salesRep.hasOne(models.stateInSystem);
+    models.stateInSystem.belongsTo(salesRep);
+
+    salesRep.hasMany(models.deviceToken);
+    models.deviceToken.belongsTo(salesRep);
+
+    salesRep.hasMany(models.employee);
+    models.employee.belongsTo(salesRep);
+
+    salesRep.hasMany(models.billingAddress);
+    models.billingAddress.belongsTo(salesRep);
+
+    salesRep.hasMany(models.address);
+    models.address.belongsTo(salesRep);
   };
 
   return salesRep;

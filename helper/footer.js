@@ -1,226 +1,106 @@
-const origin = '655 South Hope Street 901 Los Angeles California 90017';
-const address = '128 City Road, London, United Kingdom, EC1V 2NX';
-const copyRight = 'Copyright @ 2025 trim';
-const supportEmail = 'support@trimworldwide.com';
-const supportNumber = '017874854624';
+const { account } = require('../models'); // adjust path to your models
 
-exports.footer = ` <tr>
-        <td
-          style="
-            padding-top: 40px;
-            font-family: 'Switzer', sans-serif;
-            font-weight: 600;
-            font-size: 14px;
-            text-align: center;
-          "
-        >
-          Follow Us
-        </td>
-      </tr>
-      <tr>
-        <td style="padding-top: 10px; text-align: center">
-          <a href="#"
-            ><img
-              src="cid:facebook"
-              alt="Facebook"
-              style="width: 24px; margin-right: 10px"
-          /></a>
-          <a href="#"
-            ><img
-              src="cid:twitter"
-              alt="Twitter"
-              style="width: 24px; margin-right: 10px"
-          /></a>
-          <a href="#"
-            ><img
-              src="cid:instagram"
-              alt="Instagram"
-              style="width: 24px; margin-right: 10px"
-          /></a>
-          <a href="#"
-            ><img
-              src="cid:linkedin"
-              alt="LinkedIn"
-              style="width: 24px"
-          /></a>
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 20px;
-            font-family: 'Switzer', sans-serif;
-            font-size: 13px;
-            text-align: center;
-            color: #000000;
-          "
-        >
-          128 City Road, London, United Kingdom, EC1V 2NX
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 10px;
-            font-family: 'Switzer', sans-serif;
-            font-size: 13px;
-            text-align: center;
-            color: #000000;
-          "
-        >
-          📧 support@busybean.com | 📞 (123) 456-7890
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 10px;
-            font-family: 'Switzer', sans-serif;
-            font-size: 13px;
-            text-align: center;
-            color: #000000;
-          "
-        >
-          Copyright © 2024 Trim
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-left: 37px;
-            padding-right: 37px;
-            padding-top: 10px;
-            font-family: 'Switzer', sans-serif;
-            font-size: 13px;
-            text-align: center;
-            color: #000000;
-          "
-        >
-          <a href="#" style="text-decoration: underline">Unsubscribe</a>
-        </td>
-      </tr>
-      <tr>
-        <td
-          style="
-            padding-top: 40px;
-            font-family: 'Work_Sans', sans-serif;
-            font-size: 14px;
-            text-align: center;
-            color: rgba(0, 0, 0, 0.6);
-          "
-        >
-          Powered by
-        </td>
-      </tr>
-      <tr>
-        <td align="center" style="padding-top: 20px">
-          <img
-            src="cid:logo"
-            alt="Powered by"
-            width="118"
-            height="55"
-            style="border-radius: 16px"
-          />
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+function buildAddress({ address, city, state, zipCode, country }) {
+  return [address, city, state, zipCode, country].filter(Boolean).join(', ');
+}
 
-// <span
-//   style="color: #202053; margin-left: 5px"
-//   >Unsubscribe</span
-// >
-// background: transparent;
+function formatSupportNumber(code, number) {
+  return [code, number].filter(Boolean).join(' ');
+}
 
-// <table
-// align="center"
-// border="0"
-// cellpadding="0"
-// cellspacing="0"
-// class="row row-10"
-// role="presentation"
-// width="100%"
-// >
-// <tbody>
-//   <tr>
-//     <td>
-//       <table
-//         align="center"
-//         border="0"
-//         cellpadding="0"
-//         cellspacing="0"
-//         class="row-content stack"
-//         role="presentation"
-//         style="
-//           border-radius: 0;
-//           color: #000;
-//           width: 500px;
-//           margin: 0 auto;
-//         "
-//         width="500"
-//       >
-//         <tbody>
-//           <tr>
-//             <td
-//               class="column column-1"
-//               style="
-//                 font-weight: 400;
-//                 text-align: left;
-//                 padding-bottom: 5px;
-//                 padding-top: 5px;
-//                 vertical-align: top;
-//                 border-top: 0px;
-//                 border-right: 0px;
-//                 border-bottom: 0px;
-//                 border-left: 0px;
-//               "
-//               width="100%"
-//             >
-//               <table
-//                 border="0"
-//                 cellpadding="0"
-//                 cellspacing="0"
-//                 class="paragraph_block block-1"
-//                 role="presentation"
-//                 style="word-break: break-word"
-//                 width="100%"
-//               >
-//                 <tr>
-//                   <td class="pad">
-//                     <div
-//                       style="
-//                         color: #000000;
-//                         direction: ltr;
-//                         font-family: Chivo, sans-serif;
-//                         font-size: 14px;
-//                         font-weight: 500;
-//                         letter-spacing: 0px;
-//                         line-height: 120%;
-//                         text-align: center;
-//                       "
-//                     >
-//                       <p style="margin: 0">
-//                         ${address}
-//                       </p>
-//                     </div>
-//                   </td>
-//                 </tr>
-//               </table>
-//             </td>
-//           </tr>
-//         </tbody>
-//       </table>
-//     </td>
-//   </tr>
-// </tbody>
-// </table>
+function generateFooterHtml({
+  address = '',
+  copyRight = 'Copyright &copy; 2025 Busy Bean Coffee, Inc.',
+  supportEmail = '',
+  supportNumber = '',
+}) {
+  return `
+  <tr>
+    <td style="padding-top:40px;font-family:'Switzer',sans-serif;font-weight:600;font-size:14px;text-align:center">
+      Follow Us
+    </td>
+  </tr>
+  <tr>
+    <td style="padding-top:10px;text-align:center">
+      <a href="https://www.facebook.com/busybeancoffeeinc/"
+        style="display:inline-block;width:44px;height:44px;border-radius:50%;background-color:#8F5D46;margin-right:10px;text-align:center;line-height:44px;">
+        <img src="cid:facebook" alt="Facebook" style="width:24px;height:24px;vertical-align:middle;" />
+      </a>
+      <a href="https://x.com/busybean_coffee"
+        style="display:inline-block;width:44px;height:44px;border-radius:50%;background-color:#8F5D46;margin-right:10px;text-align:center;line-height:44px;">
+        <img src="cid:twitter" alt="Twitter" style="width:24px;height:24px;vertical-align:middle;" />
+      </a>
+      <a href="https://www.instagram.com/busybean_coffee/"
+        style="display:inline-block;width:44px;height:44px;border-radius:50%;background-color:#8F5D46;margin-right:10px;text-align:center;line-height:44px;">
+        <img src="cid:instagram" alt="Instagram" style="width:24px;height:24px;vertical-align:middle;" />
+      </a>
+      <a href="https://www.linkedin.com/in/thecoffeeman/"
+        style="display:inline-block;width:44px;height:44px;border-radius:50%;background-color:#8F5D46;margin-right:10px;text-align:center;line-height:44px;">
+        <img src="cid:linkedin" alt="LinkedIn" style="width:24px;height:24px;vertical-align:middle;" />
+      </a>
+      <a href="https://www.youtube.com/channel/UC4b4PYax5H3jRSyw4r0MCjQ/featured"
+        style="display:inline-block;width:44px;height:44px;border-radius:50%;background-color:#8F5D46;text-align:center;line-height:44px;">
+        <img src="cid:youtube" alt="YouTube" style="width:26px;height:24px;vertical-align:middle;" />
+      </a>
+    </td>
+  </tr>
 
-// <br /><br />
-//                   Thank you for choosing our services!
+  <tr>
+    <td style="padding:20px 37px 0;font-family:'Switzer',sans-serif;font-size:13px;text-align:center;color:#000000;">
+      ${address}
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:10px 37px 0;font-family:'Switzer',sans-serif;font-size:13px;text-align:center;color:#000000;">
+      ${supportEmail} ${supportNumber}
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:10px 37px 0;font-family:'Switzer',sans-serif;font-size:13px;text-align:center;color:#000000;">
+      ${copyRight}
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding-top:40px;font-family:'Work_Sans',sans-serif;font-size:14px;text-align:center;color:rgba(0,0,0,0.6);">
+      Powered by
+    </td>
+  </tr>
+  <tr>
+    <td align="center" style="padding-top:20px">
+      <a href="https://busybeancoffee.com" target="_blank" rel="noopener noreferrer">
+        <img src="https://backendbb.trimworldwide.com/helper/images/logo.png" alt="Powered by" width="150" style="border-radius:16px;" />
+      </a>
+    </td>
+  </tr>
+  `;
+}
+
+async function footer() {
+  const adm = await account.findOne({
+    attributes: [
+      'email',
+      'supportEmail',
+      'phoneNumber',
+      'countryCode',
+      'address',
+      'city',
+      'state',
+      'zipCode',
+      'country',
+    ],
+  });
+
+  if (!adm) return generateFooterHtml({});
+
+  const address = buildAddress(adm);
+  const supportNumber = formatSupportNumber(adm.countryCode, adm.phoneNumber);
+
+  return generateFooterHtml({
+    address,
+    supportEmail: adm.supportEmail || adm.email || '',
+    supportNumber,
+  });
+}
+
+module.exports = footer;
