@@ -2,6 +2,7 @@
 const axios = require("axios");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const { getOrderWithAssociations } = require("./orderService");
+const { warmupQBOResources } = require("./qboItemService");
 
 const BASE =
   (process.env.QBO_ENV || "").toLowerCase() === "sandbox"
@@ -11,23 +12,43 @@ const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 const MINOR = 70;
 
 /**
- * Update QuickBooks invoice when order data changes.
+ * Update an existing QuickBooks invoice with latest order data.
+ * Handles SyncToken versioning and skips if invoice is paid.
  */
-async function updateInvoiceInQuickBooks(orderId) {
-  // 1. Refresh access token
+async function updateInvoiceInQuickBooks({ orderId }) {
+  // ✅ Step 1: Get valid tokens (auto-refresh if expired)
   const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
 
-  // 2. Fetch order from shared service (reused logic!)
-  const orderData = await getOrderWithAssociations(orderId);
-  if (!orderData) throw new Error(`Order not found with id=${orderId}`);
+  // ✅ Step 2: Ensure QBO base resources (generic item, etc.)
+  const { genericItemId } = await warmupQBOResources({ accessToken, realmId });
 
+  // ✅ Step 3: Fetch order details
+  const orderData = await getOrderWithAssociations({ orderId });
+  if (!orderData) throw new Error(`Order not found with id=${orderId}`);
   if (!orderData.quickBooksInvoiceId)
     throw new Error("No linked QuickBooks invoice on this order.");
 
   const invoiceId = orderData.quickBooksInvoiceId;
 
-  // 3. Build sparse update payload
+  // ✅ Step 4: Fetch current invoice from QBO (to get SyncToken)
+  const getUrl = `${QBO(realmId)}/invoice/${invoiceId}?minorversion=${MINOR}`;
+  const { data: currentData } = await axios.get(getUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const currentInvoice = currentData?.Invoice;
+  if (!currentInvoice)
+    throw new Error(`Failed to fetch current invoice ${invoiceId} from QBO.`);
+
+  // ✅ Skip if already paid (Balance = 0)
+  if (Number(currentInvoice.Balance || 0) === 0) {
+    console.log(
+      `[QBO][InvoiceSync] Skipped update — invoice ${invoiceId} is already paid.`
+    );
+    return currentInvoice;
+  }
+
+  // ✅ Step 5: Build updated invoice lines
   const Lines = (orderData.items || []).map((it) => ({
     Amount: Number(it.price * it.qty || 0),
     Description: it.product || it.productName || "Item",
@@ -39,8 +60,25 @@ async function updateInvoiceInQuickBooks(orderId) {
     },
   }));
 
+  // ➕ Include Shipping Charges if present
+  if (Number(orderData.shippingCharges) > 0) {
+    Lines.push({
+      Amount: +Number(orderData.shippingCharges).toFixed(2),
+      Description: `Shipping Charges (${orderData.shippingCompany || "Shipping"})`,
+      DetailType: "SalesItemLineDetail",
+      SalesItemLineDetail: {
+        ItemRef: { value: String(genericItemId) },
+        Qty: 1,
+        UnitPrice: +Number(orderData.shippingCharges).toFixed(2),
+        TaxCodeRef: { value: "NON" },
+      },
+    });
+  }
+
+  // ✅ Step 6: Build sparse update payload with SyncToken
   const payload = {
     Id: String(invoiceId),
+    SyncToken: currentInvoice.SyncToken, // ✅ Required to prevent stale error
     sparse: true,
     Line: Lines,
     PrivateNote: orderData.note || undefined,
@@ -63,7 +101,7 @@ async function updateInvoiceInQuickBooks(orderId) {
       : undefined,
   };
 
-  // 4. Send update request to QuickBooks
+  // ✅ Step 7: Send update request
   const url = `${QBO(realmId)}/invoice?minorversion=${MINOR}`;
   const res = await axios.post(url, payload, {
     headers: {
@@ -73,7 +111,7 @@ async function updateInvoiceInQuickBooks(orderId) {
     },
   });
 
-  console.log(`[QBO][InvoiceSync] Updated invoice ${invoiceId}`, {
+  console.log(`[QBO][InvoiceSync] ✅ Updated invoice ${invoiceId}`, {
     total: res.data?.Invoice?.TotalAmt,
   });
 

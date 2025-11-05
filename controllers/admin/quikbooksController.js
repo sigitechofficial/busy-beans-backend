@@ -124,7 +124,7 @@ exports.importCustomers = async (req, res) => {
 exports.createInvoiceForOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const result = await syncInvoiceOnQuikBooks(Number(orderId));
+    const result = await syncInvoiceOnQuikBooks({ orderId: Number(orderId) });
     return httpSuccess(
       res,
       result,
@@ -144,7 +144,9 @@ exports.updateInvoiceForOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) return httpError(res, 400, "Missing orderId parameter");
-    const result = await updateInvoiceOnQuickBooks(Number(orderId));
+    const result = await updateInvoiceOnQuickBooks({
+      orderId: Number(orderId),
+    });
     return httpSuccess(
       res,
       result,
@@ -164,7 +166,7 @@ exports.syncOrderPayment = async (req, res) => {
   try {
     const { orderId } = req.params;
     if (!orderId) return httpError(res, 400, "Missing orderId parameter");
-    const result = await syncPaymentToQuickBooks(Number(orderId));
+    const result = await syncPaymentToQuickBooks({ orderId: Number(orderId) });
     return httpSuccess(
       res,
       result,

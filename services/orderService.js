@@ -5,7 +5,7 @@ const { literal } = require("sequelize");
 /**
  * Fetch full order details by ID for QuickBooks invoice creation
  */
-async function getOrderWithAssociations(orderId) {
+async function getOrderWithAssociations({ orderId }) {
   const httpError = (res, status, msg) => ({ status, msg });
 
   try {

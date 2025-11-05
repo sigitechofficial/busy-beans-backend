@@ -40,6 +40,17 @@ const {
 } = require("../../utils/emailsNotificationsData");
 
 const {
+  importCustomersToQuickBooks,
+} = require("../../services/qboCustomerService");
+const {
+  syncInvoiceOnQuikBooks,
+  updateInvoiceOnQuickBooks,
+} = require("../../services/syncInvoiceOnQBO");
+
+const {
+  syncPaymentToQuickBooks,
+} = require("../../services/paymentSyncService");
+const {
   processTransferToLocalPartner,
 } = require("../../utils/localPatnerCommissionTranfer");
 const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmailAdminOrLocalPatner");
@@ -51,6 +62,10 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     where: { id: req.params?.orderId },
   });
 
+  if (details.userId && !details?.quickBooksInvoiceId) {
+    await syncInvoiceOnQuikBooks({ orderId: placedOrder.id });
+  }
+
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
     return next(
       new AppError(
@@ -59,6 +74,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
       )
     );
   }
+
   console.log("🚀 ~ req.body:", req.body);
   await model.update(req.body.order, { where: { id: req.params?.orderId } });
 
@@ -751,6 +767,11 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
   if (!doc) {
     return next(new AppError("Data not found!", 400));
   }
+
+  if (!doc?.user?.qboCustomerId) {
+    importCustomersToQuickBooks({ limitIds: [doc?.user?.id] });
+  }
+
   res.status(200).json({
     status: "success",
     data: {
@@ -864,6 +885,22 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     if (statusId === 2 && [267, 279].includes(userId)) {
       req.body.orderData.supplierId = 17;
     }
+    let manualPaymentEmail = false;
+    if (!isPartnerOrder && req.body?.orderData?.paymentStatus == "done") {
+      console.log("🚀 ~ doc.doc :", JSON.parse(JSON.stringify(doc)));
+      console.log("🚀 ~ quickBookInvoiceId:", doc.quickBooksInvoiceId);
+      console.log("🚀 ~ doc.quickBooksPaymentId:", doc.quickBooksPaymentId);
+      if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
+        syncPaymentToQuickBooks({ orderId: orderId });
+        console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
+      } else if (!doc.quickBooksInvoiceId) {
+        console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
+        syncInvoiceOnQuikBooks({ orderId: orderId });
+      }
+      req.body.orderData.invoicePaidDate = new Date();
+      req.body.orderData.paymentMethod = "Bank Check";
+      manualPaymentEmail = true;
+    }
 
     await Model.update(req.body?.orderData, {
       where: { id: orderId || partnerOrderId },
@@ -879,6 +916,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     "🚀 ~ exports.orderJourneryComplete ~ req.body?.orderData?.statusId :",
     req.body?.orderData?.statusId
   );
+
   if (req.body?.orderData?.statusId) {
     if (req.body?.orderData?.statusId == 2) {
       supplierNewOrderEvent({
@@ -1074,6 +1112,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       "invoicePaidDate",
       "invoiceNumber",
       "userId",
+      "quickBooksInvoiceId",
       [
         literal(
           `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
@@ -1398,6 +1437,38 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     !input?.order?.attemptImmediatePayment
   ) {
     sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
+  }
+
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  if (!placedOrder?.quickBooksInvoiceId) {
+    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~TRUE:");
+    syncInvoiceOnQuikBooks({ orderId: placedOrder.id });
+  } else {
+    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~FALSE:");
+    updateInvoiceOnQuickBooks({ orderId: placedOrder.id });
   }
   return res.status(200).json({
     status: "success",

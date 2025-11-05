@@ -80,7 +80,7 @@ async function ensureIncomeAccount({ accessToken, realmId }) {
   const found = await findAnyIncomeAccount({ accessToken, realmId });
   if (found?.Id) {
     cachedIncomeAccountId = String(found.Id);
-    updateEnv("QBO_INCOME_ACCOUNT_ID", cachedIncomeAccountId);
+    // updateEnv("QBO_INCOME_ACCOUNT_ID", cachedIncomeAccountId);
     console.log(`[QBO] Found Income Account ${found.Name} (${found.Id})`);
     return cachedIncomeAccountId;
   }
@@ -89,7 +89,7 @@ async function ensureIncomeAccount({ accessToken, realmId }) {
   const created = await createIncomeAccount({ accessToken, realmId });
   if (created?.Id) {
     cachedIncomeAccountId = String(created.Id);
-    updateEnv("QBO_INCOME_ACCOUNT_ID", cachedIncomeAccountId);
+    // updateEnv("QBO_INCOME_ACCOUNT_ID", cachedIncomeAccountId);
     console.log(
       `[QBO] Created new Income Account ${created.Name} (${created.Id})`
     );

@@ -10,7 +10,8 @@ const { order, user } = require("../models");
  * Sync a successful Stripe (or manual) payment to QuickBooks.
  * Trigger this when your system marks an invoice as "paid".
  */
-async function syncPaymentToQuickBooks(orderId) {
+async function syncPaymentToQuickBooks({ orderId }) {
+  console.log("🚀 ~ syncPaymentToQuickBooks ~ orderId:", orderId);
   try {
     // Fetch a valid token (auto-refresh)
     const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
@@ -38,7 +39,7 @@ async function syncPaymentToQuickBooks(orderId) {
       customerId: ord.user.qboCustomerId,
       amount: ord.totalBill,
       paymentMethodName,
-      refNumber: ord.paymentIntentId || `order-${ord.id}`,
+      refNumber: ord.paymentIntentId || ord.invoiceId,
       paidDate: ord.invoicePaidDate
         ? new Date(ord.invoicePaidDate).toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10),

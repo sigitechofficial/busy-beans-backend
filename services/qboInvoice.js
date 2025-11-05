@@ -161,13 +161,17 @@ async function createPaymentForInvoice({
 }
 
 // ---- Invoice creation ----
-async function createInvoiceFromOrder(orderId) {
+async function createInvoiceFromOrder({ orderId }) {
   if (!orderId) throw new Error("Missing orderId parameter");
 
   const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
 
-  const order = await getOrderWithAssociations(orderId);
+  const order = await getOrderWithAssociations({ orderId: orderId });
+  console.log(
+    "🚀 ~ createInvoiceFromOrder ~ order:",
+    JSON.parse(JSON.stringify(order))
+  );
   if (!order) throw new Error(`Order not found with id=${orderId}`);
 
   if (!order.qboCustomerId) {
@@ -189,28 +193,54 @@ async function createInvoiceFromOrder(orderId) {
       realmId,
     });
 
-    const Lines = (order.items || []).map((it) => ({
-      Amount: +Number(it.price || it.total || 0).toFixed(2),
-      Description: `${it.product || "Coffee Product"}${it.grind ? ` • (${it.grind})` : ""}`,
-      DetailType: "SalesItemLineDetail",
-      SalesItemLineDetail: {
-        ItemRef: { value: String(genericItemId) },
-        Qty: Number(it.qty || 1),
-        UnitPrice: Number(it.price || it.total || 0),
-        TaxCodeRef: { value: "NON" },
-      },
-    }));
+    const Lines = (order.items || []).map((it) => {
+      const qty = Number(it.qty || 1);
+      console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
+      console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
+      console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
+      console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
+      // `it.price` (or `it.total`) is the full total for that line
+      const amount = +Number(it.price || it.total || 0).toFixed(2);
+      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
+      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
+      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
+      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
+      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
+      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
+      // derive the per-unit price so QBO = Qty * UnitPrice
+      const unitPrice = +(amount / qty).toFixed(2);
+      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
+      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
+      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
+      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
+      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
+
+      return {
+        Amount: amount,
+        Description: `${it.product || "Coffee Product"}${
+          it.grind ? ` • (${it.grind})` : ""
+        }`,
+        DetailType: "SalesItemLineDetail",
+        SalesItemLineDetail: {
+          ItemRef: { value: String(genericItemId) },
+          Qty: qty,
+          UnitPrice: unitPrice,
+          TaxCodeRef: { value: "NON" },
+        },
+      };
+    });
 
     // 🟢 Add Shipping Charges if > 0
     if (Number(order.shippingCharges) > 0) {
+      const shipAmt = +Number(order.shippingCharges).toFixed(2);
       Lines.push({
-        Amount: +Number(order.shippingCharges).toFixed(2),
+        Amount: shipAmt,
         Description: `Shipping Charges (${order.shippingCompany || "Shipping"})`,
         DetailType: "SalesItemLineDetail",
         SalesItemLineDetail: {
           ItemRef: { value: String(genericItemId) },
           Qty: 1,
-          UnitPrice: +Number(order.shippingCharges).toFixed(2),
+          UnitPrice: shipAmt,
           TaxCodeRef: { value: "NON" },
         },
       });
@@ -226,6 +256,7 @@ async function createInvoiceFromOrder(orderId) {
       PrivateNote: order.note || undefined,
     };
 
+    console.log("🚀 ~ createInvoiceFromOrder ~ payload:", payload);
     const invRes = await axios.post(
       `${QBO(realmId)}/invoice?minorversion=${MINOR}`,
       payload,
@@ -259,7 +290,7 @@ async function createInvoiceFromOrder(orderId) {
         customerId: order.qboCustomerId,
         amount: order.totalBill,
         paymentMethodName: order.paymentMethod,
-        refNumber: order.paymentRef,
+        refNumber: order.paymentIntentId || order.invoiceId,
         paidDate: order.invoicePaidDate,
       });
 

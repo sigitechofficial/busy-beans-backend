@@ -1,15 +1,15 @@
-const { user, address, billingAddress } = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const factory = require('../handlerFactory');
-const { response } = require('../../utils/response');
-const bcrypt = require('bcryptjs');
+const { user, address, billingAddress } = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const factory = require("../handlerFactory");
+const { response } = require("../../utils/response");
+const bcrypt = require("bcryptjs");
 
 exports.updateProfile = catchAsync(async (req, res, next) => {
-  console.log('🚀 ~ req.body:', req.body);
-  console.log('🚀 ~ req.user.Id:', req.user.id);
+  console.log("🚀 ~ req.body:", req.body);
+  console.log("🚀 ~ req.user.Id:", req.user.id);
 
-  console.log('🚀 ~ req.body?.userData:', req.body?.userData);
+  console.log("🚀 ~ req.body?.userData:", req.body?.userData);
   if (req.user.id && req.body?.userData) {
     req.body.userData.email = undefined;
     // req.body.userData.password = undefined;
@@ -19,19 +19,19 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
     if (req.body?.userData?.newPassword) {
       const isMatch = await bcrypt.compare(
         req.body.userData.oldPassword,
-        customer?.password,
+        customer?.password
       ); // password == customer?.password;
       console.log(
-        'Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ isMatch?.isMatch:',
-        isMatch,
+        "Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ isMatch?.isMatch:",
+        isMatch
       );
-      console.log('🚀 ~ req.body?.userData:', req.body?.userData);
+      console.log("🚀 ~ req.body?.userData:", req.body?.userData);
       if (!isMatch) {
-        return next(new AppError('Incorrect current password', 401));
+        return next(new AppError("Incorrect current password", 401));
       }
       req.body.userData.password = req.body?.userData?.newPassword;
     }
-    console.log('🚀 ~ req.body.userData:', req.body.userData);
+    console.log("🚀 ~ req.body.userData:", req.body.userData);
     req.body.userData.id = undefined;
     await user.update(req.body?.userData, {
       where: { id: req.user.id },
@@ -56,7 +56,7 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
   }
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {},
   });
 });
@@ -66,7 +66,7 @@ exports.addAddress = catchAsync(async (req, res, next) => {
   const data = await address.create(req.body?.address);
 
   return res.status(200).json({
-    status: 'success',
+    status: "success",
     data: { data },
   });
 });

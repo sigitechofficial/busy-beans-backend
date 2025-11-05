@@ -95,6 +95,12 @@ const customerOrder = async ({ orderId }) => {
         ],
         [
           literal(
+            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+          ),
+          "qboCustomerId",
+        ],
+        [
+          literal(
             `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
           ),
           "stripeCustomerId",
