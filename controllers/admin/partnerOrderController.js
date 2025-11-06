@@ -32,6 +32,19 @@ const {
 } = require("../events/orderEvents");
 
 const {
+  syncInvoiceOnQuikBooks,
+  updateInvoiceOnQuickBooks,
+} = require("../../services/syncInvoiceOnQBO");
+
+const {
+  importCustomersToQuickBooks,
+} = require("../../services/qboCustomerService");
+
+const {
+  syncPaymentToQuickBooks,
+} = require("../../services/paymentSyncService");
+
+const {
   paidInvoiceAdminOrLocalPatnerEventAndCustomer,
 } = require("../events/paymentInvoicePaidEvent");
 
@@ -548,9 +561,17 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
       "pulloutDate",
     ],
   });
+
   if (!doc) {
     return next(new AppError("Data not found!", 400));
   }
+  if (!doc?.salesRep?.qboCustomerId) {
+    importCustomersToQuickBooks({
+      limitIds: [doc?.salesRep?.id],
+      userType: "local-partner",
+    });
+  }
+
   const output = JSON.parse(JSON.stringify(doc));
   output.items = output.partnerOrderItems;
   output.partnerOrderItems = undefined;
@@ -558,6 +579,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
   if (req?.user?.entity == "localPartner") {
     output.selfOrder = true;
   }
+
   res.status(200).json({
     status: "success",
     data: {
@@ -578,6 +600,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
       "salesRepId",
       "invoiceId",
       //   "orderFrequencyId",
+      "quickBooksInvoiceId",
       "invoiceDate",
       "invoiceReminder",
       "invoicePaidDate",
@@ -889,20 +912,26 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
 
   if (true) {
     console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
-    console.log("🚀 ~ true:", true);
     sentPaymentInvoiceEvent({
       orderId: placedOrder?.id,
       orderType: "local-partner",
     });
   }
+
+  if (!placedOrder?.quickBooksInvoiceId) {
+    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~TRUE:");
+    syncInvoiceOnQuikBooks({
+      orderId: placedOrder.id,
+      orderType: "local-partner",
+    });
+  } else {
+    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~FALSE:");
+    //     updateInvoiceOnQuickBooks({
+    //       orderId: placedOrder.id,
+    //       orderType: "local-partner",
+    //     });
+  }
+
   return res.status(200).json({
     status: "success",
     message: "success",

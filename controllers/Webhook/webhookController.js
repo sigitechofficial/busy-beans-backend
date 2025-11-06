@@ -21,6 +21,14 @@ const { Op, literal } = require("sequelize");
 const endpointSecret = `${STRIPE_WEBHOOK_SECERET}`;
 console.log("🚀 ~ endpointSecret:", endpointSecret);
 
+const {
+  syncInvoiceOnQuikBooks,
+  updateInvoiceOnQuickBooks,
+} = require("../../services/syncInvoiceOnQBO");
+
+const {
+  syncPaymentToQuickBooks,
+} = require("../../services/paymentSyncService");
 // const endpointSecret = `whsec_PgzwORQviUKawaKDIXDeRbSSHINHQRik`; //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"];
@@ -90,6 +98,8 @@ const invoicePaid = async (event) => {
         where: condition,
         attributes: [
           "id",
+          "quickBooksPaymentId",
+          "quickBooksInvoiceId",
           [
             literal(`COALESCE(
              (SELECT SUM(salerCommission)
@@ -110,6 +120,7 @@ const invoicePaid = async (event) => {
         ],
         raw: true,
       });
+
       console.log("🚀 ~ invoicePaid ~ orderId:", orderPlaced);
       await order.update(
         {
@@ -124,6 +135,14 @@ const invoicePaid = async (event) => {
         },
         { where: { id: orderPlaced?.id } }
       );
+    }
+
+    if (orderPlaced?.quickBooksInvoiceId && !orderPlaced?.quickBooksPaymentId) {
+      await syncPaymentToQuickBooks({ orderId: orderPlaced.id });
+      console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
+    } else if (!doc.quickBooksInvoiceId) {
+      console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
+      await syncInvoiceOnQuikBooks({ orderId: orderPlaced.id });
     }
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({
       orderId: orderId,

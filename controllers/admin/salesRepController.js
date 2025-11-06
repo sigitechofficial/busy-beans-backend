@@ -123,6 +123,10 @@ exports.updateSalesRep = factory.updateOne(salesRep);
 
 exports.createSalesRep = catchAsync(async (req, res, next) => {
   const input = req.body;
+  console.log("Ã°Å¸Å¡â‚¬ ~ exports.createSalesRep=catchAsync ~ input:", input);
+  if (input?.partnerType == "direct-partner") {
+    input.creditLimit = null;
+  }
   console.log("ðŸš€ ~ exports.createSalesRep=catchAsync ~ input:", input);
 
   const condition = { deleted: 0 };
@@ -180,9 +184,6 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
 
   console.log("🚀 ~ shippingAddress:", shippingAddress);
   console.log("🚀 ~ shippingAddress:", shippingAddress);
-  console.log("🚀 ~ bAddress:", bAddress);
-  console.log("🚀 ~ bAddress:", bAddress);
-  console.log("🚀 ~ bAddress:", bAddress);
   console.log("🚀 ~ bAddress:", bAddress);
   console.log("🚀 ~ bAddress:", bAddress);
   if (shippingAddress && bAddress) {
@@ -492,7 +493,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         ),
         "toBePaid",
       ],
-
       // Wholesale price (offline)
       [
         literal(`
@@ -505,7 +505,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       `),
         "wholesalePrice",
       ],
-
       // Saler Commission (offline)
       [
         fn(
@@ -536,7 +535,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         `),
         "numberOfSoldProducts",
       ],
-
       // Total Sales (online)
       [
         fn(
@@ -553,7 +551,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         ),
         "totalSalesOnline",
       ],
-
       // Wholesale price (online)
       [
         literal(`
@@ -567,7 +564,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       `),
         "wholesalePriceOnline",
       ],
-
       // Saler Commission (online)
       [
         fn(
@@ -585,7 +581,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         ),
         "salerCommissionOnline",
       ],
-
       // Number of sold products (online)
       [
         fn(

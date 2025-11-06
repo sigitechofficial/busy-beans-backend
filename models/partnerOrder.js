@@ -178,6 +178,23 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    quickBooksInvoiceId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    qboLastSync: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    paymentSyncedToQBO: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+    },
+    quickBooksPaymentId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   });
 
   // Hook to exclude deletedAt and updatedAt from query results
