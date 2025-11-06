@@ -65,7 +65,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   });
 
   if (details.userId && !details?.quickBooksInvoiceId) {
-    await syncInvoiceOnQuikBooks({ orderId: placedOrder.id, orderType });
+    await syncInvoiceOnQuikBooks({ orderId: details.id, orderType });
   }
 
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
