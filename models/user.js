@@ -120,6 +120,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(32), // QBO Customer Id
         allowNull: true,
       },
+      qboCustomerIdForPartner: {
+        type: DataTypes.STRING(32), // QBO Customer Id for Local Partners
+        allowNull: true,
+      },
       qboSyncToken: {
         type: DataTypes.STRING(16), // needed for UPDATEs
         allowNull: true,

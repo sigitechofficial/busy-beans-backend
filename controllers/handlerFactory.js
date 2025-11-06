@@ -61,10 +61,6 @@ exports.updateOne = (Model) =>
       input.image = undefined;
       console.log("🚀 ~ c ~ input.image:", input.image);
     }
-    const doc = await Model.update(input, {
-      where: { id: req.params.id },
-      individualHooks: true,
-    });
 
     if (Model == supplier) {
       console.log("🚀 ~ catchAsync ~ UPDATE SUPPLIER:");
@@ -82,12 +78,18 @@ exports.updateOne = (Model) =>
       console.log("🚀 ~ catchAsync ~ UPDATE LOCALPATNER:");
       console.log("🚀 ~ catchAsync ~ UPDATE LOCALPATNER:");
       console.log("🚀 ~ catchAsync ~ UPDATE LOCALPATNER:");
+      req.body.creditLimit =
+        req.body?.creditLimit == "null" ? null : req.body?.creditLimit;
       deleteDeviceTokenMultiple({
         id: req.params.id,
         entity: "localPartner",
         tokenCondition: { salesRepId: req.params.id },
       });
     }
+    const doc = await Model.update(input, {
+      where: { id: req.params.id },
+      individualHooks: true,
+    });
 
     res.status(200).json({
       status: "success",

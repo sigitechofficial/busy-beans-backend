@@ -5,30 +5,30 @@ const {
   user,
   item,
   product,
-} = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
+} = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
 
-const { Op, literal, where, fn } = require('sequelize');
+const { Op, literal, where, fn } = require("sequelize");
 
 exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
     attributes: [
-      'id',
-      'srName',
+      "id",
+      "srName",
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(
-            `(SELECT SUM(orders.totalBill) FROM orders WHERE orders.salesRepId = salesRep.id  AND orders.statusId != 6)`,
+            `(SELECT SUM(orders.totalBill) FROM orders WHERE orders.salesRepId = salesRep.id  AND orders.statusId != 6)`
           ),
-          2,
+          2
         ),
-        'totalSales',
+        "totalSales",
       ],
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
             (
               SELECT SUM(items.wholesalePrice)
@@ -38,13 +38,13 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
               AND  orders.statusId != 6
             )
           `),
-          2,
+          2
         ),
-        'wholesalePriceCost',
+        "wholesalePriceCost",
       ],
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
             (
               SELECT SUM(items.price - items.wholesalePrice)
@@ -55,21 +55,21 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
                 
             )
           `),
-          2,
+          2
         ),
-        'totalCommission',
+        "totalCommission",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.statusId != 6)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.statusId != 6)`
         ),
-        'ordersPlaced',
+        "ordersPlaced",
       ],
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });
@@ -77,12 +77,12 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
 exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
     attributes: [
-      'id',
-      'srName',
-      'creditLimit',
+      "id",
+      "srName",
+      "creditLimit",
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(items.wholesalePrice)
@@ -92,15 +92,15 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
               )
             `),
-          1,
+          1
         ),
-        'creditUsed',
+        "creditUsed",
       ],
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });
@@ -108,11 +108,11 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
 exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
     attributes: [
-      'id',
-      'srName',
+      "id",
+      "srName",
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(items.wholesalePrice)
@@ -122,20 +122,20 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
                   AND orders.createdBy = 'sales-rep' AND orders.adminReceivableStatus = false
               )
             `),
-          1,
+          1
         ),
-        'outstandingBalance',
+        "outstandingBalance",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.createdBy = 'sales-rep' AND orders.adminReceivableStatus = false)`,
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.createdBy = 'sales-rep' AND orders.adminReceivableStatus = false)`
         ),
-        'ordersOnCredit',
+        "ordersOnCredit",
       ],
     ],
   });
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });
@@ -150,37 +150,37 @@ exports.customerReport = catchAsync(async (req, res, next) => {
         )
       `),
     attributes: [
-      'id',
-      'name',
+      "id",
+      "name",
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(totalBill)
                 FROM orders WHERE orders.userID = user.id
               )
             `),
-          1,
+          1
         ),
-        'totatSpent',
+        "totatSpent",
       ],
       [
         literal(`(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id)`),
-        'numberOfOrders',
+        "numberOfOrders",
       ],
       [
         fn(
-          'FORMAT',
+          "FORMAT",
           literal(`
               (
                 SELECT SUM(totalBill) / NULLIF(COUNT(*), 0)
                 FROM orders WHERE orders.userID = user.id
               )
             `),
-          1,
+          1
         ),
-        'avgSpent',
+        "avgSpent",
       ],
       [
         literal(`
@@ -192,19 +192,19 @@ exports.customerReport = catchAsync(async (req, res, next) => {
                 LIMIT 1
               )
             `),
-        'lastOrderDate',
+        "lastOrderDate",
       ],
       [
         literal(
-          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`,
+          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending')`
         ),
-        'outstandingBalance',
+        "outstandingBalance",
       ],
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });
@@ -212,8 +212,8 @@ exports.customerReport = catchAsync(async (req, res, next) => {
 exports.productSalesReport = catchAsync(async (req, res, next) => {
   const doc = await product.findAll({
     attributes: [
-      'id',
-      'name',
+      "id",
+      "name",
       [
         literal(`
               (
@@ -221,7 +221,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
                 FROM items WHERE items.productId = product.id
               )
             `),
-        'unitsSold',
+        "unitsSold",
       ],
       [
         literal(`
@@ -230,7 +230,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
                 FROM items WHERE items.productId = product.id  AND items.wholesalePrice < 1
               )
             `),
-        'customerPriceTotal',
+        "customerPriceTotal",
       ],
       [
         literal(`
@@ -239,7 +239,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
                 FROM items WHERE items.productId = product.id AND items.wholesalePrice > 0
               )
             `),
-        'wholesalePriceTotal',
+        "wholesalePriceTotal",
       ],
       [
         literal(`
@@ -254,13 +254,13 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
             WHERE items.productId = product.id
           )
         `),
-        'revenue',
+        "revenue",
       ],
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });
@@ -268,8 +268,8 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
 exports.productSalesReport = catchAsync(async (req, res, next) => {
   const doc = await product.findAll({
     attributes: [
-      'id',
-      'name',
+      "id",
+      "name",
       [
         literal(`
               (
@@ -277,7 +277,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
                 FROM items WHERE items.productId = product.id
               )
             `),
-        'unitsSold',
+        "unitsSold",
       ],
       [
         literal(`
@@ -286,7 +286,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
                 FROM items WHERE items.productId = product.id  AND items.wholesalePrice < 1
               )
             `),
-        'customerPriceTotal',
+        "customerPriceTotal",
       ],
       [
         literal(`
@@ -295,7 +295,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
                 FROM items WHERE items.productId = product.id AND items.wholesalePrice > 0
               )
             `),
-        'wholesalePriceTotal',
+        "wholesalePriceTotal",
       ],
       [
         literal(`
@@ -310,7 +310,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
             WHERE items.productId = product.id
           )
         `),
-        'revenue',
+        "revenue",
       ],
       [
         literal(`(
@@ -326,13 +326,13 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
             LIMIT 1
           )
         )`),
-        'topSalesRepName',
+        "topSalesRepName",
       ],
     ],
   });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: doc,
   });
 });

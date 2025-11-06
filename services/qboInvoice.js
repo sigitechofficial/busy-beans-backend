@@ -3,8 +3,9 @@ const axios = require("axios");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const { getOrderWithAssociations } = require("./orderService");
 const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
-const { order } = require("../models");
+const { order, partnerOrder } = require("../models");
 const Order = order;
+const PartnerOrder = partnerOrder;
 const BASE =
   (process.env.QBO_ENV || "").toLowerCase() === "sandbox"
     ? "https://sandbox-quickbooks.api.intuit.com"
@@ -161,13 +162,14 @@ async function createPaymentForInvoice({
 }
 
 // ---- Invoice creation ----
-async function createInvoiceFromOrder({ orderId }) {
+async function createInvoiceFromOrder({ orderId, orderType = "customer" }) {
   if (!orderId) throw new Error("Missing orderId parameter");
 
+  const DBMODEL = orderType === "local-partner" ? PartnerOrder : Order;
   const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
 
-  const order = await getOrderWithAssociations({ orderId: orderId });
+  const order = await getOrderWithAssociations({ orderId: orderId, orderType });
   console.log(
     "🚀 ~ createInvoiceFromOrder ~ order:",
     JSON.parse(JSON.stringify(order))
@@ -270,7 +272,7 @@ async function createInvoiceFromOrder({ orderId }) {
 
     invoiceId = inv.Id;
 
-    await Order.update(
+    await DBMODEL.update(
       {
         quickBooksInvoiceId: invoiceId,
         invoiceSyncedToQBO: true,
@@ -296,7 +298,7 @@ async function createInvoiceFromOrder({ orderId }) {
 
       if (paymentRes?.id) {
         paymentId = paymentRes.id;
-        await Order.update(
+        await DBMODEL.update(
           {
             quickBooksPaymentId: paymentRes.id,
             paymentSyncedToQBO: true,
@@ -310,7 +312,10 @@ async function createInvoiceFromOrder({ orderId }) {
       throw err;
     }
   } else {
-    await Order.update({ qboLastSync: new Date() }, { where: { id: orderId } });
+    await DBMODEL.update(
+      { qboLastSync: new Date() },
+      { where: { id: orderId } }
+    );
   }
 
   return { invoiceId, paymentId: paymentId || null, qboLastSync: new Date() };

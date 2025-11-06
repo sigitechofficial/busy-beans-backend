@@ -124,6 +124,10 @@ module.exports = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      qboCustomerId: {
+        type: DataTypes.STRING(32), // QBO Customer Id
+        allowNull: true,
+      },
     },
     {
       primaryKey: true,

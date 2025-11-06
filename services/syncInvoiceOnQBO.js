@@ -11,10 +11,16 @@ const { quickBooksInvocieDelete } = require("./qboDeleteInvoice");
 const { order } = require("../models");
 // Common HTTP response helpers
 
-exports.syncInvoiceOnQuikBooks = async ({ orderId }) => {
+exports.syncInvoiceOnQuikBooks = async ({
+  orderId,
+  orderType = "customer",
+}) => {
   console.log("🚀 ~ syncInvoiceOnQuikBooks:", orderId);
   try {
-    const result = await createInvoiceFromOrder({ orderId: Number(orderId) });
+    const result = await createInvoiceFromOrder({
+      orderId: Number(orderId),
+      orderType,
+    });
     console.log("🚀 ~ result:", result);
     return result;
   } catch (err) {
@@ -45,7 +51,11 @@ exports.syncInvoiceOnQuikBooks = async ({ orderId }) => {
   }
 };
 
-exports.updateInvoiceOnQuickBooks = async ({ orderId }) => {
+exports.updateInvoiceOnQuickBooks = async ({ orderId, orderType }) => {
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
+  console.log("🚀 ~ orderType:", orderType);
   console.log("🚀 ~ updateInvoiceOnQuickBooks:", orderId);
   console.log("🚀 ~ updateInvoiceOnQuickBooks:", orderId);
   console.log("🚀 ~ updateInvoiceOnQuickBooks:", orderId);

@@ -15,7 +15,7 @@ const MINOR = 70;
  * Update an existing QuickBooks invoice with latest order data.
  * Handles SyncToken versioning and skips if invoice is paid.
  */
-async function updateInvoiceInQuickBooks({ orderId }) {
+async function updateInvoiceInQuickBooks({ orderId, orderType = "customer" }) {
   // ✅ Step 1: Get valid tokens (auto-refresh if expired)
   const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
@@ -24,7 +24,7 @@ async function updateInvoiceInQuickBooks({ orderId }) {
   const { genericItemId } = await warmupQBOResources({ accessToken, realmId });
 
   // ✅ Step 3: Fetch order details
-  const orderData = await getOrderWithAssociations({ orderId });
+  const orderData = await getOrderWithAssociations({ orderId, orderType });
   if (!orderData) throw new Error(`Order not found with id=${orderId}`);
   if (!orderData.quickBooksInvoiceId)
     throw new Error("No linked QuickBooks invoice on this order.");
@@ -50,12 +50,12 @@ async function updateInvoiceInQuickBooks({ orderId }) {
 
   // ✅ Step 5: Build updated invoice lines
   const Lines = (orderData.items || []).map((it) => ({
-    Amount: Number(it.price * it.qty || 0),
+    Amount: Number(it.price || 0),
     Description: it.product || it.productName || "Item",
     DetailType: "SalesItemLineDetail",
     SalesItemLineDetail: {
       Qty: it.qty || 1,
-      UnitPrice: it.price || 0,
+      UnitPrice: it.price / it.qty || 0,
       TaxCodeRef: { value: "NON" },
     },
   }));

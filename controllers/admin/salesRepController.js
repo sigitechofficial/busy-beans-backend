@@ -186,9 +186,6 @@ exports.createSalesRep = catchAsync(async (req, res, next) => {
   console.log("🚀 ~ shippingAddress:", shippingAddress);
   console.log("🚀 ~ bAddress:", bAddress);
   console.log("🚀 ~ bAddress:", bAddress);
-  console.log("🚀 ~ bAddress:", bAddress);
-  console.log("🚀 ~ bAddress:", bAddress);
-  console.log("🚀 ~ bAddress:", bAddress);
   if (shippingAddress && bAddress) {
     shippingAddress.salesRepId = doc.id;
     console.log("🚀 ~ shippingAddress:", shippingAddress);
@@ -496,7 +493,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         ),
         "toBePaid",
       ],
-
       // Wholesale price (offline)
       [
         literal(`
@@ -509,7 +505,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       `),
         "wholesalePrice",
       ],
-
       // Saler Commission (offline)
       [
         fn(
@@ -540,7 +535,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         `),
         "numberOfSoldProducts",
       ],
-
       // Total Sales (online)
       [
         fn(
@@ -557,7 +551,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         ),
         "totalSalesOnline",
       ],
-
       // Wholesale price (online)
       [
         literal(`
@@ -571,7 +564,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
       `),
         "wholesalePriceOnline",
       ],
-
       // Saler Commission (online)
       [
         fn(
@@ -589,7 +581,6 @@ exports.salersMoney = catchAsync(async (req, res, next) => {
         ),
         "salerCommissionOnline",
       ],
-
       // Number of sold products (online)
       [
         fn(

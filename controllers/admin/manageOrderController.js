@@ -57,13 +57,15 @@ const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmai
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const model = req.body?.order?.partnerOrderId ? partnerOrder : order;
-
+  const orderType = req.body?.order?.partnerOrderId
+    ? "local-partner"
+    : "customer";
   const details = await model.findOne({
     where: { id: req.params?.orderId },
   });
 
   if (details.userId && !details?.quickBooksInvoiceId) {
-    await syncInvoiceOnQuikBooks({ orderId: placedOrder.id });
+    await syncInvoiceOnQuikBooks({ orderId: placedOrder.id, orderType });
   }
 
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
@@ -873,7 +875,19 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     req.body.orderData.pulloutIntentId = pullouts?.paymentIntentId;
     req.body.orderData.paymentIntentId = pullouts?.paymentIntentId;
     req.body.orderData.paymentStatus = "done";
-
+    if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
+      syncPaymentToQuickBooks({
+        orderId: orderId,
+        orderType: isPartnerOrder ? "local-partner" : "customer",
+      });
+      console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
+    } else if (!doc.quickBooksInvoiceId) {
+      console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
+      syncInvoiceOnQuikBooks({
+        orderId: orderId,
+        orderType: isPartnerOrder ? "local-partner" : "customer",
+      });
+    }
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({
       orderId: orderId || partnerOrderId,
       orderType: isPartnerOrder ? "local-partner" : "customer",
@@ -891,11 +905,17 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       console.log("🚀 ~ quickBookInvoiceId:", doc.quickBooksInvoiceId);
       console.log("🚀 ~ doc.quickBooksPaymentId:", doc.quickBooksPaymentId);
       if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
-        syncPaymentToQuickBooks({ orderId: orderId });
+        syncPaymentToQuickBooks({
+          orderId: orderId,
+          orderType: isPartnerOrder ? "local-partner" : "customer",
+        });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
       } else if (!doc.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
-        syncInvoiceOnQuikBooks({ orderId: orderId });
+        syncInvoiceOnQuikBooks({
+          orderId: orderId,
+          orderType: isPartnerOrder ? "local-partner" : "customer",
+        });
       }
       req.body.orderData.invoicePaidDate = new Date();
       req.body.orderData.paymentMethod = "Bank Check";

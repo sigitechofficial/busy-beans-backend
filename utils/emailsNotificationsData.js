@@ -95,6 +95,12 @@ const customerOrder = async ({ orderId }) => {
         ],
         [
           literal(
+            `(SELECT users.qboCustomerIdForPartner FROM users WHERE users.id = order.userId LIMIT 1)`
+          ),
+          "qboCustomerIdForPartner",
+        ],
+        [
+          literal(
             `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
           ),
           "qboCustomerId",
@@ -181,6 +187,12 @@ const customerOrder = async ({ orderId }) => {
             `(SELECT salesReps.email FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
           ),
           "patnerEmail",
+        ],
+        [
+          literal(
+            `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+          ),
+          "partnerType",
         ],
         [
           literal(`COALESCE(
@@ -374,6 +386,12 @@ const localPartnerOrder = async ({ orderId }) => {
             `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
           ),
           "stripeCustomerId",
+        ],
+        [
+          literal(
+            `(SELECT qboCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          ),
+          "qboCustomerId",
         ],
         [
           literal(
