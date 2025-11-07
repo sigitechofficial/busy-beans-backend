@@ -52,20 +52,11 @@ exports.syncInvoiceOnQuikBooks = async ({
 };
 
 exports.updateInvoiceOnQuickBooks = async ({ orderId, orderType }) => {
-  console.log("🚀 ~ orderType:", orderType);
-  console.log("🚀 ~ orderType:", orderType);
-  console.log("🚀 ~ orderType:", orderType);
-  console.log("🚀 ~ orderType:", orderType);
-  console.log("🚀 ~ updateInvoiceOnQuickBooks:", orderId);
-  console.log("🚀 ~ updateInvoiceOnQuickBooks:", orderId);
-  console.log("🚀 ~ updateInvoiceOnQuickBooks:", orderId);
-  console.log("🚀 ~ updateInvoiceOnQuickBooks:", orderId);
-
   try {
     const result = await updateInvoiceInQuickBooks({
       orderId: Number(orderId),
+      orderType,
     });
-    await order.update({ qboLastSync: new Date() }, { where: { id: orderId } });
     return result;
   } catch (err) {
     {

@@ -174,6 +174,7 @@ async function createInvoiceFromOrder({ orderId, orderType = "customer" }) {
     "🚀 ~ createInvoiceFromOrder ~ order:",
     JSON.parse(JSON.stringify(order))
   );
+  console.log("🚀 ~ createInvoiceFromOrder ~ order:", order);
   if (!order) throw new Error(`Order not found with id=${orderId}`);
 
   if (!order.qboCustomerId) {
@@ -198,25 +199,12 @@ async function createInvoiceFromOrder({ orderId, orderType = "customer" }) {
     const Lines = (order.items || []).map((it) => {
       const qty = Number(it.qty || 1);
       console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
-      console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
-      console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
-      console.log("🚀 ~ createInvoiceFromOrder ~ qty:", qty);
       // `it.price` (or `it.total`) is the full total for that line
       const amount = +Number(it.price || it.total || 0).toFixed(2);
-      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
-      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
-      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
-      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
-      console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
       console.log("🚀 ~ createInvoiceFromOrder ~ amount:", amount);
       // derive the per-unit price so QBO = Qty * UnitPrice
       const unitPrice = +(amount / qty).toFixed(2);
       console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
-      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
-      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
-      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
-      console.log("🚀 ~ createInvoiceFromOrder ~ unitPrice:", unitPrice);
-
       return {
         Amount: amount,
         Description: `${it.product || "Coffee Product"}${
@@ -251,9 +239,19 @@ async function createInvoiceFromOrder({ orderId, orderType = "customer" }) {
     const payload = {
       CustomerRef: { value: String(order.qboCustomerId) },
       Line: Lines,
+
       TxnDate: new Date(order.invoiceDate || Date.now())
         .toISOString()
         .slice(0, 10),
+
+      // ✅ clean due date
+      DueDate: new Date(
+        new Date(order.invoiceDate || Date.now()).getTime() +
+          (order.termDays || 30) * 86400000
+      )
+        .toISOString()
+        .slice(0, 10),
+
       DocNumber: order.invoiceNumber || undefined,
       PrivateNote: order.note || undefined,
     };
