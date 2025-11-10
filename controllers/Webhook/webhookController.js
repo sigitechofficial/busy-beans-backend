@@ -93,6 +93,11 @@ const invoicePaid = async (event) => {
         },
         { where: { id: orderId } }
       );
+
+      syncPaymentToQuickBooks({
+        orderId: orderId,
+        orderType: "local-partner",
+      });
     } else {
       const orderPlaced = await order.findOne({
         where: condition,
@@ -138,11 +143,17 @@ const invoicePaid = async (event) => {
     }
 
     if (orderPlaced?.quickBooksInvoiceId && !orderPlaced?.quickBooksPaymentId) {
-      await syncPaymentToQuickBooks({ orderId: orderPlaced.id });
+      await syncPaymentToQuickBooks({
+        orderId: orderPlaced.id,
+        orederType: "customer",
+      });
       console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
     } else if (!doc.quickBooksInvoiceId) {
       console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
-      await syncInvoiceOnQuikBooks({ orderId: orderPlaced.id });
+      await syncInvoiceOnQuikBooks({
+        orderId: orderPlaced.id,
+        orderType: "customer",
+      });
     }
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({
       orderId: orderId,

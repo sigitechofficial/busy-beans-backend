@@ -837,8 +837,12 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const statusId = Number(req.body?.orderData?.statusId);
   const userId = Number(doc?.userId || 0);
 
+  console.log("🚀 ~ statusId:", statusId);
+  console.log("🚀 ~ isPartnerOrder:", isPartnerOrder);
+  console.log("🚀 ~ doc?.paymentStatus :", doc?.paymentStatus);
   if (statusId == 5 && isPartnerOrder && doc?.paymentStatus != "done") {
     //HERE we try to collect payment if order type is local Patrner
+    console.log("🚀 ~ doc?.defaultBankAccount:", doc?.defaultBankAccount);
     if (!doc?.defaultBankAccount) {
       await Model.update(req.body?.orderData, {
         where: { id: orderId || partnerOrderId },
@@ -859,6 +863,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       partner: { srName: doc?.srName, territoryName: doc?.territoryName },
     });
 
+    console.log("🚀 ~ pullouts:", pullouts);
     if (!pullouts) {
       await Model.update(req.body?.orderData, {
         where: { id: orderId || partnerOrderId },
@@ -875,23 +880,24 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     req.body.orderData.pulloutIntentId = pullouts?.paymentIntentId;
     req.body.orderData.paymentIntentId = pullouts?.paymentIntentId;
     req.body.orderData.paymentStatus = "done";
+    console.log("🚀 ~ doc?.quickBooksInvoiceId:", doc?.quickBooksInvoiceId);
     if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
       syncPaymentToQuickBooks({
-        orderId: orderId,
+        orderId: orderId || partnerOrderId,
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
       console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
     } else if (!doc.quickBooksInvoiceId) {
       console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
       syncInvoiceOnQuikBooks({
-        orderId: orderId,
+        orderId: orderId || partnerOrderId,
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
     }
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-      orderId: orderId || partnerOrderId,
-      orderType: isPartnerOrder ? "local-partner" : "customer",
-    });
+    // paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+    //   orderId: orderId || partnerOrderId,
+    //   orderType: isPartnerOrder ? "local-partner" : "customer",
+    // });
   }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
@@ -905,15 +911,19 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       console.log("🚀 ~ quickBookInvoiceId:", doc.quickBooksInvoiceId);
       console.log("🚀 ~ doc.quickBooksPaymentId:", doc.quickBooksPaymentId);
       if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
+        console.log(
+          "🚀 ~ doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId:",
+          doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId
+        );
         syncPaymentToQuickBooks({
-          orderId: orderId,
+          orderId: orderId || partnerOrderId,
           orderType: isPartnerOrder ? "local-partner" : "customer",
         });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
       } else if (!doc.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
         syncInvoiceOnQuikBooks({
-          orderId: orderId,
+          orderId: orderId || partnerOrderId,
           orderType: isPartnerOrder ? "local-partner" : "customer",
         });
       }
@@ -950,14 +960,14 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
     if (req.body?.orderData?.statusId == 5) {
       //HERE we try to collect payment if order type is local Patrner
-      orderShippedEvent({
-        orderId: orderId || partnerOrderId,
-        orderType: isPartnerOrder ? "local-partner" : "customer",
-      });
-      orderDispatchEvent({
-        orderId: orderId || partnerOrderId,
-        orderType: isPartnerOrder ? "local-partner" : "customer",
-      });
+      //   orderShippedEvent({
+      //     orderId: orderId || partnerOrderId,
+      //     orderType: isPartnerOrder ? "local-partner" : "customer",
+      //   });
+      //   orderDispatchEvent({
+      //     orderId: orderId || partnerOrderId,
+      //     orderType: isPartnerOrder ? "local-partner" : "customer",
+      //   });
     }
 
     if (req.body?.orderData?.statusId == 6) {

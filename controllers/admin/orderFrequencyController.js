@@ -23,7 +23,6 @@ const {
 const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
 
 exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
-  //orderData is
   try {
     if (!orderData) return false;
 

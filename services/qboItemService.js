@@ -1,45 +1,39 @@
+// services/qboItemService.js
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const { QBO, MINOR, headers, qboQuery, qboQuote } = require("./qboHelpers");
 
-// --- Cached / persisted values ---
-let cachedIncomeAccountId = process.env.QBO_INCOME_ACCOUNT_ID || null;
-let cachedGenericItemId = process.env.QBO_GENERIC_ITEM_ID || null;
+/* ------------------------------------------------------------------
+ * ENV + CACHE HELPERS
+ * ------------------------------------------------------------------ */
 
-// --- Internal helper to update .env if missing or invalid ---
-function updateEnv(key, value) {
+function updateEnvIfMissing(key, value) {
   const envPath = path.resolve(process.cwd(), ".env");
-  try {
-    const envContent = fs.existsSync(envPath)
-      ? fs.readFileSync(envPath, "utf8")
-      : "";
-    const regex = new RegExp(`^${key}=.*$`, "m");
-    const newLine = `${key}=${value}`;
-    if (regex.test(envContent)) {
-      fs.writeFileSync(envPath, envContent.replace(regex, newLine));
-    } else {
-      fs.appendFileSync(envPath, `\n${newLine}`);
-    }
+  let envContent = fs.existsSync(envPath)
+    ? fs.readFileSync(envPath, "utf8")
+    : "";
+
+  if (!process.env[key]) {
+    fs.appendFileSync(envPath, `\n${key}=${value}`);
     process.env[key] = value;
-    console.log(`[QBO] Updated .env ${key}=${value}`);
-  } catch (err) {
-    console.warn(`[QBO] Failed to update .env for ${key}:`, err.message);
+    console.log(`[QBO] Saved new env value ${key}=${value}`);
+    return;
+  }
+
+  if (!envContent.includes(`${key}=`)) {
+    fs.appendFileSync(envPath, `\n${key}=${value}`);
+    process.env[key] = value;
   }
 }
 
 /* ------------------------------------------------------------------
- *  ACCOUNT HELPERS
+ * ACCOUNT HELPERS
  * ------------------------------------------------------------------ */
-async function findAccountById({ accessToken, realmId, id }) {
-  const q = `select Id, Name, Active, AccountType from Account where Id='${id}'`;
-  const res = await qboQuery({ accessToken, realmId, query: q });
-  return res?.QueryResponse?.Account?.[0] || null;
-}
 
 async function findAnyIncomeAccount({ accessToken, realmId }) {
-  const q = `select Id, Name from Account where AccountType='Income'`;
-  const res = await qboQuery({ accessToken, realmId, query: q });
+  const sql = `select Id, Name from Account where AccountType='Income'`;
+  const res = await qboQuery({ accessToken, realmId, query: sql });
   return res?.QueryResponse?.Account?.[0] || null;
 }
 
@@ -50,140 +44,168 @@ async function createIncomeAccount({ accessToken, realmId }) {
     AccountType: "Income",
     AccountSubType: "SalesOfProductIncome",
   };
+
   const res = await axios.post(url, payload, { headers: headers(accessToken) });
-  return res.data?.Account;
+  return res?.data?.Account;
 }
 
-/* ------------------------------------------------------------------
- *  Ensure Income Account
- * ------------------------------------------------------------------ */
 async function ensureIncomeAccount({ accessToken, realmId }) {
-  // 1️⃣ Validate cached or env-stored account
-  if (cachedIncomeAccountId) {
-    const acc = await findAccountById({
-      accessToken,
-      realmId,
-      id: cachedIncomeAccountId,
-    });
-    if (acc && acc.Active) {
-      console.log(
-        `[QBO] Using valid cached Income Account ${acc.Name} (${acc.Id})`
-      );
-      return cachedIncomeAccountId;
-    }
-    console.warn(
-      `[QBO] Cached Income Account ${cachedIncomeAccountId} invalid, will recreate`
-    );
+  let existing = process.env.QBO_INCOME_ACCOUNT_ID;
+
+  if (existing) {
+    console.log(`[QBO] Using income account from env: ${existing}`);
+    return existing;
   }
 
-  // 2️⃣ Try to find existing Income Account
   const found = await findAnyIncomeAccount({ accessToken, realmId });
   if (found?.Id) {
-    cachedIncomeAccountId = String(found.Id);
-    // updateEnv("QBO_INCOME_ACCOUNT_ID", cachedIncomeAccountId);
-    console.log(`[QBO] Found Income Account ${found.Name} (${found.Id})`);
-    return cachedIncomeAccountId;
+    updateEnvIfMissing("QBO_INCOME_ACCOUNT_ID", found.Id);
+    return String(found.Id);
   }
 
-  // 3️⃣ Create one if none exist
   const created = await createIncomeAccount({ accessToken, realmId });
-  if (created?.Id) {
-    cachedIncomeAccountId = String(created.Id);
-    // updateEnv("QBO_INCOME_ACCOUNT_ID", cachedIncomeAccountId);
-    console.log(
-      `[QBO] Created new Income Account ${created.Name} (${created.Id})`
-    );
-    return cachedIncomeAccountId;
-  }
-
-  throw new Error("Failed to ensure a valid Income Account in QuickBooks.");
+  updateEnvIfMissing("QBO_INCOME_ACCOUNT_ID", created.Id);
+  return String(created.Id);
 }
 
 /* ------------------------------------------------------------------
- *  Ensure Generic Service Item
+ * ITEM HELPERS
  * ------------------------------------------------------------------ */
-async function ensureServiceItem({
+
+async function findItemByName({ accessToken, realmId, name }) {
+  try {
+    const sql = `select Id, Name from Item where Name = ${qboQuote(name)}`;
+    const res = await qboQuery({ accessToken, realmId, query: sql });
+    return res?.QueryResponse?.Item?.[0] || null;
+  } catch (err) {
+    console.warn("[QBO][findItemByName]", err.message);
+    return null;
+  }
+}
+
+async function createServiceItem({
   accessToken,
   realmId,
   name,
   incomeAccountId,
   taxable = false,
 }) {
-  const findSql = `select Id, Name from Item where Name = ${qboQuote(name)}`;
-  const res = await qboQuery({ accessToken, realmId, query: findSql });
-  const found = res?.QueryResponse?.Item?.[0];
-  if (found?.Id) {
-    console.log(
-      `[QBO] Found existing service item: ${found.Name} (${found.Id})`
-    );
-    return String(found.Id);
-  }
+  console.log(`[QBO] Creating Item "${name}"...`);
 
-  console.log(`[QBO] Creating new service item: ${name}`);
-  const createUrl = `${QBO(realmId)}/item?minorversion=${MINOR}`;
   const payload = {
     Name: name,
-    Type: "Service",
+    Type: "Extra Charges / Services",
     IncomeAccountRef: { value: String(incomeAccountId) },
     TrackQtyOnHand: false,
     Taxable: Boolean(taxable),
   };
 
+  const url = `${QBO(realmId)}/item?minorversion=${MINOR}`;
+
   try {
-    const c = await axios.post(createUrl, payload, {
+    const res = await axios.post(url, payload, {
       headers: headers(accessToken),
     });
-    const newItem = c.data?.Item;
-    console.log(`[QBO] Created Item ${newItem?.Name} (${newItem?.Id})`);
-    return newItem?.Id ? String(newItem.Id) : null;
+
+    const item = res?.data?.Item;
+    console.log(`[QBO] ✅ Created item: ${item.Name} (${item.Id})`);
+    return String(item.Id);
   } catch (err) {
-    const status = err?.response?.status;
-    const data = err?.response?.data;
     console.error(
-      "[QBO][ensureServiceItem] Create failed:",
-      status,
-      JSON.stringify(data, null, 2)
+      "[QBO][createServiceItem] Error:",
+      err?.response?.status,
+      JSON.stringify(err?.response?.data, null, 2)
     );
-    throw new Error(
-      `QuickBooks Item creation failed (${status}): ${
-        data?.Fault?.Error?.[0]?.Message ||
-        data?.Fault?.Error?.[0]?.Detail ||
-        "Unknown"
-      }`
-    );
+    throw new Error("Failed to create QBO item: " + err?.message);
   }
 }
 
 /* ------------------------------------------------------------------
- * Warm-up helper: find or create and cache everything once
+ *  Ensure item (ENV → FIND → CREATE)
+ * ------------------------------------------------------------------ */
+async function ensureItem({
+  accessToken,
+  realmId,
+  name,
+  envKey,
+  incomeAccountId,
+}) {
+  // 1. from env
+  if (process.env[envKey]) {
+    console.log(`[QBO] Using ${name} from env: ${process.env[envKey]}`);
+    return process.env[envKey];
+  }
+
+  // 2. find in QBO
+  const found = await findItemByName({ accessToken, realmId, name });
+  if (found?.Id) {
+    updateEnvIfMissing(envKey, found.Id);
+    return String(found.Id);
+  }
+
+  // 3. create new
+  const newId = await createServiceItem({
+    accessToken,
+    realmId,
+    name,
+    incomeAccountId,
+    taxable: false,
+  });
+
+  updateEnvIfMissing(envKey, newId);
+  return newId;
+}
+
+/* ------------------------------------------------------------------
+ * PUBLIC: Warmup Loader (returns all 3 item IDs)
  * ------------------------------------------------------------------ */
 async function warmupQBOResources({ accessToken, realmId }) {
-  console.log("[QBO] Warm-up: ensuring Income Account and Generic Item...");
+  console.log("[QBO] Warm-up started...");
+
   const incomeAccountId = await ensureIncomeAccount({ accessToken, realmId });
 
-  if (!cachedGenericItemId) {
-    cachedGenericItemId = await ensureServiceItem({
-      accessToken,
-      realmId,
-      name: "Generic Coffee Product",
-      incomeAccountId,
-      taxable: false,
-    });
-    updateEnv("QBO_GENERIC_ITEM_ID", cachedGenericItemId);
-    console.log("✔ Cached GenericItemId =", cachedGenericItemId);
-  }
+  const productItemId = await ensureItem({
+    accessToken,
+    realmId,
+    name: "Generic Coffee Product",
+    envKey: "QBO_PRODUCT_ITEM_ID",
+    incomeAccountId,
+  });
+
+  const serviceItemId = await ensureItem({
+    accessToken,
+    realmId,
+    name: "Extra Charges / Services",
+    envKey: "QBO_SERVICE_ITEM_ID",
+    incomeAccountId,
+  });
+
+  const shippingItemId = await ensureItem({
+    accessToken,
+    realmId,
+    name: "Shipping",
+    envKey: "QBO_SHIPPING_ITEM_ID",
+    incomeAccountId,
+  });
+
+  console.log("[QBO] ✅ Warm-up complete:", {
+    incomeAccountId,
+    productItemId,
+    serviceItemId,
+    shippingItemId,
+  });
 
   return {
     incomeAccountId,
-    genericItemId: cachedGenericItemId,
+    productItemId,
+    serviceItemId,
+    shippingItemId,
   };
 }
 
-/* ------------------------------------------------------------------
- * Exports
- * ------------------------------------------------------------------ */
 module.exports = {
-  ensureIncomeAccount,
-  ensureServiceItem,
   warmupQBOResources,
+  findItemByName,
+  createServiceItem,
+  ensureItem,
 };
