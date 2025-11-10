@@ -918,6 +918,18 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     });
   }
 
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
+  console.log(
+    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
+    placedOrder?.quickBooksInvoiceId
+  );
   if (!placedOrder?.quickBooksInvoiceId) {
     console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~TRUE:");
     syncInvoiceOnQuikBooks({
@@ -926,10 +938,10 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     });
   } else {
     console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~FALSE:");
-    //     updateInvoiceOnQuickBooks({
-    //       orderId: placedOrder.id,
-    //       orderType: "local-partner",
-    //     });
+    updateInvoiceOnQuickBooks({
+      orderId: placedOrder.id,
+      orderType: "local-partner",
+    });
   }
 
   return res.status(200).json({

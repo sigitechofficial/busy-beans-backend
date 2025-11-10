@@ -31,21 +31,28 @@ const {
 const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
+const {
+  syncInvoiceOnQuikBooks,
+  updateInvoiceOnQuickBooks,
+} = require("../../services/syncInvoiceOnQBO");
 
+// const { orderEvents } = require("../events/orderEvents");
 exports.notificationTesting = async (req, res, next) => {
-  const orderData = await dataForEmailAndNotifications(
-    req.body.id,
-    "local-partner"
-  );
+  //   const orderData = await dataForEmailAndNotifications(
+  //     req.body.id,
+  //     "local-partner"
+  //   );
 
-  paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-    orderId: 15,
-    orderType: true ? "local-partner" : "customer",
-  });
+  //   paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+  //     orderId: 15,
+  //     orderType: true ? "local-partner" : "customer",
+  //   });
+  //   //
   //   const row = await qboToken.findOne();
-  return res
-    .status(200)
-    .json(response({ data: { orderData: orderData.details } }));
+  syncInvoiceOnQuikBooks({ orderId: 21, orderType: "local-partner" });
+  //   updateInvoiceOnQuickBooks({ orderId: 21, orderType: "local-partner" });
+  //   orderEvents({ orderId: req.body.id, orderType: "local-partner" });
+  return res.status(200).json(response({ data: { orderData: 1 } }));
 };
 
 exports.bookOrder = catchAsync(async (req, res, next) => {
