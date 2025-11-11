@@ -52,7 +52,7 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   const data = await product.findAll({
     where: { status: 1, deleted: 0 },
     attributes: {
-      exclude: ["deleted", "deletedAt", "updatedAt", "wholesalePrice"],
+      exclude: ["deleted", "deletedAt", "wholesalePrice"],
     },
     raw: true, // return plain objects instead of Sequelize instances
   });

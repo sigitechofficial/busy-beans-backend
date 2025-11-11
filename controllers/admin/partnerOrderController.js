@@ -227,8 +227,6 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     orderEvents({ orderId: newOrder?.id, orderType: "local-partner" });
   }
 
-  //   syncInvoiceOnQuikBooks({ orderId: newOrder?.id, orderType: "local-partner" });
-
   return res.status(200).json({
     status: "success",
     data: { id: newOrder?.id, allitems },

@@ -145,7 +145,7 @@ const invoicePaid = async (event) => {
     if (orderPlaced?.quickBooksInvoiceId && !orderPlaced?.quickBooksPaymentId) {
       await syncPaymentToQuickBooks({
         orderId: orderPlaced.id,
-        orederType: "customer",
+        orderType: "customer",
       });
       console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
     } else if (!doc.quickBooksInvoiceId) {

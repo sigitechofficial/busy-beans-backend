@@ -11,7 +11,8 @@ const { where } = require("sequelize");
  * Sync a successful Stripe (or manual) payment to QuickBooks.
  * Trigger this when your system marks an invoice as "paid".
  */
-async function syncPaymentToQuickBooks({ orderId, orederType = "customer" }) {
+async function syncPaymentToQuickBooks({ orderId, orderType = "customer" }) {
+  console.log("🚀 ~ syncPaymentToQuickBooks ~ orderType:", orderType);
   console.log("🚀 ~ syncPaymentToQuickBooks ~ orderId:", orderId);
   try {
     // Fetch a valid token (auto-refresh)
@@ -20,12 +21,12 @@ async function syncPaymentToQuickBooks({ orderId, orederType = "customer" }) {
       throw new Error("QBO not connected or token missing");
 
     // Get order info
-    const MODEL = orederType === "customer" ? order : partnerOrder;
+    const MODEL = orderType === "customer" ? order : partnerOrder;
     const ord = await MODEL.findOne({
       where: { id: orderId },
       include: [
         {
-          model: orederType == "customer" ? user : salesRep,
+          model: orderType == "customer" ? user : salesRep,
           attributes: ["id", "qboCustomerId", "email"],
         },
       ],
@@ -59,6 +60,7 @@ async function syncPaymentToQuickBooks({ orderId, orederType = "customer" }) {
       paidDate: ord?.invoicePaidDate
         ? new Date(ord.invoicePaidDate).toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10),
+      invoiceNumber: ord?.invoiceNumber,
     });
 
     // Update local DB with payment info

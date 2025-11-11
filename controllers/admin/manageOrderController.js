@@ -65,7 +65,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   });
 
   if (details.userId && !details?.quickBooksInvoiceId) {
-    await syncInvoiceOnQuikBooks({ orderId: details.id, orderType });
+    syncInvoiceOnQuikBooks({ orderId: details.id, orderType });
   }
 
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
@@ -787,6 +787,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
 // if(req.body?.orderData?.statusId == 4)processTransferToLocalPartner({orderId:orderId})
 exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const { orderId, partnerOrderId } = req.body;
+  console.log("🚀 ~ partnerOrderId:", partnerOrderId);
 
   const Model = partnerOrderId ? partnerOrder : order;
   const isPartnerOrder = partnerOrderId ? true : false;
@@ -839,6 +840,9 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const statusId = Number(req.body?.orderData?.statusId);
   const userId = Number(doc?.userId || 0);
 
+  //because customers and localpart6ner already have order invoice in
+  //main issue status alreqady 4 hoga jin order ka 5 py unki payment ho jaye gi or f
+  0;
   console.log("🚀 ~ statusId:", statusId);
   console.log("🚀 ~ isPartnerOrder:", isPartnerOrder);
   console.log("🚀 ~ doc?.paymentStatus :", doc?.paymentStatus);
@@ -849,6 +853,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       await Model.update(req.body?.orderData, {
         where: { id: orderId || partnerOrderId },
       });
+
       return next(
         new AppError(
           "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
@@ -896,10 +901,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
     }
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-      orderId: orderId || partnerOrderId,
-      orderType: isPartnerOrder ? "local-partner" : "customer",
-    });
+    // paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+    //   orderId: orderId || partnerOrderId,
+    //   orderType: isPartnerOrder ? "local-partner" : "customer",
+    // });
   }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
@@ -962,14 +967,14 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
     if (req.body?.orderData?.statusId == 5) {
       //  HERE we try to collect payment if order type is local Patrner
-      orderShippedEvent({
-        orderId: orderId || partnerOrderId,
-        orderType: isPartnerOrder ? "local-partner" : "customer",
-      });
-      orderDispatchEvent({
-        orderId: orderId || partnerOrderId,
-        orderType: isPartnerOrder ? "local-partner" : "customer",
-      });
+      //   orderShippedEvent({
+      //     orderId: orderId || partnerOrderId,
+      //     orderType: isPartnerOrder ? "local-partner" : "customer",
+      //   });
+      //   orderDispatchEvent({
+      //     orderId: orderId || partnerOrderId,
+      //     orderType: isPartnerOrder ? "local-partner" : "customer",
+      //   });
     }
 
     if (req.body?.orderData?.statusId == 6) {

@@ -1,14 +1,18 @@
 const express = require("express");
 const r = express.Router();
-
+const auth = require("../middlewares/protect");
+const { protect } = auth;
 // ✅ Middleware (already exists)
 const ensureQboConnection = require("../middlewares/qboAuth");
+const ctrl = require("../controllers/admin/quikbooksController");
 
 // ✅ Controller (final integrated version)
-const ctrl = require("../controllers/admin/quikbooksController");
 
 // 🔐 AUTH
 // 🔐 Login (OAuth start)
+
+r.use(protect);
+r.post("/save-qbo-credentials", ctrl.saveQboCredentials);
 r.get("/auth/login", ctrl.authLogin);
 // 🔐 Exchange (OAuth callback)
 r.post("/auth/exchange", ctrl.authExchange);

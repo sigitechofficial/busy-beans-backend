@@ -61,7 +61,8 @@ async function saveTokens({
  */
 
 async function refreshAccessTokenIfNeeded() {
-  const record = await qboToken.findOne();
+  const record = await qboToken.findOne({});
+  console.log("🚀 ~ refreshAccessTokenIfNeeded ~ record:", record.id);
   if (!record) throw new Error("No QuickBooks token record found.");
 
   const now = new Date();

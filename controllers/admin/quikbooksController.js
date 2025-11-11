@@ -17,7 +17,7 @@ const {
   syncInvoiceOnQuikBooks,
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
-const { order } = require("../../models");
+const { qboToken, qboCredientials } = require("../../models");
 // Common HTTP response helpers
 function httpError(
   res,
@@ -31,11 +31,68 @@ function httpSuccess(res, data = null, message = "OK") {
   return res.status(200).json({ status: "success", message, data });
 }
 
+const { encrypt, decrypt } = require("../../utils/encryption");
+
+exports.saveQboCredentials = async (req, res) => {
+  try {
+    const { salesRepId, QBO_CLIENT_ID, QBO_CLIENT_SECRET } = req.body;
+
+    if (!salesRepId || !QBO_CLIENT_ID || !QBO_CLIENT_SECRET) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields.",
+      });
+    }
+
+    // Encrypt ID + Secret
+    const encClientId = encrypt(QBO_CLIENT_ID);
+    const encClientSecret = encrypt(QBO_CLIENT_SECRET);
+
+    // Check if exists
+    let record = await qboCredientials.findOne({
+      where: { salesRepId },
+    });
+
+    if (record) {
+      // ---- Update existing ----
+      record.QBO_CLIENT_ID = encClientId;
+      record.QBO_CLIENT_SECRET = encClientSecret;
+      record.status = true;
+      await record.save();
+
+      return res.json({
+        success: true,
+        message: "QBO credentials updated successfully.",
+      });
+    }
+
+    // ---- Create new ----
+    await qboCredientials.create({
+      salesRepId,
+      QBO_CLIENT_ID: encClientId,
+      QBO_CLIENT_SECRET: encClientSecret,
+      status: true,
+    });
+
+    return res.json({
+      success: true,
+      message: "QBO credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("saveQboCredentials Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error.",
+    });
+  }
+};
+
 /**
  * GET /qbo/auth/login
  * Redirect user to QuickBooks OAuth login page
  */
 exports.authLogin = async (req, res) => {
+  console.log("🚀 ~ req authLoginQBO:", req.user);
   try {
     const clientId = process.env.QBO_CLIENT_ID;
     const redirectUri = process.env.QBO_REDIRECT_URI;

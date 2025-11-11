@@ -202,6 +202,12 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.address);
     models.address.belongsTo(salesRep);
+
+    salesRep.hasOne(models.qboCredientials);
+    models.qboCredientials.belongsTo(salesRep);
+
+    salesRep.hasOne(models.qboToken);
+    models.qboToken.belongsTo(salesRep);
   };
 
   return salesRep;

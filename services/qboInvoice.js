@@ -106,6 +106,7 @@ async function createPaymentForInvoice({
   paymentMethodName,
   refNumber,
   paidDate,
+  invoiceNumber,
 }) {
   console.log("🚀 Creating QBO Payment:", {
     invoiceId,
@@ -157,7 +158,6 @@ async function createPaymentForInvoice({
     TxnDate: safeDate,
     PaymentRefNum: refNumber || `ref-${invoiceId}-${Date.now()}`,
     PaymentMethodRef: { value: String(paymentMethodId) },
-
     // ✅ REQUIRED: accounts receivable reference
     // ARAccountRef: { value: "33" }, // QBO auto-resolves this for most accounts, override if needed
 
@@ -168,6 +168,10 @@ async function createPaymentForInvoice({
       },
     ],
   };
+
+  if (invoiceNumber) {
+    payload.PrivateNote = `Order Invoice ID: ${invoiceNumber}`;
+  }
   console.log("🚀 ~ createPaymentForInvoice ~ payload:", payload);
 
   /* -----------------------------------------------------------
@@ -352,6 +356,7 @@ async function createInvoiceFromOrder({ orderId, orderType = "customer" }) {
         paymentMethodName: order.paymentMethod,
         refNumber: order.paymentIntentId || order.invoiceId,
         paidDate: order.invoicePaidDate,
+        invoiceNumber: order?.invoiceNumber,
       });
 
       if (paymentRes?.id) {
