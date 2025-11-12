@@ -108,7 +108,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   } else if (decoded?.entity === "partnerEmployee") {
     req.user.salesRepId = currentUser?.salesRepId;
   } else if (decoded?.entity === "admin") {
-    req.user.accountId = dec?.id;
+    req.user.accountId = decoded?.id;
   } else if (decoded?.entity === "adminEmployee") {
     req.user.accountId = currentUser?.accountId;
   }
