@@ -104,13 +104,13 @@ exports.protect = catchAsync(async (req, res, next) => {
   req.user.accessToken = token; // used in logout
   // req.user.accessToken = token;
   if (decoded?.entity === "localPartner") {
-    req.user.salesRepId = decoded?.id;
+    req.user.localPartnerId = decoded?.id;
   } else if (decoded?.entity === "partnerEmployee") {
-    req.user.salesRepId = currentUser?.salesRepId;
+    req.user.localPartnerId = currentUser?.salesRepId;
   } else if (decoded?.entity === "admin") {
-    req.user.accountId = decoded?.id;
+    req.user.adminId = decoded?.id;
   } else if (decoded?.entity === "adminEmployee") {
-    req.user.accountId = currentUser?.accountId;
+    req.user.adminId = currentUser?.accountId;
   }
   req.user.dvToken = decoded?.dvToken;
   req.user.entity = decoded?.entity;

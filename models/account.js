@@ -69,6 +69,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      currentRealmId: {
+        type: DataTypes.STRING(32), // QBO Customer Id
+        allowNull: true,
+      },
     },
     {
       tableName: "accounts",
@@ -97,6 +101,9 @@ module.exports = (sequelize, DataTypes) => {
 
     account.hasOne(models.qboToken);
     models.qboToken.belongsTo(account);
+
+    account.hasMany(models.qboCustomerMap);
+    models.qboCustomerMap.belongsTo(account);
   };
 
   const SALT_ROUNDS = 12;

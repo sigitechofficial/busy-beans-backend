@@ -771,7 +771,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
   }
 
   if (!doc?.user?.qboCustomerId) {
-    importCustomersToQuickBooks({ limitIds: [doc?.user?.id] });
+    importCustomersToQuickBooks({ limitIds: [doc?.user?.id], req });
   }
 
   res.status(200).json({

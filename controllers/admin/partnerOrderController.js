@@ -566,6 +566,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
     importCustomersToQuickBooks({
       limitIds: [doc?.salesRep?.id],
       userType: "local-partner",
+      req,
     });
   }
 

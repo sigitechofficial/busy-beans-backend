@@ -130,10 +130,9 @@ exports.authExchange = async (req, res) => {
   try {
     const { fullUrl } = req.body || {};
     console.log("🚀 ~ req.body:", req.body);
-
     if (!fullUrl)
       return httpError(res, 400, "Missing fullUrl from request body");
-    const data = await exchangeFromFullUrl(fullUrl);
+    const data = await exchangeFromFullUrl({ fullUrl, req: req });
     return httpSuccess(res, data, "QuickBooks tokens saved successfully.");
   } catch (err) {
     console.error("[QBO][authExchange] Error:", err?.message);
@@ -166,6 +165,7 @@ exports.importCustomers = async (req, res) => {
   try {
     const result = await importCustomersToQuickBooks({
       limitIds: req.body.ids || [],
+      req,
     });
     return httpSuccess(res, result, "Customers imported successfully.");
   } catch (err) {

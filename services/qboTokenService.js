@@ -60,8 +60,8 @@ async function saveTokens({
  * Refresh the access token if expired; otherwise return existing one
  */
 
-async function refreshAccessTokenIfNeeded() {
-  const record = await qboToken.findOne({});
+async function refreshAccessTokenIfNeeded({ condition }) {
+  const record = await qboToken.findOne({ where: condition });
   console.log("🚀 ~ refreshAccessTokenIfNeeded ~ record:", record.id);
   if (!record) throw new Error("No QuickBooks token record found.");
 

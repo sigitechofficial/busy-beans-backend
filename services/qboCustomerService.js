@@ -1,6 +1,13 @@
 // services/qboCustomerService.js
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
-const { user, salesRep, address, billingAddress } = require("../models");
+const {
+  user,
+  salesRep,
+  address,
+  billingAddress,
+  qboCustomerMap,
+  account,
+} = require("../models");
 const axios = require("axios");
 
 const BASE =
@@ -100,27 +107,106 @@ async function findQboCustomerByDisplayName({
   return found || null;
 }
 
+async function upsertQboCustomer({
+  u,
+  accessToken,
+  realmId,
+  userType = "customer",
+}) {
+  try {
+    if (!u || !accessToken || !realmId)
+      throw new Error("Missing data for QBO customer sync");
+
+    const displayName = getDisplayName(u);
+    console.log(`[QBO][Customer] Using DisplayName: '${displayName}'`);
+
+    // 1️⃣ Try to find existing customer in QBO
+    const existing = await findQboCustomerByDisplayName({
+      accessToken,
+      realmId,
+      displayName,
+    });
+
+    if (existing?.Id) {
+      const qboCustomerId = existing.Id;
+      const MODEL = userType === "local-partner" ? salesRep : user;
+
+      const input = { qboCustomerId };
+      if (MODEL === user && u.salesRep?.partnerType === "direct-partner") {
+        input.qboCustomerIdForPartner = qboCustomerId;
+        delete input.qboCustomerId;
+      }
+
+      await MODEL.update(input, { where: { id: u.id } });
+      console.log(
+        `[QBO][Customer] ✅ Linked existing QBO ${qboCustomerId} to user ${u.id}`
+      );
+
+      return qboCustomerId;
+    }
+
+    // 2️⃣ Not found → Create new QBO customer
+    console.log(
+      `[QBO][Customer] Creating new QBO customer for '${displayName}'`
+    );
+
+    const payload = mapToQboCustomer(u);
+    const url = `${QBO(realmId)}/customer?minorversion=${MINOR}`;
+
+    const r = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    });
+
+    const qboCustomerId = r.data?.Customer?.Id;
+    if (!qboCustomerId) throw new Error("Failed to create QBO customer");
+
+    const MODEL = userType === "local-partner" ? salesRep : user;
+    const input = { qboCustomerId };
+    if (MODEL === user && u.salesRep?.partnerType === "direct-partner") {
+      input.qboCustomerIdForPartner = qboCustomerId;
+      delete input.qboCustomerId;
+    }
+
+    await MODEL.update(input, { where: { id: u.id } });
+    console.log(`[QBO][Customer] 🆕 Created QBO customer ${qboCustomerId}`);
+
+    return qboCustomerId;
+  } catch (err) {
+    console.error(`[QBO][Customer] ❌ upsertQboCustomer error:`, err.message);
+    throw err; // let caller decide error handling
+  }
+}
+
 // ✅ MAIN IMPORT FUNCTION (fixed, clean, consistent)
 async function importCustomersToQuickBooks({
   limitIds = [],
   userType = "customer",
+  req,
 }) {
-  const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
-  if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
-
   const where = { qboCustomerId: null };
   if (limitIds.length) where.id = limitIds;
 
-  const MODEL = userType == "local-partner" ? salesRep : user;
+  const MODEL = userType === "local-partner" ? salesRep : user;
   const include = [
     { model: address, limit: 1 },
     { model: billingAddress, limit: 1 },
   ];
 
+  let ADMIN = await account.findOne({});
   if (MODEL === user) {
     include.push({
       model: salesRep,
-      attributes: ["id", "srName", "territoryName", "partnerType"],
+      attributes: [
+        "id",
+        "srName",
+        "territoryName",
+        "partnerType",
+        "currentRealmId",
+      ],
     });
   }
 
@@ -134,101 +220,79 @@ async function importCustomersToQuickBooks({
   const results = [];
 
   for (const u of users) {
+    console.log(`\n-----------------------------`);
+    console.log(`[QBO][Customer] Processing user ${u.id} (${u.email})`);
+
     try {
-      console.log(`\n-----------------------------`);
-      console.log(`[QBO][Customer] Processing user ${u.id} (${u.email})`);
+      // --- (1) Always export to ADMIN realm
+      const adminCondition = {
+        accountId: ADMIN?.id,
+        realmId: ADMIN?.currentRealmId,
+      };
 
-      const displayName = getDisplayName(u);
-      console.log(`[QBO][Customer] Using DisplayName: '${displayName}'`);
-
-      // ✅ 1 — Search by DisplayName
-      const existing = await findQboCustomerByDisplayName({
-        accessToken,
-        realmId,
-        displayName,
+      const adminCustomerId = await upsertQboCustomer({
+        u,
+        condition: adminCondition, // pass condition instead of token
+        userType,
       });
+      const adminInput = {
+        ...adminCondition,
+        qboCustomerId: adminCustomerId,
+      };
 
-      console.log(
-        `[QBO][Customer] Search result for '${displayName}':`,
-        existing
-      );
-
-      // ✅ If exists → update DB only
-      if (existing?.Id) {
-        const input = { qboCustomerId: existing.Id };
-
-        if (MODEL === user && u.salesRep?.partnerType === "direct-partner") {
-          input.qboCustomerIdForPartner = existing.Id;
-          delete input.qboCustomerId;
-        }
-
-        await MODEL.update(input, { where: { id: u.id } });
-
-        console.log(
-          `[QBO][Customer] ✅ Linked existing QBO ${existing.Id} to user ${u.id}`
-        );
-
-        results.push({
-          userId: u.id,
-          qboCustomerId: existing.Id,
-          status: "linked_existing",
-        });
-
-        continue;
+      if (userType == "customer ") {
+        adminInput.userId = u.id;
+      } else {
+        adminInput.salesRepId = u.id;
       }
 
-      // ✅ 2 — Not found → Create new
-      console.log(
-        `[QBO][Customer] Creating new QBO customer for '${displayName}'`
-      );
+      await qboCustomerMap.create(adminInput);
+      results.push(adminInput);
 
-      const payload = mapToQboCustomer(u);
-      const url = `${QBO(realmId)}/customer?minorversion=${MINOR}`;
+      // --- (2) If customer belongs to a sales rep, export to partner too
+      if (
+        userType === "customer" &&
+        u.salesRepId &&
+        u.salesRep?.currentRealmId
+      ) {
+        try {
+          const repCondition = {
+            salesRepId: u.salesRepId,
+            realmId: u.salesRep.currentRealmId,
+          };
 
-      const r = await axios.post(url, payload, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-      });
+          const partnerCustomerId = await upsertQboCustomer({
+            u,
+            condition: repCondition,
+            userType,
+          });
 
-      const qboId = r.data?.Customer?.Id;
-
-      if (qboId) {
-        const input = { qboCustomerId: qboId };
-
-        if (MODEL === user && u.salesRep?.partnerType === "direct-partner") {
-          input.qboCustomerIdForPartner = qboId;
-          delete input.qboCustomerId;
+          const partnerInput = {
+            ...adminCondition,
+            qboCustomerId: partnerCustomerId,
+            userId: u?.id,
+          };
+          await qboCustomerMap.create(partnerInput);
+          results.push(partnerInput);
+        } catch (partnerErr) {
+          console.warn(
+            `[QBO][Customer] ⚠️ Partner sync failed for ${u.email}:`,
+            partnerErr.message
+          );
+          // Don't break admin sync — continue
         }
-
-        await MODEL.update(input, { where: { id: u.id } });
-
-        console.log(`[QBO][Customer] 🆕 Created QBO customer ${qboId}`);
       }
-
-      results.push({
-        userId: u.id,
-        qboCustomerId: qboId,
-        status: "created",
-      });
-    } catch (err) {
+    } catch (adminErr) {
       console.error(
-        `[QBO][Customer] ❌ Error creating ${u.email}:`,
-        err.message
+        `[QBO][Customer] ❌ Admin sync failed for ${u.email}:`,
+        adminErr.message
       );
-
-      results.push({
-        userId: u.id,
-        status: "error",
-        message: err.message,
-      });
     }
   }
 
   console.log(
-    `[QBO][CustomerImport] ✅ Completed import for ${results.length} user(s).`
+    `[QBO][CustomerImport] ✅ Completed import for ${results.length} user(s).`,
+    results
   );
 
   return { imported: results.length, results };
