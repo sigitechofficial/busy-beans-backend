@@ -89,7 +89,7 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
                 FROM orders
                 JOIN items ON items.orderId = orders.id
                 WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+                    AND orders.paymentStatus = 'pending'
               )
             `),
           1
@@ -119,7 +119,7 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
                 FROM orders
                 JOIN items ON items.orderId = orders.id
                 WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep' AND orders.adminReceivableStatus = false
+                    AND orders.adminReceivableStatus = false
               )
             `),
           1
@@ -128,7 +128,7 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.createdBy = 'sales-rep' AND orders.adminReceivableStatus = false)`
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.adminReceivableStatus = false)`
         ),
         "ordersOnCredit",
       ],

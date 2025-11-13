@@ -136,7 +136,7 @@ exports.authExchange = async (req, res) => {
     return httpSuccess(res, data, "QuickBooks tokens saved successfully.");
   } catch (err) {
     console.error("[QBO][authExchange] Error:", err?.message);
-    console.error("[QBO][authExchange] Error:", err);
+    console.error("[QBO][authExchange] Error:", err.stack);
     return httpError(res, 500, err.message);
   }
 };
@@ -169,6 +169,8 @@ exports.importCustomers = async (req, res) => {
     });
     return httpSuccess(res, result, "Customers imported successfully.");
   } catch (err) {
+    console.log("🚀 ~ err:", err.stack);
+
     console.error("[QBO][importCustomers] Error:", err.message);
     return httpError(res, 500, err.message);
   }

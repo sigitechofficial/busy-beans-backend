@@ -107,20 +107,15 @@ async function findQboCustomerByDisplayName({
   return found || null;
 }
 
-async function upsertQboCustomer({
-  u,
-  accessToken,
-  realmId,
-  userType = "customer",
-}) {
+async function upsertQboCustomer({ u, condition, userType }) {
   try {
-    if (!u || !accessToken || !realmId)
-      throw new Error("Missing data for QBO customer sync");
+    const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
+      condition,
+    });
+
+    if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
 
     const displayName = getDisplayName(u);
-    console.log(`[QBO][Customer] Using DisplayName: '${displayName}'`);
-
-    // 1️⃣ Try to find existing customer in QBO
     const existing = await findQboCustomerByDisplayName({
       accessToken,
       realmId,
@@ -129,56 +124,46 @@ async function upsertQboCustomer({
 
     if (existing?.Id) {
       const qboCustomerId = existing.Id;
-      const MODEL = userType === "local-partner" ? salesRep : user;
-
-      const input = { qboCustomerId };
-      if (MODEL === user && u.salesRep?.partnerType === "direct-partner") {
-        input.qboCustomerIdForPartner = qboCustomerId;
-        delete input.qboCustomerId;
-      }
-
-      await MODEL.update(input, { where: { id: u.id } });
-      console.log(
-        `[QBO][Customer] ✅ Linked existing QBO ${qboCustomerId} to user ${u.id}`
-      );
-
+      //   await updateQboCustomerId(u, qboCustomerId, userType);
       return qboCustomerId;
     }
 
-    // 2️⃣ Not found → Create new QBO customer
-    console.log(
-      `[QBO][Customer] Creating new QBO customer for '${displayName}'`
+    const payload = mapToQboCustomer(u);
+    const res = await axios.post(
+      `${QBO(realmId)}/customer?minorversion=${MINOR}`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      }
     );
 
-    const payload = mapToQboCustomer(u);
-    const url = `${QBO(realmId)}/customer?minorversion=${MINOR}`;
-
-    const r = await axios.post(url, payload, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-    });
-
-    const qboCustomerId = r.data?.Customer?.Id;
-    if (!qboCustomerId) throw new Error("Failed to create QBO customer");
-
-    const MODEL = userType === "local-partner" ? salesRep : user;
-    const input = { qboCustomerId };
-    if (MODEL === user && u.salesRep?.partnerType === "direct-partner") {
-      input.qboCustomerIdForPartner = qboCustomerId;
-      delete input.qboCustomerId;
-    }
-
-    await MODEL.update(input, { where: { id: u.id } });
-    console.log(`[QBO][Customer] 🆕 Created QBO customer ${qboCustomerId}`);
+    const qboCustomerId = res.data?.Customer?.Id;
+    // if (qboCustomerId) {
+    //   await updateQboCustomerId(u, qboCustomerId, userType);
+    // }
 
     return qboCustomerId;
   } catch (err) {
-    console.error(`[QBO][Customer] ❌ upsertQboCustomer error:`, err.message);
-    throw err; // let caller decide error handling
+    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
+    console.error(`[QBO][Customer] ❌ upsertQboCustomer:`, err.message);
+    throw err;
   }
+}
+
+async function updateQboCustomerId(u, qboCustomerId, userType) {
+  const MODEL = userType === "local-partner" ? salesRep : user;
+  const input = { qboCustomerId };
+
+  if (MODEL === user && u.salesRep?.partnerType === "direct-partner") {
+    input.qboCustomerIdForPartner = qboCustomerId;
+    delete input.qboCustomerId;
+  }
+
+  await MODEL.update(input, { where: { id: u.id } });
 }
 
 // ✅ MAIN IMPORT FUNCTION (fixed, clean, consistent)
@@ -235,17 +220,19 @@ async function importCustomersToQuickBooks({
         condition: adminCondition, // pass condition instead of token
         userType,
       });
+
       const adminInput = {
         ...adminCondition,
         qboCustomerId: adminCustomerId,
       };
 
-      if (userType == "customer ") {
+      if (userType == "customer") {
         adminInput.userId = u.id;
       } else {
         adminInput.salesRepId = u.id;
       }
 
+      console.log("🚀 ~ importCustomersToQuickBooks ~ adminInput:", adminInput);
       await qboCustomerMap.create(adminInput);
       results.push(adminInput);
 
@@ -268,10 +255,14 @@ async function importCustomersToQuickBooks({
           });
 
           const partnerInput = {
-            ...adminCondition,
+            ...repCondition,
             qboCustomerId: partnerCustomerId,
             userId: u?.id,
           };
+          console.log(
+            "🚀 ~ importCustomersToQuickBooks ~ partnerInput:",
+            partnerInput
+          );
           await qboCustomerMap.create(partnerInput);
           results.push(partnerInput);
         } catch (partnerErr) {

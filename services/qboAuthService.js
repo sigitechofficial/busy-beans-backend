@@ -54,25 +54,28 @@ async function exchangeFromFullUrl({ fullUrl, req }) {
   );
 
   // Save or update tokens in DB
+
+  condition = {};
+  const { localPartnerId, adminId } = req?.user || {};
+  console.log("🚀 ~ exchangeFromFullUrl ~ FOR LOCAL PARTNER:", localPartnerId);
+  console.log("🚀 ~ exchangeFromFullUrl ~ FOR ADMIN:", adminId);
+  condition.accountId = adminId || null;
+  condition.salesRepId = localPartnerId || null;
   const input = {
     realmId,
     accessToken: access_token,
     refreshToken: refresh_token,
     accessTokenExpiresAt,
     refreshTokenExpiresAt,
+    ...condition,
   };
-  condition = {};
-  const { localPartnerId, adminId } = req?.user || {};
-  console.log("🚀 ~ exchangeFromFullUrl ~ FOR LOCAL PARTNER:", localPartnerId);
-  console.log("🚀 ~ exchangeFromFullUrl ~ FOR ADMIN:", adminId);
-  condition.accountId = adminId;
-  condition.salesRepId = localPartnerId;
-
   const MODEL = adminId ? account : salesRep;
   MODEL.update(
     { currentRealmId: realmId },
     { where: { id: adminId || localPartnerId } }
   );
+  console.log("🚀 ~ exchangeFromFullUrl ~ input:", input);
+
   const existing = await qboToken.findOne({ where: condition });
   if (existing) {
     await existing.update(input);
