@@ -770,9 +770,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
     return next(new AppError("Data not found!", 400));
   }
 
-  if (!doc?.user?.qboCustomerId) {
-    importCustomersToQuickBooks({ limitIds: [doc?.user?.id], req });
-  }
+  importCustomersToQuickBooks({ limitIds: [doc?.user?.id], req });
 
   res.status(200).json({
     status: "success",
@@ -1476,37 +1474,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
   }
 
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  if (!placedOrder?.quickBooksInvoiceId) {
-    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~TRUE:");
-    syncInvoiceOnQuikBooks({ orderId: placedOrder.id });
-  } else {
-    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~FALSE:");
-    updateInvoiceOnQuickBooks({ orderId: placedOrder.id });
-  }
+  syncInvoiceOnQuikBooks({ orderId: placedOrder.id, updateRequest: true });
+
   return res.status(200).json({
     status: "success",
     message: "success",

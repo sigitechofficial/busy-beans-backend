@@ -203,6 +203,14 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    partnerRealmId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    adminRealmId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   });
 
   // Hook to exclude deletedAt and updatedAt from query results

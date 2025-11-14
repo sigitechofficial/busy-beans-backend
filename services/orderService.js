@@ -120,6 +120,8 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "termDays",
         "note",
         "trackingNumber",
+        "partnerRealmId",
+        "adminRealmId",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
@@ -194,6 +196,8 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "note",
         "trackingNumber",
         "salesRepId",
+        "partnerRealmId",
+        "adminRealmId",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`

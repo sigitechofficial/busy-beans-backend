@@ -2,8 +2,10 @@
 const axios = require("axios");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const { getOrderWithAssociations } = require("./orderService");
+const { updateInvoiceInQuickBooks } = require("./qboInvoiceUpdate");
 const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
 const { order, partnerOrder, account, qboCustomerMap } = require("../models");
+
 const Order = order;
 const PartnerOrder = partnerOrder;
 const BASE =
@@ -158,7 +160,6 @@ async function createPaymentForInvoice({
     PaymentMethodRef: { value: String(paymentMethodId) },
     // ✅ REQUIRED: accounts receivable reference
     // ARAccountRef: { value: "33" }, // QBO auto-resolves this for most accounts, override if needed
-
     Line: [
       {
         Amount: safeAmount,
@@ -307,6 +308,13 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       payload,
       { headers: headers(accessToken) }
     );
+    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
+    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
+    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
+    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
+    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
+    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
+    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
 
     const invoiceId = invRes?.data?.Invoice?.Id;
     if (!invoiceId) throw new Error("Failed to create QuickBooks Invoice");
@@ -321,6 +329,7 @@ async function createQboInvoice({ order, accessToken, realmId }) {
   }
 }
 async function updateOrderRecord({ orderId, input = {}, MODEL = Order }) {
+  console.log("🚀 ~ updateOrderRecord ~ input:", input);
   if (!orderId) throw new Error("Missing orderId");
   try {
     await MODEL.update(
@@ -346,9 +355,10 @@ async function handleAdminQboSync({
   orderId,
   ADMIN,
   DBMODEL,
+  updateRequest = false,
 }) {
   try {
-    if (!order?.quickBooksInvoiceId && ADMIN?.currentRealmId) {
+    if (ADMIN?.currentRealmId) {
       const adminQboCondition = {
         realmId: ADMIN?.currentRealmId,
         accountId: ADMIN.id,
@@ -372,7 +382,7 @@ async function handleAdminQboSync({
           condition: adminQboCondition,
         });
 
-        if (accessToken && realmId) {
+        if (accessToken && realmId && !order?.quickBooksInvoiceId) {
           const adminQboInvoice = await createQboInvoice({
             order,
             accessToken,
@@ -381,11 +391,14 @@ async function handleAdminQboSync({
 
           updateOrderRecord({
             orderId,
-            input: { quickBooksInvoiceId: adminQboInvoice?.invoiceId },
+            input: {
+              quickBooksInvoiceId: adminQboInvoice?.invoiceId,
+              adminRealmId: realmId,
+            },
             MODEL: DBMODEL,
           });
 
-          if (!order.quickBooksPaymentId && order?.paymentStatus == "done") {
+          if (order?.paymentStatus == "done") {
             const adminQboPayment = await createQboPayment({
               order,
               invoiceId: adminQboInvoice?.invoiceId,
@@ -399,12 +412,29 @@ async function handleAdminQboSync({
               MODEL: DBMODEL,
             });
           }
-        } else {
+        } else if (
+          accessToken &&
+          realmId &&
+          order?.quickBooksInvoiceId &&
+          updateRequest
+        ) {
+          console.log("🚀 ~ ADMIN QBO UPDATE ORDER", orderId);
+          updateInvoiceInQuickBooks({
+            accessToken,
+            realmId,
+            order,
+            qboInvoiceId: order?.quickBooksInvoiceId,
+            MODEL: DBMODEL,
+          });
           console.log("🚀 ~ ADMIN QBO ACCOUNT NOT CONNECTED");
         }
       } else {
         console.log("🚀 ~ ADMIN QBO CUSTOMER NOT CONNECTED");
       }
+    } else {
+      console.log(
+        "🚀 ~ handlePartnerQboSync ~ LOCAL ADMIN NOT CONNECTED OR  ORDER ALREADY ON QUICK BOOKS:"
+      );
     }
   } catch (err) {
     console.log("🔥 ERROR in handleAdminQboSync:");
@@ -413,15 +443,29 @@ async function handleAdminQboSync({
 }
 
 // HANDLES INVOICE SYN and PAyment sync On local Partner QBO
-async function handlePartnerQboSync({ order, orderType, orderId, DBMODEL }) {
+async function handlePartnerQboSync({
+  order,
+  orderType,
+  orderId,
+  DBMODEL,
+  updateRequest = false,
+}) {
   try {
     const quickBooksInvoiceIdPartner = order?.quickBooksInvoiceIdPartner;
+    console.log(
+      "🚀 ~ handlePartnerQboSync ~ quickBooksInvoiceIdPartner:",
+      quickBooksInvoiceIdPartner
+    );
 
-    if (
-      orderType == "customer" &&
-      order?.partnerCurrentRealmId &&
-      !quickBooksInvoiceIdPartner
-    ) {
+    console.log(
+      "🚀 ~ handlePartnerQboSync ~ order?.partnerCurrentRealmId:",
+      order?.partnerCurrentRealmId
+    );
+    if (orderType == "customer" && order?.partnerCurrentRealmId) {
+      console.log(
+        "🚀 ~ handlePartnerQboSync ~ order?.partnerCurrentRealmId:",
+        order?.partnerCurrentRealmId
+      );
       const partnerQboCondition = {
         realmId: order?.partnerCurrentRealmId,
         salesRepId: order.salesRepId,
@@ -442,8 +486,14 @@ async function handlePartnerQboSync({ order, orderType, orderId, DBMODEL }) {
         const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
           condition: partnerQboCondition,
         });
+        console.log("🚀 ~ handlePartnerQboSync ~ accessToken:", accessToken);
 
-        if (accessToken && realmId) {
+        console.log("🚀 ~ handlePartnerQboSync ~ realmId:", realmId);
+        console.log(
+          "🚀 ~ handlePartnerQboSync ~ quickBooksInvoiceIdPartner:",
+          quickBooksInvoiceIdPartner
+        );
+        if (accessToken && realmId && !quickBooksInvoiceIdPartner) {
           const partnerQboInvoice = await createQboInvoice({
             order,
             accessToken,
@@ -454,6 +504,7 @@ async function handlePartnerQboSync({ order, orderType, orderId, DBMODEL }) {
             orderId,
             input: {
               quickBooksInvoiceIdPartner: partnerQboInvoice?.invoiceId,
+              partnerRealmId: realmId,
             },
             MODEL: DBMODEL,
           });
@@ -477,12 +528,24 @@ async function handlePartnerQboSync({ order, orderType, orderId, DBMODEL }) {
               MODEL: DBMODEL,
             });
           }
-        } else {
-          console.log("🚀 ~ LOCAL PARTNER QBO ACCOUNT NOT CONNECTED");
+        } else if (accessToken && realmId && quickBooksInvoiceIdPartner) {
+          console.log("🚀 ~ LOCAL PARTNER QBO UPDATE ORDER", orderId);
+          updateInvoiceInQuickBooks({
+            accessToken,
+            realmId,
+            order,
+            qboInvoiceId: quickBooksInvoiceIdPartner,
+            MODEL: DBMODEL,
+            updateRequest,
+          });
         }
       } else {
         console.log("🚀 ~ LOCAL PARTNER QBO CUSTOMER NOT CONNECTED");
       }
+    } else {
+      console.log(
+        "🚀 ~ handlePartnerQboSync ~ ORDER IS ALREADY PARTNER ACCOUNT:"
+      );
     }
   } catch (err) {
     console.log("🔥 ERROR in handlePartnerQboSync:");
@@ -491,7 +554,11 @@ async function handlePartnerQboSync({ order, orderType, orderId, DBMODEL }) {
 }
 
 // ---- Invoice creation ----
-async function createInvoiceFromOrder({ orderId, orderType = "customer" }) {
+async function createInvoiceFromOrder({
+  orderId,
+  orderType = "customer",
+  updateRequest = false,
+}) {
   if (!orderId) throw new Error("Missing orderId");
 
   const DBMODEL = orderType === "local-partner" ? PartnerOrder : Order;
@@ -503,12 +570,25 @@ async function createInvoiceFromOrder({ orderId, orderType = "customer" }) {
   // -------------------------------
   // 🔹 ADMIN SYNC
   // -------------------------------
-  await handleAdminQboSync({ order, orderType, orderId, ADMIN, DBMODEL });
+  await handleAdminQboSync({
+    order,
+    orderType,
+    orderId,
+    ADMIN,
+    DBMODEL,
+    updateRequest,
+  });
 
   // -------------------------------
   // 🔹 PARTNER SYNC
   // -------------------------------
-  await handlePartnerQboSync({ order, orderType, orderId, DBMODEL });
+  await handlePartnerQboSync({
+    order,
+    orderType,
+    orderId,
+    DBMODEL,
+    updateRequest,
+  });
 
   return {
     message: `Quickbooks inovice sync success for order #${orderId}`,
@@ -519,4 +599,5 @@ module.exports = {
   createInvoiceFromOrder,
   createPaymentForInvoice,
   mapPaymentMethodName,
+  createQboPayment,
 };

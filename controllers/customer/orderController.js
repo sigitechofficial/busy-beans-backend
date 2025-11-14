@@ -52,8 +52,8 @@ exports.notificationTesting = async (req, res, next) => {
   //   });
   //   //
   //   const row = await qboToken.findOne();
-  //   syncInvoiceOnQuikBooks({ orderId: 22, orderType: "local-partner" });
-  //   syncPaymentToQuickBooks({ orderId: 24, orderType: "local-partner" });
+  //   syncInvoiceOnQuikBooks({ orderId: 525, orderType: "customer" });
+  syncPaymentToQuickBooks({ orderId: 526, orderType: "customer" });
   //   updateInvoiceOnQuickBooks({ orderId: 21, orderType: "local-partner" });
   //   orderEvents({ orderId: req.body.id, orderType: "local-partner" });
   return res.status(200).json(response({ data: req.user }));

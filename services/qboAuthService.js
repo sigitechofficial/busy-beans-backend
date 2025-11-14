@@ -70,6 +70,8 @@ async function exchangeFromFullUrl({ fullUrl, req }) {
     ...condition,
   };
   const MODEL = adminId ? account : salesRep;
+  console.log("🚀 ~ exchangeFromFullUrl ~ MODEL:", MODEL);
+
   MODEL.update(
     { currentRealmId: realmId },
     { where: { id: adminId || localPartnerId } }
