@@ -106,10 +106,17 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
 });
 
 exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
+  const condition = { ...req.query };
+  console.log("🚀 ~ req.query:", req.query);
+  console.log("🚀 ~ condition:", condition);
+
   const doc = await salesRep.findAll({
+    where: condition,
     attributes: [
       "id",
       "srName",
+      "partnerType",
+      "territoryName",
       [
         fn(
           "FORMAT",
@@ -140,6 +147,35 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.directPartnerReportSummary = catchAsync(async (req, res, next) => {
+  const condition = { ...req.query };
+
+  const doc = await salesRep.findAll({
+    where: condition,
+    attributes: [
+      "id",
+      "srName",
+      "partnerType",
+      "territoryName",
+      [
+        literal(
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id)`
+        ),
+        "clientOrdersCount",
+      ],
+      [
+        literal(
+          `(SELECT COUNT(*) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id)`
+        ),
+        "selfOrdersCount",
+      ],
+    ],
+  });
+  res.status(200).json({
+    status: "success",
+    data: doc,
+  });
+});
 exports.customerReport = catchAsync(async (req, res, next) => {
   const doc = await user.findAll({
     where: literal(`
@@ -337,7 +373,8 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
   });
 });
 
-//   [
+//   [s
+
 //     literal(
 //       `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id)`
 //     ),

@@ -524,6 +524,11 @@ router.get(
   adminReportsController.unpaidPartnerbalanceReport
 );
 
+router.get(
+  "/admin-reports/direct-partner-summary",
+  adminReportsController.directPartnerReportSummary
+);
+
 //! SUPPLIER REPORTS SECTION
 
 router.get(
