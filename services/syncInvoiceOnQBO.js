@@ -53,7 +53,7 @@ exports.syncInvoiceOnQuikBooks = async ({
 
 exports.updateInvoiceOnQuickBooks = async ({ orderId, orderType }) => {
   try {
-    const result = await updateInvoiceInQuickBooks({
+    const result = await createInvoiceFromOrder({
       orderId: Number(orderId),
       orderType,
     });

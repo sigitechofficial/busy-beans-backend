@@ -13,6 +13,7 @@ const { Op, literal, where, fn } = require("sequelize");
 
 exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
+    where: { partnerType: "dropship-partner" },
     attributes: [
       "id",
       "srName",
@@ -76,6 +77,7 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
 
 exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
   const doc = await salesRep.findAll({
+    where: { partnerType: "dropship-partner" },
     attributes: [
       "id",
       "srName",
@@ -118,9 +120,7 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
       "partnerType",
       "territoryName",
       [
-        fn(
-          "FORMAT",
-          literal(`
+        literal(`
               (
                 SELECT SUM(items.wholesalePrice)
                 FROM orders
@@ -129,8 +129,6 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
                     AND orders.adminReceivableStatus = false
               )
             `),
-          1
-        ),
         "outstandingBalance",
       ],
       [
@@ -138,6 +136,18 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
           `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.adminReceivableStatus = false)`
         ),
         "ordersOnCredit",
+      ],
+      [
+        literal(
+          `(SELECT SUM(partnerOrders.totalBill) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id AND partnerOrders.paymentStatus = 'pending')`
+        ),
+        "selfOrdersOutstandingBalance",
+      ],
+      [
+        literal(
+          `(SELECT COUNT(*) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id AND partnerOrders.paymentStatus = 'pending')`
+        ),
+        "selfOrdersOnCredit",
       ],
     ],
   });
@@ -176,6 +186,7 @@ exports.directPartnerReportSummary = catchAsync(async (req, res, next) => {
     data: doc,
   });
 });
+
 exports.customerReport = catchAsync(async (req, res, next) => {
   const doc = await user.findAll({
     where: literal(`
@@ -257,7 +268,7 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
                 FROM items WHERE items.productId = product.id
               )
             `),
-        "unitsSold",
+        "unitsSoldToCustomer",
       ],
       [
         literal(`
@@ -290,79 +301,26 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
             WHERE items.productId = product.id
           )
         `),
-        "revenue",
+        "revenueFromCustomers",
       ],
-    ],
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: doc,
-  });
-});
-
-exports.productSalesReport = catchAsync(async (req, res, next) => {
-  const doc = await product.findAll({
-    attributes: [
-      "id",
-      "name",
+      [
+        literal(`
+          (
+            SELECT SUM(price)
+            FROM partnerOrderItems 
+            WHERE partnerOrderItems.productId = product.id
+          )
+        `),
+        "revenueFromLocalPartners",
+      ],
       [
         literal(`
               (
                 SELECT SUM(qty)
-                FROM items WHERE items.productId = product.id
+                FROM partnerOrderItems WHERE partnerOrderItems.productId = product.id
               )
             `),
-        "unitsSold",
-      ],
-      [
-        literal(`
-              (
-                SELECT SUM(price)
-                FROM items WHERE items.productId = product.id  AND items.wholesalePrice < 1
-              )
-            `),
-        "customerPriceTotal",
-      ],
-      [
-        literal(`
-              (
-                SELECT SUM(wholesalePrice)
-                FROM items WHERE items.productId = product.id AND items.wholesalePrice > 0
-              )
-            `),
-        "wholesalePriceTotal",
-      ],
-      [
-        literal(`
-          (
-            SELECT SUM(
-              CASE 
-                WHEN wholesalePrice > 0 THEN wholesalePrice 
-                ELSE price 
-              END
-            )
-            FROM items 
-            WHERE items.productId = product.id
-          )
-        `),
-        "revenue",
-      ],
-      [
-        literal(`(
-          SELECT srName
-          FROM salesReps
-          WHERE salesReps.id = (
-            SELECT orders.salesRepId
-            FROM items
-            JOIN orders ON orders.id = items.orderId
-            WHERE items.productId = product.id
-            GROUP BY orders.salesRepId
-            ORDER BY COUNT(*) DESC
-            LIMIT 1
-          )
-        )`),
-        "topSalesRepName",
+        "unitsSoldToPartners",
       ],
     ],
   });
@@ -372,6 +330,78 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
     data: doc,
   });
 });
+
+// exports.productSalesReportss = catchAsync(async (req, res, next) => {
+//   const doc = await product.findAll({
+//     attributes: [
+//       "id",
+//       "name",
+//       [
+//         literal(`
+//               (
+//                 SELECT SUM(qty)
+//                 FROM items WHERE items.productId = product.id
+//               )
+//             `),
+//         "unitsSold",
+//       ],
+//       [
+//         literal(`
+//               (
+//                 SELECT SUM(price)
+//                 FROM items WHERE items.productId = product.id  AND items.wholesalePrice < 1
+//               )
+//             `),
+//         "customerPriceTotal",
+//       ],
+//       [
+//         literal(`
+//               (
+//                 SELECT SUM(wholesalePrice)
+//                 FROM items WHERE items.productId = product.id AND items.wholesalePrice > 0
+//               )
+//             `),
+//         "wholesalePriceTotal",
+//       ],
+//       [
+//         literal(`
+//           (
+//             SELECT SUM(
+//               CASE
+//                 WHEN wholesalePrice > 0 THEN wholesalePrice
+//                 ELSE price
+//               END
+//             )
+//             FROM items
+//             WHERE items.productId = product.id
+//           )
+//         `),
+//         "revenue",
+//       ],
+//       [
+//         literal(`(
+//           SELECT srName
+//           FROM salesReps
+//           WHERE salesReps.id = (
+//             SELECT orders.salesRepId
+//             FROM items
+//             JOIN orders ON orders.id = items.orderId
+//             WHERE items.productId = product.id
+//             GROUP BY orders.salesRepId
+//             ORDER BY COUNT(*) DESC
+//             LIMIT 1
+//           )
+//         )`),
+//         "topSalesRepName",
+//       ],
+//     ],
+//   });
+
+//   res.status(200).json({
+//     status: "success",
+//     data: doc,
+//   });
+// });
 
 //   [s
 

@@ -70,6 +70,7 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   }, {});
 
   // apply discounts
+
   const productsWithDiscount = data.map((prod) => {
     const discount = discountMap[prod.categoryId] || 0;
     const originalPrice = parseFloat(prod.price);

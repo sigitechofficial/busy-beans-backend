@@ -4,9 +4,7 @@ const {
   importCustomersToQuickBooks,
 } = require("../../services/qboCustomerService");
 const { createInvoiceFromOrder } = require("../../services/qboInvoice");
-const {
-  updateInvoiceInQuickBooks,
-} = require("../../services/qboInvoiceUpdate");
+
 const {
   syncPaymentToQuickBooks,
 } = require("../../services/paymentSyncService");

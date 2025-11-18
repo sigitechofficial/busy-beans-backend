@@ -51,6 +51,25 @@ function mapPaymentMethodName(name = "") {
   return "ACH"; // safest fallback
 }
 
+async function getValidDepositAccount({ accessToken, realmId }) {
+  const query = `select Id, Name, AccountType from Account 
+    where AccountType in ('Bank', 'Other Current Assets')`;
+
+  const res = await qboQuery({ accessToken, realmId, query });
+
+  const accounts = res.QueryResponse?.Account || [];
+
+  // Prefer Undeposited Funds if exists
+  const undeposited = accounts.find((a) => a.Name === "Undeposited Funds");
+  if (undeposited) return undeposited.Id;
+
+  // Otherwise any Bank account
+  const bank = accounts.find((a) => a.AccountType === "Bank");
+  if (bank) return bank.Id;
+
+  throw new Error("No valid deposit account found for QBO payment.");
+}
+
 /**
  * Ensure a PaymentMethod exists in QBO — fetch or create it
  */
@@ -156,7 +175,7 @@ async function createPaymentForInvoice({
     CustomerRef: { value: String(customerId) },
     TotalAmt: safeAmount,
     TxnDate: safeDate,
-    PaymentRefNum: refNumber || `ref-${invoiceId}-${Date.now()}`,
+    PaymentRefNum: refNumber || `ref-${invoiceId}`,
     PaymentMethodRef: { value: String(paymentMethodId) },
     // ✅ REQUIRED: accounts receivable reference
     // ARAccountRef: { value: "33" }, // QBO auto-resolves this for most accounts, override if needed
@@ -167,6 +186,12 @@ async function createPaymentForInvoice({
       },
     ],
   };
+
+  const depositAccountId = await getValidDepositAccount({
+    accessToken,
+    realmId,
+  });
+  payload.DepositToAccountRef = { value: String(depositAccountId) };
 
   if (invoiceNumber) {
     payload.PrivateNote = `Order Invoice ID: ${invoiceNumber}`;

@@ -14,7 +14,6 @@ const {
   orderFrequency,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
-const AppError = require("../../utils/appError");
 
 const { Op, literal, where, fn, col } = require("sequelize");
 
