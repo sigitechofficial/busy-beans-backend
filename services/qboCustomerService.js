@@ -1,5 +1,6 @@
 // services/qboCustomerService.js
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
+const { handleQboError } = require("./qboErrorHandler");
 const {
   user,
   salesRep,
@@ -148,17 +149,10 @@ async function upsertQboCustomer({ u, condition, userType }) {
 
     return qboCustomerId;
   } catch (err) {
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.log("🚀 ~ upsertQboCustomer ~ err:", err.stack);
-    console.error(`[QBO][Customer] ----❌ upsertQboCustomer:`, err.message);
-    throw err;
+    handleQboError({
+      err,
+      context: `[QBO][Customer] ----❌ upsertQboCustomer:`,
+    });
   }
 }
 
@@ -308,22 +302,17 @@ async function importCustomersToQuickBooks({
             results.push(partnerInput);
           }
         } catch (partnerErr) {
-          console.warn(
-            `[QBO][Customer] ⚠️ Partner sync failed for ${u.email}:`,
-            partnerErr.message
-          );
-          // Don't break admin sync — continue
+          handleQboError({
+            err: partnerErr,
+            context: `[QBO][Customer] ⚠️ Partner sync failed for ${u?.email}`,
+          });
         }
       }
     } catch (adminErr) {
-      console.log(
-        "🚀 ~ importCustomersToQuickBooks ~ adminErr:",
-        adminErr.stack
-      );
-      console.error(
-        `[QBO][Customer] ❌ Admin sync failed for ${u.email}:`,
-        adminErr.message
-      );
+      handleQboError({
+        err: adminErr,
+        context: `[QBO][Customer] ⚠️ Admin sync failed for ${u?.email}`,
+      });
     }
   }
 

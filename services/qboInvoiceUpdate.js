@@ -3,6 +3,7 @@ const axios = require("axios");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const { getOrderWithAssociations } = require("./orderService");
 const { warmupQBOResources } = require("./qboItemService");
+const { handleQboError } = require("./qboErrorHandler");
 const { order, partnerOrder } = require("../models");
 const Order = order;
 const PartnerOrder = partnerOrder;
@@ -76,6 +77,9 @@ function buildQboInvoiceUpdatePayload({
     Id: String(qboInvoiceId),
     SyncToken: syncToken,
     sparse: true,
+    CustomerRef: {
+      value: String(order.qboCustomerId),
+    },
     Line: Lines,
     PrivateNote: order.note || undefined,
 
@@ -116,6 +120,12 @@ async function updateInvoiceInQuickBooks({
 }) {
   try {
     console.log("🚀 updateInvoiceInQuickBooks:", { orderId: order?.id });
+    console.log("🚀 updateInvoiceInQuickBooks:", {
+      orderId: order?.qboCustomerId,
+    });
+    console.log("🚀 ~ updateInvoiceInQuickBooks ~ accessToken:", accessToken);
+    console.log("🚀 ~ updateInvoiceInQuickBooks ~ realmId:", realmId);
+    console.log("🚀 ~ updateInvoiceInQuickBooks ~ qboInvoiceId:", qboInvoiceId);
 
     if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
     if (!order) throw new Error("Order not found");
@@ -127,6 +137,10 @@ async function updateInvoiceInQuickBooks({
     const { productItemId, serviceItemId, shippingItemId } =
       await warmupQBOResources({ accessToken, realmId });
 
+    console.log(
+      `🚀 ~ updateInvoiceInQuickBooks ~ { productItemId, serviceItemId, shippingItemId }:`,
+      { productItemId, serviceItemId, shippingItemId }
+    );
     /* -------------------------------------------------------
         2. Fetch existing invoice
     --------------------------------------------------------*/
@@ -158,6 +172,7 @@ async function updateInvoiceInQuickBooks({
       serviceItemId,
       shippingItemId,
     });
+    console.log("🚀 ~ updateInvoiceInQuickBooks ~ payload:", payload);
 
     /* -------------------------------------------------------
         6. Send update request
@@ -179,13 +194,15 @@ async function updateInvoiceInQuickBooks({
       { where: { id: order.id } }
     );
 
-    console.log(`[QBO] ✅ Invoice updated ${qboInvoiceId}`);
+    console.log(`[QBO] ✅ Invoice updated ${qboInvoiceId} =  ${realmId}`);
 
     return res.data?.Invoice;
   } catch (err) {
-    console.error("❌ [QBO Invoice Update ERROR]:", err.message);
-    console.error(err.stack);
-    throw err;
+    handleQboError({
+      err,
+      context: "❌ [QBO][UPDATE INVOICE ERROR]:",
+    });
+    // throw err;
   }
 }
 

@@ -3,6 +3,8 @@ const { qboToken } = require("../models");
 const OAuthClient = require("intuit-oauth");
 const qs = require("qs");
 const axios = require("axios");
+const { handleQboError } = require("./qboErrorHandler");
+
 /**
  * Builds a configured Intuit OAuth client
  */
@@ -124,11 +126,10 @@ async function refreshAccessTokenIfNeeded({ condition }) {
       realmId: record.realmId,
     };
   } catch (err) {
-    const msg = err?.response?.data || err.message;
-    console.error("[QBO] Failed to refresh token:", msg);
-
-    // Optionally mark as disconnected in DB
-    await record.update({ disconnected: true });
+    handleQboError({
+      err,
+      context: `[QBO] Failed to refresh token:`,
+    });
 
     throw new Error(
       "QuickBooks refresh token invalid or expired — please reconnect."

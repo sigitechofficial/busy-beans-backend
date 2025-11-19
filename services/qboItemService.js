@@ -1,6 +1,7 @@
 // services/qboItemService.js
 const axios = require("axios");
 const { QBO, MINOR, headers, qboQuery, qboQuote } = require("./qboHelpers");
+const { handleQboError } = require("./qboErrorHandler");
 
 /* ------------------------------------------------------------------
  *  NO MORE ENV — REALM-SAFE ITEM HANDLING
@@ -32,7 +33,10 @@ async function ensureIncomeAccount({ accessToken, realmId }) {
     const created = await createIncomeAccount({ accessToken, realmId });
     return String(created.Id);
   } catch (err) {
-    console.error("[QBO][IncomeAccount] Error:", err.message);
+    handleQboError({
+      err: err,
+      context: `[QBO][ensureIncomeAccount] ⚠️ ensureIncomeAccount`,
+    });
     throw err;
   }
 }
@@ -47,6 +51,10 @@ async function findItemByName({ accessToken, realmId, name }) {
     const res = await qboQuery({ accessToken, realmId, query: sql });
     return res?.QueryResponse?.Item?.[0] || null;
   } catch (err) {
+    handleQboError({
+      err: err,
+      context: `[QBO][findItemByName] ⚠️ findItemByName`,
+    });
     return null;
   }
 }

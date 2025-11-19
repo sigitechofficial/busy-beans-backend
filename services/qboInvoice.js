@@ -5,6 +5,8 @@ const { getOrderWithAssociations } = require("./orderService");
 const { updateInvoiceInQuickBooks } = require("./qboInvoiceUpdate");
 const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
 const { order, partnerOrder, account, qboCustomerMap } = require("../models");
+const { handleQboError } = require("./qboErrorHandler");
+const { qboQuery } = require("./qboHelpers");
 
 const Order = order;
 const PartnerOrder = partnerOrder;
@@ -52,22 +54,35 @@ function mapPaymentMethodName(name = "") {
 }
 
 async function getValidDepositAccount({ accessToken, realmId }) {
-  const query = `select Id, Name, AccountType from Account 
-    where AccountType in ('Bank', 'Other Current Assets')`;
+  const query = `select Id, Name, AccountType from Account`; // no WHERE
 
   const res = await qboQuery({ accessToken, realmId, query });
 
-  const accounts = res.QueryResponse?.Account || [];
+  const accounts = res?.QueryResponse?.Account || [];
 
-  // Prefer Undeposited Funds if exists
-  const undeposited = accounts.find((a) => a.Name === "Undeposited Funds");
+  // 1️⃣ Prefer Undeposited Funds
+  const undeposited = accounts.find(
+    (a) => a.Name?.toLowerCase() === "undeposited funds"
+  );
   if (undeposited) return undeposited.Id;
 
-  // Otherwise any Bank account
-  const bank = accounts.find((a) => a.AccountType === "Bank");
+  // 2️⃣ Otherwise pick any “Bank” account
+  const bank = accounts.find(
+    (a) => a.AccountType && a.AccountType.toLowerCase() === "bank"
+  );
   if (bank) return bank.Id;
 
-  throw new Error("No valid deposit account found for QBO payment.");
+  // 3️⃣ Otherwise pick any usable asset account
+  const asset = accounts.find(
+    (a) =>
+      a.AccountType &&
+      ["other current assets", "accounts receivable"].includes(
+        a.AccountType.toLowerCase()
+      )
+  );
+  if (asset) return asset.Id;
+
+  throw new Error("No valid deposit account found in QBO Charts of Accounts.");
 }
 
 /**
@@ -105,11 +120,11 @@ async function ensurePaymentMethod({ accessToken, realmId, name }) {
     console.log(`[QBO] Created new PaymentMethod: ${name} (${createdId})`);
     return createdId;
   } catch (err) {
-    console.warn(
-      "[QBO] Failed to ensure PaymentMethod:",
-      err?.response?.data || err.message
-    );
-    return null;
+    handleQboError({
+      err,
+      context: "[QBO] Failed to ensure PaymentMethod:",
+    });
+    throw err; // keep error bubbling
   }
 }
 // =========================
@@ -134,6 +149,7 @@ async function createPaymentForInvoice({
     paymentMethodName,
     refNumber,
     paidDate,
+    realmId,
   });
 
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
@@ -187,11 +203,11 @@ async function createPaymentForInvoice({
     ],
   };
 
-  const depositAccountId = await getValidDepositAccount({
-    accessToken,
-    realmId,
-  });
-  payload.DepositToAccountRef = { value: String(depositAccountId) };
+  //   const depositAccountId = await getValidDepositAccount({
+  //     accessToken,
+  //     realmId,
+  //   });
+  //   payload.DepositToAccountRef = { value: String(depositAccountId) };
 
   if (invoiceNumber) {
     payload.PrivateNote = `Order Invoice ID: ${invoiceNumber}`;
@@ -225,15 +241,11 @@ async function createPaymentForInvoice({
       raw: payment,
     };
   } catch (error) {
-    console.log("🚀 ~ createPaymentForInvoice ~ error:", error?.response?.data);
-    // console.error("[QBO Payment Error]:", error?.response?.data || error);
-
-    const err = new Error(
-      "Payment could not be created in QuickBooks (invalid or missing references)."
-    );
-    err.isPublic = true;
-    err.statusCode = 400;
-    throw err;
+    handleQboError({
+      err: error,
+      context: `[QBO][Payment] ----❌ QBO Payment Failed:`,
+    });
+    throw error; // keep error bubbling
   }
 }
 
@@ -260,9 +272,11 @@ async function createQboPayment({ order, invoiceId, accessToken, realmId }) {
 
     return { paymentId };
   } catch (err) {
-    console.error("❌ [QBO Payment ERROR]:", err.message);
-    console.error(err); // full stack
-    throw err;
+    handleQboError({
+      err: err,
+      context: `❌ [QBO Payment ERROR]`,
+    });
+    throw err; // keep error bubbling
   }
 }
 
@@ -333,13 +347,7 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       payload,
       { headers: headers(accessToken) }
     );
-    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
-    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
-    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
-    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
-    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
-    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
-    console.log("🚀 ~ createQboInvoice ~ invRes:", invRes);
+    console.log("🚀 ~ createQboInvoice ~ invRes:", true);
 
     const invoiceId = invRes?.data?.Invoice?.Id;
     if (!invoiceId) throw new Error("Failed to create QuickBooks Invoice");
@@ -348,9 +356,11 @@ async function createQboInvoice({ order, accessToken, realmId }) {
 
     return { invoiceId, payload, invRes };
   } catch (err) {
-    console.error("❌ [QBO Invoice ERROR]:", err.message);
-    console.error(err.stack); // full stack
-    throw err;
+    handleQboError({
+      err: err,
+      context: `❌ [QBO Invoice ERROR]:`,
+    });
+    throw err; // keep error bubbling
   }
 }
 async function updateOrderRecord({ orderId, input = {}, MODEL = Order }) {
@@ -364,11 +374,10 @@ async function updateOrderRecord({ orderId, input = {}, MODEL = Order }) {
 
     console.log(`[QBO][OrderUpdate] Updated order ${orderId}:`, input);
   } catch (err) {
-    console.error(`[QBO][OrderUpdate] ❌ Failed for order ${orderId}`, err);
-    console.error(
-      `[QBO][OrderUpdate] ❌ Failed for order ${orderId}`,
-      err?.stack
-    );
+    handleQboError({
+      err: err,
+      context: `[QBO][OrderUpdate] ❌ Failed for order ${orderId}`,
+    });
     throw err; // keep error bubbling
   }
 }
@@ -444,6 +453,7 @@ async function handleAdminQboSync({
           updateRequest
         ) {
           console.log("🚀 ~ ADMIN QBO UPDATE ORDER", orderId);
+
           updateInvoiceInQuickBooks({
             accessToken,
             realmId,
@@ -462,8 +472,10 @@ async function handleAdminQboSync({
       );
     }
   } catch (err) {
-    console.log("🔥 ERROR in handleAdminQboSync:");
-    console.log(err.stack || err.message);
+    handleQboError({
+      err: err,
+      context: `🔥 ERROR in handleAdminQboSync:`,
+    });
   }
 }
 
@@ -487,10 +499,6 @@ async function handlePartnerQboSync({
       order?.partnerCurrentRealmId
     );
     if (orderType == "customer" && order?.partnerCurrentRealmId) {
-      console.log(
-        "🚀 ~ handlePartnerQboSync ~ order?.partnerCurrentRealmId:",
-        order?.partnerCurrentRealmId
-      );
       const partnerQboCondition = {
         realmId: order?.partnerCurrentRealmId,
         salesRepId: order.salesRepId,
@@ -573,8 +581,10 @@ async function handlePartnerQboSync({
       );
     }
   } catch (err) {
-    console.log("🔥 ERROR in handlePartnerQboSync:");
-    console.log(err.stack || err.message);
+    handleQboError({
+      err: err,
+      context: `🔥 ERROR in handlePartnerQboSync:`,
+    });
   }
 }
 

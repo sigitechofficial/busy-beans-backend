@@ -14,12 +14,14 @@ const { order } = require("../models");
 exports.syncInvoiceOnQuikBooks = async ({
   orderId,
   orderType = "customer",
+  updateRequest = false,
 }) => {
   console.log("🚀 ~ syncInvoiceOnQuikBooks:", orderId);
   try {
     const result = await createInvoiceFromOrder({
       orderId: Number(orderId),
       orderType,
+      updateRequest,
     });
     console.log("🚀 ~ result:", result);
     return result;

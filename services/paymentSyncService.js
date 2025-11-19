@@ -5,6 +5,7 @@ const {
   createQboPayment,
 } = require("./qboInvoice");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
+const { handleQboError } = require("./qboErrorHandler");
 const { getOrderWithAssociations } = require("./orderService");
 const {
   order,
@@ -155,12 +156,10 @@ async function syncPaymentToQuickBooks({ orderId, orderType = "customer" }) {
 
     return { status: "success", data: {} };
   } catch (err) {
-    console.error(
-      `[QBO][PaymentSync] ✗ Error syncing order ${orderId}:`,
-      err.message
-    );
-    console.error(err.stack);
-    throw err;
+    handleQboError({
+      err,
+      context: `[QBO][PaymentSync] ✗ Error syncing order ${orderId}:`,
+    });
   }
 }
 
