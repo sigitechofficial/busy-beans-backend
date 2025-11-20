@@ -174,7 +174,10 @@ async function importCustomersToQuickBooks({
   userType = "customer",
   req,
 }) {
-  const where = { qboCustomerId: null };
+  console.log("🚀 ~ importCustomersToQuickBooks ~ limitIds:", limitIds);
+  console.log("🚀 ~ importCustomersToQuickBooks ~ limitIds:", limitIds);
+  console.log("🚀 ~ importCustomersToQuickBooks ~ limitIds:", userType);
+  const where = {};
   if (limitIds.length) where.id = limitIds;
 
   const MODEL = userType === "local-partner" ? salesRep : user;

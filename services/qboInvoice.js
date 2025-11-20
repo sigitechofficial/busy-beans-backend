@@ -150,6 +150,7 @@ async function createPaymentForInvoice({
     refNumber,
     paidDate,
     realmId,
+    invoiceNumber,
   });
 
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
@@ -159,6 +160,32 @@ async function createPaymentForInvoice({
   /* -----------------------------------------------------------
    ✅ 1. Normalize amount + date
   ----------------------------------------------------------- */
+
+  /* -----------------------------------------------------------
+   Validate Invoice before creating payment
+----------------------------------------------------------- */
+  const inv = await axios
+    .get(`${QBO(realmId)}/invoice/${invoiceId}?minorversion=${MINOR}`, {
+      headers: headers(accessToken),
+    })
+    .then((r) => r.data.Invoice);
+
+  if (!inv) {
+    throw new Error(
+      `Invoice ${invoiceId} does not exist in QBO realm ${realmId}`
+    );
+  }
+
+  if (String(inv.CustomerRef?.value) !== String(customerId)) {
+    throw new Error(
+      `Invoice ${invoiceId} belongs to customer ${inv.CustomerRef.value}, not ${customerId}`
+    );
+  }
+
+  if (Number(inv.Balance) <= 0) {
+    throw new Error(`Invoice ${invoiceId} is already paid or closed.`);
+  }
+
   const safeAmount = Number(amount) || 0.01;
   const safeDate = new Date(
     paidDate && !isNaN(Date.parse(paidDate)) ? paidDate : Date.now()
@@ -249,7 +276,13 @@ async function createPaymentForInvoice({
   }
 }
 
-async function createQboPayment({ order, invoiceId, accessToken, realmId }) {
+async function createQboPayment({
+  order,
+  invoiceId,
+  accessToken,
+  realmId,
+  qboCustomerId = null,
+}) {
   try {
     console.log("⚡ [QBO] Creating Payment for invoice:", invoiceId);
 
@@ -257,7 +290,7 @@ async function createQboPayment({ order, invoiceId, accessToken, realmId }) {
       accessToken,
       realmId,
       invoiceId,
-      customerId: order.qboCustomerId,
+      customerId: qboCustomerId || order.qboCustomerId,
       amount: order.totalBill,
       paymentMethodName: order.paymentMethod,
       refNumber: order.paymentIntentId || order.invoiceId,
@@ -438,6 +471,7 @@ async function handleAdminQboSync({
               invoiceId: adminQboInvoice?.invoiceId,
               accessToken,
               realmId,
+              qboCustomerId: qboCustomerOnAdmin?.qboCustomerId,
             });
 
             updateOrderRecord({
@@ -551,6 +585,7 @@ async function handlePartnerQboSync({
               invoiceId: partnerQboInvoice?.invoiceId,
               accessToken,
               realmId,
+              qboCustomerId: qboCustomerOnPartner?.qboCustomerId,
             });
 
             updateOrderRecord({
@@ -561,7 +596,12 @@ async function handlePartnerQboSync({
               MODEL: DBMODEL,
             });
           }
-        } else if (accessToken && realmId && quickBooksInvoiceIdPartner) {
+        } else if (
+          accessToken &&
+          realmId &&
+          quickBooksInvoiceIdPartner &&
+          updateRequest
+        ) {
           console.log("🚀 ~ LOCAL PARTNER QBO UPDATE ORDER", orderId);
           updateInvoiceInQuickBooks({
             accessToken,
@@ -569,7 +609,6 @@ async function handlePartnerQboSync({
             order,
             qboInvoiceId: quickBooksInvoiceIdPartner,
             MODEL: DBMODEL,
-            updateRequest,
           });
         }
       } else {
