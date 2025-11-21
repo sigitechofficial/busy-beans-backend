@@ -109,7 +109,6 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
 
 exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
   const condition = { ...req.query };
-  console.log("🚀 ~ req.query:", req.query);
   console.log("🚀 ~ condition:", condition);
 
   const doc = await salesRep.findAll({
@@ -151,6 +150,7 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
       ],
     ],
   });
+
   res.status(200).json({
     status: "success",
     data: doc,

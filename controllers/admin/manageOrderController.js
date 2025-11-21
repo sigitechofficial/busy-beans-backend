@@ -1230,8 +1230,6 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   input.order.hostedInvoiceUrl = null;
   input.items = req.body.items;
 
-  // console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
-
   if (input?.items?.length < 1 && input?.typeCharges?.length < 1) {
     throw new AppError("Update possible, but no changes were made.", 404);
   }

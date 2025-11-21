@@ -280,11 +280,12 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       ],
     ],
   });
-  // return res.json(products)
+
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
     products?.length
   );
+
   // let percentageDiscount = input?.order?.discountPercentage
   //   ? parseFloat(input?.order?.discountPercentage)
   //   : parseFloat(customer?.defaultDiscount);
