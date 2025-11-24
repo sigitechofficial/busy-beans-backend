@@ -15,6 +15,7 @@ const {
 const factory = require("../handlerFactory");
 const APIFeatures = require("../../utils/apiFeatures");
 const { Op, literal, where, fn, col } = require("sequelize");
+
 console.log("🚀 ~ literal:", process.env.BASE_URL);
 
 exports.createEmployee = catchAsync(async (req, res, next) => {

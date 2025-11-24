@@ -202,7 +202,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     );
   }
 
-  if (customer?.salesRepId) {
+  if (customer?.salesRepId && customer?.partnerType == "dropship-partner") {
     const credit = await salesRep.findOne({
       where: {
         id: customer?.salesRepId,
