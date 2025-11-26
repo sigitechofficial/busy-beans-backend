@@ -14,7 +14,6 @@ const {
   orderFrequency,
   partnerOrder,
   partnerOrderItem,
-  //   partnerOrder,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 

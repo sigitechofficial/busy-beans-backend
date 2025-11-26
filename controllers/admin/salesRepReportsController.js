@@ -27,7 +27,7 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
     .limitFields()
     .paginate();
 
-  // Get the base query options (where, limit, offset, order, etc.)
+  // Get the base query options (where, limit, offset, order etc.)
   const queryOptions = features.getQuery();
 
   // Merge manual filter conditions

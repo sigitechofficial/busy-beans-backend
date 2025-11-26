@@ -129,11 +129,12 @@ function parseDDMMYYYY(val) {
           <div style="font-size:14px;"><%= formatUSPhone(order.salesRep.phoneNumber) || '' %></div>
         <% } else { %>
           <div style="font-size:14px; color:#111; font-weight:500">
-            Busy Bean Coffee of Central Florida
+            <%= admin?.companyName || "Busy Bean Coffee Inc." %>
           </div>
-          <div style="font-size:14px">1776 Cinnamon Circle</div>
-          <div style="font-size:14px">Casselberry, FL 32707</div>
-          <div style="font-size:14px">407-625-7843</div>
+          <div style="font-size:14px"><%= admin?.address || "" %></div>
+          <div style="font-size:14px"><%= [admin?.city, admin?.state, admin?.zipCode].filter(Boolean).join(" ") %></div>
+          <div style="font-size:14px"><%= admin?.country || "" %></div>
+          <div style="font-size:14px"><%= formatUSPhone(admin?.phoneNumber) || "" %></div>
         <% } %>
       </div>
     </div>
@@ -186,10 +187,11 @@ function parseDDMMYYYY(val) {
             <%= [order?.salesRep?.city, order?.salesRep?.state, order?.salesRep?.zipCode].filter(Boolean).join(' ') %><br />
            <% if (order?.salesRep?.phoneNumber) { %><%= formatUSPhone(order.salesRep.phoneNumber) %><% } %>
         <% } else { %>
-            Busy Bean Coffee of Central Florida<br />
-            1776 Cinnamon Circle<br />
-            Casselberry, FL 32707<br />
-            407-625-7843<br />
+            <%= admin?.companyName || "Busy Bean Coffee Inc." %><br />
+            <%= admin?.address || "" %><br />
+            <%= [admin?.city, admin?.state, admin?.zipCode].filter(Boolean).join(" ") %><br />
+            <%= admin?.country || "" %><br />
+            <%= formatUSPhone(admin?.phoneNumber) || "" %><br />
         <% } %>
       </p>
       <br />
