@@ -182,6 +182,10 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    quickBooksInvoiceIdPartner: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     qboLastSync: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -192,6 +196,18 @@ module.exports = (sequelize) => {
       defaultValue: false,
     },
     quickBooksPaymentId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    quickBooksPaymentIdPartner: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    partnerRealmId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    adminRealmId: {
       type: DataTypes.STRING,
       allowNull: true,
     },

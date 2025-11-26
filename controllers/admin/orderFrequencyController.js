@@ -23,7 +23,6 @@ const {
 const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
 
 exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
-  //orderData is
   try {
     if (!orderData) return false;
 
@@ -203,7 +202,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     );
   }
 
-  if (customer?.salesRepId) {
+  if (customer?.salesRepId && customer?.partnerType == "dropship-partner") {
     const credit = await salesRep.findOne({
       where: {
         id: customer?.salesRepId,
@@ -281,11 +280,12 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       ],
     ],
   });
-  // return res.json(products)
+
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
     products?.length
   );
+
   // let percentageDiscount = input?.order?.discountPercentage
   //   ? parseFloat(input?.order?.discountPercentage)
   //   : parseFloat(customer?.defaultDiscount);

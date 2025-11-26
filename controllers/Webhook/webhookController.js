@@ -93,13 +93,36 @@ const invoicePaid = async (event) => {
         },
         { where: { id: orderId } }
       );
+
+      const orderPlaced = await order.findOne({
+        where: condition,
+        attributes: ["id", "quickBooksInvoiceId", "quickBooksPaymentId"],
+      });
+      if (
+        orderPlaced?.quickBooksInvoiceId &&
+        !orderPlaced?.quickBooksPaymentId
+      ) {
+        await syncPaymentToQuickBooks({
+          orderId: orderPlaced.id,
+          orderType: "local-partner",
+        });
+        console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
+      } else if (!doc.quickBooksInvoiceId) {
+        console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
+        await syncInvoiceOnQuikBooks({
+          orderId: orderPlaced.id,
+          orderType: "local-partner",
+        });
+      }
     } else {
       const orderPlaced = await order.findOne({
         where: condition,
         attributes: [
           "id",
-          "quickBooksPaymentId",
           "quickBooksInvoiceId",
+          "quickBooksInvoiceIdPartner",
+          "quickBooksPaymentId",
+          "quickBooksPaymentIdPartner",
           [
             literal(`COALESCE(
              (SELECT SUM(salerCommission)
@@ -135,19 +158,29 @@ const invoicePaid = async (event) => {
         },
         { where: { id: orderPlaced?.id } }
       );
-    }
 
-    if (orderPlaced?.quickBooksInvoiceId && !orderPlaced?.quickBooksPaymentId) {
-      await syncPaymentToQuickBooks({ orderId: orderPlaced.id });
-      console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
-    } else if (!doc.quickBooksInvoiceId) {
-      console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
-      await syncInvoiceOnQuikBooks({ orderId: orderPlaced.id });
+      if (
+        orderPlaced?.quickBooksInvoiceId &&
+        (!orderPlaced?.quickBooksPaymentId ||
+          !orderPlaced?.quickBooksPaymentIdPartner)
+      ) {
+        await syncPaymentToQuickBooks({
+          orderId: orderPlaced.id,
+          orderType: "customer",
+        });
+        console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
+      } else if (!doc.quickBooksInvoiceId || !doc.quickBooksInvoiceIdPartner) {
+        console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
+        await syncInvoiceOnQuikBooks({
+          orderId: orderPlaced.id,
+          orderType: "customer",
+        });
+      }
+      paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+        orderId: orderId,
+        orderType,
+      });
     }
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-      orderId: orderId,
-      orderType,
-    });
     // paidInvoiceAdminOrLocalPatnerEvent({ orderId });
     //   if(!localPartnerId) {
     //   return true

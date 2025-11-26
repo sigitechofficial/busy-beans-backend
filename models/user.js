@@ -212,6 +212,9 @@ module.exports = (sequelize) => {
 
     user.hasMany(models.deviceToken);
     models.deviceToken.belongsTo(user);
+
+    user.hasMany(models.qboCustomerMap);
+    models.qboCustomerMap.belongsTo(user);
   };
 
   return user;

@@ -1,6 +1,6 @@
 // services/qboAuthService.js
 const axios = require("axios");
-const { qboToken } = require("../models"); // Adjust based on how you export models
+const { qboToken, qboCustomerMap, account, salesRep } = require("../models"); // Adjust based on how you export models
 const qs = require("qs");
 
 // Helper: environment variables
@@ -15,7 +15,7 @@ const tokenUrl = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
  * Exchanges a full redirect URL from QuickBooks (contains code + realmId)
  * for access + refresh tokens, and stores them in DB.
  */
-async function exchangeFromFullUrl(fullUrl) {
+async function exchangeFromFullUrl({ fullUrl, req }) {
   const u = new URL(fullUrl);
   const code = u.searchParams.get("code");
   const realmId = u.searchParams.get("realmId");
@@ -54,23 +54,35 @@ async function exchangeFromFullUrl(fullUrl) {
   );
 
   // Save or update tokens in DB
-  const existing = await qboToken.findOne();
+
+  condition = {};
+  const { localPartnerId, adminId } = req?.user || {};
+  console.log("🚀 ~ exchangeFromFullUrl ~ FOR LOCAL PARTNER:", localPartnerId);
+  console.log("🚀 ~ exchangeFromFullUrl ~ FOR ADMIN:", adminId);
+  condition.accountId = adminId || null;
+  condition.salesRepId = localPartnerId || null;
+  const input = {
+    realmId,
+    accessToken: access_token,
+    refreshToken: refresh_token,
+    accessTokenExpiresAt,
+    refreshTokenExpiresAt,
+    ...condition,
+  };
+  const MODEL = adminId ? account : salesRep;
+  console.log("🚀 ~ exchangeFromFullUrl ~ MODEL:", MODEL);
+
+  MODEL.update(
+    { currentRealmId: realmId },
+    { where: { id: adminId || localPartnerId } }
+  );
+  console.log("🚀 ~ exchangeFromFullUrl ~ input:", input);
+
+  const existing = await qboToken.findOne({ where: condition });
   if (existing) {
-    await existing.update({
-      realmId,
-      accessToken: access_token,
-      refreshToken: refresh_token,
-      accessTokenExpiresAt,
-      refreshTokenExpiresAt,
-    });
+    await existing.update(input);
   } else {
-    await qboToken.create({
-      realmId,
-      accessToken: access_token,
-      refreshToken: refresh_token,
-      accessTokenExpiresAt,
-      refreshTokenExpiresAt,
-    });
+    await qboToken.create(input);
   }
 
   return {
@@ -79,6 +91,8 @@ async function exchangeFromFullUrl(fullUrl) {
     refreshToken: refresh_token,
     accessTokenExpiresAt,
     refreshTokenExpiresAt,
+    localPartnerId,
+    adminId,
   };
 }
 

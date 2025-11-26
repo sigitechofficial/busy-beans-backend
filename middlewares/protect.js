@@ -103,9 +103,21 @@ exports.protect = catchAsync(async (req, res, next) => {
   req.user = currentUser;
   req.user.accessToken = token; // used in logout
   // req.user.accessToken = token;
+  if (decoded?.entity === "localPartner") {
+    req.user.localPartnerId = decoded?.id;
+  } else if (decoded?.entity === "partnerEmployee") {
+    req.user.localPartnerId = currentUser?.salesRepId;
+  } else if (decoded?.entity === "admin") {
+    req.user.adminId = decoded?.id;
+  } else if (decoded?.entity === "adminEmployee") {
+    req.user.adminId = currentUser?.accountId;
+  }
   req.user.dvToken = decoded?.dvToken;
   req.user.entity = decoded?.entity;
+  //   console.log("🚀 ~  req.user.:", req.user);
+
   res.locals.user = currentUser;
+
   next();
 });
 

@@ -210,10 +210,6 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     element.partnerOrderId = newOrder.id;
   });
   console.log("🚀 ~ finalItems:", finalItems);
-  console.log("🚀 ~ finalItems:", finalItems);
-  console.log("🚀 ~ finalItems:", finalItems);
-  console.log("🚀 ~ finalItems:", finalItems);
-  console.log("🚀 ~ finalItems:", finalItems);
 
   const allitems = await partnerOrderItem.bulkCreate(finalItems);
 
@@ -230,6 +226,7 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     });
     orderEvents({ orderId: newOrder?.id, orderType: "local-partner" });
   }
+
   return res.status(200).json({
     status: "success",
     data: { id: newOrder?.id, allitems },
@@ -569,6 +566,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
     importCustomersToQuickBooks({
       limitIds: [doc?.salesRep?.id],
       userType: "local-partner",
+      req,
     });
   }
 
@@ -896,6 +894,10 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
         orderId: placedOrder?.id,
         orderType: "local-partner",
       });
+      syncPaymentToQuickBooks({
+        orderId: placedOrder.id,
+        orderType: "local-partner",
+      });
       return res.status(200).json({
         status: "success",
         message: "Payment capture success",
@@ -926,12 +928,8 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     "🚀 ~ placedOrder?.quickBooksInvoiceId:",
     placedOrder?.quickBooksInvoiceId
   );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
+
   if (!placedOrder?.quickBooksInvoiceId) {
-    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~TRUE:");
     syncInvoiceOnQuikBooks({
       orderId: placedOrder.id,
       orderType: "local-partner",
@@ -1246,6 +1244,11 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
       where: { id: partnerOrderId },
     });
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      orderId: partnerOrderId,
+      orderType: isPartnerOrder ? "local-partner" : "customer",
+    });
+
+    syncPaymentToQuickBooks({
       orderId: partnerOrderId,
       orderType: isPartnerOrder ? "local-partner" : "customer",
     });

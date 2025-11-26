@@ -4,9 +4,7 @@ const {
   importCustomersToQuickBooks,
 } = require("../../services/qboCustomerService");
 const { createInvoiceFromOrder } = require("../../services/qboInvoice");
-const {
-  updateInvoiceInQuickBooks,
-} = require("../../services/qboInvoiceUpdate");
+
 const {
   syncPaymentToQuickBooks,
 } = require("../../services/paymentSyncService");
@@ -17,7 +15,12 @@ const {
   syncInvoiceOnQuikBooks,
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
-const { order } = require("../../models");
+const {
+  qboToken,
+  qboCredientials,
+  order,
+  partnerOrder,
+} = require("../../models");
 // Common HTTP response helpers
 function httpError(
   res,
@@ -31,11 +34,68 @@ function httpSuccess(res, data = null, message = "OK") {
   return res.status(200).json({ status: "success", message, data });
 }
 
+const { encrypt, decrypt } = require("../../utils/encryption");
+
+exports.saveQboCredentials = async (req, res) => {
+  try {
+    const { salesRepId, QBO_CLIENT_ID, QBO_CLIENT_SECRET } = req.body;
+
+    if (!salesRepId || !QBO_CLIENT_ID || !QBO_CLIENT_SECRET) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields.",
+      });
+    }
+
+    // Encrypt ID + Secret
+    const encClientId = encrypt(QBO_CLIENT_ID);
+    const encClientSecret = encrypt(QBO_CLIENT_SECRET);
+
+    // Check if exists
+    let record = await qboCredientials.findOne({
+      where: { salesRepId },
+    });
+
+    if (record) {
+      // ---- Update existing ----
+      record.QBO_CLIENT_ID = encClientId;
+      record.QBO_CLIENT_SECRET = encClientSecret;
+      record.status = true;
+      await record.save();
+
+      return res.json({
+        success: true,
+        message: "QBO credentials updated successfully.",
+      });
+    }
+
+    // ---- Create new ----
+    await qboCredientials.create({
+      salesRepId,
+      QBO_CLIENT_ID: encClientId,
+      QBO_CLIENT_SECRET: encClientSecret,
+      status: true,
+    });
+
+    return res.json({
+      success: true,
+      message: "QBO credentials saved successfully.",
+    });
+  } catch (err) {
+    console.error("saveQboCredentials Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error.",
+    });
+  }
+};
+
 /**
  * GET /qbo/auth/login
  * Redirect user to QuickBooks OAuth login page
  */
 exports.authLogin = async (req, res) => {
+  console.log("🚀 ~ req authLoginQBO:", req.user);
   try {
     const clientId = process.env.QBO_CLIENT_ID;
     const redirectUri = process.env.QBO_REDIRECT_URI;
@@ -73,14 +133,13 @@ exports.authExchange = async (req, res) => {
   try {
     const { fullUrl } = req.body || {};
     console.log("🚀 ~ req.body:", req.body);
-
     if (!fullUrl)
       return httpError(res, 400, "Missing fullUrl from request body");
-    const data = await exchangeFromFullUrl(fullUrl);
+    const data = await exchangeFromFullUrl({ fullUrl, req: req });
     return httpSuccess(res, data, "QuickBooks tokens saved successfully.");
   } catch (err) {
     console.error("[QBO][authExchange] Error:", err?.message);
-    console.error("[QBO][authExchange] Error:", err);
+    console.error("[QBO][authExchange] Error:", err.stack);
     return httpError(res, 500, err.message);
   }
 };
@@ -109,9 +168,12 @@ exports.importCustomers = async (req, res) => {
   try {
     const result = await importCustomersToQuickBooks({
       limitIds: req.body.ids || [],
+      req,
     });
     return httpSuccess(res, result, "Customers imported successfully.");
   } catch (err) {
+    console.log("🚀 ~ err:", err.stack);
+
     console.error("[QBO][importCustomers] Error:", err.message);
     return httpError(res, 500, err.message);
   }
@@ -167,6 +229,27 @@ exports.syncOrderPayment = async (req, res) => {
     const { orderId } = req.params;
     if (!orderId) return httpError(res, 400, "Missing orderId parameter");
     const result = await syncPaymentToQuickBooks({ orderId: Number(orderId) });
+    return httpSuccess(
+      res,
+      result,
+      `Payment synced successfully for order ${orderId}.`
+    );
+  } catch (err) {
+    console.error("[QBO][syncOrderPayment] Error:", err.message);
+    return httpError(res, 500, err.message);
+  }
+};
+
+/**
+ * POST /qbo/order-payment/sync/:orderId
+ * Creates or updates payment in QuickBooks for a paid order
+ */
+
+exports.ordersPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    if (!orderId) return httpError(res, 400, "Missing orderId parameter");
+    const result = await order.findAll({ where: { qboInvoiceId } });
     return httpSuccess(
       res,
       result,

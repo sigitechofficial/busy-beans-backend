@@ -15,6 +15,7 @@ const {
 const factory = require("../handlerFactory");
 const APIFeatures = require("../../utils/apiFeatures");
 const { Op, literal, where, fn, col } = require("sequelize");
+
 console.log("🚀 ~ literal:", process.env.BASE_URL);
 
 exports.createEmployee = catchAsync(async (req, res, next) => {
@@ -152,7 +153,6 @@ exports.deleteEmployee = async (req, res, next) => {
   });
 
   await permission.destroy({ where: { employeeId: emp?.id } });
-  // Soft delete employee (paranoid mode)
   await emp.destroy();
 
   res.status(200).json({ status: "success", message: "Employee deleted" });

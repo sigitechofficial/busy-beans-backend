@@ -52,7 +52,7 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   const data = await product.findAll({
     where: { status: 1, deleted: 0 },
     attributes: {
-      exclude: ["deleted", "deletedAt", "updatedAt", "wholesalePrice"],
+      exclude: ["deleted", "deletedAt", "wholesalePrice"],
     },
     raw: true, // return plain objects instead of Sequelize instances
   });
@@ -70,6 +70,7 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   }, {});
 
   // apply discounts
+
   const productsWithDiscount = data.map((prod) => {
     const discount = discountMap[prod.categoryId] || 0;
     const originalPrice = parseFloat(prod.price);

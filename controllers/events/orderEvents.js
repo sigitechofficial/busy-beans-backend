@@ -20,27 +20,27 @@ exports.orderEvents = async ({ orderId, orderType = "customer" }) => {
     let to = email ? [email] : [];
     let invoice = null;
 
-    if (orderType == "customer") {
-      if (
-        details.partnerType === "direct-partner" &&
-        !details.qboCustomerIdForPartner
-      ) {
-        importCustomersToQuickBooks({
-          limitIds: [details.userId],
-          userType: "customer",
-        });
-      } else if (details.partnerType === "drop" && !details.qboCustomerId) {
-        importCustomersToQuickBooks({
-          limitIds: [details.userId],
-          userType: "customer",
-        });
-      }
-    } else if (orderType == "local-partner") {
-      importCustomersToQuickBooks({
-        limitIds: [details.salesRepId],
-        userType: "local-partner",
-      });
-    }
+    // if (orderType == "customer") {
+    //   if (
+    //     details.partnerType === "direct-partner" &&
+    //     !details.qboCustomerIdForPartner
+    //   ) {
+    //     importCustomersToQuickBooks({
+    //       limitIds: [details.userId],
+    //       userType: "customer",
+    //     });
+    //   } else if (details.partnerType === "drop" && !details.qboCustomerId) {
+    //     importCustomersToQuickBooks({
+    //       limitIds: [details.userId],
+    //       userType: "customer",
+    //     });
+    //   }
+    // } else if (orderType == "local-partner") {
+    //   importCustomersToQuickBooks({
+    //     limitIds: [details.salesRepId],
+    //     userType: "local-partner",
+    //   });
+    // }
 
     if (details?.email) {
       if (details?.dispatchEmail && email != details?.dispatchEmail) {

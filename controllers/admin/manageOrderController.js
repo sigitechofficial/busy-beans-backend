@@ -65,7 +65,7 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
   });
 
   if (details.userId && !details?.quickBooksInvoiceId) {
-    await syncInvoiceOnQuikBooks({ orderId: details.id, orderType });
+    syncInvoiceOnQuikBooks({ orderId: details.id, orderType });
   }
 
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
@@ -770,9 +770,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
     return next(new AppError("Data not found!", 400));
   }
 
-  if (!doc?.user?.qboCustomerId) {
-    importCustomersToQuickBooks({ limitIds: [doc?.user?.id] });
-  }
+  importCustomersToQuickBooks({ limitIds: [doc?.user?.id], req });
 
   res.status(200).json({
     status: "success",
@@ -787,6 +785,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
 // if(req.body?.orderData?.statusId == 4)processTransferToLocalPartner({orderId:orderId})
 exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const { orderId, partnerOrderId } = req.body;
+  console.log("🚀 ~ partnerOrderId:", partnerOrderId);
 
   const Model = partnerOrderId ? partnerOrder : order;
   const isPartnerOrder = partnerOrderId ? true : false;
@@ -802,6 +801,8 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       "totalBill",
       "invoiceNumber",
       "statusId",
+      "quickBooksInvoiceId",
+      "quickBooksPaymentId",
       "paymentStatus",
       [
         literal(
@@ -837,12 +838,20 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   const statusId = Number(req.body?.orderData?.statusId);
   const userId = Number(doc?.userId || 0);
 
+  //because customers and localpart6ner already have order invoice in
+  //main issue status alreqady 4 hoga jin order ka 5 py unki payment ho jaye gi or f
+  0;
+  console.log("🚀 ~ statusId:", statusId);
+  console.log("🚀 ~ isPartnerOrder:", isPartnerOrder);
+  console.log("🚀 ~ doc?.paymentStatus :", doc?.paymentStatus);
   if (statusId == 5 && isPartnerOrder && doc?.paymentStatus != "done") {
     //HERE we try to collect payment if order type is local Patrner
+    console.log("🚀 ~ doc?.defaultBankAccount:", doc?.defaultBankAccount);
     if (!doc?.defaultBankAccount) {
       await Model.update(req.body?.orderData, {
         where: { id: orderId || partnerOrderId },
       });
+
       return next(
         new AppError(
           "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
@@ -859,6 +868,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       partner: { srName: doc?.srName, territoryName: doc?.territoryName },
     });
 
+    console.log("🚀 ~ pullouts:", pullouts);
     if (!pullouts) {
       await Model.update(req.body?.orderData, {
         where: { id: orderId || partnerOrderId },
@@ -875,23 +885,30 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     req.body.orderData.pulloutIntentId = pullouts?.paymentIntentId;
     req.body.orderData.paymentIntentId = pullouts?.paymentIntentId;
     req.body.orderData.paymentStatus = "done";
+    console.log("🚀 ~ doc?.quickBooksInvoiceId:", doc?.quickBooksInvoiceId);
+    await Model.update(
+      { paymentStatus: "done" },
+      {
+        where: { id: orderId || partnerOrderId },
+      }
+    );
     if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
       syncPaymentToQuickBooks({
-        orderId: orderId,
+        orderId: orderId || partnerOrderId,
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
       console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
     } else if (!doc.quickBooksInvoiceId) {
       console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
       syncInvoiceOnQuikBooks({
-        orderId: orderId,
+        orderId: orderId || partnerOrderId,
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
     }
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-      orderId: orderId || partnerOrderId,
-      orderType: isPartnerOrder ? "local-partner" : "customer",
-    });
+    // paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+    //   orderId: orderId || partnerOrderId,
+    //   orderType: isPartnerOrder ? "local-partner" : "customer",
+    // });
   }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
@@ -905,15 +922,25 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       console.log("🚀 ~ quickBookInvoiceId:", doc.quickBooksInvoiceId);
       console.log("🚀 ~ doc.quickBooksPaymentId:", doc.quickBooksPaymentId);
       if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
+        console.log(
+          "🚀 ~ doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId:",
+          doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId
+        );
+        await Model.update(
+          { paymentStatus: "done" },
+          {
+            where: { id: orderId || partnerOrderId },
+          }
+        );
         syncPaymentToQuickBooks({
-          orderId: orderId,
+          orderId: orderId || partnerOrderId,
           orderType: isPartnerOrder ? "local-partner" : "customer",
         });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
       } else if (!doc.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
         syncInvoiceOnQuikBooks({
-          orderId: orderId,
+          orderId: orderId || partnerOrderId,
           orderType: isPartnerOrder ? "local-partner" : "customer",
         });
       }
@@ -949,7 +976,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     // }
 
     if (req.body?.orderData?.statusId == 5) {
-      //HERE we try to collect payment if order type is local Patrner
+      //    HERE we try to collect payment if order type is local Patrner
       orderShippedEvent({
         orderId: orderId || partnerOrderId,
         orderType: isPartnerOrder ? "local-partner" : "customer",
@@ -1202,8 +1229,6 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   input.order.invoiceId = null;
   input.order.hostedInvoiceUrl = null;
   input.items = req.body.items;
-
-  // console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
 
   if (input?.items?.length < 1 && input?.typeCharges?.length < 1) {
     throw new AppError("Update possible, but no changes were made.", 404);
@@ -1459,37 +1484,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
   }
 
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  console.log(
-    "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
-  );
-  if (!placedOrder?.quickBooksInvoiceId) {
-    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~TRUE:");
-    syncInvoiceOnQuikBooks({ orderId: placedOrder.id });
-  } else {
-    console.log("🚀 ~ syncInvoiceOnQuikBooks ------ ~FALSE:");
-    updateInvoiceOnQuickBooks({ orderId: placedOrder.id });
-  }
+  syncInvoiceOnQuikBooks({ orderId: placedOrder.id, updateRequest: true });
+
   return res.status(200).json({
     status: "success",
     message: "success",

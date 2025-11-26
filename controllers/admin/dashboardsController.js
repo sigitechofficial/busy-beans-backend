@@ -12,9 +12,10 @@ const {
   employee,
   statuses,
   orderFrequency,
+  partnerOrder,
+  partnerOrderItem,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
-const AppError = require("../../utils/appError");
 
 const { Op, literal, where, fn, col } = require("sequelize");
 
@@ -26,7 +27,8 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
 });
 
 exports.adminDashboard = catchAsync(async (req, res, next) => {
-  const salesSummary = await item.findOne({
+  const clientSalesSummary = await item.findOne({
+    // where: { id: { [Op.gte]: 2500 } },
     attributes: [
       // Revenue
       [
@@ -57,17 +59,51 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
         literal(`
         SUM(
           CASE 
-            WHEN item.wholesalePrice < 1 THEN item.price
+            WHEN item.wholesalePrice < 0.1 THEN item.price
             ELSE 0
           END
         )
       `),
         "customerPriceTotal",
       ],
+      [
+        literal(`
+        SUM(item.qty)
+      `),
+        "numberOfItems",
+      ],
     ],
     include: [
       {
         model: order, // make sure your association is set: items.belongsTo(orders)
+        attributes: [],
+        where: {
+          statusId: { [Op.lt]: 6 },
+        },
+      },
+    ],
+    raw: true,
+  });
+
+  const partnerSalesSummary = await partnerOrderItem.findOne({
+    attributes: [
+      // Revenue
+      [
+        literal(`
+        SUM(partnerOrderItem.price)
+      `),
+        "sales",
+      ],
+      [
+        literal(`
+        SUM(partnerOrderItem.qty)
+      `),
+        "numberOfItems",
+      ],
+    ],
+    include: [
+      {
+        model: partnerOrder, // make sure your association is set: items.belongsTo(orders)
         attributes: [],
         where: {
           statusId: { [Op.lt]: 6 },
@@ -83,7 +119,7 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
   const totalSupplier = await supplier.count({ where: { deleted: 0 } });
   const totalPatners = await salesRep.count({ where: { deleted: 0 } });
 
-  const revenueSummary = await order.findOne({
+  const revenueSummaryClient = await order.findOne({
     where: { paymentStatus: "done" },
     attributes: [
       [
@@ -99,13 +135,17 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
           END
         )
       `),
-        "revenueCollected",
+        "revenueCollectedClient",
       ],
     ],
     raw: true,
   });
-
-  const ordersSummary = await order.findOne({
+  const revenueSummaryPartners = await partnerOrder.findOne({
+    where: { paymentStatus: "done" },
+    attributes: [[literal(`SUM(totalBill)`), "revenueCollectedPartners"]],
+    raw: true,
+  });
+  const clientOrdersSummary = await order.findOne({
     attributes: [
       [literal(`SUM(CASE WHEN statusId = 1 THEN 1 ELSE 0 END)`), "orderPlaced"],
       [
@@ -116,13 +156,52 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
         literal(`SUM(CASE WHEN statusId = 3 THEN 1 ELSE 0 END)`),
         "supplierAcknowledged",
       ],
+      //   [
+      //     literal(`SUM(CASE WHEN statusId = 4 THEN 1 ELSE 0 END)`),
+      //     "dispatchedOrders",
+      //   ],
       [
-        literal(`SUM(CASE WHEN statusId = 4 THEN 1 ELSE 0 END)`),
+        literal(`SUM(CASE WHEN statusId IN (4, 5) THEN 1 ELSE 0 END)`),
         "dispatchedOrders",
       ],
       [
-        literal(`SUM(CASE WHEN statusId = 5 THEN 1 ELSE 0 END)`),
-        "deliveredOrders",
+        literal(`SUM(CASE WHEN statusId = 6 THEN 1 ELSE 0 END)`),
+        "CanceledOrders",
+      ],
+      [
+        literal(
+          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`
+        ),
+        "paymentPending",
+      ],
+      [
+        literal(
+          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`
+        ),
+        "paymentDone",
+      ],
+    ],
+    raw: true,
+  });
+
+  const partnersOrdersSummary = await partnerOrder.findOne({
+    attributes: [
+      [literal(`SUM(CASE WHEN statusId = 1 THEN 1 ELSE 0 END)`), "orderPlaced"],
+      [
+        literal(`SUM(CASE WHEN statusId = 2 THEN 1 ELSE 0 END)`),
+        "assignedToSupplier",
+      ],
+      [
+        literal(`SUM(CASE WHEN statusId = 3 THEN 1 ELSE 0 END)`),
+        "supplierAcknowledged",
+      ],
+      //   [
+      //     literal(`SUM(CASE WHEN statusId = 4 THEN 1 ELSE 0 END)`),
+      //     "dispatchedOrders",
+      //   ],
+      [
+        literal(`SUM(CASE WHEN statusId IN (4, 5) THEN 1 ELSE 0 END)`),
+        "dispatchedOrders",
       ],
       [
         literal(`SUM(CASE WHEN statusId = 6 THEN 1 ELSE 0 END)`),
@@ -147,9 +226,12 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     data: {
-      salesSummary,
-      ordersSummary,
-      revenueSummary,
+      clientSalesSummary,
+      partnerSalesSummary,
+      partnersOrdersSummary,
+      clientOrdersSummary,
+      revenueSummaryClient,
+      revenueSummaryPartners,
       totalPatners,
       totalUser,
       totalSupplier,

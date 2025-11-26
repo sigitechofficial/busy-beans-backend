@@ -8,6 +8,7 @@ const {
   item,
   sequelize,
   salesRep,
+  account,
 } = require("../models");
 const { literal } = require("sequelize");
 
@@ -17,11 +18,8 @@ const { literal } = require("sequelize");
 
 async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
   console.log("🚀 ~ getOrderWithAssociations ~ orderType:", orderType);
-  console.log("🚀 ~ getOrderWithAssociations ~ orderType:", orderType);
-  console.log("🚀 ~ getOrderWithAssociations ~ orderType:", orderType);
-  console.log("🚀 ~ getOrderWithAssociations ~ orderType:", orderType);
-  //   const httpError = (res, status, msg) => ({ status, msg });
 
+  //   const httpError = (res, status, msg) => ({ status, msg });
   try {
     const id = Number(orderId);
     if (!Number.isFinite(id) || id <= 0) {
@@ -94,12 +92,21 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         ],
         [
           literal(
+            `(SELECT salesReps.currentRealmId FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+          ),
+          "partnerCurrentRealmId",
+        ],
+        [
+          literal(
             `(SELECT salesReps.partnerType FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
           ),
           "partnerType",
         ],
+        "quickBooksInvoiceIdPartner",
+        "quickBooksPaymentIdPartner",
         "totalBill",
         "salesRepId",
+        "userId",
         "vat",
         "shippingCharges",
         "invoiceNumber",
@@ -113,6 +120,8 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "termDays",
         "note",
         "trackingNumber",
+        "partnerRealmId",
+        "adminRealmId",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
@@ -186,6 +195,9 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "termDays",
         "note",
         "trackingNumber",
+        "salesRepId",
+        "partnerRealmId",
+        "adminRealmId",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`
@@ -215,13 +227,6 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
     } else {
       orderData.localPatnerOrder = false;
       orderData.directParnerClient = false;
-      if (orderData.salesRepId && orderData.patnerType === "direct-partner") {
-        orderData.qboCustomerId =
-          orderData.user?.qboCustomerIdForPartner || null;
-        orderData.user.qboCustomerId =
-          orderData.user?.qboCustomerIdForPartner || null;
-        orderData.directParnerClient = true;
-      }
     }
 
     return orderData;

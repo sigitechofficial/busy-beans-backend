@@ -16,6 +16,7 @@ const dashboardsController = require("../controllers/admin/dashboardsController"
 const shippingCompanyController = require("../controllers/admin/shippingCompanyController");
 const employeeController = require("../controllers/admin/employeeController");
 const adminController = require("../controllers/admin/adminController");
+
 const patnerOrderController = require("../controllers/admin/partnerOrderController");
 
 const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsController");
@@ -522,6 +523,11 @@ router.get(
 router.get(
   "/admin-reports/unpaid-partner-balance",
   adminReportsController.unpaidPartnerbalanceReport
+);
+
+router.get(
+  "/admin-reports/direct-partner-summary",
+  adminReportsController.directPartnerReportSummary
 );
 
 //! SUPPLIER REPORTS SECTION

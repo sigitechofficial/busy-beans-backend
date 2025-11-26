@@ -1,18 +1,18 @@
-const bcrypt = require('bcryptjs');
+const bcrypt = require("bcryptjs");
 module.exports = (sequelize, DataTypes) => {
   const account = sequelize.define(
-    'account',
+    "account",
     {
       name: {
         type: DataTypes.STRING,
-        defaultValue: 'Administrator',
+        defaultValue: "Administrator",
       },
       email: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: {
           args: true,
-          msg: 'This email is already exist.',
+          msg: "This email is already exist.",
         },
       },
       password: {
@@ -69,20 +69,24 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      currentRealmId: {
+        type: DataTypes.STRING(32), // QBO Customer Id
+        allowNull: true,
+      },
     },
     {
-      tableName: 'accounts',
+      tableName: "accounts",
       primaryKey: true,
       autoIncrement: true,
       paranoid: true,
       timestamps: true,
       indexes: [
         {
-          fields: ['email'],
-          name: 'email_index',
+          fields: ["email"],
+          name: "email_index",
         },
       ],
-    },
+    }
   );
 
   account.associate = (models) => {
@@ -91,25 +95,34 @@ module.exports = (sequelize, DataTypes) => {
 
     account.hasMany(models.employee);
     models.employee.belongsTo(account);
+
+    account.hasOne(models.qboCredientials);
+    models.qboCredientials.belongsTo(account);
+
+    account.hasOne(models.qboToken);
+    models.qboToken.belongsTo(account);
+
+    account.hasMany(models.qboCustomerMap);
+    models.qboCustomerMap.belongsTo(account);
   };
 
   const SALT_ROUNDS = 12;
   // Create
-  account.addHook('beforeCreate', (instance) => {
+  account.addHook("beforeCreate", (instance) => {
     if (instance.password) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
   // Update (only if changed)
-  account.addHook('beforeUpdate', (instance) => {
-    if (instance.changed('password')) {
+  account.addHook("beforeUpdate", (instance) => {
+    if (instance.changed("password")) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
     }
   });
 
   // If you ever bulk-create users with plaintext passwords:
-  account.addHook('beforeBulkCreate', (instances) => {
+  account.addHook("beforeBulkCreate", (instances) => {
     for (const i of instances) {
       if (i.password) {
         i.password = bcrypt.hashSync(i.password, SALT_ROUNDS);

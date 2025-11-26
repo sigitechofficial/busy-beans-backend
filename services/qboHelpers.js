@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { handleQboError } = require("./qboErrorHandler");
 
 // Base URL builder for QuickBooks API
 function QBO(realmId) {
@@ -48,11 +49,10 @@ async function qboQuery({ accessToken, realmId, query }) {
     const res = await axios.get(url, { headers: headers(accessToken) });
     return res.data;
   } catch (err) {
-    const msg = err?.response?.data || err.message;
-    console.error("[QBO Query Error]", msg);
-    throw new Error(
-      `QuickBooks query failed: ${msg?.Fault?.Error?.[0]?.Message || msg}`
-    );
+    handleQboError({
+      err,
+      context: `QuickBooks query failed:`,
+    });
   }
 }
 

@@ -35,6 +35,9 @@ const {
   syncInvoiceOnQuikBooks,
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
+const {
+  syncPaymentToQuickBooks,
+} = require("../../services/paymentSyncService");
 
 // const { orderEvents } = require("../events/orderEvents");
 exports.notificationTesting = async (req, res, next) => {
@@ -49,10 +52,12 @@ exports.notificationTesting = async (req, res, next) => {
   //   });
   //   //
   //   const row = await qboToken.findOne();
-  syncInvoiceOnQuikBooks({ orderId: 21, orderType: "local-partner" });
+  //   syncInvoiceOnQuikBooks({ orderId: 525, orderType: "customer" });
+  //   syncPaymentToQuickBooks({ orderId: 5, orderType: "customer" });
+  syncInvoiceOnQuikBooks({ orderId: req.body?.id, updateRequest: false });
   //   updateInvoiceOnQuickBooks({ orderId: 21, orderType: "local-partner" });
   //   orderEvents({ orderId: req.body.id, orderType: "local-partner" });
-  return res.status(200).json(response({ data: { orderData: 1 } }));
+  return res.status(200).json(response({ data: req.user }));
 };
 
 exports.bookOrder = catchAsync(async (req, res, next) => {

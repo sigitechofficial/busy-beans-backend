@@ -128,6 +128,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(32), // QBO Customer Id
         allowNull: true,
       },
+      currentRealmId: {
+        type: DataTypes.STRING(32), // QBO Customer Id
+        allowNull: true,
+      },
     },
     {
       primaryKey: true,
@@ -202,6 +206,15 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.address);
     models.address.belongsTo(salesRep);
+
+    salesRep.hasOne(models.qboCredientials);
+    models.qboCredientials.belongsTo(salesRep);
+
+    salesRep.hasOne(models.qboToken);
+    models.qboToken.belongsTo(salesRep);
+
+    salesRep.hasMany(models.qboCustomerMap);
+    models.qboCustomerMap.belongsTo(salesRep);
   };
 
   return salesRep;
