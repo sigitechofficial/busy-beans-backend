@@ -16,6 +16,7 @@ const dashboardsController = require("../controllers/admin/dashboardsController"
 const shippingCompanyController = require("../controllers/admin/shippingCompanyController");
 const employeeController = require("../controllers/admin/employeeController");
 const adminController = require("../controllers/admin/adminController");
+const machineController = require("../controllers/admin/machineController");
 
 const patnerOrderController = require("../controllers/admin/partnerOrderController");
 
@@ -207,6 +208,20 @@ const salesRepImage = multer.diskStorage({
   },
 });
 
+const machineImage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const destinationPath = "./public/machines";
+
+    // Call the function to create the destination directory
+    createDestinationDirectory(destinationPath, cb);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `sales-rep-${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
+const uploadMachineImage = multer({
+  storage: machineImage,
+});
 const uploadProductImage = multer({
   storage: productsImage,
 });
@@ -681,4 +696,17 @@ router.post(
   "/partner-order/pull-payment-from-bank/:partnerOrderId",
   patnerOrderController.pullPartnerOrderPayment
 );
+
+router
+  .route("/coffee-machine")
+  .get(machineController.getAllMachines) // For fetching a product by ID
+  .post(uploadMachineImage.single("image"), machineController.createMachines); // For deleting a product by ID
+
+// Category by ID routes
+router
+  .route("/coffee-machine/:id")
+  .get(machineController.getMachines) // For fetching a product by ID
+  .delete(machineController.deleteMachines) // For deleting a product by IDWWW
+  .patch(uploadMachineImage.single("image"), machineController.updateMachines); // For updating a product (including image upload)
+
 module.exports = router;
