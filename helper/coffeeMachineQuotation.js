@@ -5,24 +5,34 @@ const { attachments } = require("./attactments");
 const attachment = attachments();
 const { transporter } = require("./transpoter");
 let Footer = require("./footer");
+let Header = require("./header");
 
-module.exports = async function ({
-  email,
-  name = "",
-  boardingLink = "",
-  password,
-}) {
-  console.log("🚀 ~ boardingLink:", boardingLink);
-  let footer = await Footer();
-  let hiUser = `Hi ${name}!`;
-  transporter.sendMail(
-    {
-      from: process.env.EMAIL_USERNAME, // sender address
-      to: [`${email}`, "sigidevelopers@gmail.com"], //`${email}` list of receivers
-      subject: `${hiUser}! Welcome to Busy Bean. To start receiving online payments connect your Stripe account`, // Subject line
-      attachments: attachment.footer,
-      replyTo: "noreply@busybeancoffee.com",
-      html: `<!DOCTYPE html>
+module.exports = async function ({ data }) {
+  try {
+    let footer = await Footer();
+    let header = await Header();
+
+    // Extract data fields
+    const {
+      name,
+      phoneNumber,
+      addressLineOne,
+      addressLineTwo,
+      city,
+      state,
+      country,
+      zipCode,
+      companyName,
+      notes,
+    } = data;
+
+    const hiUser = `Hi ${name}!`;
+
+    const fullAddress = `${addressLineOne}, ${addressLineTwo}, ${city}, ${state}, ${country}, ${zipCode}`;
+
+    // Same template design — ONLY replaced placeholders []
+    const htmlTemplate = `
+<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8" />
@@ -59,7 +69,7 @@ module.exports = async function ({
           >
             <tr>
               <td align="center" style="padding: 30px 20px 10px">
-                   ${header}
+                ${header}
               </td>
             </tr>
             <tr>
@@ -79,7 +89,7 @@ module.exports = async function ({
                     margin-bottom: 8px;
                   "
                 >
-                  Hi [Customer Name]!
+                  Hi ${name}!
                 </p>
                 <p
                   style="
@@ -89,10 +99,10 @@ module.exports = async function ({
                     margin-top: 0;
                   "
                 >
-                  Thank you for submitting your request for the [Machine
-                  Name/Model] through our website. We've received your details,
-                  and our team will be reaching out to you shortly to confirm
-                  your requirements and guide you with the next steps.
+                  Thank you for submitting your request for the <strong>${data?.machineName}</strong>
+                  through our website. We've received your details, and our team
+                  will be reaching out to you shortly to confirm your requirements
+                  and guide you with the next steps.
                 </p>
 
                 <p
@@ -114,11 +124,12 @@ module.exports = async function ({
                     margin: 0;
                   "
                 >
-                  <strong>Machine:</strong> [Machine Name]<br />
-                  <strong>Name:</strong> [Customer Name]<br />
-                  <strong>Phone:</strong> [Phone Number]<br />
-                  <strong>Address:</strong> [Customer Address]<br />
-                  <strong>Notes/Requirements:</strong> [If provided]
+                  <strong>Machine:</strong> ${data?.machineName}<br />
+                  <strong>Name:</strong> ${name}<br />
+                  <strong>Company:</strong> ${companyName || "N/A"}<br />
+                  <strong>Phone:</strong> ${phoneNumber}<br />
+                  <strong>Address:</strong> ${fullAddress}<br />
+                  <strong>Notes/Requirements:</strong> ${notes || "None"}
                 </p>
 
                 <p
@@ -129,8 +140,8 @@ module.exports = async function ({
                     margin-top: 20px;
                   "
                 >
-                  Our representative will contact you within [X hours / 1
-                  working day] to confirm your request and process your order.
+                  Our representative will contact you within 24 hours to confirm
+                  your request and process your order.
                 </p>
 
                 <p
@@ -146,20 +157,33 @@ module.exports = async function ({
                 </p>
 
                 <p style="font-size: 14px; line-height: 22px; color: #333333">
-                  If you have any questions, feel free to reach out to our
-                  support team.
+                  If you have any questions, feel free to reach out to our support
+                  team.
                 </p>
               </td>
             </tr>
        ${footer}
-      `,
-    },
-    function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(info);
+`;
+
+    // Send Email
+    transporter.sendMail(
+      {
+        from: process.env.EMAIL_USERNAME,
+        to: [data?.email, "sigidevelopers@gmail.com"],
+        subject: `${hiUser} Your Coffee Machine Request Has Been Received`,
+        html: htmlTemplate,
+        attachments: attachment.footer,
+        replyTo: "noreply@busybeancoffee.com",
+      },
+      function (error, info) {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log(info);
+        }
       }
-    }
-  );
+    );
+  } catch (err) {
+    console.log("Email sending error:", err);
+  }
 };

@@ -36,6 +36,11 @@ router.post(
 );
 
 router.post(
+  "/order-management/email-helper",
+  manageOrderController.emailHelper
+);
+
+router.post(
   "/login",
   (req, res, next) => {
     req.params.entity = "admin";
@@ -707,6 +712,6 @@ router
   .route("/coffee-machine/:id")
   .get(machineController.getMachines) // For fetching a product by ID
   .delete(machineController.deleteMachines) // For deleting a product by IDWWW
-  .patch(uploadMachineImage.single("image"), machineController.updateMachines); // For updating a product (including image upload)
+  .patch(uploadMachineImage.single("image"), machineController.updateMachines); // For updating a product (including image upload);
 
 module.exports = router;

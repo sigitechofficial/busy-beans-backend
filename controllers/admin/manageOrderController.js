@@ -18,9 +18,7 @@ const {
 
 const fs = require("fs");
 const path = require("path");
-const {
-  paidInvoiceAdminOrLocalPatnerEventAndCustomer,
-} = require("../events/paymentInvoicePaidEvent");
+
 const { Op, literal, fn, col } = require("sequelize");
 const APIFeatures = require("../../utils/apiFeatures");
 
@@ -29,12 +27,7 @@ const AppError = require("../../utils/appError");
 const Stripe = require("../stripe");
 const factory = require("../handlerFactory");
 const { response } = require("../../utils/response");
-const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
-const {
-  sentPaymentInvoiceEvent,
-} = require("../events/sentPaymentInvoiceEvent");
-const { orderShippedEvent } = require("../events/orderShippedEvent");
-const { orderDispatchEvent } = require("../events/orderDispatchEvent");
+
 const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
@@ -54,6 +47,46 @@ const {
   processTransferToLocalPartner,
 } = require("../../utils/localPatnerCommissionTranfer");
 const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmailAdminOrLocalPatner");
+const {
+  paidInvoiceAdminOrLocalPatnerEventAndCustomer,
+} = require("../events/paymentInvoicePaidEvent");
+const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
+const {
+  sentPaymentInvoiceEvent,
+} = require("../events/sentPaymentInvoiceEvent");
+const { orderShippedEvent } = require("../events/orderShippedEvent");
+const { orderDispatchEvent } = require("../events/orderDispatchEvent");
+const {
+  orderEvents,
+  orderEventsToLocalPatnerOrAdmin,
+} = require("../events/orderEvents");
+
+exports.emailHelper = catchAsync(async (req, res, next) => {
+  const { orderId, orderType, emailType } = req.body;
+
+  if (emailType == "order-creation") {
+    orderEvents({ orderId, orderType });
+  } else if (emailType == "paid-invoice") {
+    sentPaymentInvoiceEvent({ orderId, orderType });
+  } else if (emailType == "invoice-sent" || emailType == "invoice-reminder") {
+    await model.update(
+      { invoiceDate: new Date() },
+      { where: { id: req.params?.orderId } }
+    );
+    sentPaymentInvoiceEvent({ orderId, orderType });
+  } else if (emailType == "order-dispatch") {
+    orderDispatchEvent({ orderId, orderType });
+  } else if (emailType == "order-shipped") {
+    orderShippedEvent({ orderId, orderType });
+  } else if (emailType == "order-ship-supplier") {
+    supplierNewOrderEvent({ orderId, orderType });
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {},
+  });
+});
 
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const model = req.body?.order?.partnerOrderId ? partnerOrder : order;

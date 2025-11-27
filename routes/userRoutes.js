@@ -6,8 +6,9 @@ const manageOrderController = require("../controllers/admin/manageOrderControlle
 const productController = require("../controllers/admin/productController");
 const customerController = require("../controllers/admin/customerController");
 const machineController = require("../controllers/admin/machineController");
-const Authorization = require("../middlewares/protect");
+const machineSubController = require("../controllers/customer/machineSubController");
 
+const Authorization = require("../middlewares/protect");
 const router = express.Router();
 
 router.get(`/product/:userId`, productController.getAllProductsUser);
@@ -27,7 +28,12 @@ router.post("/throw-notification", orderController.notificationTesting);
 router.post("/sync-customer-to-stripe", orderController.createStripeCustomers);
 router.post("/sheet-upload", orderController.SheetUplod);
 router.get(`/product`, productController.getAllProducts);
-
+router.post(
+  "/coffee-machine/contact",
+  machineSubController.coffeeMachineContact
+);
+router.get("/coffee-machine", machineController.getAllMachines);
+router.get("/coffee-machine/:id", machineController.getMachines);
 router.use(Authorization.protect);
 
 router.post("/book-order/:id", orderController.bookOrder);
@@ -43,7 +49,5 @@ router.get("/address/view-all", profileController.getAllAddress);
 // router.get('/product', profileController.productController);
 router.get(`/product`, productController.getAllProducts);
 router.get("/view-customer-detail/:id", customerController.customerDetail);
-router.get("/coffee-machine", machineController.getAllMachines);
-router.get("/coffee-machine/:id", machineController.getMachines);
 
 module.exports = router;

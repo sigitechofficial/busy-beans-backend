@@ -472,6 +472,7 @@ const localPartnerOrder = async ({ orderId }) => {
       include: [
         {
           model: address,
+          require: false,
           attributes: {
             exclude: [
               "createdAt",
@@ -485,11 +486,14 @@ const localPartnerOrder = async ({ orderId }) => {
         {
           model: partnerOrderItem,
           attributes: itemAttributes,
+          require: false,
         },
         {
           model: salesRep,
+          require: false,
           include: {
             model: billingAddress,
+            require: false,
             attributes: {
               exclude: [
                 "createdAt",
