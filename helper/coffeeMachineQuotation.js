@@ -5,12 +5,11 @@ const { attachments } = require("./attactments");
 const attachment = attachments();
 const { transporter } = require("./transpoter");
 let Footer = require("./footer");
-let Header = require("./header");
+let { header } = require("./header");
 
 module.exports = async function ({ data }) {
   try {
     let footer = await Footer();
-    let header = await Header();
 
     // Extract data fields
     const {

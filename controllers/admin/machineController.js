@@ -1,4 +1,4 @@
-const { coffeeMachine } = require("../../models");
+const { coffeeMachine, machineQuery } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
@@ -11,6 +11,14 @@ exports.createMachines = factory.createOne(coffeeMachine);
 exports.updateMachines = factory.updateOne(coffeeMachine);
 exports.deleteMachines = factory.softdelete(coffeeMachine);
 
+exports.coffeeMachineQuries = catchAsync(async (req, res, next) => {
+  const result = await machineQuery.findAll({});
+
+  res.status(200).json({
+    status: "success",
+    data: { result },
+  });
+});
 // exports.Add = catchAsync(async (req, res, next) => {
 //   const exist = await order.findOne({
 //     where: {

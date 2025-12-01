@@ -1,18 +1,18 @@
-const { account } = require('../models'); // adjust path to your models
+const { account } = require("../models"); // adjust path to your models
 
 function buildAddress({ address, city, state, zipCode, country }) {
-  return [address, city, state, zipCode, country].filter(Boolean).join(', ');
+  return [address, city, state, zipCode, country].filter(Boolean).join(", ");
 }
 
 function formatSupportNumber(code, number) {
-  return [code, number].filter(Boolean).join(' ');
+  return [code, number].filter(Boolean).join(" ");
 }
 
 function generateFooterHtml({
-  address = '',
-  copyRight = 'Copyright &copy; 2025 Busy Bean Coffee, Inc.',
-  supportEmail = '',
-  supportNumber = '',
+  address = "",
+  copyRight = "Copyright &copy; 2025 Busy Bean Coffee, Inc.",
+  supportEmail = "",
+  supportNumber = "",
 }) {
   return `
   <tr>
@@ -79,15 +79,15 @@ function generateFooterHtml({
 async function footer() {
   const adm = await account.findOne({
     attributes: [
-      'email',
-      'supportEmail',
-      'phoneNumber',
-      'countryCode',
-      'address',
-      'city',
-      'state',
-      'zipCode',
-      'country',
+      "email",
+      "supportEmail",
+      "phoneNumber",
+      "countryCode",
+      "address",
+      "city",
+      "state",
+      "zipCode",
+      "country",
     ],
   });
 
@@ -98,7 +98,7 @@ async function footer() {
 
   return generateFooterHtml({
     address,
-    supportEmail: adm.supportEmail || adm.email || '',
+    supportEmail: adm.supportEmail || adm.email || "",
     supportNumber,
   });
 }

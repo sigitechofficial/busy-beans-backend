@@ -1,9 +1,9 @@
 const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
-  const MachineQuery = sequelize.define(
-    "MachineQuery",
-    { 
+  const machineQuery = sequelize.define(
+    "machineQuery",
+    {
       machineId: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -46,6 +46,10 @@ module.exports = (sequelize) => {
       phoneNumber: {
         type: DataTypes.STRING,
       },
+      status: {
+        type: DataTypes.ENUM("pending", "approve", "reject"),
+        defaultValue: "pending",
+      },
     },
     {
       tableName: "machineQueries",
@@ -53,5 +57,5 @@ module.exports = (sequelize) => {
     }
   );
 
-  return MachineQuery;
+  return machineQuery;
 };

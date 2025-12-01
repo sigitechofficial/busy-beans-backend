@@ -702,6 +702,8 @@ router.post(
   patnerOrderController.pullPartnerOrderPayment
 );
 
+router.get("/coffee-machine/requests", machineController.coffeeMachineQuries);
+
 router
   .route("/coffee-machine")
   .get(machineController.getAllMachines) // For fetching a product by ID
