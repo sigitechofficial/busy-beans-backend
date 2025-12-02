@@ -80,7 +80,8 @@ module.exports = async function ({ email, data, invoice }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ["sigidevelopers@gmail.com", `${email}`], //`${email}` list of receivers
+      to: [email], // main recipient(s)
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `We’ve Received Your Payment for Invoice #${data?.invoiceNumber || ""} – Thank You!`, // Subject line
       replyTo: data?.patnerEmail || "info@busybeancoffee.com",
       attachments: emailAttachments,

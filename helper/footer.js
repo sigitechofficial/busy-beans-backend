@@ -1,7 +1,9 @@
 const { account } = require("../models"); // adjust path to your models
 
 function buildAddress({ address, city, state, zipCode, country }) {
-  return [address, city, state, zipCode, country].filter(Boolean).join(", ");
+  return [address, city, `${state} ${zipCode}`, country]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function formatSupportNumber(code, number) {

@@ -50,6 +50,10 @@ module.exports = (sequelize) => {
         type: DataTypes.ENUM("pending", "approve", "reject"),
         defaultValue: "pending",
       },
+      requestType: {
+        type: DataTypes.ENUM("purchase", "subscription"),
+        defaultValue: "purchase",
+      },
     },
     {
       tableName: "machineQueries",

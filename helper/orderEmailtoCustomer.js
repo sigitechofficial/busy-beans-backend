@@ -61,7 +61,8 @@ module.exports = async function ({
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ["sigidevelopers@gmail.com", email], //`${email}` list of receivers
+      to: [email], // main recipient(s)
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `Your Busy Beans Coffee Order #${data.id} Has Been Confirmed`, // Subject line
       attachments: attachment.footer,
       replyTo: data?.patnerEmail || "info@busybeancoffee.com",

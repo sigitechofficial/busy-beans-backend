@@ -98,11 +98,12 @@ Need help or want a custom order? Just reply to this email or call us!`
     ? `Payment Reminder: Complete Payment for Order ${data.id}`
     : `$${data.totalBill} due by ${dueDate} for ${data?.invoiceNumber || ""}`;
   items = items.join("");
-  email.push("sigidevelopers@gmail.com");
+  //   email.push("sigidevelopers@gmail.com");
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
+      to: email, // main recipient(s)
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: data?.invoiceReminder
         ? `Payment Reminder: Complete Payment for Invoice ${data?.invoiceNumber || ""}`
         : `Your Invoice ${data?.invoiceNumber || ""}`, // Subject line

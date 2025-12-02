@@ -1,14 +1,14 @@
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const fs = require("fs");
+const path = require("path");
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
-const { transporter } = require('./transpoter');
-let Footer = require('./footer');
-const generateFooterHtml = require('./footerLocalpatner');
-const { header } = require('./header');
-const { emailDateFormate } = require('../utils/emailDateFormate');
+const { attachments } = require("./attactments");
+const { transporter } = require("./transpoter");
+let Footer = require("./footer");
+const generateFooterHtml = require("./footerLocalpatner");
+const { header } = require("./header");
+const { emailDateFormate } = require("../utils/emailDateFormate");
 
 // async function downloadPDF(pdfUrl, outputPath) {
 //   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
@@ -16,7 +16,7 @@ const { emailDateFormate } = require('../utils/emailDateFormate');
 // }
 
 module.exports = async function ({ email, data, invoice }) {
-  console.log('ðŸš€ ~ data:', data);
+  console.log("ðŸš€ ~ data:", data);
   //will use from env BASE URL
   let footer = await Footer();
   const lcoalPatner = data?.salesRep;
@@ -33,7 +33,7 @@ module.exports = async function ({ email, data, invoice }) {
   data?.items.forEach((ele) => {
     let temp = `
             <tr>
-              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''} </td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ""} </td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
@@ -43,16 +43,17 @@ module.exports = async function ({ email, data, invoice }) {
     return temp;
   });
 
-  items = items.join('');
+  items = items.join("");
   const on = emailDateFormate(data?.on);
-  email.push('sigidevelopers@gmail.com');
+  //   email.push("sigidevelopers@gmail.com");
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: email, //`${email}` list of receivers
+      to: email, // main recipient(s)
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `Busy Bean Coffee Update: Order #${data.id} Has Been Shipped.`, // Subject line
       attachments: attachments().footer,
-      replyTo: data?.patnerEmail || 'noreply@busybeancoffee.com',
+      replyTo: data?.patnerEmail || "noreply@busybeancoffee.com",
       html: `<!DOCTYPE html>
   <html lang="en">
   <head>
@@ -134,15 +135,15 @@ module.exports = async function ({ email, data, invoice }) {
          <span style="font-weight: 600">Order ID:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.id}</span><br />
           <span style="font-weight: 600">Po Number:</span>
-          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ''}</span><br />
+          <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ""}</span><br />
           <span style="font-weight: 600">Order Date:</span>
           <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
           <span style="font-weight: 600">Company Name:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName}</span><br />
            <span style="font-weight: 600">Shipping Company:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.shippingCompany || ""}</span><br />
           <span style="font-weight: 600">Tracking Number:</span>
-          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ''}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.6)">${data?.trackingNumber || ""}</span><br />
         </td> 
       </tr>
        
@@ -197,6 +198,6 @@ module.exports = async function ({ email, data, invoice }) {
       } else {
         console.log(info);
       }
-    },
+    }
   );
 };

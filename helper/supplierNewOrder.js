@@ -1,12 +1,12 @@
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
+const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require('./transpoter');
-let Footer = require('./footer');
-const generateFooterHtml = require('./footerLocalpatner');
-const { emailDateFormate } = require('../utils/emailDateFormate');
+const { transporter } = require("./transpoter");
+let Footer = require("./footer");
+const generateFooterHtml = require("./footerLocalpatner");
+const { emailDateFormate } = require("../utils/emailDateFormate");
 
 module.exports = async function ({ email, data }) {
   let footer = await Footer();
@@ -22,7 +22,7 @@ module.exports = async function ({ email, data }) {
     });
   }
 
-  console.log('🚀 ~ footer:', email);
+  console.log("🚀 ~ footer:", email);
   const addressParts = [
     data?.address?.companyaddress,
     data?.address?.addressLineOne,
@@ -34,18 +34,18 @@ module.exports = async function ({ email, data }) {
   ];
 
   const DeliveryAddress = addressParts
-    .filter((part) => part && part.trim() !== '') // remove null/undefined/empty strings
-    .join(', ')
-    .concat('.');
+    .filter((part) => part && part.trim() !== "") // remove null/undefined/empty strings
+    .join(", ")
+    .concat(".");
 
   let items = [];
   data?.items.forEach((ele) => {
-    if (ele.type == 'product') {
+    if (ele.type == "product") {
       let temp = `
             <tr>
-              <td style="padding: 10px;">${ele.supplierSku || ''}</td>
-              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
-              <td style="padding: 10px;">${ele.qty || ''}</td>
+              <td style="padding: 10px;">${ele.supplierSku || ""}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ""}</td>
+              <td style="padding: 10px;">${ele.qty || ""}</td>
             </tr>
             `;
       temp = items.push(temp);
@@ -53,35 +53,36 @@ module.exports = async function ({ email, data }) {
     }
   });
 
-  items = items.join('');
+  items = items.join("");
   const on = emailDateFormate(data?.on);
   const htmlSnipit = `
   <span style="color: #161616ff; font-weight: 600">Deliver To</span><br>
-  ${data?.companyName ? `<span style="margin: 0; color:black;">${data.companyName}</span><br>` : ''}
-  ${data?.customerName ? `<span style="margin: 0; color:black;">${data.customerName}</span><br>` : ''}
-  ${data?.address?.companyaddress ? `<span style="margin: 0; color:black;">${data.address.companyaddress}</span><br>` : ''}
-  ${data?.address?.addressLineOne ? `<span style="margin: 0; color:black;">${data.address.addressLineOne}</span><br>` : ''}
-  ${data?.address?.addressLineTwo ? `<span style="margin: 0; color:black;">${data.address.addressLineTwo}</span><br>` : ''}
+  ${data?.companyName ? `<span style="margin: 0; color:black;">${data.companyName}</span><br>` : ""}
+  ${data?.customerName ? `<span style="margin: 0; color:black;">${data.customerName}</span><br>` : ""}
+  ${data?.address?.companyaddress ? `<span style="margin: 0; color:black;">${data.address.companyaddress}</span><br>` : ""}
+  ${data?.address?.addressLineOne ? `<span style="margin: 0; color:black;">${data.address.addressLineOne}</span><br>` : ""}
+  ${data?.address?.addressLineTwo ? `<span style="margin: 0; color:black;">${data.address.addressLineTwo}</span><br>` : ""}
   ${
     data?.address?.town || data?.address?.state || data?.address?.zipCode
       ? `
     <span style="margin: 0; color:black;">
-      ${data.address.town || ''} ${data.address.state || ''} ${data.address.zipCode || ''}
+      ${data.address.town || ""} ${data.address.state || ""} ${data.address.zipCode || ""}
     </span><br>`
-      : ''
+      : ""
   }
-  ${data?.address?.country ? `<span style="margin: 0; color:black;">${data.address.country}</span><br>` : ''}
-  ${data?.countryCode && data?.phoneNumber ? `<span style="margin: 0; color:black;">Phone: ${data.countryCode}${data.phoneNumber}</span><br>` : ''}
-  ${on ? `<span style="margin-top: 20px; color:black;">Dispatched on ${on}</span>` : ''}
+  ${data?.address?.country ? `<span style="margin: 0; color:black;">${data.address.country}</span><br>` : ""}
+  ${data?.countryCode && data?.phoneNumber ? `<span style="margin: 0; color:black;">Phone: ${data.countryCode}${data.phoneNumber}</span><br>` : ""}
+  ${on ? `<span style="margin-top: 20px; color:black;">Dispatched on ${on}</span>` : ""}
 `;
 
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      to: [email], // main recipient(s)
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `${hiSupplierName}, You’ve Received a New Order #${data.id} to Fulfill`, // Subject line
       attachments: attachment.footer,
-      replyTo: data?.patnerEmail || 'info@busybeancoffee.com',
+      replyTo: data?.patnerEmail || "info@busybeancoffee.com",
       html: `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -221,6 +222,6 @@ module.exports = async function ({ email, data }) {
       } else {
         console.log(info);
       }
-    },
+    }
   );
 };

@@ -67,7 +67,7 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
   if (emailType == "order-creation") {
     orderEvents({ orderId, orderType });
   } else if (emailType == "paid-invoice") {
-    sentPaymentInvoiceEvent({ orderId, orderType });
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId, orderType });
   } else if (emailType == "invoice-sent" || emailType == "invoice-reminder") {
     await model.update(
       { invoiceDate: new Date() },
@@ -252,6 +252,39 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   if (req.params.id) condition.id = req.params.id;
 
   console.log("🚀 ~ condition:", condition);
+
+  if (req?.params?.qbo == "not-synced") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
+    } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceIdPartner = { [Op.or]: [null, ""] };
+    }
+    condition[Op.or] = [
+      { invoiceDate: { [Op.ne]: null } },
+      { paymentStatus: "done" },
+    ];
+  } else if (req?.params?.qbo == "synced") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceId = { [Op.ne]: null };
+    } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceIdPartner = { [Op.ne]: null };
+    }
+  } else if (req.query.qbo == "unsynced-paid") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceId = { [Op.ne]: null };
+      condition.quickBooksPaymentId = { [Op.or]: [null, ""] };
+    } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceIdPartner = { [Op.ne]: null };
+      condition.quickBooksPaymentIdPartner = { [Op.or]: [null, ""] };
+    }
+    condition.paymentStatus = "done";
+  } else if (req.query.qbo == "synced-paid") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksPaymentId = { [Op.ne]: null };
+    } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksPaymentIdPartner = { [Op.ne]: null };
+    }
+  }
   // Build API features (filter, sort, fields, pagination)
   const features = new APIFeatures(order, req.query)
     .filter()

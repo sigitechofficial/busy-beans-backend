@@ -19,7 +19,10 @@ module.exports = async function ({ email, data, invoice }) {
   //will use from env BASE URL
   let footer = await Footer();
 
+  console.log("🚀 ~ data?.on:", data?.on);
+  console.log("🚀 ~ data?.createdAt:", data?.createdAt);
   const on = emailDateFormate(data?.on || data?.createdAt);
+  console.log("🚀 ~ on:", on);
   console.log("__dirname:", __dirname);
 
   const folderPath = path.join(__dirname, "..", "public", "invoicePDFs");
@@ -69,7 +72,8 @@ module.exports = async function ({ email, data, invoice }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ["sigidevelopers@gmail.com", email], //`${email}` list of receivers
+      to: [email], // main recipient(s)
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `Busy Bean Coffee Invoice #${data?.invoiceNumber || ""} Payment Completed`, // Subject line
       replyTo: data.email,
       attachments: emailAttachments,
@@ -155,7 +159,7 @@ module.exports = async function ({ email, data, invoice }) {
           <span style="font-weight: 600">Po Number:</span>
           <span style="color: #54a24a; font-weight: 600">${data?.poNumber || ""}</span><br />
           <span style="font-weight: 600">Order Date:</span>
-          <span style="color: rgba(0, 0, 0, 0.7)">${on}</span><br />
+          <span style="color: rgba(0, 0, 0, 0.7)">${on || data.on}</span><br />
           <span style="font-weight: 600">Company Name:</span>
           <span style="color: rgba(0, 0, 0, 0.6)">${data?.companyName || ""}</span><br />
            <span style="font-weight: 600">Shipping Company:</span>

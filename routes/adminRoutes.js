@@ -265,6 +265,12 @@ router
 //! Order Management
 
 router.get("/orders", manageOrderController.allOrder);
+
+router.get(
+  "/quickbooks-customer-order-management/:qbo",
+  manageOrderController.allOrder
+);
+
 router.post(
   "/order-management/send-invoice/:orderId",
   manageOrderController.sendInvoice
@@ -666,6 +672,10 @@ router.post(
 );
 
 router.get("/partner-order/orders-list", patnerOrderController.allPartnerOrder);
+router.get(
+  "/quickbooks-partner-order-management/:qbo",
+  patnerOrderController.allPartnerOrder
+);
 
 router.get(
   "/partner-order/order-details/:id",

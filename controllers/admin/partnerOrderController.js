@@ -235,7 +235,6 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
 
 exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
-
   if (
     req.user.entity == "adminEmployee" ||
     req.user.entity == "partnerEmployee"
@@ -255,6 +254,29 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   // Get the base query options (where, limit, offset, order, etc.)
   const queryOptions = features.getQuery();
 
+  if (req?.params?.qbo == "not-synced") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
+    }
+    condition[Op.or] = [
+      { invoiceDate: { [Op.ne]: null } },
+      { paymentStatus: "done" },
+    ];
+  } else if (req?.params?.qbo == "synced") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceId = { [Op.ne]: null };
+    }
+  } else if (req.query.qbo == "unsynced-paid") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksInvoiceId = { [Op.ne]: null };
+      condition.quickBooksPaymentId = { [Op.or]: [null, ""] };
+    }
+    condition.paymentStatus = "done";
+  } else if (req.query.qbo == "synced-paid") {
+    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      condition.quickBooksPaymentId = { [Op.ne]: null };
+    }
+  }
   // Merge manual filter conditions
   queryOptions.where = { ...(queryOptions.where || {}), ...condition };
 
