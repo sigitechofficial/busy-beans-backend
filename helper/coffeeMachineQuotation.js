@@ -13,19 +13,30 @@ module.exports = async function ({ data }) {
 
     // Extract data fields
     const {
-      name,
-      phoneNumber,
+      contactName,
+      contactPhone,
+      contactEmail,
       addressLineOne,
       addressLineTwo,
       city,
       state,
       country,
       zipCode,
-      companyName,
+      company,
+      role,
+      type,
+      leadSource,
+      preferredContact,
+      businessType,
+      snapshotType,
+      snapshotUseCase,
+      snapshotVolume,
+      snapshotTimeline,
+      estimatedValue,
       notes,
     } = data;
 
-    const hiUser = `Hi ${name}!`;
+    const hiUser = `Hi ${contactName}!`;
 
     const fullAddress = `${addressLineOne}, ${addressLineTwo}, ${city}, ${state}, ${country}, ${zipCode}`;
 
@@ -88,7 +99,7 @@ module.exports = async function ({ data }) {
                     margin-bottom: 8px;
                   "
                 >
-                  Hi ${name}!
+                  Hi ${contactName}!
                 </p>
                 <p
                   style="
@@ -124,10 +135,20 @@ module.exports = async function ({ data }) {
                   "
                 >
                   <strong>Machine:</strong> ${data?.machineName}<br />
-                  <strong>Name:</strong> ${name}<br />
-                  <strong>Company:</strong> ${companyName || "N/A"}<br />
-                  <strong>Phone:</strong> ${phoneNumber}<br />
+                  <strong>Type:</strong> ${type || "N/A"}<br />
+                  <strong>Contact Name:</strong> ${contactName}<br />
+                  ${role ? `<strong>Role:</strong> ${role}<br />` : ""}
+                  <strong>Company:</strong> ${company || "N/A"}<br />
+                  <strong>Email:</strong> ${contactEmail}<br />
+                  <strong>Phone:</strong> ${contactPhone}<br />
+                  <strong>Preferred Contact:</strong> ${preferredContact || "N/A"}<br />
                   <strong>Address:</strong> ${fullAddress}<br />
+                  ${businessType ? `<strong>Business Type:</strong> ${businessType}<br />` : ""}
+                  ${leadSource ? `<strong>Lead Source:</strong> ${leadSource}<br />` : ""}
+                  ${snapshotUseCase ? `<strong>Use Case:</strong> ${snapshotUseCase}<br />` : ""}
+                  ${snapshotVolume ? `<strong>Volume:</strong> ${snapshotVolume}<br />` : ""}
+                  ${snapshotTimeline ? `<strong>Timeline:</strong> ${snapshotTimeline}<br />` : ""}
+                  ${estimatedValue ? `<strong>Estimated Value:</strong> ${estimatedValue}<br />` : ""}
                   <strong>Notes/Requirements:</strong> ${notes || "None"}
                 </p>
 

@@ -1,4 +1,4 @@
-const { coffeeMachine, machineQuery } = require("../../models");
+const { coffeeMachine, Lead, Logs } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
@@ -8,7 +8,7 @@ const coffeeMachineQuatationEmailCustomer = require("../../helper/coffeeMachineQ
 
 exports.coffeeMachineContact = catchAsync(async (req, res, next) => {
   console.log("🚀 ~~~~~~~~ :", req?.body);
-  await machineQuery.create(req?.body);
+  await Lead.create(req?.body);
   coffeeMachineQuatationEmailCustomer({ data: req?.body });
   res.status(200).json({
     status: "success",

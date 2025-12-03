@@ -7,6 +7,7 @@ const productController = require("../controllers/admin/productController");
 const customerController = require("../controllers/admin/customerController");
 const machineController = require("../controllers/admin/machineController");
 const machineSubController = require("../controllers/customer/machineSubController");
+const leadController = require("../controllers/admin/leadController");
 
 const Authorization = require("../middlewares/protect");
 const router = express.Router();
@@ -34,6 +35,7 @@ router.post(
 );
 router.get("/coffee-machine", machineController.getAllMachines);
 router.get("/coffee-machine/:id", machineController.getMachines);
+router.post("/create-lead", leadController.createLead);
 router.use(Authorization.protect);
 
 router.post("/book-order/:id", orderController.bookOrder);
