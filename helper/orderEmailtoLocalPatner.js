@@ -1,17 +1,17 @@
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
+const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require('./transpoter');
-let Footer = require('./footer');
-const { emailDateFormate } = require('../utils/emailDateFormate');
-const { header } = require('./header');
+const { transporter } = require("./transpoter");
+let Footer = require("./footer");
+const { emailDateFormate } = require("../utils/emailDateFormate");
+const { header } = require("./header");
 
 module.exports = async function ({
   email,
   data,
-  satge = 'Confirmed',
+  satge = "Confirmed",
   invoice,
 }) {
   let footer = await Footer();
@@ -25,15 +25,15 @@ module.exports = async function ({
     data?.address?.country,
   ];
   const DeliveryAddress = addressParts
-    .filter((part) => part && part.trim() !== '') // remove null/undefined/empty strings
-    .join(', ')
-    .concat('.');
+    .filter((part) => part && part.trim() !== "") // remove null/undefined/empty strings
+    .join(", ")
+    .concat(".");
 
   let items = [];
   data?.items.forEach((ele) => {
     let temp = `
              <tr>
-              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ''}</td>
+              <td style="padding: 10px;">${ele.product || ele.productName} ${ele.grind || ""}</td>
               <td style="padding: 10px;">${ele.qty}</td>
               <td style="padding: 10px;">$${parseFloat((ele.price / ele.qty).toFixed(2))}</td>
               <td style="padding: 10px;">$${ele?.price}</td>
@@ -44,11 +44,12 @@ module.exports = async function ({
   });
 
   const on = emailDateFormate(data?.on);
-  items = items.join('');
+  items = items.join("");
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', email], //`${email}` list of receivers
+      to: [email], // main recipient(s)
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `${data?.companyName} Just Placed an Order – #${data.id}`, // Subject line
       attachments: attachment.footer,
       replyTo: data?.email,
@@ -193,6 +194,6 @@ module.exports = async function ({
       } else {
         console.log(info);
       }
-    },
+    }
   );
 };

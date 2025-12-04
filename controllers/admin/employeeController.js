@@ -145,6 +145,7 @@ exports.deleteEmployee = async (req, res, next) => {
     req.user?.entity == "admin" || req.user?.entity == "adminEmployee"
       ? "adminEmployee"
       : "partnerEmployee";
+      
   deleteDeviceTokenSingle({
     id: emp?.id,
     entity: entity,

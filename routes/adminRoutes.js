@@ -16,6 +16,7 @@ const dashboardsController = require("../controllers/admin/dashboardsController"
 const shippingCompanyController = require("../controllers/admin/shippingCompanyController");
 const employeeController = require("../controllers/admin/employeeController");
 const adminController = require("../controllers/admin/adminController");
+const machineController = require("../controllers/admin/machineController");
 
 const patnerOrderController = require("../controllers/admin/partnerOrderController");
 
@@ -32,6 +33,11 @@ const router = express.Router();
 router.post(
   "/order-management/fetch-invoice/:orderId",
   manageOrderController.fetchInvoice
+);
+
+router.post(
+  "/order-management/email-helper",
+  manageOrderController.emailHelper
 );
 
 router.post(
@@ -207,6 +213,20 @@ const salesRepImage = multer.diskStorage({
   },
 });
 
+const machineImage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const destinationPath = "./public/machines";
+
+    // Call the function to create the destination directory
+    createDestinationDirectory(destinationPath, cb);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `sales-rep-${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
+const uploadMachineImage = multer({
+  storage: machineImage,
+});
 const uploadProductImage = multer({
   storage: productsImage,
 });
@@ -245,6 +265,12 @@ router
 //! Order Management
 
 router.get("/orders", manageOrderController.allOrder);
+
+router.get(
+  "/quickbooks-customer-order-management/:qbo",
+  manageOrderController.allOrder
+);
+
 router.post(
   "/order-management/send-invoice/:orderId",
   manageOrderController.sendInvoice
@@ -646,6 +672,10 @@ router.post(
 );
 
 router.get("/partner-order/orders-list", patnerOrderController.allPartnerOrder);
+router.get(
+  "/quickbooks-partner-order-management/:qbo",
+  patnerOrderController.allPartnerOrder
+);
 
 router.get(
   "/partner-order/order-details/:id",
@@ -681,4 +711,19 @@ router.post(
   "/partner-order/pull-payment-from-bank/:partnerOrderId",
   patnerOrderController.pullPartnerOrderPayment
 );
+
+router.get("/coffee-machine/requests", machineController.coffeeMachineQuries);
+
+router
+  .route("/coffee-machine")
+  .get(machineController.getAllMachines) // For fetching a product by ID
+  .post(uploadMachineImage.single("image"), machineController.createMachines); // For deleting a product by ID
+
+// Category by ID routes
+router
+  .route("/coffee-machine/:id")
+  .get(machineController.getMachines) // For fetching a product by ID
+  .delete(machineController.deleteMachines) // For deleting a product by IDWWW
+  .patch(uploadMachineImage.single("image"), machineController.updateMachines); // For updating a product (including image upload);
+
 module.exports = router;

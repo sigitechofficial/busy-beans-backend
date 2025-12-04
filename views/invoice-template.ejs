@@ -132,7 +132,7 @@ function parseDDMMYYYY(val) {
             <%= admin?.companyName || "Busy Bean Coffee Inc." %>
           </div>
           <div style="font-size:14px"><%= admin?.address || "" %></div>
-          <div style="font-size:14px"><%= [admin?.city, admin?.state, admin?.zipCode].filter(Boolean).join(" ") %></div>
+          <div style="font-size:14px"><%= [`${admin?.city},`, admin?.state, admin?.zipCode].filter(Boolean).join(" ") %></div>
           <div style="font-size:14px"><%= admin?.country || "" %></div>
           <div style="font-size:14px"><%= formatUSPhone(admin?.phoneNumber) || "" %></div>
         <% } %>
@@ -189,7 +189,7 @@ function parseDDMMYYYY(val) {
         <% } else { %>
             <%= admin?.companyName || "Busy Bean Coffee Inc." %><br />
             <%= admin?.address || "" %><br />
-            <%= [admin?.city, admin?.state, admin?.zipCode].filter(Boolean).join(" ") %><br />
+            <%= [`${admin?.city},`, admin?.state, admin?.zipCode].filter(Boolean).join(" ") %><br />
             <%= admin?.country || "" %><br />
             <%= formatUSPhone(admin?.phoneNumber) || "" %><br />
         <% } %>

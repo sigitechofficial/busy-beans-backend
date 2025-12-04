@@ -1,8 +1,8 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
   const item = sequelize.define(
-    'item',
+    "item",
     {
       qty: {
         type: DataTypes.STRING,
@@ -25,7 +25,7 @@ module.exports = (sequelize) => {
       unit: {
         type: DataTypes.STRING,
         allowNull: true,
-        defaultValue: '',
+        defaultValue: "",
       },
       salerCommission: {
         type: DataTypes.DECIMAL(10, 2),
@@ -48,16 +48,16 @@ module.exports = (sequelize) => {
         defaultValue: false,
       },
       type: {
-        type: DataTypes.ENUM('product', 'charges'),
-        defaultValue: 'product',
+        type: DataTypes.ENUM("product", "charges"),
+        defaultValue: "product",
       },
     },
     {
-      tableName: 'items',
+      tableName: "items",
       primaryKey: true,
       autoIncrement: true,
       timestamps: true,
-    },
+    }
   );
 
   return item;

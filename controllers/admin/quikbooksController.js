@@ -20,6 +20,8 @@ const {
   qboCredientials,
   order,
   partnerOrder,
+  account,
+  salesRep,
 } = require("../../models");
 // Common HTTP response helpers
 function httpError(
@@ -35,6 +37,7 @@ function httpSuccess(res, data = null, message = "OK") {
 }
 
 const { encrypt, decrypt } = require("../../utils/encryption");
+const { where } = require("sequelize");
 
 exports.saveQboCredentials = async (req, res) => {
   try {
@@ -150,7 +153,27 @@ exports.authExchange = async (req, res) => {
  */
 exports.ping = async (req, res) => {
   try {
-    const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
+    let ADMIN = await account.findOne({});
+    let condition = {
+      realmId: ADMIN?.currentRealmId,
+      accountId: ADMIN.id,
+    };
+
+    if (
+      req?.user?.entity === "localPartner" ||
+      req?.user?.entity === "partnerEmployee"
+    ) {
+      let localPartner = await salesRep.findOne({
+        where: { id: req?.user?.localPartnerId },
+      });
+      condition = {
+        realmId: localPartner?.currentRealmId,
+        salesRepId: localPartner?.id,
+      };
+    }
+    const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
+      condition,
+    });
     if (!accessToken || !realmId)
       return httpError(res, 401, "QuickBooks not connected.");
     return httpSuccess(res, { realmId }, "QuickBooks connection healthy.");
