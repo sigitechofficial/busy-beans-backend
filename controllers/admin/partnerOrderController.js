@@ -16,6 +16,7 @@ const {
   chequeDetail,
   statuses,
   orderFrequency,
+  account,
 } = require("../../models");
 
 const fs = require("fs");
@@ -600,10 +601,25 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
     output.selfOrder = true;
   }
 
+  const adm = await account.findOne({
+    attributes: [
+      "email",
+      "supportEmail",
+      "phoneNumber",
+      "countryCode",
+      "address",
+      "city",
+      "state",
+      "zipCode",
+      "country",
+    ],
+  });
+
   res.status(200).json({
     status: "success",
     data: {
       order: output,
+      adminAddress: adm,
     },
   });
 });

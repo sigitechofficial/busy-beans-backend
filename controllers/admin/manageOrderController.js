@@ -14,6 +14,7 @@ const {
   orderFrequency,
   userDiscount,
   partnerOrder,
+  account,
 } = require("../../models");
 
 const fs = require("fs");
@@ -64,15 +65,13 @@ const {
 exports.emailHelper = catchAsync(async (req, res, next) => {
   const { orderId, orderType, emailType } = req.body;
 
+  const model = orderType == "local-partner" ? partnerOrder : order;
   if (emailType == "order-creation") {
     orderEvents({ orderId, orderType });
   } else if (emailType == "paid-invoice") {
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId, orderType });
   } else if (emailType == "invoice-sent" || emailType == "invoice-reminder") {
-    await model.update(
-      { invoiceDate: new Date() },
-      { where: { id: req.params?.orderId } }
-    );
+    await model.update({ invoiceDate: new Date() }, { where: { id: orderId } });
     sentPaymentInvoiceEvent({ orderId, orderType });
   } else if (emailType == "order-dispatch") {
     orderDispatchEvent({ orderId, orderType });
@@ -838,10 +837,25 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
 
   importCustomersToQuickBooks({ limitIds: [doc?.user?.id], req });
 
+  const adm = await account.findOne({
+    attributes: [
+      "email",
+      "supportEmail",
+      "phoneNumber",
+      "countryCode",
+      "address",
+      "city",
+      "state",
+      "zipCode",
+      "country",
+    ],
+  });
+
   res.status(200).json({
     status: "success",
     data: {
       order: doc,
+      adminAddress: adm,
     },
   });
 });
@@ -1479,7 +1493,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     parseFloat(input?.order?.vat || 0) +
     parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
 
-  if (placedOrder.invoiceDate) {
+  if (placedOrder.invoiceDate && !input?.order?.emailInvoiceToCustomer) {
     delete input.order.invoiceDate;
   }
   await order.update(input?.order, { where: { id: placedOrder?.id } });

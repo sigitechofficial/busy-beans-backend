@@ -4,6 +4,7 @@ const AppError = require("../../utils/appError");
 const { Op } = require("sequelize");
 const sendCustomerEmail = require("../../helper/coffeeMachineQuotation");
 const sendAdminEmail = require("../../helper/coffeeMachineQuotationAdmin");
+const sendLeadQuotation = require("../../helper/leadQuotation");
 
 /**
  * Controller for managing Leads
@@ -345,6 +346,9 @@ class LeadController {
       );
 
       await transaction.commit();
+
+      // Send quotation email
+      sendLeadQuotation({ lead: lead.toJSON(), quotationAmount: amount });
 
       res.status(200).json({
         success: true,
