@@ -7,7 +7,7 @@ const serverPort = process.env.PORT || 8011;
 const serverHost = process.env.HOST || "127.0.0.1"; // Accept connections from anywhere
 // const serverHost = "192.168.18.21";
 
-const syncDb = 1;
+const syncDb = 0;
 
 if (syncDb) {
   db.sequelize

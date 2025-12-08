@@ -17,6 +17,10 @@ module.exports = (sequelize) => {
         type: DataTypes.TEXT,
         allowNull: false,
       },
+      stageNote: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
       // userId: {
       //   type: DataTypes.INTEGER,
       //   references: {

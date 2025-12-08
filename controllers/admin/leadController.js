@@ -235,11 +235,16 @@ class LeadController {
 
       // Log status change if happened
       if (updates.status && updates.status !== oldStatus) {
+        const logMessage = updates.stageNote
+          ? `Status changed from ${oldStatus} to ${updates.status}. Note: ${updates.stageNote}`
+          : `Status changed from ${oldStatus} to ${updates.status}`;
+
         await LeadLog.create(
           {
             LeadId: lead.id,
             type: "status",
-            message: `Status changed from ${oldStatus} to ${updates.status}`,
+            message: logMessage,
+            stageNote: updates.stageNote || null,
             // userId: req.user ? req.user.id : null,
           },
           { transaction }

@@ -1,7 +1,10 @@
 // services/qboInvoice.js
 const axios = require("axios");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
-const { getOrderWithAssociations } = require("./orderService");
+const {
+  getOrderWithAssociations,
+  getOrdersWithAssociations,
+} = require("./orderService");
 const { updateInvoiceInQuickBooks } = require("./qboInvoiceUpdate");
 const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
 const { order, partnerOrder, account, qboCustomerMap } = require("../models");
@@ -669,8 +672,103 @@ async function createInvoiceFromOrder({
   };
 }
 
+// ---- Bulk Invoice creation ----
+async function createMultipleInvoicesFromOrders({
+  orderIds,
+  orderType = "customer",
+  updateRequest = false,
+}) {
+  console.log("🚀 ~ createMultipleInvoicesFromOrders ~ orderIds:", orderIds);
+  console.log("🚀 ~ createMultipleInvoicesFromOrders ~ orderType:", orderType);
+
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error("orderIds must be a non-empty array");
+  }
+
+  const DBMODEL = orderType === "local-partner" ? PartnerOrder : Order;
+
+  // Fetch all orders at once
+  const orders = await getOrdersWithAssociations({ orderIds, orderType });
+
+  if (!orders || orders.length === 0) {
+    throw new Error(`No orders found for the provided IDs`);
+  }
+
+  console.log(`🚀 ~ Processing ${orders.length} orders for QBO sync`);
+
+  // Get ADMIN account once
+  let ADMIN = await account.findOne({});
+
+  // Initialize results tracking
+  const results = [];
+  let successCount = 0;
+  let failureCount = 0;
+
+  // Loop through each order and process
+  for (const order of orders) {
+    try {
+      console.log(`\n🔄 Processing Order #${order.id}...`);
+
+      // -------------------------------
+      // 🔹 ADMIN SYNC
+      // -------------------------------
+      await handleAdminQboSync({
+        order,
+        orderType,
+        orderId: order.id,
+        ADMIN,
+        DBMODEL,
+        updateRequest,
+      });
+
+      // -------------------------------
+      // 🔹 PARTNER SYNC
+      // -------------------------------
+      await handlePartnerQboSync({
+        order,
+        orderType,
+        orderId: order.id,
+        DBMODEL,
+        updateRequest,
+      });
+
+      // Success
+      results.push({
+        orderId: order.id,
+        status: "success",
+        message: `QuickBooks invoice sync successful for order #${order.id}`,
+      });
+      successCount++;
+      console.log(`✅ Order #${order.id} processed successfully`);
+    } catch (error) {
+      // Failure - log error but continue processing other orders
+      console.error(`❌ Order #${order.id} failed:`, error.message);
+      results.push({
+        orderId: order.id,
+        status: "failed",
+        message: `Failed to sync order #${order.id}`,
+        error: error.message,
+      });
+      failureCount++;
+    }
+  }
+
+  // Return summary
+  const summary = {
+    total: orders.length,
+    successCount,
+    failureCount,
+    results,
+    message: `Bulk invoice sync completed: ${successCount} succeeded, ${failureCount} failed out of ${orders.length} total orders`,
+  };
+
+  console.log("\n📊 Bulk Invoice Sync Summary:", summary);
+  return summary;
+}
+
 module.exports = {
   createInvoiceFromOrder,
+  createMultipleInvoicesFromOrders,
   createPaymentForInvoice,
   mapPaymentMethodName,
   createQboPayment,

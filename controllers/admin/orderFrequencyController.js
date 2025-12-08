@@ -12,6 +12,7 @@ const {
 } = require("../../models");
 
 const catchAsync = require("../../utils/catchAsync");
+
 const AppError = require("../../utils/appError");
 const { nextFrequencyDate } = require("../../utils/nextFrequencyDate");
 const factory = require("../handlerFactory");
