@@ -3,10 +3,14 @@ const { exchangeFromFullUrl } = require("../../services/qboAuthService");
 const {
   importCustomersToQuickBooks,
 } = require("../../services/qboCustomerService");
-const { createInvoiceFromOrder } = require("../../services/qboInvoice");
+const {
+  createInvoiceFromOrder,
+  createMultipleInvoicesFromOrders,
+} = require("../../services/qboInvoice");
 
 const {
   syncPaymentToQuickBooks,
+  syncMultiplePaymentsToQuickBooks,
 } = require("../../services/paymentSyncService");
 const {
   refreshAccessTokenIfNeeded,
@@ -222,6 +226,39 @@ exports.createInvoiceForOrder = async (req, res) => {
 };
 
 /**
+ * POST /qbo/order-invoice/create-multiple
+ * Creates multiple QuickBooks Invoices for given orders
+ */
+exports.createMultipleInvoicesForOrders = async (req, res) => {
+  try {
+    const {
+      orderIds,
+      orderType = "customer",
+      updateRequest = false,
+    } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return httpError(res, 400, "orderIds must be a non-empty array");
+    }
+
+    const result = await createMultipleInvoicesFromOrders({
+      orderIds: orderIds.map((id) => Number(id)),
+      orderType,
+      updateRequest,
+    });
+
+    return httpSuccess(
+      res,
+      result,
+      `Bulk invoice creation completed: ${result.successCount} succeeded, ${result.failureCount} failed out of ${result.total} total orders`
+    );
+  } catch (err) {
+    console.error("[QBO][createMultipleInvoicesForOrders] Error:", err);
+    return httpError(res, 500, err.message);
+  }
+};
+
+/**
  * POST /qbo/order-invoice/update/:orderId
  * Updates existing QuickBooks Invoice when order changes
  */
@@ -259,6 +296,34 @@ exports.syncOrderPayment = async (req, res) => {
     );
   } catch (err) {
     console.error("[QBO][syncOrderPayment] Error:", err.message);
+    return httpError(res, 500, err.message);
+  }
+};
+
+/**
+ * POST /qbo/order-payment/sync-multiple
+ * Syncs multiple order payments to QuickBooks in bulk
+ */
+exports.syncMultipleOrderPayments = async (req, res) => {
+  try {
+    const { orderIds, orderType = "customer" } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return httpError(res, 400, "orderIds must be a non-empty array");
+    }
+
+    const result = await syncMultiplePaymentsToQuickBooks({
+      orderIds: orderIds.map((id) => Number(id)),
+      orderType,
+    });
+
+    return httpSuccess(
+      res,
+      result,
+      `Bulk payment sync completed: ${result.successCount} succeeded, ${result.failureCount} failed out of ${result.total} total orders`
+    );
+  } catch (err) {
+    console.error("[QBO][syncMultipleOrderPayments] Error:", err);
     return httpError(res, 500, err.message);
   }
 };

@@ -6,7 +6,10 @@ const {
 } = require("./qboInvoice");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const { handleQboError } = require("./qboErrorHandler");
-const { getOrderWithAssociations } = require("./orderService");
+const {
+  getOrderWithAssociations,
+  getOrdersWithAssociations,
+} = require("./orderService");
 const {
   order,
   user,
@@ -184,7 +187,139 @@ async function syncPaymentToQuickBooks({ orderId, orderType = "customer" }) {
   }
 }
 
-module.exports = { syncPaymentToQuickBooks };
+/**
+ * Sync multiple order payments to QuickBooks in bulk
+ * @param {Array<number>} orderIds - Array of order IDs to sync payments for
+ * @param {string} orderType - Type of orders: "customer" or "local-partner"
+ * @returns {Object} Summary with success/failure counts and detailed results
+ */
+async function syncMultiplePaymentsToQuickBooks({
+  orderIds,
+  orderType = "customer",
+}) {
+  console.log("🚀 ~ syncMultiplePaymentsToQuickBooks ~ orderIds:", orderIds);
+  console.log("🚀 ~ syncMultiplePaymentsToQuickBooks ~ orderType:", orderType);
+
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error("orderIds must be a non-empty array");
+  }
+
+  try {
+    const ADMIN = await account.findOne({});
+    const MODEL = orderType === "customer" ? order : partnerOrder;
+
+    // Fetch all orders at once
+    const orders = await getOrdersWithAssociations({ orderIds, orderType });
+
+    if (!orders || orders.length === 0) {
+      throw new Error(`No orders found for the provided IDs`);
+    }
+
+    console.log(`🚀 ~ Processing ${orders.length} orders for payment sync`);
+
+    // Initialize results tracking
+    const results = [];
+    let successCount = 0;
+    let failureCount = 0;
+
+    // Loop through each order and process
+    for (const ord of orders) {
+      try {
+        console.log(`\n🔄 Processing Payment for Order #${ord.id}...`);
+
+        // Check if payment sync is needed
+        if (ord.paymentStatus !== "done") {
+          results.push({
+            orderId: ord.id,
+            status: "skipped",
+            message: `Order #${ord.id} payment status is not 'done' (current: ${ord.paymentStatus})`,
+          });
+          continue;
+        }
+
+        // Track if any sync happened
+        let syncOccurred = false;
+
+        // 1) ADMIN PAYMENT SYNC
+        if (
+          ord.adminRealmId &&
+          !ord.quickBooksPaymentId &&
+          ord.quickBooksInvoiceId
+        ) {
+          await syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType });
+          syncOccurred = true;
+          console.log(`✅ Admin payment synced for Order #${ord.id}`);
+        }
+
+        // 2) PARTNER PAYMENT SYNC (only for customer orders)
+        if (
+          orderType === "customer" &&
+          ord.partnerRealmId &&
+          !ord.quickBooksPaymentIdPartner &&
+          ord.quickBooksInvoiceIdPartner
+        ) {
+          await syncPartnerPaymentToQBO({ ord, MODEL });
+          syncOccurred = true;
+          console.log(`✅ Partner payment synced for Order #${ord.id}`);
+        }
+
+        if (syncOccurred) {
+          results.push({
+            orderId: ord.id,
+            status: "success",
+            message: `Payment sync successful for order #${ord.id}`,
+          });
+          successCount++;
+        } else {
+          results.push({
+            orderId: ord.id,
+            status: "skipped",
+            message: `Order #${ord.id} already synced or missing required data`,
+          });
+        }
+
+        console.log(`✅ Order #${ord.id} payment processed successfully`);
+      } catch (error) {
+        // Failure - log error but continue processing other orders
+        console.error(
+          `❌ Order #${ord.id} payment sync failed:`,
+          error.message
+        );
+        results.push({
+          orderId: ord.id,
+          status: "failed",
+          message: `Failed to sync payment for order #${ord.id}`,
+          error: error.message,
+        });
+        failureCount++;
+      }
+    }
+
+    // Return summary
+    const summary = {
+      total: orders.length,
+      successCount,
+      failureCount,
+      skippedCount: results.filter((r) => r.status === "skipped").length,
+      results,
+      message: `Bulk payment sync completed: ${successCount} succeeded, ${failureCount} failed out of ${orders.length} total orders`,
+    };
+
+    console.log("\n📊 Bulk Payment Sync Summary:", summary);
+    return summary;
+  } catch (err) {
+    handleQboError({
+      err,
+      context: `[QBO][BulkPaymentSync] Error in bulk payment sync:`,
+    });
+    throw err;
+  }
+}
+
+module.exports = {
+  syncPaymentToQuickBooks,
+  syncMultiplePaymentsToQuickBooks,
+};
 // async function syncPaymentToQuickBooks({ orderId, orderType = "customer" }) {
 //   console.log("🚀 ~ syncPaymentToQuickBooks ~ orderType:", orderType);
 //   console.log("🚀 ~ syncPaymentToQuickBooks ~ orderId:", orderId);

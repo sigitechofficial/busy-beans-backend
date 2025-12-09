@@ -29,6 +29,11 @@ r.post(
   ctrl.createInvoiceForOrder
 );
 r.post(
+  "/order-invoice/create-multiple",
+
+  ctrl.createMultipleInvoicesForOrders
+);
+r.post(
   "/order-invoice/update/:orderId",
 
   ctrl.updateInvoiceForOrder
@@ -39,6 +44,11 @@ r.post(
   "/order-payment/sync/:orderId",
 
   ctrl.syncOrderPayment
+);
+r.post(
+  "/order-payment/sync-multiple",
+
+  ctrl.syncMultipleOrderPayments
 );
 
 // r.get("/test/income-accounts", async (req, res) => {

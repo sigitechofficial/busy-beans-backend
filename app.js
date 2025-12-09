@@ -18,6 +18,7 @@ const adminRouter = require("./routes/adminRoutes");
 const webhookRoute = require("./routes/webhooks");
 const qboRoutes = require("./routes/qboRoutes");
 const leadRoutes = require("./routes/leadRoutes");
+const subscriptionRouter = require("./routes/subscriptionRoutes");
 
 app.use((req, res, next) => {
   console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
@@ -109,6 +110,7 @@ app.use("/api/v1/users", userRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/leads", leadRoutes);
 app.use("/qbo", qboRoutes);
+app.use("/api/subscription", subscriptionRouter);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });
