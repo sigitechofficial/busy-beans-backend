@@ -110,7 +110,7 @@ app.use("/api/v1/users", userRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/leads", leadRoutes);
 app.use("/qbo", qboRoutes);
-app.use("/api/subscription", subscriptionRouter);
+app.use("/api/v1/subscription", subscriptionRouter);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });

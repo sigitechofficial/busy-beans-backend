@@ -7,8 +7,16 @@ const router = express.Router();
 
 // Protect all routes
 router.use(auth.protect);
-// Restrict to admin and sales-rep (adjust roles as needed)
-router.use(auth.restrictTo("admin", "salesRep", "localPartner"));
+// Restrict to admin, sales-rep, and employees
+router.use(
+  auth.restrictTo(
+    "admin",
+    "salesRep",
+    "localPartner",
+    "adminEmployee",
+    "partnerEmployee"
+  )
+);
 
 router
   .route("/")
@@ -30,5 +38,9 @@ router.post("/:id/site-visit", leadController.scheduleSiteVisit);
 
 router.patch("/:id/won", leadController.markAsWon);
 router.patch("/:id/lost", leadController.markAsLost);
+
+// New endpoints
+router.post("/:id/assign", leadController.assignLead);
+router.get("/:id/logs", leadController.getLeadLogs);
 
 module.exports = router;

@@ -4,8 +4,8 @@ require("./redis_connect");
 const server = require("./app");
 
 const serverPort = process.env.PORT || 8011;
-const serverHost = process.env.HOST || "127.0.0.1"; // Accept connections from anywhere
-// const serverHost = "192.168.18.21";
+// const serverHost = process.env.HOST || "127.0.0.1"; // Accept connections from anywhere
+const serverHost = "192.168.1.116";
 
 const syncDb = 0;
 

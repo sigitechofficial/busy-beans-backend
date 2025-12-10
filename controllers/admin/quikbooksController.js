@@ -226,7 +226,7 @@ exports.createInvoiceForOrder = async (req, res) => {
 };
 
 /**
- * POST /qbo/order-invoice/create-multiple
+ * POST /qbo/order-invoice / create-multiple
  * Creates multiple QuickBooks Invoices for given orders
  */
 exports.createMultipleInvoicesForOrders = async (req, res) => {

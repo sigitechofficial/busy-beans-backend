@@ -267,13 +267,13 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
     }
-  } else if (req.query.qbo == "unsynced-paid") {
+  } else if (req?.params?.qbo == "unsynced-paid") {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
       condition.quickBooksPaymentId = { [Op.or]: [null, ""] };
     }
     condition.paymentStatus = "done";
-  } else if (req.query.qbo == "synced-paid") {
+  } else if (req?.params?.qbo == "synced-paid") {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     }

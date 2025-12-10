@@ -77,6 +77,7 @@ exports.createSubscription = async (req, res) => {
 
     if (existingCustomers.data.length > 0) {
       stripeCustomer = existingCustomers.data[0];
+
       console.log("✅ Using existing Stripe customer:", stripeCustomer.id);
     } else {
       stripeCustomer = await stripe.customers.create({
@@ -86,6 +87,7 @@ exports.createSubscription = async (req, res) => {
           default_payment_method: paymentMethodId,
         },
       });
+
       console.log("✅ Created new Stripe customer:", stripeCustomer.id);
     }
 

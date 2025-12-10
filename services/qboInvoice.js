@@ -428,6 +428,14 @@ async function handleAdminQboSync({
   updateRequest = false,
 }) {
   try {
+    console.log("🚀 ~ handleAdminQboSync ~ ADMIN:", {
+      order,
+      orderType,
+      orderId,
+      ADMIN,
+      DBMODEL,
+      updateRequest,
+    });
     if (ADMIN?.currentRealmId) {
       const adminQboCondition = {
         realmId: ADMIN?.currentRealmId,
@@ -444,7 +452,10 @@ async function handleAdminQboSync({
       const qboCustomerOnAdmin = await qboCustomerMap.findOne({
         where: customerOrPartnerCondition,
       });
-
+      console.log(
+        "🚀 ~ handleAdminQboSync ~ qboCustomerOnAdmin:",
+        qboCustomerOnAdmin?.qboCustomerId
+      );
       if (qboCustomerOnAdmin?.qboCustomerId) {
         order.qboCustomerId = qboCustomerOnAdmin.qboCustomerId;
 

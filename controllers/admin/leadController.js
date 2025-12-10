@@ -1,10 +1,21 @@
-const { Lead, LeadLog, sequelize } = require("../../models");
+const {
+  Lead,
+  LeadLog,
+  salesRep,
+  employee,
+  sequelize,
+} = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const { Op } = require("sequelize");
 const sendCustomerEmail = require("../../helper/coffeeMachineQuotation");
 const sendAdminEmail = require("../../helper/coffeeMachineQuotationAdmin");
 const sendLeadQuotation = require("../../helper/leadQuotation");
+const {
+  createLeadLog,
+  formatLogDetails,
+  extractEntityInfo,
+} = require("../../utils/leadLogger");
 
 /**
  * Controller for managing Leads
@@ -58,9 +69,18 @@ class LeadController {
       limit: parseInt(limit),
       offset: parseInt(offset),
       order,
-      // include: [
-      //   { model: User, as: "owner", attributes: ["id", "name", "email"] }, // Assuming association alias 'owner' or just model
-      // ],
+      include: [
+        {
+          model: salesRep,
+          as: "assignedSalesRep",
+          attributes: ["id", "srName", "email"],
+        },
+        {
+          model: employee,
+          as: "assignedEmployee",
+          attributes: ["id", "name", "email", "employeeOf"],
+        },
+      ],
       distinct: true,
     });
 
@@ -96,8 +116,38 @@ class LeadController {
    * @param {Object} res - Express response object
    */
   getKanbanLeads = catchAsync(async (req, res, next) => {
+    // Role-based filtering
+    const where = {};
+
+    // Admin sees all leads
+    if (req.user?.entity === "admin") {
+      // No filter needed - admin sees all
+    } else if (req.user?.entity === "localPartner") {
+      // Local partner sees leads assigned to them
+      where.salesRepId = req.user.id;
+    } else if (
+      req.user?.entity === "adminEmployee" ||
+      req.user?.entity === "partnerEmployee"
+    ) {
+      // Employees see leads assigned to them
+      where.employeeId = req.user.id;
+    }
+
     const leads = await Lead.findAll({
+      where,
       order: [["createdAt", "DESC"]],
+      include: [
+        {
+          model: salesRep,
+          as: "assignedSalesRep",
+          attributes: ["id", "srName", "email"],
+        },
+        {
+          model: employee,
+          as: "assignedEmployee",
+          attributes: ["id", "name", "email"],
+        },
+      ],
     });
 
     const kanbanData = {
@@ -137,7 +187,7 @@ class LeadController {
   });
 
   /**
-   * Get single lead by ID with logs
+   * Get single lead by ID with logs and assignment details
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
@@ -148,7 +198,24 @@ class LeadController {
       include: [
         {
           model: LeadLog,
-          // include: [{ model: User, attributes: ["id", "name"] }], // Assuming LeadLog belongsTo User
+          order: [["createdAt", "DESC"]],
+        },
+        {
+          model: salesRep,
+          as: "assignedSalesRep",
+          attributes: ["id", "srName", "email", "phoneNumber", "countryCode"],
+        },
+        {
+          model: employee,
+          as: "assignedEmployee",
+          attributes: [
+            "id",
+            "name",
+            "email",
+            "phoneNumber",
+            "countryCode",
+            "employeeOf",
+          ],
         },
       ],
     });
@@ -181,16 +248,16 @@ class LeadController {
 
       const newLead = await Lead.create(leadData, { transaction });
 
-      // Log creation
-      await LeadLog.create(
-        {
-          LeadId: newLead.id,
-          type: "status",
-          message: "Lead created",
-          // userId: req.user ? req.user.id : null,
-        },
-        { transaction }
-      );
+      // Log creation with entity tracking
+      const entityInfo = extractEntityInfo(req.user);
+      await createLeadLog({
+        leadId: newLead.id,
+        action: "created",
+        details: formatLogDetails("created", {}, entityInfo.entityName),
+        user: req.user,
+        type: "status",
+        transaction,
+      });
 
       await transaction.commit();
 
@@ -235,20 +302,31 @@ class LeadController {
 
       // Log status change if happened
       if (updates.status && updates.status !== oldStatus) {
-        const logMessage = updates.stageNote
-          ? `Status changed from ${oldStatus} to ${updates.status}. Note: ${updates.stageNote}`
-          : `Status changed from ${oldStatus} to ${updates.status}`;
-
-        await LeadLog.create(
-          {
-            LeadId: lead.id,
-            type: "status",
-            message: logMessage,
-            stageNote: updates.stageNote || null,
-            // userId: req.user ? req.user.id : null,
-          },
-          { transaction }
-        );
+        const entityInfo = extractEntityInfo(req.user);
+        await createLeadLog({
+          leadId: lead.id,
+          action: "status_changed",
+          details: formatLogDetails(
+            "status_changed",
+            { oldStatus, newStatus: updates.status, note: updates.stageNote },
+            entityInfo.entityName
+          ),
+          user: req.user,
+          type: "status",
+          stageNote: updates.stageNote || null,
+          transaction,
+        });
+      } else {
+        // Log general update
+        const entityInfo = extractEntityInfo(req.user);
+        await createLeadLog({
+          leadId: lead.id,
+          action: "updated",
+          details: formatLogDetails("updated", {}, entityInfo.entityName),
+          user: req.user,
+          type: "update",
+          transaction,
+        });
       }
 
       await transaction.commit();
@@ -290,15 +368,19 @@ class LeadController {
         { transaction }
       );
 
-      await LeadLog.create(
-        {
-          LeadId: lead.id,
-          type: "note",
-          message: `Follow-up scheduled for ${date}. Notes: ${notes}`,
-          // userId: req.user ? req.user.id : null,
-        },
-        { transaction }
-      );
+      const entityInfo = extractEntityInfo(req.user);
+      await createLeadLog({
+        leadId: lead.id,
+        action: "follow_up_scheduled",
+        details: formatLogDetails(
+          "follow_up_scheduled",
+          { date, notes },
+          entityInfo.entityName
+        ),
+        user: req.user,
+        type: "note",
+        transaction,
+      });
 
       await transaction.commit();
 
@@ -340,15 +422,19 @@ class LeadController {
         { transaction }
       );
 
-      await LeadLog.create(
-        {
-          LeadId: lead.id,
-          type: "email",
-          message: `Quotation sent. Amount: ${amount}`,
-          // userId: req.user ? req.user.id : null,
-        },
-        { transaction }
-      );
+      const entityInfo = extractEntityInfo(req.user);
+      await createLeadLog({
+        leadId: lead.id,
+        action: "quotation_sent",
+        details: formatLogDetails(
+          "quotation_sent",
+          { amount },
+          entityInfo.entityName
+        ),
+        user: req.user,
+        type: "email",
+        transaction,
+      });
 
       await transaction.commit();
 
@@ -392,15 +478,19 @@ class LeadController {
         { transaction }
       );
 
-      await LeadLog.create(
-        {
-          LeadId: lead.id,
-          type: "status",
-          message: `Site visit scheduled for ${date}`,
-          // userId: req.user ? req.user.id : null,
-        },
-        { transaction }
-      );
+      const entityInfo = extractEntityInfo(req.user);
+      await createLeadLog({
+        leadId: lead.id,
+        action: "site_visit_scheduled",
+        details: formatLogDetails(
+          "site_visit_scheduled",
+          { date },
+          entityInfo.entityName
+        ),
+        user: req.user,
+        type: "status",
+        transaction,
+      });
 
       await transaction.commit();
 
@@ -439,15 +529,15 @@ class LeadController {
         { transaction }
       );
 
-      await LeadLog.create(
-        {
-          LeadId: lead.id,
-          type: "status",
-          message: "Lead marked as WON",
-          // userId: req.user ? req.user.id : null,
-        },
-        { transaction }
-      );
+      const entityInfo = extractEntityInfo(req.user);
+      await createLeadLog({
+        leadId: lead.id,
+        action: "marked_won",
+        details: formatLogDetails("marked_won", {}, entityInfo.entityName),
+        user: req.user,
+        type: "status",
+        transaction,
+      });
 
       await transaction.commit();
 
@@ -489,15 +579,19 @@ class LeadController {
         { transaction }
       );
 
-      await LeadLog.create(
-        {
-          LeadId: lead.id,
-          type: "status",
-          message: `Lead marked as LOST. Reason: ${reason}`,
-          // userId: req.user ? req.user.id : null,
-        },
-        { transaction }
-      );
+      const entityInfo = extractEntityInfo(req.user);
+      await createLeadLog({
+        leadId: lead.id,
+        action: "marked_lost",
+        details: formatLogDetails(
+          "marked_lost",
+          { reason },
+          entityInfo.entityName
+        ),
+        user: req.user,
+        type: "status",
+        transaction,
+      });
 
       await transaction.commit();
 
@@ -564,6 +658,171 @@ class LeadController {
         conversionRate,
       },
       message: "Lead statistics retrieved successfully",
+    });
+  });
+
+  /**
+   * Assign Lead to SalesRep or Employee
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  assignLead = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { salesRepId, employeeId } = req.body;
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Validate that at least one assignment is provided
+      if (!salesRepId && !employeeId) {
+        await transaction.rollback();
+        return next(
+          new AppError("Either salesRepId or employeeId must be provided", 400)
+        );
+      }
+
+      const lead = await Lead.findByPk(id, { transaction });
+      if (!lead) {
+        await transaction.rollback();
+        return next(new AppError("Lead not found", 404));
+      }
+
+      // Validate salesRep exists if provided
+      let assignedSalesRep;
+      if (salesRepId) {
+        assignedSalesRep = await salesRep.findByPk(salesRepId, { transaction });
+        if (!assignedSalesRep || assignedSalesRep.deleted) {
+          await transaction.rollback();
+          return next(new AppError("Sales Representative not found", 404));
+        }
+      }
+
+      // Validate employee exists if provided
+      let assignedEmployee;
+      if (employeeId) {
+        assignedEmployee = await employee.findByPk(employeeId, { transaction });
+        if (!assignedEmployee || assignedEmployee.deleted) {
+          await transaction.rollback();
+          return next(new AppError("Employee not found", 404));
+        }
+      }
+
+      // Build update object - preserve existing assignments if not explicitly provided
+      const updateData = {
+        assignedBy: req.user?.id || null,
+        assignedAt: new Date(),
+      };
+
+      // Only update salesRepId if explicitly provided in request
+      if (salesRepId !== undefined) {
+        updateData.salesRepId = salesRepId;
+      }
+
+      // Only update employeeId if explicitly provided in request
+      if (employeeId !== undefined) {
+        updateData.employeeId = employeeId;
+      }
+
+      // Update lead assignment
+      await lead.update(updateData, { transaction });
+
+      // Reload lead to get current state
+      await lead.reload({ transaction });
+
+      // Build log message based on what was assigned
+      let logDetails = "";
+      const entityInfo = extractEntityInfo(req.user);
+
+      if (salesRepId && employeeId) {
+        // Both assigned
+        const salesRepName = assignedSalesRep
+          ? assignedSalesRep.srName
+          : "Unknown";
+        const employeeName = assignedEmployee
+          ? assignedEmployee.name
+          : "Unknown";
+        logDetails = `${entityInfo.entityName} assigned lead to ${salesRepName} (Sales Rep) and ${employeeName} (Employee)`;
+      } else if (salesRepId) {
+        // Only sales rep assigned
+        const salesRepName = assignedSalesRep
+          ? assignedSalesRep.srName
+          : "Unknown";
+        logDetails = `${entityInfo.entityName} assigned lead to ${salesRepName} (Sales Representative)`;
+      } else if (employeeId) {
+        // Only employee assigned (preserve existing salesRep if exists)
+        const employeeName = assignedEmployee
+          ? assignedEmployee.name
+          : "Unknown";
+        if (lead.salesRepId) {
+          logDetails = `${entityInfo.entityName} assigned ${employeeName} (Employee) to assist with this lead`;
+        } else {
+          logDetails = `${entityInfo.entityName} assigned lead to ${employeeName} (Employee)`;
+        }
+      }
+
+      // Log assignment
+      await createLeadLog({
+        leadId: lead.id,
+        action: "assigned",
+        details: logDetails,
+        user: req.user,
+        type: "assignment",
+        transaction,
+      });
+
+      await transaction.commit();
+
+      // Reload lead with associations
+      const updatedLead = await Lead.findByPk(id, {
+        include: [
+          {
+            model: salesRep,
+            as: "assignedSalesRep",
+            attributes: ["id", "srName", "email"],
+          },
+          {
+            model: employee,
+            as: "assignedEmployee",
+            attributes: ["id", "name", "email"],
+          },
+        ],
+      });
+
+      res.status(200).json({
+        success: true,
+        data: updatedLead,
+        message: "Lead assigned successfully",
+      });
+    } catch (error) {
+      await transaction.rollback();
+      next(error);
+    }
+  });
+
+  /**
+   * Get Lead Logs/Timeline
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  getLeadLogs = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+
+    const lead = await Lead.findByPk(id);
+    if (!lead) {
+      return next(new AppError("Lead not found", 404));
+    }
+
+    const logs = await LeadLog.findAll({
+      where: { LeadId: id },
+      order: [["createdAt", "DESC"]],
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        leadId: id,
+        logs,
+      },
+      message: "Lead logs retrieved successfully",
     });
   });
 }

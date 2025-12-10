@@ -176,6 +176,32 @@ module.exports = (sequelize) => {
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      // Assignment fields
+      salesRepId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "salesReps",
+          key: "id",
+        },
+      },
+      employeeId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "employees",
+          key: "id",
+        },
+      },
+      assignedBy: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: "ID of the entity who assigned this lead",
+      },
+      assignedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
       // Lost Lead Info
       lostReason: {
         type: DataTypes.ENUM(
@@ -198,8 +224,20 @@ module.exports = (sequelize) => {
   );
 
   Lead.associate = (models) => {
+    // Lead logs
     Lead.hasMany(models.LeadLog);
     models.LeadLog.belongsTo(Lead);
+
+    // Assignment associations
+    Lead.belongsTo(models.salesRep, {
+      foreignKey: "salesRepId",
+      as: "assignedSalesRep",
+    });
+
+    Lead.belongsTo(models.employee, {
+      foreignKey: "employeeId",
+      as: "assignedEmployee",
+    });
   };
 
   return Lead;
