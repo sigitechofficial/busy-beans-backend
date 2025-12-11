@@ -199,6 +199,7 @@ exports.customerReport = catchAsync(async (req, res, next) => {
     attributes: [
       "id",
       "name",
+      "companyName",
       [
         fn(
           "FORMAT",

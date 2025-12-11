@@ -66,7 +66,7 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
   const { orderId, orderType, emailType } = req.body;
 
   const model = orderType == "local-partner" ? partnerOrder : order;
-  if (emailType == "order-creation") {
+  if (emailType == "order-confirmation") {
     orderEvents({ orderId, orderType });
   } else if (emailType == "paid-invoice") {
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId, orderType });
@@ -268,22 +268,26 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceIdPartner = { [Op.ne]: null };
     }
-  } else if (req.query.qbo == "unsynced-paid") {
+  } else if (req.params.qbo == "unsynced-paid") {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+      console.log("🚀 ~ exports.allOrder ~ req.params.qbo:");
       condition.quickBooksInvoiceId = { [Op.ne]: null };
-      condition.quickBooksPaymentId = { [Op.or]: [null, ""] };
+      condition.quickBooksPaymentId = null;
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceIdPartner = { [Op.ne]: null };
       condition.quickBooksPaymentIdPartner = { [Op.or]: [null, ""] };
     }
     condition.paymentStatus = "done";
-  } else if (req.query.qbo == "synced-paid") {
+  } else if (req?.params?.qbo == "synced-paid") {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksPaymentIdPartner = { [Op.ne]: null };
     }
+  } else {
+    condition.type = req.query?.type || "regular-order";
   }
+  console.log("🚀 ~ condition:", condition);
   // Build API features (filter, sort, fields, pagination)
   const features = new APIFeatures(order, req.query)
     .filter()
@@ -743,6 +747,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
     ],
     attributes: [
       "id",
+      "type",
       [
         literal(
           `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`

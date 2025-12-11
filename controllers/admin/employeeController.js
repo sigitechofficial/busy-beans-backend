@@ -145,7 +145,7 @@ exports.deleteEmployee = async (req, res, next) => {
     req.user?.entity == "admin" || req.user?.entity == "adminEmployee"
       ? "adminEmployee"
       : "partnerEmployee";
-      
+
   deleteDeviceTokenSingle({
     id: emp?.id,
     entity: entity,
@@ -154,6 +154,7 @@ exports.deleteEmployee = async (req, res, next) => {
   });
 
   await permission.destroy({ where: { employeeId: emp?.id } });
+
   await emp.destroy();
 
   res.status(200).json({ status: "success", message: "Employee deleted" });
