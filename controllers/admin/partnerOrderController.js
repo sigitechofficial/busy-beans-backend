@@ -277,6 +277,8 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     }
+  } else {
+    condition.type = req.query?.type || "regular-order";
   }
   // Merge manual filter conditions
   queryOptions.where = { ...(queryOptions.where || {}), ...condition };
@@ -527,6 +529,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
     ],
     attributes: [
       "id",
+      "type",
       [
         literal(
           `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`

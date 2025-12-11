@@ -5,16 +5,16 @@ const subscriptionController = require("../controllers/admin/subscriptionControl
 // Create a new subscription
 router.post("/create", subscriptionController.createSubscription);
 
-// Get subscription by ID
+// List all subscriptions (can filter by email or status) - MUST come before /:id
+router.get("/list", subscriptionController.listSubscriptions);
+
+// List all available add-ons - MUST come before /:id
+router.get("/addons", subscriptionController.listAddons);
+
+// Get subscription by ID - MUST come after specific routes
 router.get("/:id", subscriptionController.getSubscription);
 
 // Cancel subscription
 router.post("/:id/cancel", subscriptionController.cancelSubscription);
-
-// List all subscriptions (can filter by email or status)
-router.get("/list", subscriptionController.listSubscriptions);
-
-// List all available add-ons
-router.get("/addons", subscriptionController.listAddons);
 
 module.exports = router;

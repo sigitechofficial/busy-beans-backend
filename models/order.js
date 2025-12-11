@@ -211,6 +211,11 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    type: {
+      type: DataTypes.ENUM("direct-invoice", "regular-order"),
+      allowNull: true,
+      defaultValue: "regular-order",
+    },
   });
 
   // Hook to exclude deletedAt and updatedAt from query results

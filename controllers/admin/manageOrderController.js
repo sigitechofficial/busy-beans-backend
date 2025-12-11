@@ -284,6 +284,8 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksPaymentIdPartner = { [Op.ne]: null };
     }
+  } else {
+    condition.type = req.query?.type || "regular-order";
   }
   console.log("🚀 ~ condition:", condition);
   // Build API features (filter, sort, fields, pagination)
@@ -745,6 +747,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
     ],
     attributes: [
       "id",
+      "type",
       [
         literal(
           `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
