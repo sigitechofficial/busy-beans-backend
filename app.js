@@ -31,10 +31,6 @@ app.set("views", __dirname + "/views");
 const viewRoute = require("./routes/viewRoutes");
 
 app.use("/view", viewRoute);
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send("Something broke!");
-});
 app.use("/webhook", bodyParser.raw({ type: "application/json" }), webhookRoute);
 
 dotenv.config({ path: "./.env" });

@@ -4,6 +4,8 @@ const {
   addon,
   coffeeMachine,
   subscriptionAddon,
+  subscriptionProduct,
+  product,
 } = require("../models");
 const {
   calculateSubscriptionPrice,
@@ -21,9 +23,19 @@ exports.createSubscription = async (req, res) => {
   try {
     const {
       customerEmail,
+      userName,
       paymentMethodId,
+      stripeCustomerId,
       machineId,
-      addonIds = [],
+      machineName,
+      machinePrice,
+      userId,
+      subscriptionDays = 30,
+      products = [],
+      productsTotal = 0,
+      addons = [],
+      addonsTotal = 0,
+      totalAmount,
     } = req.body;
 
     // Validate required fields
@@ -43,10 +55,30 @@ exports.createSubscription = async (req, res) => {
       });
     }
 
-    // 2. Load add-ons
-    let addons = [];
-    if (addonIds.length > 0) {
-      addons = await addon.findAll({
+    // 2. Validate products if provided
+    if (products.length > 0) {
+      const productIds = products.map((p) => p.productId);
+      const foundProducts = await product.findAll({
+        where: {
+          id: productIds,
+          status: true,
+          deleted: false,
+        },
+      });
+
+      if (foundProducts.length !== productIds.length) {
+        return res.status(400).json({
+          success: false,
+          error: "One or more products not found or inactive",
+        });
+      }
+    }
+
+    // 3. Validate addons of type "addon" (with addonId)
+    const addonTypeAddons = addons.filter((a) => a.type === "addon");
+    if (addonTypeAddons.length > 0) {
+      const addonIds = addonTypeAddons.map((a) => a.addonId);
+      const foundAddons = await addon.findAll({
         where: {
           id: addonIds,
           status: true,
@@ -54,7 +86,7 @@ exports.createSubscription = async (req, res) => {
         },
       });
 
-      if (addons.length !== addonIds.length) {
+      if (foundAddons.length !== addonIds.length) {
         return res.status(400).json({
           success: false,
           error: "One or more add-ons not found or inactive",
@@ -62,31 +94,53 @@ exports.createSubscription = async (req, res) => {
       }
     }
 
-    // 3. Calculate total price
-    const pricing = calculateSubscriptionPrice({ machine, addons });
-    const totalInCents = toCents(pricing.total);
+    // 4. Calculate total price
+    const calculatedTotal =
+      totalAmount || machinePrice + productsTotal + addonsTotal;
+    const totalInCents = toCents(calculatedTotal);
 
-    console.log("💰 Subscription Price Breakdown:", pricing);
-
-    // 4. Create or retrieve Stripe customer
-    let stripeCustomer;
-    const existingCustomers = await stripe.customers.list({
-      email: customerEmail,
-      limit: 1,
+    console.log("💰 Subscription Price Breakdown:", {
+      machinePrice,
+      productsTotal,
+      addonsTotal,
+      total: calculatedTotal,
     });
 
-    if (existingCustomers.data.length > 0) {
-      stripeCustomer = existingCustomers.data[0];
-      console.log("✅ Using existing Stripe customer:", stripeCustomer.id);
-    } else {
-      stripeCustomer = await stripe.customers.create({
+    // 5. Create or retrieve Stripe customer
+    let stripeCustomer;
+
+    // If stripeCustomerId is provided, use it
+    if (stripeCustomerId) {
+      try {
+        stripeCustomer = await stripe.customers.retrieve(stripeCustomerId);
+        console.log("✅ Using provided Stripe customer:", stripeCustomer.id);
+      } catch (error) {
+        console.log("⚠️ Provided customer ID not found, creating new customer");
+        stripeCustomer = null;
+      }
+    }
+
+    // If no customer found, search by email or create new
+    if (!stripeCustomer) {
+      const existingCustomers = await stripe.customers.list({
         email: customerEmail,
-        payment_method: paymentMethodId,
-        invoice_settings: {
-          default_payment_method: paymentMethodId,
-        },
+        limit: 1,
       });
-      console.log("✅ Created new Stripe customer:", stripeCustomer.id);
+
+      if (existingCustomers.data.length > 0) {
+        stripeCustomer = existingCustomers.data[0];
+        console.log("✅ Using existing Stripe customer:", stripeCustomer.id);
+      } else {
+        stripeCustomer = await stripe.customers.create({
+          email: customerEmail,
+          name: userName,
+          payment_method: paymentMethodId,
+          invoice_settings: {
+            default_payment_method: paymentMethodId,
+          },
+        });
+        console.log("✅ Created new Stripe customer:", stripeCustomer.id);
+      }
     }
 
     // Attach payment method to customer if not already attached
@@ -101,7 +155,12 @@ exports.createSubscription = async (req, res) => {
       }
     }
 
-    // 5. Create dynamic Stripe price
+    // 6. Create dynamic Stripe price
+    const productDescription =
+      products.length > 0 ? `${products.length} product(s)` : "no products";
+    const addonDescription =
+      addons.length > 0 ? `${addons.length} addon(s)` : "no addons";
+
     const stripePrice = await stripe.prices.create({
       unit_amount: totalInCents,
       currency: "usd",
@@ -110,13 +169,13 @@ exports.createSubscription = async (req, res) => {
       },
       product_data: {
         name: `Subscription for ${machine.name}`,
-        description: `Machine: ${machine.name} + ${addons.length} add-on(s)`,
+        description: `Machine: ${machine.name} + ${productDescription} + ${addonDescription}`,
       },
     });
 
     console.log("✅ Created Stripe price:", stripePrice.id);
 
-    // 6. Create Stripe subscription
+    // 7. Create Stripe subscription
     const stripeSubscription = await stripe.subscriptions.create({
       customer: stripeCustomer.id,
       items: [{ price: stripePrice.id }],
@@ -127,44 +186,72 @@ exports.createSubscription = async (req, res) => {
 
     console.log("✅ Created Stripe subscription:", stripeSubscription.id);
 
-    // 7. Save subscription in database
+    // 8. Save subscription in database
     const newSubscription = await subscription.create({
       customerEmail,
       stripeCustomerId: stripeCustomer.id,
       stripeSubscriptionId: stripeSubscription.id,
       stripePriceId: stripePrice.id,
-      totalPrice: pricing.total,
+      totalPrice: calculatedTotal,
       status: stripeSubscription.status,
       machineId,
+      userId,
+      userName,
+      subscriptionDays,
+      machinePrice: machinePrice || 0,
+      productsTotal: productsTotal || 0,
+      addonsTotal: addonsTotal || 0,
       currentPeriodStart: new Date(
         stripeSubscription.current_period_start * 1000
       ),
       currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
     });
 
-    // 8. Save subscription add-ons
-    if (addons.length > 0) {
-      const subscriptionAddonRecords = addons.map((addon) => ({
+    // 9. Save subscription products
+    if (products.length > 0) {
+      const subscriptionProductRecords = products.map((prod) => ({
         subscriptionId: newSubscription.id,
-        addonId: addon.id,
+        productId: prod.productId,
+        sku: prod.sku,
+        quantity: prod.quantity,
+        unitPrice: prod.unitPrice,
+        totalPrice: prod.totalPrice,
+      }));
+      await subscriptionProduct.bulkCreate(subscriptionProductRecords);
+    }
+
+    // 10. Save subscription add-ons
+    if (addons.length > 0) {
+      const subscriptionAddonRecords = addons.map((addonItem) => ({
+        subscriptionId: newSubscription.id,
+        addonId: addonItem.addonId || null,
+        type: addonItem.type,
+        name: addonItem.name || null,
+        quantity: addonItem.quantity,
+        unitPrice: addonItem.unitPrice,
+        totalPrice: addonItem.totalPrice,
       }));
       await subscriptionAddon.bulkCreate(subscriptionAddonRecords);
     }
 
     console.log("✅ Subscription saved to database:", newSubscription.id);
 
-    // 9. Get client secret for frontend
+    // 11. Get client secret for frontend
     const clientSecret =
       stripeSubscription.latest_invoice?.payment_intent?.client_secret;
 
-    // 10. Return response
+    // 12. Return response
     return res.status(201).json({
       success: true,
       subscriptionId: newSubscription.id,
       stripeSubscriptionId: stripeSubscription.id,
       clientSecret,
-      totalPrice: pricing.total,
-      breakdown: pricing.breakdown,
+      totalPrice: calculatedTotal,
+      breakdown: {
+        machinePrice,
+        productsTotal,
+        addonsTotal,
+      },
       status: stripeSubscription.status,
     });
   } catch (error) {
@@ -193,7 +280,16 @@ exports.getSubscription = async (req, res) => {
         {
           model: addon,
           as: "addons",
-          through: { attributes: [] },
+          through: {
+            attributes: ["type", "name", "quantity", "unitPrice", "totalPrice"],
+          },
+        },
+        {
+          model: product,
+          as: "products",
+          through: {
+            attributes: ["sku", "quantity", "unitPrice", "totalPrice"],
+          },
         },
       ],
     });
@@ -288,7 +384,16 @@ exports.listSubscriptions = async (req, res) => {
         {
           model: addon,
           as: "addons",
-          through: { attributes: [] },
+          through: {
+            attributes: ["type", "name", "quantity", "unitPrice", "totalPrice"],
+          },
+        },
+        {
+          model: product,
+          as: "products",
+          through: {
+            attributes: ["sku", "quantity", "unitPrice", "totalPrice"],
+          },
         },
       ],
       order: [["createdAt", "DESC"]],

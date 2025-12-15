@@ -87,6 +87,13 @@ module.exports = (sequelize, DataTypes) => {
 
     product.hasMany(models.userDiscount);
     models.userDiscount.belongsTo(product);
+
+    // Many-to-many with Subscription through SubscriptionProduct
+    product.belongsToMany(models.subscription, {
+      through: models.subscriptionProduct,
+      foreignKey: "productId",
+      as: "subscriptions",
+    });
   };
   return product;
 };

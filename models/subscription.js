@@ -23,7 +23,7 @@ module.exports = (sequelize) => {
       stripeSubscriptionId: {
         type: DataTypes.STRING,
         allowNull: true,
-        unique: true,
+        unique: false, // Changed to false to allow multiple pending subscriptions
       },
       stripePriceId: {
         type: DataTypes.STRING,
@@ -40,10 +40,11 @@ module.exports = (sequelize) => {
           "canceled",
           "past_due",
           "incomplete",
-          "trialing"
+          "trialing",
+          "pending_payment"
         ),
         allowNull: false,
-        defaultValue: "incomplete",
+        defaultValue: "pending_payment",
       },
       machineId: {
         type: DataTypes.INTEGER,
@@ -52,6 +53,34 @@ module.exports = (sequelize) => {
           model: "coffeeMachines",
           key: "id",
         },
+      },
+      userId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      userName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      subscriptionDays: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 30,
+      },
+      machinePrice: {
+        type: DataTypes.DECIMAL(15, 2),
+        allowNull: false,
+        defaultValue: 0.0,
+      },
+      productsTotal: {
+        type: DataTypes.DECIMAL(15, 2),
+        allowNull: false,
+        defaultValue: 0.0,
+      },
+      addonsTotal: {
+        type: DataTypes.DECIMAL(15, 2),
+        allowNull: false,
+        defaultValue: 0.0,
       },
       currentPeriodStart: {
         type: DataTypes.DATE,
@@ -84,6 +113,13 @@ module.exports = (sequelize) => {
       through: models.subscriptionAddon,
       foreignKey: "subscriptionId",
       as: "addons",
+    });
+
+    // Many-to-many with Product through SubscriptionProduct
+    Subscription.belongsToMany(models.product, {
+      through: models.subscriptionProduct,
+      foreignKey: "subscriptionId",
+      as: "products",
     });
   };
 

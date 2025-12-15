@@ -8,12 +8,19 @@ const customerController = require("../controllers/admin/customerController");
 const machineController = require("../controllers/admin/machineController");
 const machineSubController = require("../controllers/customer/machineSubController");
 const leadController = require("../controllers/admin/leadController");
+const subscriptionController = require("../controllers/admin/subscriptionController");
 
 const Authorization = require("../middlewares/protect");
 const router = express.Router();
 
 router.get(`/product/:userId`, productController.getAllProductsUser);
 router.post("/signup", authController.signup);
+router.get("/subscription/:id", subscriptionController.getSubscription);
+router.get(
+  "/subscription/:id/create-payment-intent/:userId",
+  subscriptionController.createPaymentIntent
+);
+
 router.post("/login", authController.login);
 router.post("/logout", authController.logout);
 router.post("/otp/verfication", authController.otpVerification);

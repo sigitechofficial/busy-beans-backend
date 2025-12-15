@@ -403,6 +403,7 @@ exports.fetchSavedCards = async (req, res, next) => {
     expYear: obj.card.exp_year,
     last4: obj.card.last4,
     funding: obj.card.funding,
+    stripeCustomerId: customer?.stripeCustomerId,
   }));
 
   console.log("🚀 ~ stripeCards ~ stripeCards:", stripeCards);

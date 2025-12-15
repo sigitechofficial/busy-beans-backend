@@ -17,4 +17,10 @@ router.get("/:id", subscriptionController.getSubscription);
 // Cancel subscription
 router.post("/:id/cancel", subscriptionController.cancelSubscription);
 
+// Complete pending payment
+router.post(
+  "/:id/complete-payment",
+  subscriptionController.completeSubscriptionPayment
+);
+
 module.exports = router;

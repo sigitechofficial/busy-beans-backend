@@ -516,8 +516,8 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //       payment_method_types: ['card'],
 //       mode: 'payment',
 //       line_items,
-//       success_url: 'https://busybeancoffee.com/product?status=success',
-//       cancel_url: 'https://busybeancoffee.com/product?status=cancel',
+//       success_url: 'https://busybeancoffee.com/products?status=success',
+//       cancel_url: 'https://busybeancoffee.com/products?status=cancel',
 
 //       // No customer passed (Stripe auto-creates one in connected account)
 //       // No application_fee
@@ -601,8 +601,8 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //       mode: "payment",
 //       customer: order?.stripeCustomerId,
 //       line_items,
-//       success_url: "https://www.busybeancoffee.com/product?status=success",
-//       cancel_url: `https://www.busybeancoffee.com/product?status=cancel`,
+//       success_url: "https://www.busybeancoffee.com/products?status=success",
+//       cancel_url: `https://www.busybeancoffee.com/products?status=cancel`,
 //       saved_payment_method_options: {
 //         payment_method_save: "enabled",
 //       },
@@ -696,8 +696,8 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
     payment_method_types: ["card"],
     mode: "payment",
     line_items,
-    success_url: "https://www.busybeancoffee.com/product?status=success",
-    cancel_url: "https://www.busybeancoffee.com/product?status=cancel",
+    success_url: "https://www.busybeancoffee.com/products?status=success",
+    cancel_url: "https://www.busybeancoffee.com/products?status=cancel",
     saved_payment_method_options: { payment_method_save: "enabled" },
     payment_intent_data: {
       description: `Payment for invoice ${order?.invoiceNumber}.`,

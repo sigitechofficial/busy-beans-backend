@@ -286,8 +286,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     }
   } else {
     condition.type = req.query?.type || "regular-order";
+    if (req.query?.type == "all") {
+      delete condition.type;
+      delete req.query.type;
+    }
   }
-  console.log("🚀 ~ condition:", condition);
+  console.log("🚀 ~ condition----:", condition);
   // Build API features (filter, sort, fields, pagination)
   const features = new APIFeatures(order, req.query)
     .filter()
@@ -351,6 +355,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 
   queryOptions.attributes = [
     "id",
+    "type",
     [
       literal(
         `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
