@@ -323,7 +323,10 @@ router.get(
 );
 
 router.patch("/customer-update/:id", customerController.updateCutomer);
-
+router.get(
+  "/customer-management/customer-list/all",
+  customerController.customersListByQboStatus
+);
 router.get(
   "/customer-management/customer-list/:condition",
   customerController.customersListByQboStatus
