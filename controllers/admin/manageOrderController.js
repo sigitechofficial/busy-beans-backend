@@ -241,13 +241,9 @@ exports.getAllSalesRep = factory.getAll(statuses);
 exports.allOrder = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
 
-  if (
-    req.user.entity == "adminEmployee" ||
-    req.user.entity == "partnerEmployee"
-  ) {
-    if (req.query.salesRepId) delete req.query.salesRepId;
-  }
   let condition = {};
+  if (req.user?.localPartnerId) condition.salesRepId = req.user.localPartnerId;
+
   if (req.params.id) condition.id = req.params.id;
 
   console.log("🚀 ~ condition:", condition);
@@ -347,7 +343,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   ) {
     queryOptions.include.push({
       model: user,
-      where: { employeeId: req.user?.id },
+      where: { employeeId: req.user?.employeeId },
       attributes: [],
     });
   }

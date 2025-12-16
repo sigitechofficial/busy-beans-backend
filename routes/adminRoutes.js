@@ -326,7 +326,7 @@ router.patch("/customer-update/:id", customerController.updateCutomer);
 
 router.get(
   "/customer-management/customer-list/:condition",
-  customerController.customersList
+  customerController.customersListByQboStatus
 );
 
 router.get(

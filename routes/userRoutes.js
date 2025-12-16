@@ -20,7 +20,14 @@ router.get(
   "/subscription/:id/create-payment-intent/:userId",
   subscriptionController.createPaymentIntent
 );
-
+router.post(
+  "/subscription/:id/create-payment-intent/:userId",
+  subscriptionController.createPaymentIntent
+);
+router.post(
+  "/subscription/:id/confirm-payment",
+  subscriptionController.confirmSubscriptionPayment
+);
 router.post("/login", authController.login);
 router.post("/logout", authController.logout);
 router.post("/otp/verfication", authController.otpVerification);

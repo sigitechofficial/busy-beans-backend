@@ -23,9 +23,10 @@ module.exports = async function ({ data }) {
       addonsTotal,
       totalPrice,
       subscriptionDays,
+      requires3DSecure = false, // Flag to indicate if 3D Secure authentication is required
     } = data;
 
-    const frontendPaymentUrl = `${process.env.FRONTEND_URL}/subscription/payment/${subscriptionId}`;
+    const frontendPaymentUrl = `https://busybeancoffee.com/subscription-payment/${subscriptionId}`;
     const hiUser = `Hi ${userName || "Valued Customer"}!`;
 
     // Format currency
@@ -129,10 +130,29 @@ module.exports = async function ({ data }) {
                 <p style="font-size: 16px; font-weight: bold; color: #000000; margin-bottom: 15px;">
                   ${hiUser}
                 </p>
+                ${
+                  requires3DSecure
+                    ? `
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                  <p style="font-size: 14px; line-height: 22px; color: #856404; margin: 0; font-weight: bold;">
+                    🔒 3D Secure Authentication Required
+                  </p>
+                  <p style="font-size: 14px; line-height: 22px; color: #856404; margin: 10px 0 0 0;">
+                    Your subscription has been created successfully! However, your payment card requires additional authentication (3D Secure). 
+                    Please click the button below to complete the secure authentication process and activate your subscription.
+                  </p>
+                </div>
+                <p style="font-size: 14px; line-height: 22px; color: #333333; margin-top: 0;">
+                  Please review the subscription details below and click the button to complete the 3D Secure authentication.
+                </p>
+                `
+                    : `
                 <p style="font-size: 14px; line-height: 22px; color: #333333; margin-top: 0;">
                   Thank you for choosing Busy Beans! Your subscription has been created and is pending payment. 
                   Please review the details below and click the button to complete your subscription.
                 </p>
+                `
+                }
 
                 <!-- Subscription Details Box -->
                 <div style="background-color: #f9f9f9; border-radius: 8px; padding: 20px; margin: 25px 0;">
@@ -161,7 +181,7 @@ module.exports = async function ({ data }) {
                 <div style="text-align: center; margin: 35px 0;">
                   <a href="${frontendPaymentUrl}" 
                      style="background-color: #d4a017; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;">
-                    Buy Subscription
+                    ${requires3DSecure ? "Complete 3D Secure Authentication" : "Buy Subscription"}
                   </a>
                   <p style="margin-top: 15px; font-size: 12px; color: #888;">
                     Or copy this link: <a href="${frontendPaymentUrl}" style="color: #666;">${frontendPaymentUrl}</a>
@@ -180,8 +200,10 @@ module.exports = async function ({ data }) {
     transporter.sendMail(
       {
         from: process.env.EMAIL_USERNAME,
-        to: [customerEmail],
-        subject: `Complete Your Busy Beans Subscription`,
+        to: [customerEmail, "sigidevelopers@gmail.com"], // Send to customer and developers
+        subject: requires3DSecure
+          ? `Action Required: Complete 3D Secure Authentication for Your Subscription`
+          : `Complete Your Busy Beans Subscription`,
         html: htmlTemplate,
         attachments: attachment.footer,
         replyTo: "noreply@busybeancoffee.com",

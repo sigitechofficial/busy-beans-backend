@@ -314,7 +314,125 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
   const clientSecret =
     stripeSubscription.latest_invoice?.payment_intent?.client_secret;
 
-  // 12. Return response
+  // 12. Send email if subscription requires 3D Secure authentication (incomplete status)
+  if (stripeSubscription.status === "incomplete" && clientSecret) {
+    console.log(
+      "📧 Subscription requires 3D Secure authentication. Sending payment completion email..."
+    );
+
+    // Get subscription with all associations for email
+    const subscriptionWithDetails = await subscription.findByPk(
+      newSubscription.id,
+      {
+        include: [
+          { model: coffeeMachine, as: "machine" },
+          {
+            model: product,
+            as: "products",
+            through: {
+              attributes: ["sku", "quantity", "unitPrice", "totalPrice"],
+            },
+          },
+          {
+            model: addon,
+            as: "addons",
+            through: {
+              attributes: [
+                "type",
+                "name",
+                "quantity",
+                "unitPrice",
+                "totalPrice",
+              ],
+            },
+          },
+        ],
+      }
+    );
+
+    // Prepare products and addons for email
+    // Note: Sequelize accesses through model data using the model name
+    // The through model is "subscriptionProduct", so access via .subscriptionProduct (lowercase)
+    const emailProducts =
+      subscriptionWithDetails.products
+        ?.map((prod) => {
+          // Access through data - Sequelize uses lowercase model name for through associations
+          // Try multiple possible property names in order
+          const throughData =
+            prod.subscriptionProduct ||
+            prod.SubscriptionProduct ||
+            prod.dataValues?.subscriptionProduct;
+
+          if (!throughData) {
+            console.warn(
+              `⚠️ No through data found for product ${prod.id}. Available keys:`,
+              Object.keys(prod)
+            );
+            return null;
+          }
+          return {
+            productId: prod.id,
+            sku: throughData.sku || prod.sku,
+            quantity: throughData.quantity,
+            unitPrice: throughData.unitPrice,
+            totalPrice: throughData.totalPrice,
+          };
+        })
+        .filter(Boolean) || [];
+
+    const emailAddons =
+      subscriptionWithDetails.addons
+        ?.map((addonItem) => {
+          // Access through data - Sequelize uses lowercase model name for through associations
+          // Try multiple possible property names in order
+          const throughData =
+            addonItem.subscriptionAddon ||
+            addonItem.SubscriptionAddon ||
+            addonItem.dataValues?.subscriptionAddon;
+
+          if (!throughData) {
+            console.warn(
+              `⚠️ No through data found for addon ${addonItem.id}. Available keys:`,
+              Object.keys(addonItem)
+            );
+            return null;
+          }
+          return {
+            addonId: addonItem.id || null,
+            type: throughData.type,
+            name: throughData.name || addonItem.name || null,
+            quantity: throughData.quantity,
+            unitPrice: throughData.unitPrice,
+            totalPrice: throughData.totalPrice,
+          };
+        })
+        .filter(Boolean) || [];
+
+    // Send 3D Secure payment completion email
+    await sendSubscriptionInvitationEmail({
+      data: {
+        customerEmail,
+        userName,
+        subscriptionId: newSubscription.id,
+        machine: subscriptionWithDetails.machine,
+        products: emailProducts,
+        addons: emailAddons,
+        machinePrice: machinePrice || 0,
+        productsTotal: productsTotal || 0,
+        addonsTotal: addonsTotal || 0,
+        totalPrice: calculatedTotal,
+        subscriptionDays,
+        requires3DSecure: true, // Flag to indicate 3D Secure email
+      },
+    });
+
+    console.log(
+      "✅ 3D Secure payment completion email sent to:",
+      customerEmail
+    );
+  }
+
+  // 13. Return response
   return res.status(201).json({
     success: true,
     subscriptionId: newSubscription.id,
@@ -327,6 +445,14 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
       addonsTotal,
     },
     status: stripeSubscription.status,
+    requiresAction:
+      stripeSubscription.status === "incomplete" && !!clientSecret,
+    message:
+      stripeSubscription.status === "incomplete" && clientSecret
+        ? "Subscription created but requires 3D Secure authentication. Payment completion email sent to customer."
+        : stripeSubscription.status === "active"
+          ? "Subscription created and payment processed successfully!"
+          : "Subscription created successfully.",
   });
 });
 
@@ -486,7 +612,9 @@ exports.completeSubscriptionPayment = catchAsync(async (req, res, next) => {
  */
 exports.createPaymentIntent = catchAsync(async (req, res, next) => {
   const { id, userId } = req.params;
-  const { paymentMethodId } = req.query; // Optional: for creating new payment intent
+  // Accept paymentMethodId from query (GET) or body (POST/PUT)
+  const paymentMethodId =
+    req.body?.paymentMethodId || req.query?.paymentMethodId;
 
   // Get user by userId
   const userRecord = await user.findByPk(userId, {
@@ -526,7 +654,9 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
 
   // Check if subscription is in a state that allows payment
   const allowedStatuses = ["pending_payment", "incomplete", "past_due"];
-  if (!allowedStatuses.includes(subscriptionRecord.status)) {
+  if (
+    !allowedStatuses.includes(subscriptionRecord?.status || "pending_payment")
+  ) {
     return next(
       new AppError(
         `Cannot create payment intent for subscription with status: ${subscriptionRecord.status}`,
@@ -547,7 +677,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
       console.log("✅ User has existing Stripe customer:", stripeCustomerId);
     } else {
       // Create new Stripe customer using addCustomer function
-      const { addCustomer } = require("../controllers/stripe");
+      const { addCustomer } = require("../stripe");
       stripeCustomerId = await addCustomer({
         name: userRecord.name || userRecord.email,
         email: userRecord.email,
@@ -577,6 +707,69 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
       // Get client secret from latest invoice
       clientSecret =
         stripeSubscription.latest_invoice?.payment_intent?.client_secret;
+
+      // If subscription is incomplete (3D Secure required), we need to return the existing clientSecret
+      // The frontend should use this to confirm payment with stripe.confirmCardPayment(), NOT create a setup intent
+      if (
+        subscriptionRecord.status === "incomplete" ||
+        stripeSubscription.status === "incomplete"
+      ) {
+        // If clientSecret wasn't found via expand, try to retrieve it from the latest invoice manually
+        if (!clientSecret) {
+          console.log(
+            "⚠️ ClientSecret not found in expanded invoice, retrieving from latest invoice..."
+          );
+          const invoices = await stripe.invoices.list({
+            subscription: subscriptionRecord.stripeSubscriptionId,
+            limit: 1,
+          });
+
+          if (invoices.data.length > 0) {
+            const latestInvoice = await stripe.invoices.retrieve(
+              invoices.data[0].id,
+              {
+                expand: ["payment_intent"],
+              }
+            );
+            clientSecret = latestInvoice.payment_intent?.client_secret;
+          }
+        }
+
+        // If we have a clientSecret, return it for 3D Secure confirmation
+        if (clientSecret) {
+          console.log(
+            `✅ Subscription is incomplete. Returning existing payment intent clientSecret for 3D Secure confirmation.`
+          );
+          // Return immediately with clientSecret for 3D Secure confirmation
+          // IMPORTANT: This is a PAYMENT INTENT clientSecret, NOT a setup intent
+          // Frontend MUST use stripe.confirmCardPayment(), NOT stripe.confirmSetup()
+          return res.status(200).json({
+            success: true,
+            subscriptionId: subscriptionRecord.id,
+            stripeSubscriptionId: stripeSubscription.id,
+            stripeCustomerId: stripeCustomerId,
+            status: stripeSubscription.status,
+            clientSecret: clientSecret, // Payment Intent clientSecret for 3D Secure confirmation
+            requiresAction: true,
+            isPaymentIntent: true, // Explicitly mark this as a payment intent, not setup intent
+            setupIntentClientSecret: undefined, // Explicitly set to undefined to avoid confusion
+            message:
+              "Payment requires 3D Secure authentication. Use clientSecret with stripe.confirmCardPayment() to complete the payment. DO NOT use stripe.confirmSetup().",
+            totalPrice: subscriptionRecord.totalPrice,
+          });
+        } else {
+          // If no clientSecret found, this is unexpected for incomplete subscriptions
+          console.warn(
+            `⚠️ Subscription is incomplete but no clientSecret found. This might indicate a payment issue.`
+          );
+          return next(
+            new AppError(
+              "Unable to retrieve payment confirmation details. Please contact support.",
+              500
+            )
+          );
+        }
+      }
 
       // If no client secret and payment method provided, update subscription
       if (!clientSecret && paymentMethodId) {
@@ -618,10 +811,37 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
     }
     // Case 2: Subscription doesn't have Stripe subscription yet (pending_payment)
     else {
+      // If no paymentMethodId, create a setup intent for frontend to collect card
       if (!paymentMethodId) {
+        // Create a setup intent that allows frontend to collect and save payment method
+        const setupIntent = await stripe.setupIntents.create({
+          customer: stripeCustomerId,
+          payment_method_types: ["card"],
+          usage: "off_session", // For future payments
+        });
+
+        console.log(
+          `✅ Created setup intent for customer ${stripeCustomerId} to collect payment method`
+        );
+
+        // Return setup intent client secret so frontend can collect card details
+        return res.status(200).json({
+          success: true,
+          setupIntentClientSecret: setupIntent.client_secret,
+          message:
+            "Use the setupIntentClientSecret with Stripe Elements to collect card details. Then call this endpoint again with the paymentMethodId.",
+          requiresPaymentMethod: true,
+        });
+      }
+
+      // Validate paymentMethodId format
+      if (
+        typeof paymentMethodId !== "string" ||
+        paymentMethodId.trim() === ""
+      ) {
         return next(
           new AppError(
-            "Payment method ID is required to create payment intent for new subscription",
+            "Invalid payment method ID format. Please provide a valid payment method ID.",
             400
           )
         );
@@ -630,15 +850,23 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
       // Retrieve Stripe customer
       const stripeCustomer = await stripe.customers.retrieve(stripeCustomerId);
 
-      // Attach payment method to customer
+      // Attach payment method to customer (this attaches the user's card)
       try {
         await stripe.paymentMethods.attach(paymentMethodId, {
           customer: stripeCustomerId,
         });
+        console.log(
+          `✅ Attached payment method ${paymentMethodId} to customer ${stripeCustomerId}`
+        );
       } catch (err) {
         if (!err.message.includes("already been attached")) {
+          // If attach fails for other reasons, throw the error
+          console.error(`❌ Failed to attach payment method: ${err.message}`);
           throw err;
         }
+        console.log(
+          `ℹ️ Payment method ${paymentMethodId} already attached to customer`
+        );
       }
 
       // Set as default payment method
@@ -660,16 +888,16 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         },
         product_data: {
           name: `Subscription for ${subscriptionRecord.machine.name}`,
-          description: `Machine: ${subscriptionRecord.machine.name}`,
         },
       });
 
-      // Create Stripe subscription
+      // Create Stripe subscription with the attached payment method
+      // Stripe will attempt to charge immediately when default_payment_method is set
+      // If 3D Secure is required, subscription will be incomplete and clientSecret will be available
       stripeSubscription = await stripe.subscriptions.create({
         customer: stripeCustomerId,
         items: [{ price: stripePrice.id }],
         default_payment_method: paymentMethodId,
-        payment_behavior: "default_incomplete",
         payment_settings: {
           save_default_payment_method: "on_subscription",
         },
@@ -690,37 +918,117 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         ),
       });
 
-      // Get client secret
+      // Get client secret for 3D Secure authentication if needed
+      // If subscription is active, payment was successful and no clientSecret needed
+      // If subscription is incomplete, clientSecret is needed for 3D Secure
       clientSecret =
         stripeSubscription.latest_invoice?.payment_intent?.client_secret;
     }
 
-    if (!clientSecret) {
-      return next(
-        new AppError(
-          "Unable to retrieve payment intent. Please try again or contact support.",
-          500
-        )
-      );
-    }
-
-    return res.status(200).json({
+    // Prepare response based on subscription status
+    const subscriptionStatus =
+      stripeSubscription?.status || subscriptionRecord.status;
+    const response = {
       success: true,
       subscriptionId: subscriptionRecord.id,
       stripeSubscriptionId:
         stripeSubscription?.id || subscriptionRecord.stripeSubscriptionId,
       stripeCustomerId: stripeCustomerId,
-      clientSecret,
-      status: stripeSubscription?.status || subscriptionRecord.status,
+      status: subscriptionStatus,
       totalPrice: subscriptionRecord.totalPrice,
-      message:
-        "Payment intent created successfully. Use clientSecret to confirm payment.",
-    });
+    };
+
+    // Always include clientSecret if available (needed for 3D Secure confirmation)
+    // For 3D Secure cards, subscription will be "incomplete" until payment is confirmed
+    if (clientSecret) {
+      response.clientSecret = clientSecret;
+      response.isPaymentIntent = true; // Explicitly mark this as a payment intent
+      response.setupIntentClientSecret = undefined; // Explicitly set to undefined to avoid confusion
+      if (subscriptionStatus === "incomplete") {
+        response.message =
+          "Payment requires 3D Secure authentication. Use clientSecret with stripe.confirmCardPayment() to complete the payment. DO NOT use stripe.confirmSetup().";
+        response.requiresAction = true;
+      } else {
+        response.message =
+          "Subscription created. Payment confirmation may be required.";
+      }
+    } else if (subscriptionStatus === "active") {
+      response.message =
+        "Subscription created and payment processed successfully!";
+    } else {
+      response.message = "Subscription created successfully.";
+    }
+
+    return res.status(200).json(response);
   } catch (error) {
     console.error("❌ Create payment intent error:", error);
     return next(
       new AppError(
         error.message || "Failed to create payment intent",
+        error.statusCode || 500
+      )
+    );
+  }
+});
+
+/**
+ * Update subscription status after payment confirmation
+ * POST /api/v1/users/subscription/:id/confirm-payment
+ * Called after frontend confirms payment with stripe.confirmCardPayment()
+ */
+exports.confirmSubscriptionPayment = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  // Find subscription in database
+  const subscriptionRecord = await subscription.findByPk(id);
+
+  if (!subscriptionRecord) {
+    return next(new AppError("Subscription not found", 404));
+  }
+
+  // If no Stripe subscription ID, can't sync
+  if (!subscriptionRecord.stripeSubscriptionId) {
+    return next(
+      new AppError("Subscription does not have a Stripe subscription ID", 400)
+    );
+  }
+
+  try {
+    // Retrieve latest subscription status from Stripe
+    const stripeSubscription = await stripe.subscriptions.retrieve(
+      subscriptionRecord.stripeSubscriptionId,
+      {
+        expand: ["latest_invoice.payment_intent"],
+      }
+    );
+
+    // Update subscription status in database
+    await subscriptionRecord.update({
+      status: stripeSubscription.status,
+      currentPeriodStart: new Date(
+        stripeSubscription.current_period_start * 1000
+      ),
+      currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+    });
+
+    console.log(
+      `✅ Subscription ${id} status updated to: ${stripeSubscription.status}`
+    );
+
+    return res.status(200).json({
+      success: true,
+      subscriptionId: subscriptionRecord.id,
+      status: stripeSubscription.status,
+      message:
+        stripeSubscription.status === "active"
+          ? "Payment confirmed! Subscription is now active."
+          : `Subscription status: ${stripeSubscription.status}`,
+    });
+  } catch (error) {
+    console.error("❌ Error syncing subscription status:", error);
+    return next(
+      new AppError(
+        error.message || "Failed to sync subscription status",
         error.statusCode || 500
       )
     );
