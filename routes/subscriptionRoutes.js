@@ -17,6 +17,9 @@ router.get("/:id", subscriptionController.getSubscription);
 // Cancel subscription
 router.post("/:id/cancel", subscriptionController.cancelSubscription);
 
+// Reactivate subscription
+router.post("/:id/reactivate", subscriptionController.reactivateSubscription);
+
 // Complete pending payment
 router.post(
   "/:id/complete-payment",

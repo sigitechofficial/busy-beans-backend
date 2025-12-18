@@ -57,6 +57,7 @@ router.post("/book-order", orderController.bookOrder);
 
 router.post("/create-payment-intent", orderController.paymentIntent);
 router.get("/orders", manageOrderController.allOrder);
+router.get("/invoices/", manageOrderController.allOrder);
 router.get("/order-details/:id", manageOrderController.orderDetails);
 
 router.put("/drawer/update-profile", profileController.updateProfile);
@@ -65,5 +66,21 @@ router.get("/address/view-all", profileController.getAllAddress);
 // router.get('/product', profileController.productController);
 router.get(`/product`, productController.getAllProducts);
 router.get("/view-customer-detail/:id", customerController.customerDetail);
+
+router.post(
+  "/order-management/create-payment-intent-for-user",
+  manageOrderController.createPaymentIntentForUser
+);
+
+// List subscriptions (filtered by userId for 'user' entity)
+router.get("/subscriptions", subscriptionController.listSubscriptions);
+router.post(
+  "/subscriptions/:id/cancel",
+  subscriptionController.cancelSubscription
+);
+router.post(
+  "/subscriptions/:id/reactivate",
+  subscriptionController.reactivateSubscription
+);
 
 module.exports = router;

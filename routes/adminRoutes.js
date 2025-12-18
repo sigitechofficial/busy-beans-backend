@@ -324,9 +324,10 @@ router.get(
 
 router.patch("/customer-update/:id", customerController.updateCutomer);
 router.get(
-  "/customer-management/customer-list/all",
-  customerController.customersListByQboStatus
+  "/customer-management/customer-list/:sr",
+  customerController.customersList
 );
+
 router.get(
   "/customer-management/customer-list/:condition",
   customerController.customersListByQboStatus
@@ -728,5 +729,10 @@ router
   .get(machineController.getMachines) // For fetching a product by ID
   .delete(machineController.deleteMachines) // For deleting a product by IDWWW
   .patch(uploadMachineImage.single("image"), machineController.updateMachines); // For updating a product (including image upload);
+
+router.post(
+  "/order-management/create-payment-intent-for-user",
+  manageOrderController.createPaymentIntentForUser
+);
 
 module.exports = router;

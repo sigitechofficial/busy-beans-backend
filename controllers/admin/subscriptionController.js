@@ -1069,9 +1069,69 @@ exports.getSubscription = catchAsync(async (req, res, next) => {
     return next(new AppError("Subscription not found", 404));
   }
 
+  // Initialize default values for reactivation fields
+  let reactivationAvailable = false;
+  let cancelAtPeriodEnd = false;
+  let scheduledCancelAt = null;
+
+  // Fetch Stripe subscription if stripeSubscriptionId exists
+  if (subscriptionRecord.stripeSubscriptionId) {
+    try {
+      const stripeSubscription = await stripe.subscriptions.retrieve(
+        subscriptionRecord.stripeSubscriptionId
+      );
+
+      // Set cancelAtPeriodEnd from Stripe
+      cancelAtPeriodEnd = stripeSubscription.cancel_at_period_end === true;
+
+      // Compute reactivationAvailable:
+      // true only if status === "active" AND cancel_at_period_end === true
+      // false for canceled, incomplete, past_due, unpaid, etc.
+      if (
+        stripeSubscription.status === "active" &&
+        stripeSubscription.cancel_at_period_end === true
+      ) {
+        reactivationAvailable = true;
+      } else {
+        reactivationAvailable = false;
+      }
+
+      // Compute scheduledCancelAt:
+      // Prefer cancel_at if set, otherwise use current_period_end when cancel_at_period_end === true
+      if (stripeSubscription.cancel_at) {
+        // cancel_at is a Unix timestamp in seconds
+        scheduledCancelAt = new Date(
+          stripeSubscription.cancel_at * 1000
+        ).toISOString();
+      } else if (
+        stripeSubscription.cancel_at_period_end === true &&
+        stripeSubscription.current_period_end
+      ) {
+        // current_period_end is a Unix timestamp in seconds
+        scheduledCancelAt = new Date(
+          stripeSubscription.current_period_end * 1000
+        ).toISOString();
+      } else {
+        scheduledCancelAt = null;
+      }
+    } catch (error) {
+      // If Stripe fetch fails, log but don't fail the entire request
+      // The fields will remain as default values (false, null)
+      console.error("❌ Error fetching Stripe subscription:", error.message);
+    }
+  }
+
+  // Convert subscription record to JSON to allow modification
+  const subscriptionData = subscriptionRecord.toJSON();
+
+  // Add the new fields to the subscription data
+  subscriptionData.reactivationAvailable = reactivationAvailable;
+  subscriptionData.cancelAtPeriodEnd = cancelAtPeriodEnd;
+  subscriptionData.scheduledCancelAt = scheduledCancelAt;
+
   return res.status(200).json({
     success: true,
-    subscription: subscriptionRecord,
+    subscription: subscriptionData,
   });
 });
 
@@ -1113,6 +1173,131 @@ exports.cancelSubscription = catchAsync(async (req, res, next) => {
 });
 
 /**
+ * Reactivate subscription
+ * POST /api/subscription/:id/reactivate
+ * Reactivates a subscription that was scheduled to cancel at period end
+ */
+exports.reactivateSubscription = catchAsync(async (req, res, next) => {
+  // Get subscriptionId from route param or body
+  const subscriptionId = req.params.id || req.body.subscriptionId;
+
+  // Basic validation
+  if (!subscriptionId) {
+    return next(new AppError("subscriptionId is required", 400));
+  }
+
+  // Find subscription in database
+  const subscriptionRecord = await subscription.findByPk(subscriptionId);
+
+  if (!subscriptionRecord) {
+    return next(new AppError("Subscription not found", 404));
+  }
+
+  // Check if subscription has Stripe subscription ID
+  if (!subscriptionRecord.stripeSubscriptionId) {
+    return next(
+      new AppError("Subscription does not have a Stripe subscription ID", 400)
+    );
+  }
+
+  try {
+    // Fetch the Stripe subscription by id
+    const stripeSubscription = await stripe.subscriptions.retrieve(
+      subscriptionRecord.stripeSubscriptionId
+    );
+
+    // Reactivation is allowed only if:
+    // 1. subscription.status === "active" (still active)
+    // 2. subscription.cancel_at_period_end === true (it's scheduled to cancel)
+    const isActive = stripeSubscription.status === "active";
+    const isScheduledToCancel =
+      stripeSubscription.cancel_at_period_end === true;
+
+    if (!isActive || !isScheduledToCancel) {
+      // Return error with details including status and cancel_at_period_end
+      return res.status(409).json({
+        success: false,
+        status: "conflict",
+        message:
+          "Subscription reactivation is not available at this point. Please create a new subscription.",
+        details: {
+          currentStatus: stripeSubscription.status,
+          cancel_at_period_end: stripeSubscription.cancel_at_period_end,
+          reason: !isActive
+            ? "Subscription is not active"
+            : "Subscription is not scheduled to cancel",
+        },
+      });
+    }
+
+    // Update the subscription to remove scheduled cancellation
+    const updatedStripeSubscription = await stripe.subscriptions.update(
+      subscriptionRecord.stripeSubscriptionId,
+      {
+        cancel_at_period_end: false,
+      }
+    );
+
+    // Update database record if needed (optional - you may want to update status or clear canceledAt)
+    await subscriptionRecord.update({
+      status: "active",
+      canceledAt: null,
+    });
+
+    console.log("✅ Subscription reactivated:", subscriptionId);
+
+    // Return success response with updated subscription fields
+    return res.status(200).json({
+      success: true,
+      message: "Subscription reactivated successfully",
+      subscription: {
+        id: subscriptionRecord.id,
+        status: updatedStripeSubscription.status,
+        cancel_at_period_end: updatedStripeSubscription.cancel_at_period_end,
+        current_period_start: new Date(
+          updatedStripeSubscription.current_period_start * 1000
+        ),
+        current_period_end: new Date(
+          updatedStripeSubscription.current_period_end * 1000
+        ),
+      },
+      stripeSubscription: {
+        id: updatedStripeSubscription.id,
+        status: updatedStripeSubscription.status,
+        cancel_at_period_end: updatedStripeSubscription.cancel_at_period_end,
+        current_period_start: new Date(
+          updatedStripeSubscription.current_period_start * 1000
+        ),
+        current_period_end: new Date(
+          updatedStripeSubscription.current_period_end * 1000
+        ),
+      },
+    });
+  } catch (error) {
+    // Handle Stripe errors and return clean API error response
+    console.error("❌ Error reactivating subscription:", error);
+
+    // Check if it's a Stripe error
+    if (error.type && error.type.startsWith("Stripe")) {
+      return next(
+        new AppError(
+          `Stripe error: ${error.message || "Failed to reactivate subscription"}`,
+          error.statusCode || 400
+        )
+      );
+    }
+
+    // Generic error
+    return next(
+      new AppError(
+        error.message || "Failed to reactivate subscription",
+        error.statusCode || 500
+      )
+    );
+  }
+});
+
+/**
  * List all subscriptions
  * GET /api/subscription/list
  */
@@ -1120,6 +1305,12 @@ exports.listSubscriptions = catchAsync(async (req, res, next) => {
   const { customerEmail, status } = req.query;
 
   const where = {};
+
+  // If user entity is 'user', filter by userId
+  if (req.user?.entity === "user") {
+    where.userId = req.user.id;
+  }
+
   if (customerEmail) where.customerEmail = customerEmail;
   if (status) where.status = status;
 
@@ -1129,21 +1320,22 @@ exports.listSubscriptions = catchAsync(async (req, res, next) => {
       {
         model: coffeeMachine,
         as: "machine",
+        attributes: ["id", "image", "name"],
       },
-      {
-        model: addon,
-        as: "addons",
-        through: {
-          attributes: ["type", "name", "quantity", "unitPrice", "totalPrice"],
-        },
-      },
-      {
-        model: product,
-        as: "products",
-        through: {
-          attributes: ["sku", "quantity", "unitPrice", "totalPrice"],
-        },
-      },
+      //   {
+      //     model: addon,
+      //     as: "addons",
+      //     through: {
+      //       attributes: ["type", "name", "quantity", "unitPrice", "totalPrice"],
+      //     },
+      //   },
+      //   {
+      //     model: product,
+      //     as: "products",
+      //     through: {
+      //       attributes: ["sku", "quantity", "unitPrice", "totalPrice"],
+      //     },
+      //   },
     ],
     order: [["createdAt", "DESC"]],
   });
