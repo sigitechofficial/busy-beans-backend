@@ -740,9 +740,44 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
           console.log(
             `✅ Subscription is incomplete. Returning existing payment intent clientSecret for 3D Secure confirmation.`
           );
+
+          // Check if subscription has a payment method attached
+          let hasPaymentMethod = !!(
+            stripeSubscription.default_payment_method ||
+            stripeSubscription.default_source
+          );
+
+          // Also check payment intent for payment method
+          let paymentMethodId = null;
+          if (stripeSubscription.latest_invoice?.payment_intent) {
+            const paymentIntent =
+              stripeSubscription.latest_invoice.payment_intent;
+            paymentMethodId = paymentIntent.payment_method;
+            if (paymentMethodId) {
+              hasPaymentMethod = true;
+            }
+          }
+
+          // If not found in expanded data, retrieve payment intent directly
+          if (!paymentMethodId && clientSecret) {
+            try {
+              // Extract payment intent ID from client secret
+              const paymentIntentId = clientSecret.split("_secret_")[0];
+              const paymentIntent =
+                await stripe.paymentIntents.retrieve(paymentIntentId);
+              paymentMethodId = paymentIntent.payment_method;
+              if (paymentMethodId) {
+                hasPaymentMethod = true;
+              }
+            } catch (err) {
+              console.warn("Could not retrieve payment intent:", err.message);
+            }
+          }
+
           // Return immediately with clientSecret for 3D Secure confirmation
           // IMPORTANT: This is a PAYMENT INTENT clientSecret, NOT a setup intent
-          // Frontend MUST use stripe.confirmCardPayment(), NOT stripe.confirmSetup()
+          // If payment method exists, use stripe.confirmCardPayment() directly (no payment sheet)
+          // If no payment method, use Payment Element to collect card first
           return res.status(200).json({
             success: true,
             subscriptionId: subscriptionRecord.id,
@@ -752,9 +787,15 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
             clientSecret: clientSecret, // Payment Intent clientSecret for 3D Secure confirmation
             requiresAction: true,
             isPaymentIntent: true, // Explicitly mark this as a payment intent, not setup intent
+            hasPaymentMethod: hasPaymentMethod, // Indicates if payment method is already attached
+            paymentMethodId:
+              paymentMethodId ||
+              stripeSubscription.default_payment_method ||
+              null, // Payment method ID if available
             setupIntentClientSecret: undefined, // Explicitly set to undefined to avoid confusion
-            message:
-              "Payment requires 3D Secure authentication. Use clientSecret with stripe.confirmCardPayment() to complete the payment. DO NOT use stripe.confirmSetup().",
+            message: hasPaymentMethod
+              ? "Payment method found. 3D Secure authentication required. Use stripe.confirmCardPayment() with existing payment method - NO payment sheet needed."
+              : "Payment requires 3D Secure authentication. Use Payment Element to collect card, then confirm payment.",
             totalPrice: subscriptionRecord.totalPrice,
           });
         } else {
@@ -828,6 +869,8 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         return res.status(200).json({
           success: true,
           setupIntentClientSecret: setupIntent.client_secret,
+          isPaymentIntent: false, // Explicitly mark this as a setup intent, not payment intent
+          clientSecret: undefined, // Explicitly set to undefined to avoid confusion
           message:
             "Use the setupIntentClientSecret with Stripe Elements to collect card details. Then call this endpoint again with the paymentMethodId.",
           requiresPaymentMethod: true,

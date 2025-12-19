@@ -318,6 +318,9 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   }
 
   // Merge manual filter conditions
+  if (req.user.entity == "localPartner") {
+    condition.salesRepId = req.user.localPartnerId;
+  }
   queryOptions.where = { ...(queryOptions.where || {}), ...condition };
   console.log("🚀 ~ queryOptions.where:", queryOptions.where);
   // Add your custom includes

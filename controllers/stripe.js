@@ -821,13 +821,18 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
     },
     description: `Payment for invoice ${order?.invoiceNumber}.`,
     metadata: {
-      orderId: order?.id,
+      orderId: String(order?.id || ""),
       invoiceNumber: order?.invoiceNumber || "",
-      partnerId: order?.connectAccountId || "",
-      salesRepId: order?.salesRepId || "",
+      partnerConnectAccountId: order?.connectAccountId || "",
+      salesRepId: String(order?.salesRepId || ""),
+      partnerName: order?.srName || "",
       orderType: order?.orderOf || "Customer",
+      partnerType: order?.partnerType || "",
       type: "payment-intent",
       platform: "Busy Bean Coffee Inc.",
+      customerName: order?.customerName || "",
+      companyName: order?.companyName || "",
+      userId: String(order?.userId || ""),
     },
   };
 
@@ -841,9 +846,14 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
       const directParams = { ...base };
 
       // If you have a customer that actually exists on the connected account, put it in order.connectedCustomerId
+      // Also try to use platform customer if available (for save card functionality)
       if (order.connectedCustomerId) {
         directParams.customer = order.connectedCustomerId;
-        // Optional: save for off_session on that connected account
+        // Enable save card option for future use
+        directParams.setup_future_usage = "off_session";
+      } else if (order?.stripeCustomerId) {
+        // Use platform customer if connected customer not available
+        directParams.customer = order.stripeCustomerId;
         directParams.setup_future_usage = "off_session";
       }
 
@@ -855,10 +865,19 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
         { stripeAccount: order.connectAccountId } // key line: header `Stripe-Account`
       );
 
+      // Retrieve connected account to get publishable key
+      const connectedAccount = await stripe.accounts.retrieve(
+        order.connectAccountId
+      );
+
       return {
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         proportionalStripeFee: 0, // not calculated in this flow
+        connectAccountId: order.connectAccountId,
+        isDirectPartner: true,
+        // Note: For Express accounts, use platform publishable key with account parameter
+        // For Standard/Custom accounts, you may need to retrieve their publishable key separately
       };
     }
 
@@ -873,12 +892,16 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
       customer: order?.stripeCustomerId || undefined, // platform customer is fine in this flow
     };
 
+    // Enable save card option for future use
+    if (order?.stripeCustomerId) {
+      input.setup_future_usage = "off_session";
+    }
+
     if (order.connectAccountId) {
       input.application_fee_amount = adminProfitCents;
       input.transfer_data = {
         destination: order.connectAccountId,
       };
-      input.setup_future_usage = "off_session";
     }
 
     const paymentIntent = await stripe.paymentIntents.create(input);
@@ -887,6 +910,7 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       proportionalStripeFee: stripeFee,
+      isDirectPartner: false,
     };
   } catch (err) {
     console.error("❌ Payment Intent creation failed:", err);

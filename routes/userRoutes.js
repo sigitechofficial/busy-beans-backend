@@ -68,8 +68,13 @@ router.get(`/product`, productController.getAllProducts);
 router.get("/view-customer-detail/:id", customerController.customerDetail);
 
 router.post(
-  "/order-management/create-payment-intent-for-user",
+  "/invoices/:orderId/create-payment-intent",
   manageOrderController.createPaymentIntentForUser
+);
+
+router.post(
+  "/invoices/:orderId/confirm-payment",
+  manageOrderController.confirmPaymentForInvoiceIntent
 );
 
 // List subscriptions (filtered by userId for 'user' entity)

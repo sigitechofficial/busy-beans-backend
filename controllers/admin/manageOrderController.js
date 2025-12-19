@@ -250,7 +250,8 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
 });
 
 exports.createPaymentIntentForUser = catchAsync(async (req, res, next) => {
-  const { orderId, orderType } = req.body;
+  const { orderId } = req.params;
+  const { orderType } = req.body;
 
   if (!orderId) {
     return next(new AppError("Order ID is required", 400));
@@ -293,6 +294,10 @@ exports.createPaymentIntentForUser = catchAsync(async (req, res, next) => {
         clientSecret: paymentIntent.clientSecret,
         paymentIntentId: paymentIntent.paymentIntentId,
         proportionalStripeFee: paymentIntent.proportionalStripeFee,
+        connectAccountId: paymentIntent.connectAccountId || null,
+        isDirectPartner: paymentIntent.isDirectPartner || false,
+        localPatnerCommission: details?.localPatnerCommission || 0,
+        adminReceivableAmount: details?.adminReceivableAmount || 0,
       },
     });
   } catch (error) {
@@ -301,6 +306,79 @@ exports.createPaymentIntentForUser = catchAsync(async (req, res, next) => {
       new AppError(error?.message || "Payment Intent creation failed", 400)
     );
   }
+});
+
+exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
+  const { orderId } = req.params;
+  const {
+    paymentIntentId,
+    paymentMethodId,
+    adminReceivableStatus,
+    localPatnerCommission,
+    adminReceivableAmount,
+    proportionalStripeFee,
+    orderType,
+  } = req.body;
+
+  if (!orderId) {
+    return next(new AppError("Order ID is required", 400));
+  }
+
+  if (!paymentIntentId) {
+    return next(new AppError("Payment Intent ID is required", 400));
+  }
+
+  const model = orderType == "local-partner" ? partnerOrder : order;
+
+  // Check if order exists
+  const orderData = await model.findOne({
+    where: { id: orderId },
+    attributes: ["id", "paymentStatus"],
+  });
+
+  if (!orderData) {
+    return next(new AppError("Order not found", 404));
+  }
+
+  if (orderData.paymentStatus === "done") {
+    return res.status(200).json({
+      status: "already-paid",
+      message: "Payment has already been processed for this order.",
+      data: {},
+    });
+  }
+
+  // Prepare update data
+  const updateData = {
+    paymentIntentId: paymentIntentId || null,
+    paymentMethod: "card",
+    paymentStatus: "done",
+    invoicePaidDate: new Date(),
+    pulloutDate: Date.now(),
+  };
+
+  // Add optional fields if provided
+
+  updateData.adminReceivableStatus = adminReceivableStatus || true;
+
+  updateData.localPatnerCommission = localPatnerCommission || 0;
+
+  updateData.adminReceivableAmount = adminReceivableAmount || 0;
+
+  updateData.proportionalStripeFee = proportionalStripeFee || 0;
+
+  // Update the order
+  await model.update(updateData, {
+    where: { id: orderId },
+  });
+
+  return res.status(200).json({
+    status: "success",
+    message: "Payment confirmed successfully",
+    data: {
+      orderId,
+    },
+  });
 });
 
 exports.getAllSalesRep = factory.getAll(statuses);
