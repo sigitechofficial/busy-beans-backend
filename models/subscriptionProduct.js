@@ -1,8 +1,8 @@
 const { DataTypes } = require("sequelize");
 
 module.exports = (sequelize) => {
-  const SubscriptionAddon = sequelize.define(
-    "subscriptionAddon",
+  const SubscriptionProduct = sequelize.define(
+    "subscriptionProduct",
     {
       id: {
         type: DataTypes.INTEGER,
@@ -18,23 +18,18 @@ module.exports = (sequelize) => {
         },
         onDelete: "CASCADE",
       },
-      addonId: {
+      productId: {
         type: DataTypes.INTEGER,
-        allowNull: true, // Nullable for "extra" type
+        allowNull: false,
         references: {
-          model: "addons",
+          model: "products",
           key: "id",
         },
         onDelete: "CASCADE",
       },
-      type: {
-        type: DataTypes.ENUM("addon", "extra"),
-        allowNull: false,
-        defaultValue: "addon",
-      },
-      name: {
+      sku: {
         type: DataTypes.STRING,
-        allowNull: true, // For "extra" type addons
+        allowNull: true,
       },
       quantity: {
         type: DataTypes.INTEGER,
@@ -53,15 +48,15 @@ module.exports = (sequelize) => {
       },
     },
     {
-      tableName: "subscriptionAddons",
+      tableName: "subscriptionProducts",
       timestamps: true,
     }
   );
 
   // No additional associations needed - this is a junction table
-  SubscriptionAddon.associate = (models) => {
-    // Associations are handled in Subscription and Addon models
+  SubscriptionProduct.associate = (models) => {
+    // Associations are handled in Subscription and Product models
   };
 
-  return SubscriptionAddon;
+  return SubscriptionProduct;
 };

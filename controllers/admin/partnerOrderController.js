@@ -242,6 +242,26 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   ) {
     if (req.query.salesRepId) delete req.query.salesRepId;
   }
+
+  // Handle type parameter BEFORE APIFeatures processes it
+  // Logic:
+  // - If type is not sent → default to "regular-order"
+  // - If type === "all" → don't filter by type (remove from query)
+  // - If type has any other value → use that value
+  let typeCondition = null;
+  const hasTypeParam =
+    req.query?.type !== undefined && req.query?.type !== null;
+
+  if (hasTypeParam) {
+    if (req.query.type === "all") {
+      delete req.query.type; // Remove from query so APIFeatures doesn't process it
+      // typeCondition remains null, so we won't set type in condition
+    } else {
+      typeCondition = req.query.type;
+      delete req.query.type; // Remove from query, we'll handle it manually
+    }
+  }
+
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
 
@@ -278,11 +298,28 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     }
   } else {
-    condition.type = req.query?.type || "regular-order";
+    // Handle type condition:
+    // - If type was not sent → default to "regular-order"
+    // - If type === "all" → don't set type (no filter)
+    // - If type has other value → use that value
+    if (!hasTypeParam) {
+      // Type parameter was not sent, default to "regular-order"
+      condition.type = "regular-order";
+    } else if (typeCondition) {
+      // Type was sent and has a value (not "all"), use that value
+      condition.type = typeCondition;
+    }
+    // If type === "all", typeCondition is null, so we don't set condition.type (no filter)
   }
+
+  // Remove type from queryOptions.where if it was added by APIFeatures (shouldn't happen now, but safety check)
+  if (queryOptions.where?.type === "all") {
+    delete queryOptions.where.type;
+  }
+
   // Merge manual filter conditions
   queryOptions.where = { ...(queryOptions.where || {}), ...condition };
-
+  console.log("🚀 ~ queryOptions.where:", queryOptions.where);
   // Add your custom includes
   queryOptions.include = [
     {
@@ -323,7 +360,7 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
 
   queryOptions.attributes = [
     "id",
-
+    "type",
     [
       literal(
         `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`

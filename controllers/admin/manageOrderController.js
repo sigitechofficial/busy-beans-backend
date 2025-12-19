@@ -66,6 +66,19 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
   const { orderId, orderType, emailType } = req.body;
 
   const model = orderType == "local-partner" ? partnerOrder : order;
+
+  const orderData = await model.findOne({
+    where: { id: orderId },
+    attributes: ["id", "type"],
+  });
+  if (!orderData) {
+    return next(new AppError("Order not found", 404));
+  } else if (orderData.type == "direct-invoice") {
+    return next(
+      new AppError("This is a direct invoice and email cannot be sent.", 400)
+    );
+  }
+
   if (emailType == "order-confirmation") {
     orderEvents({ orderId, orderType });
   } else if (emailType == "paid-invoice") {
@@ -236,18 +249,68 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.createPaymentIntentForUser = catchAsync(async (req, res, next) => {
+  const { orderId, orderType } = req.body;
+
+  if (!orderId) {
+    return next(new AppError("Order ID is required", 400));
+  }
+
+  const model = orderType == "local-partner" ? partnerOrder : order;
+
+  const orderData = await model.findOne({
+    where: { id: orderId },
+    attributes: ["id", "type"],
+  });
+
+  if (!orderData) {
+    return next(new AppError("Order not found", 404));
+  }
+
+  const { details } = await dataForEmailAndNotifications(orderId, orderType);
+
+  if (!details) {
+    return next(new AppError("Order details not found", 404));
+  }
+
+  if (details?.paymentIntentId || details?.paymentStatus == "done") {
+    return res.status(200).json({
+      status: "already-paid",
+      message:
+        "As the payment for the order has already been made, we are unable to create a payment intent at this point.",
+      data: {},
+    });
+  }
+
+  try {
+    const paymentIntent = await Stripe.paymentIntentForWebsitePayments({
+      order: details,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        clientSecret: paymentIntent.clientSecret,
+        paymentIntentId: paymentIntent.paymentIntentId,
+        proportionalStripeFee: paymentIntent.proportionalStripeFee,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Payment Intent creation failed:", error);
+    return next(
+      new AppError(error?.message || "Payment Intent creation failed", 400)
+    );
+  }
+});
+
 exports.getAllSalesRep = factory.getAll(statuses);
 
 exports.allOrder = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
 
-  if (
-    req.user.entity == "adminEmployee" ||
-    req.user.entity == "partnerEmployee"
-  ) {
-    if (req.query.salesRepId) delete req.query.salesRepId;
-  }
   let condition = {};
+  if (req.user?.localPartnerId) condition.salesRepId = req.user.localPartnerId;
+
   if (req.params.id) condition.id = req.params.id;
 
   console.log("🚀 ~ condition:", condition);
@@ -286,9 +349,19 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     }
   } else {
     condition.type = req.query?.type || "regular-order";
+    if (req.query?.type == "all") {
+      delete condition.type;
+      delete req.query.type;
+    }
   }
-  console.log("🚀 ~ condition:", condition);
+
   // Build API features (filter, sort, fields, pagination)
+
+  // If user entity is 'user', filter by userId
+  if (req.user?.entity === "user") {
+    condition.userId = req.user.id;
+  }
+  console.log("🚀 ~ condition----:", condition);
   const features = new APIFeatures(order, req.query)
     .filter()
     .sort()
@@ -343,7 +416,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   ) {
     queryOptions.include.push({
       model: user,
-      where: { employeeId: req.user?.id },
+      where: { employeeId: req.user?.employeeId },
       attributes: [],
     });
   }
@@ -351,6 +424,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 
   queryOptions.attributes = [
     "id",
+    "type",
     [
       literal(
         `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`

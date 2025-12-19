@@ -107,10 +107,12 @@ exports.protect = catchAsync(async (req, res, next) => {
     req.user.localPartnerId = decoded?.id;
   } else if (decoded?.entity === "partnerEmployee") {
     req.user.localPartnerId = currentUser?.salesRepId;
+    req.user.employeeId = currentUser?.id;
   } else if (decoded?.entity === "admin") {
     req.user.adminId = decoded?.id;
   } else if (decoded?.entity === "adminEmployee") {
     req.user.adminId = currentUser?.accountId;
+    req.user.employeeId = currentUser?.id;
   }
   req.user.dvToken = decoded?.dvToken;
   req.user.entity = decoded?.entity;

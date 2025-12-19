@@ -8,12 +8,26 @@ const customerController = require("../controllers/admin/customerController");
 const machineController = require("../controllers/admin/machineController");
 const machineSubController = require("../controllers/customer/machineSubController");
 const leadController = require("../controllers/admin/leadController");
+const subscriptionController = require("../controllers/admin/subscriptionController");
 
 const Authorization = require("../middlewares/protect");
 const router = express.Router();
 
 router.get(`/product/:userId`, productController.getAllProductsUser);
 router.post("/signup", authController.signup);
+router.get("/subscription/:id", subscriptionController.getSubscription);
+router.get(
+  "/subscription/:id/create-payment-intent/:userId",
+  subscriptionController.createPaymentIntent
+);
+router.post(
+  "/subscription/:id/create-payment-intent/:userId",
+  subscriptionController.createPaymentIntent
+);
+router.post(
+  "/subscription/:id/confirm-payment",
+  subscriptionController.confirmSubscriptionPayment
+);
 router.post("/login", authController.login);
 router.post("/logout", authController.logout);
 router.post("/otp/verfication", authController.otpVerification);
@@ -43,6 +57,7 @@ router.post("/book-order", orderController.bookOrder);
 
 router.post("/create-payment-intent", orderController.paymentIntent);
 router.get("/orders", manageOrderController.allOrder);
+router.get("/invoices/", manageOrderController.allOrder);
 router.get("/order-details/:id", manageOrderController.orderDetails);
 
 router.put("/drawer/update-profile", profileController.updateProfile);
@@ -51,5 +66,21 @@ router.get("/address/view-all", profileController.getAllAddress);
 // router.get('/product', profileController.productController);
 router.get(`/product`, productController.getAllProducts);
 router.get("/view-customer-detail/:id", customerController.customerDetail);
+
+router.post(
+  "/order-management/create-payment-intent-for-user",
+  manageOrderController.createPaymentIntentForUser
+);
+
+// List subscriptions (filtered by userId for 'user' entity)
+router.get("/subscriptions", subscriptionController.listSubscriptions);
+router.post(
+  "/subscriptions/:id/cancel",
+  subscriptionController.cancelSubscription
+);
+router.post(
+  "/subscriptions/:id/reactivate",
+  subscriptionController.reactivateSubscription
+);
 
 module.exports = router;

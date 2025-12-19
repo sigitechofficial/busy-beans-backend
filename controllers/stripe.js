@@ -516,8 +516,8 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //       payment_method_types: ['card'],
 //       mode: 'payment',
 //       line_items,
-//       success_url: 'https://busybeancoffee.com/product?status=success',
-//       cancel_url: 'https://busybeancoffee.com/product?status=cancel',
+//       success_url: 'https://busybeancoffee.com/products?status=success',
+//       cancel_url: 'https://busybeancoffee.com/products?status=cancel',
 
 //       // No customer passed (Stripe auto-creates one in connected account)
 //       // No application_fee
@@ -601,8 +601,8 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //       mode: "payment",
 //       customer: order?.stripeCustomerId,
 //       line_items,
-//       success_url: "https://www.busybeancoffee.com/product?status=success",
-//       cancel_url: `https://www.busybeancoffee.com/product?status=cancel`,
+//       success_url: "https://www.busybeancoffee.com/products?status=success",
+//       cancel_url: `https://www.busybeancoffee.com/products?status=cancel`,
 //       saved_payment_method_options: {
 //         payment_method_save: "enabled",
 //       },
@@ -696,8 +696,8 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
     payment_method_types: ["card"],
     mode: "payment",
     line_items,
-    success_url: "https://www.busybeancoffee.com/product?status=success",
-    cancel_url: "https://www.busybeancoffee.com/product?status=cancel",
+    success_url: "https://www.busybeancoffee.com/products?status=success",
+    cancel_url: "https://www.busybeancoffee.com/products?status=cancel",
     saved_payment_method_options: { payment_method_save: "enabled" },
     payment_intent_data: {
       description: `Payment for invoice ${order?.invoiceNumber}.`,
@@ -782,6 +782,115 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
   } catch (err) {
     console.error("❌ Checkout Session creation failed:", err);
     throw new Error(err?.message || "Checkout session failed.");
+  }
+}
+
+async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
+  // Guards
+  if (!order || !Array.isArray(order.items) || order.items.length === 0) {
+    throw new Error("Order with at least one item is required.");
+  }
+
+  const { items, shippingCharges, vat } = order;
+  let totalAmount = 0;
+
+  // Calculate total amount from items (item.price assumed as LINE TOTAL)
+  for (const item of items) {
+    const qty = Number(item.qty);
+    const lineTotal = Number(item.price);
+    if (!qty || !lineTotal) throw new Error("Each item needs qty and price.");
+    totalAmount += lineTotal;
+  }
+
+  // Add shipping charges
+  if (shippingCharges && Number(shippingCharges) > 0) {
+    totalAmount += Number(shippingCharges);
+  }
+
+  // Add VAT
+  if (vat && Number(vat) > 0) {
+    totalAmount += Number(vat);
+  }
+
+  // Base payload common to both flows
+  const base = {
+    amount: convertToCents(totalAmount),
+    currency,
+    automatic_payment_methods: {
+      enabled: true,
+    },
+    description: `Payment for invoice ${order?.invoiceNumber}.`,
+    metadata: {
+      orderId: order?.id,
+      invoiceNumber: order?.invoiceNumber || "",
+      partnerId: order?.connectAccountId || "",
+      salesRepId: order?.salesRepId || "",
+      orderType: order?.orderOf || "Customer",
+      type: "payment-intent",
+      platform: "Busy Bean Coffee Inc.",
+    },
+  };
+
+  try {
+    // ====== BRANCH 1: DIRECT PARTNER (payment intent on connected account; no platform/customer/fees) ======
+    if (order.partnerType === "direct-partner") {
+      if (!order.connectAccountId) {
+        throw new Error("connectAccountId is required for direct-partner.");
+      }
+
+      const directParams = { ...base };
+
+      // If you have a customer that actually exists on the connected account, put it in order.connectedCustomerId
+      if (order.connectedCustomerId) {
+        directParams.customer = order.connectedCustomerId;
+        // Optional: save for off_session on that connected account
+        directParams.setup_future_usage = "off_session";
+      }
+
+      // No application_fee_amount, no transfer_data — it's a direct charge on the connected account
+
+      // Create the Payment Intent **on** the connected account
+      const paymentIntent = await stripe.paymentIntents.create(
+        directParams,
+        { stripeAccount: order.connectAccountId } // key line: header `Stripe-Account`
+      );
+
+      return {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        proportionalStripeFee: 0, // not calculated in this flow
+      };
+    }
+
+    // ====== BRANCH 2: EXISTING DROPSHIP / OTHER PARTNERS (destination charge with application fee) ======
+    const platformFeeInCents = convertToCents(order.adminReceivableAmount || 0);
+    const stripeFee = estimateStripeFeeFromDollars(order.totalBill || 0);
+    const stripeFeeInCents = convertToCents(stripeFee);
+    const adminProfitCents = platformFeeInCents + stripeFeeInCents;
+
+    const input = {
+      ...base,
+      customer: order?.stripeCustomerId || undefined, // platform customer is fine in this flow
+    };
+
+    if (order.connectAccountId) {
+      input.application_fee_amount = adminProfitCents;
+      input.transfer_data = {
+        destination: order.connectAccountId,
+      };
+      input.setup_future_usage = "off_session";
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(input);
+
+    return {
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      proportionalStripeFee: stripeFee,
+    };
+  } catch (err) {
+    console.error("❌ Payment Intent creation failed:", err);
+    throw new Error(err?.message || "Payment Intent creation failed.");
   }
 }
 
@@ -1071,6 +1180,7 @@ module.exports = {
   createCheckoutSession,
   createStripeAccountLink,
   createInvoiceWithItems,
+  paymentIntentForWebsitePayments,
   transferToLocalPatners,
   getInvoiceDetails,
   createStandardConnectAccount,
