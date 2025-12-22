@@ -230,6 +230,13 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
     "🚀 ~ customersListByQboStatus ~ qboMapCondition:",
     qboMapCondition
   );
+  // If entity is adminEmployee or partnerEmployee, filter for only those created by this employee
+  if (
+    req.user?.entity === "adminEmployee" ||
+    req.user?.entity === "partnerEmployee"
+  ) {
+    filters.employeeId = req.user.id;
+  }
 
   const data = await user.findAll({
     where: filters,

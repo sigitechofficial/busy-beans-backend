@@ -295,8 +295,24 @@ exports.deleteSalesRep = catchAsync(async (req, res, next) => {
 exports.addCustomer = catchAsync(async (req, res, next) => {
   req.body.info.verifiedAt = new Date();
   console.log("🚀 ~ exports.addCustomer=catchAsync ~ req.body:", req.body);
-  req.body.info.salesRepId = req.params?.srId || null;
-  req.body.info.createdBy = req.params?.srId ? "sales-rep" : "admin";
+
+  // Handle based on user entity type
+  if (req.user?.entity === "localPartner") {
+    req.body.info.salesRepId = req.user.localPartnerId;
+    req.body.info.createdBy = "sales-rep";
+  } else if (req.user?.entity === "partnerEmployee") {
+    req.body.info.employeeId = req.user.id;
+    req.body.info.salesRepId = req.user.localPartnerId;
+    req.body.info.createdBy = "sales-rep";
+  } else if (req.user?.entity === "adminEmployee") {
+    req.body.info.employeeId = req.user.id;
+    req.body.info.createdBy = "admin";
+  } else {
+    // Fallback to original logic
+    req.body.info.salesRepId = req.params?.srId || null;
+    req.body.info.createdBy = req.params?.srId ? "sales-rep" : "admin";
+  }
+
   const newUser = await user.create(req.body?.info);
 
   req.body.address.userId = newUser?.id;

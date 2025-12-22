@@ -329,7 +329,7 @@ router.get(
 );
 
 router.get(
-  "/customer-management/customer-list/:condition",
+  "/qbo-customer-management/customer-list/:condition",
   customerController.customersListByQboStatus
 );
 
@@ -560,6 +560,15 @@ router.get(
   adminReportsController.directPartnerReportSummary
 );
 
+router.get(
+  "/admin-reports/customer-detail-report/:userId",
+  adminReportsController.customerDetailsSummary
+);
+
+router.get(
+  "/admin-reports/category-wise-product-sales-report",
+  adminReportsController.categoryWiseProductSalesSummary
+);
 //! SUPPLIER REPORTS SECTION
 
 router.get(
