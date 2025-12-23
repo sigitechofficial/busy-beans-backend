@@ -607,7 +607,15 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
 // ],
 
 exports.customerSalesSummary = catchAsync(async (req, res, next) => {
-  const { startDate, endDate } = req.query;
+  const { startDate, endDate, salesRepId, userType } = req.query;
+  const salesRepNe = req.query["salesRep[ne]"];
+
+  console.log("🚀 ~ customerSalesSummary ~ req.query:", req.query);
+  console.log("🚀 ~ customerSalesSummary ~ startDate:", startDate);
+  console.log("🚀 ~ customerSalesSummary ~ endDate:", endDate);
+  console.log("🚀 ~ customerSalesSummary ~ salesRepId:", salesRepId);
+  console.log("🚀 ~ customerSalesSummary ~ userType:", userType);
+  console.log("🚀 ~ customerSalesSummary ~ salesRepNe:", salesRepNe);
 
   if (!startDate || !endDate) {
     return next(new AppError("startDate and endDate are required", 400));
@@ -631,58 +639,138 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
     return next(new AppError("Invalid date values", 400));
   }
 
-  // Build date filter condition for SQL queries
-  const dateFilter = `AND orders.on >= '${startDate}' AND orders.on <= '${endDate}'`;
+  // Build salesRep filter condition
+  let salesRepFilter = "";
 
-  const doc = await user.findAll({
-    where: literal(`
+  // Handle userType=admin (salesRepId IS NULL) - takes precedence
+  if (userType === "admin") {
+    salesRepFilter = "AND orders.salesRepId IS NULL";
+    console.log("🚀 ~ customerSalesSummary ~ Applied userType=admin filter");
+  }
+  // Handle salesRep[ne]=null (salesRepId IS NOT NULL)
+  else if (salesRepNe === "null" || salesRepNe === null) {
+    salesRepFilter = "AND orders.salesRepId IS NOT NULL";
+    console.log("🚀 ~ customerSalesSummary ~ Applied salesRep[ne]=null filter");
+  }
+  // Handle salesRepId array [29,27] or comma-separated string
+  else if (salesRepId) {
+    let salesRepIds = [];
+
+    // Handle array format: [29,27] or "29,27"
+    if (Array.isArray(salesRepId)) {
+      salesRepIds = salesRepId
+        .map((id) => parseInt(id))
+        .filter((id) => !isNaN(id));
+      console.log(
+        "🚀 ~ customerSalesSummary ~ salesRepId is Array:",
+        salesRepIds
+      );
+    } else if (typeof salesRepId === "string") {
+      // Handle string format like "[29,27]" or "29,27" or "[28]"
+      let cleaned = salesRepId.trim();
+      // Remove brackets if present
+      if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+        cleaned = cleaned.slice(1, -1);
+      }
+      // Split by comma and parse each ID
+      const parts = cleaned.split(",");
+      salesRepIds = parts
+        .map((id) => parseInt(id.trim()))
+        .filter((id) => !isNaN(id) && id > 0);
+      console.log(
+        "🚀 ~ customerSalesSummary ~ salesRepId is String, original:",
+        salesRepId
+      );
+      console.log("🚀 ~ customerSalesSummary ~ salesRepId cleaned:", cleaned);
+      console.log(
+        "🚀 ~ customerSalesSummary ~ Parsed salesRepIds:",
+        salesRepIds
+      );
+    } else if (typeof salesRepId === "number") {
+      // Handle single number
+      salesRepIds = [parseInt(salesRepId)];
+      console.log(
+        "🚀 ~ customerSalesSummary ~ salesRepId is Number:",
+        salesRepIds
+      );
+    }
+
+    if (salesRepIds.length > 0) {
+      const placeholders = salesRepIds.map((id) => `${id}`).join(", ");
+      salesRepFilter = `AND orders.salesRepId IN (${placeholders})`;
+      console.log(
+        "🚀 ~ customerSalesSummary ~ Applied salesRepId IN filter:",
+        salesRepFilter
+      );
+    } else {
+      console.log(
+        "🚀 ~ customerSalesSummary ~ WARNING: salesRepIds array is empty after parsing!"
+      );
+    }
+  }
+
+  console.log(
+    "🚀 ~ customerSalesSummary ~ Final salesRepFilter:",
+    salesRepFilter
+  );
+
+  // Build date filter condition for SQL queries
+  const dateFilter = `AND orders.on >= '${startDate}' AND orders.on <= '${endDate}' ${salesRepFilter}`;
+  console.log("🚀 ~ customerSalesSummary ~ dateFilter:", dateFilter);
+
+  // Build the WHERE clause with filter
+  const whereClause = `
           EXISTS (
             SELECT 1
             FROM orders 
             WHERE orders.userId = user.id
             ${dateFilter}
           )
-        `),
-    attributes: [
-      "id",
-      "name",
-      "companyName",
-      [
-        fn(
-          "FORMAT",
-          literal(`
+        `;
+  console.log("🚀 ~ customerSalesSummary ~ whereClause:", whereClause);
+
+  // Build the totalSpent subquery with filter
+  const totalSpentQuery = `
                 (
                   SELECT SUM(totalBill)
                   FROM orders WHERE orders.userID = user.id
                   ${dateFilter}
                 )
-              `),
-          1
-        ),
-        "totatSpent",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id ${dateFilter})`
-        ),
-        "numberOfOrders",
-      ],
-      [
-        fn(
-          "FORMAT",
-          literal(`
+              `;
+  console.log("🚀 ~ customerSalesSummary ~ totalSpentQuery:", totalSpentQuery);
+
+  // Build the numberOfOrders subquery with filter
+  const numberOfOrdersQuery = `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id ${dateFilter})`;
+  console.log(
+    "🚀 ~ customerSalesSummary ~ numberOfOrdersQuery:",
+    numberOfOrdersQuery
+  );
+
+  // Build the avgSpent subquery with filter
+  const avgSpentQuery = `
                 (
                   SELECT SUM(totalBill) / NULLIF(COUNT(*), 0)
                   FROM orders WHERE orders.userID = user.id
                   ${dateFilter}
                 )
-              `),
-          1
-        ),
-        "avgSpent",
-      ],
+              `;
+  console.log("🚀 ~ customerSalesSummary ~ avgSpentQuery:", avgSpentQuery);
+
+  console.log("🚀 ~ customerSalesSummary ~ Executing query...");
+  const doc = await user.findAll({
+    where: literal(whereClause),
+    attributes: [
+      "id",
+      "name",
+      "companyName",
+      [literal(totalSpentQuery), "totatSpent"],
+      [literal(numberOfOrdersQuery), "numberOfOrders"],
+      [fn("FORMAT", literal(avgSpentQuery), 1), "avgSpent"],
     ],
   });
+
+  console.log("🚀 ~ customerSalesSummary ~ Query result count:", doc?.length);
+  console.log("🚀 ~ customerSalesSummary ~ First result:", doc?.[0]);
 
   res.status(200).json({
     status: "success",
@@ -776,7 +864,8 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
 });
 
 exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
-  const { startDate, endDate } = req.query;
+  const { startDate, endDate, salesRepId, userType } = req.query;
+  const salesRepNe = req.query["salesRep[ne]"];
 
   if (!startDate || !endDate) {
     return next(new AppError("startDate and endDate are required", 400));
@@ -798,6 +887,53 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
   const end = new Date(endDate);
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
     return next(new AppError("Invalid date values", 400));
+  }
+
+  // Build salesRep filter conditions
+  let orderSalesRepFilter = "";
+  let partnerOrderSalesRepFilter = "";
+  const replacements = { startDate, endDate };
+
+  // Handle userType=admin (salesRepId IS NULL) - takes precedence
+  if (userType === "admin") {
+    orderSalesRepFilter = "AND orders.salesRepId IS NULL";
+    partnerOrderSalesRepFilter = "AND partnerOrders.salesRepId IS NULL";
+  }
+  // Handle salesRep[ne]=null (salesRepId IS NOT NULL)
+  else if (salesRepNe === "null" || salesRepNe === null) {
+    orderSalesRepFilter = "AND orders.salesRepId IS NOT NULL";
+    partnerOrderSalesRepFilter = "AND partnerOrders.salesRepId IS NOT NULL";
+  }
+  // Handle salesRepId array [29,27] or comma-separated string
+  else if (salesRepId) {
+    let salesRepIds = [];
+
+    // Handle array format: [29,27] or "29,27"
+    if (Array.isArray(salesRepId)) {
+      salesRepIds = salesRepId
+        .map((id) => parseInt(id))
+        .filter((id) => !isNaN(id));
+    } else if (typeof salesRepId === "string") {
+      // Handle string format like "[29,27]" or "29,27"
+      const cleaned = salesRepId.replace(/[\[\]]/g, "");
+      salesRepIds = cleaned
+        .split(",")
+        .map((id) => parseInt(id.trim()))
+        .filter((id) => !isNaN(id));
+    }
+
+    if (salesRepIds.length > 0) {
+      const placeholders = salesRepIds
+        .map((_, index) => `:salesRepId${index}`)
+        .join(", ");
+      orderSalesRepFilter = `AND orders.salesRepId IN (${placeholders})`;
+      partnerOrderSalesRepFilter = `AND partnerOrders.salesRepId IN (${placeholders})`;
+
+      // Add replacements for each salesRepId
+      salesRepIds.forEach((id, index) => {
+        replacements[`salesRepId${index}`] = id;
+      });
+    }
   }
 
   // Build the SQL query to get category-wise product sales summary
@@ -928,6 +1064,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       LEFT JOIN categories ON categories.id = products.categoryId
       WHERE orders.on >= :startDate
         AND orders.on <= :endDate
+        ${orderSalesRepFilter}
         AND items.deleted = 0
         AND items.type = 'product'
         AND products.id IS NOT NULL
@@ -949,6 +1086,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       LEFT JOIN categories ON categories.id = products.categoryId
       WHERE partnerOrders.on >= :startDate
         AND partnerOrders.on <= :endDate
+        ${partnerOrderSalesRepFilter}
         AND partnerOrderItems.deleted = 0
         AND partnerOrderItems.type = 'product'
         AND products.id IS NOT NULL
@@ -959,7 +1097,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
   `;
 
   const rawData = await order.sequelize.query(finalQuery, {
-    replacements: { startDate, endDate },
+    replacements: replacements,
     type: order.sequelize.QueryTypes.SELECT,
   });
 

@@ -561,6 +561,11 @@ router.get(
 );
 
 router.get(
+  "/admin-reports/customer-sales-report",
+  adminReportsController.customerSalesSummary
+);
+
+router.get(
   "/admin-reports/customer-detail-report/:userId",
   adminReportsController.customerDetailsSummary
 );
