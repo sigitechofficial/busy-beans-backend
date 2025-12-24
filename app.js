@@ -31,7 +31,18 @@ app.set("views", __dirname + "/views");
 const viewRoute = require("./routes/viewRoutes");
 
 app.use("/view", viewRoute);
-app.use("/webhook", bodyParser.raw({ type: "application/json" }), webhookRoute);
+
+// Stripe webhook needs raw body for signature verification
+// Meta webhook needs JSON body parser
+// Apply raw body parser only to Stripe route
+app.use(
+  "/webhook/busy-beans-coffee",
+  bodyParser.raw({ type: "application/json" }),
+  webhookRoute
+);
+
+// Meta webhook routes use JSON parser
+app.use("/webhook", express.json(), webhookRoute);
 
 dotenv.config({ path: "./.env" });
 // Start express app
