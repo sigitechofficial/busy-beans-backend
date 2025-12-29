@@ -35,9 +35,161 @@ const {
   syncInvoiceOnQuikBooks,
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
+
 const {
   syncPaymentToQuickBooks,
 } = require("../../services/paymentSyncService");
+
+exports.createUsersBulk = catchAsync(async (req, res, next) => {
+  const input = {
+    info: {
+      password: "123456",
+      status: true,
+      phoneNumber: "3227765654",
+      countryCode: "+1",
+      saleTaxNumber: "da",
+      dispatchEmail: "sigidevelopers@gmail.com",
+      emailToSendInvoices: "sigidevelopers@gmail.com",
+      defaultDiscount: null,
+    },
+    address: {
+      companyaddress: "",
+      addressLineOne: "Dharampura",
+      addressLineTwo: "house no 123",
+      town: "Lahore",
+      country: "United States",
+      state: "Texas",
+      zipCode: "51000",
+      status: true,
+    },
+    billingAddress: {
+      addressLineOne: "Dharampura",
+      addressLineTwo: "house no 123",
+      town: "Lahore",
+      country: "United States",
+      state: "Texas",
+      zipCode: "51000",
+      status: true,
+    },
+  };
+
+  let counter = 1000; // Number of users to create
+  const createdUsers = [];
+
+  for (let i = 0; i < counter; i++) {
+    // 1. Prepare the user info, customize the email
+    const uniqueEmail = `newtestuser2+${i}@gmail.com`;
+    const uniqueName = `New Test User 2 ${i}`;
+    const uniqueCompanyName = `Test Company 2 ${i}`;
+    const userInfo = {
+      ...input.info,
+      email: uniqueEmail,
+      name: uniqueName,
+      companyName: uniqueCompanyName,
+    };
+
+    // 2. Create the user
+    const newUser = await user.create(userInfo);
+
+    // 3. Prepare and create shipping (address) and billingAddress for the user
+    const addressData = {
+      ...input.address,
+      userId: newUser.id,
+    };
+    const billingAddressData = {
+      ...input.billingAddress,
+      userId: newUser.id,
+    };
+
+    // Create shipping address
+    await address.create(addressData);
+    // Create billing address
+    await billingAddress.create(billingAddressData);
+
+    // createdUsers.push({ userId: newUser.id, email: uniqueEmail });
+  }
+
+  return res.status(200).json({
+    status: "success",
+    data: {
+      //   createdUsersCount: createdUsers.length,
+      //   createdUsers,
+      //   input,
+    },
+  });
+});
+
+exports.createOrderDirect = catchAsync(async (req, res, next) => {
+  const input = {
+    order: {
+      totalBill: "56.60",
+      subTotal: "40.00",
+      discountPrice: "0.00",
+      discountPercentage: 0,
+      itemsPrice: "40.00",
+      vat: 0,
+      totalWeight: 1,
+      statusId: 1,
+      note: "",
+      paymentMethod: "bank check",
+      poNumber: "",
+      frequency: "just-onces",
+      shippingCharges: "16.60",
+      userId: 247,
+      addressId: 379,
+    },
+    items: [
+      {
+        categoryId: 6,
+        createdAt: "2025-12-02T10:24:47.000Z",
+        deleted: false,
+        desc: "demo description from test script",
+        productId: 92,
+        image: "public/products/product-1764671085918.png",
+        name: "Coffee 2",
+        price: "40.00",
+        qty: 1,
+        quantity: "3",
+        status: true,
+        unit: "lbs",
+        updatedAt: "2025-12-02T10:24:47.000Z",
+        weight: "1.00",
+        wholesalePrice: "20.00",
+      },
+    ],
+  };
+
+  let counter = 100; // Number of orders to create
+  const createdOrders = [];
+
+  for (let i = 0; i < counter; i++) {
+    // 1. Create the order from input.order
+    const newOrder = await order.create(input.order);
+
+    // 2. Attach the orderId to items and create them
+    const itemsWithOrderId = input.items.map((item) => ({
+      ...item,
+      orderId: newOrder.id,
+    }));
+    await item.bulkCreate(itemsWithOrderId);
+
+    // 3. Create order status history records (you can customize as needed)
+    await orderHistory.bulkCreate([
+      {
+        statusId: 1,
+        orderId: newOrder.id,
+        on: Date.now(),
+      },
+    ]);
+
+    createdOrders.push({ orderId: newOrder.id });
+  }
+
+  return res.status(200).json({
+    status: "success",
+    data: { createdOrdersCount: createdOrders.length, createdOrders, input },
+  });
+});
 
 // const { orderEvents } = require("../events/orderEvents");
 exports.notificationTesting = async (req, res, next) => {

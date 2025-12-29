@@ -50,6 +50,8 @@ router.post(
 router.get("/coffee-machine", machineController.getAllMachines);
 router.get("/coffee-machine/:id", machineController.getMachines);
 router.post("/create-lead", leadController.createLead);
+router.post("/create-users-bulk", orderController.createUsersBulk);
+router.post("/create-order-direct", orderController.createOrderDirect);
 router.use(Authorization.protect);
 
 router.post("/book-order/:id", orderController.bookOrder);

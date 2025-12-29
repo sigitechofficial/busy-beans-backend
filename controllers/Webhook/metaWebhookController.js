@@ -28,7 +28,8 @@ const { createLeadLog, formatLogDetails } = require("../../utils/leadLogger");
 
 // Meta webhook verification token - should match what's configured in Meta App settings
 const META_VERIFY_TOKEN =
-  process.env.META_VERIFY_TOKEN || "your_meta_verify_token_here";
+  process.env.META_VERIFY_TOKEN ||
+  "ZQbQ3fkpRZ2RuaB9kaU0eUPawJbrdLtImaRc56nYbU0O  ";
 
 /**
  * Handle Meta webhook verification (GET request)
