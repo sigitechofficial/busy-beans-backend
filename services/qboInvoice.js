@@ -360,6 +360,19 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       });
     }
 
+    // Build PrivateNote - include Local Partner info if both userId and salesRepId exist
+    let privateNote = order.note || "";
+    if (order.userId && order.salesRepId) {
+      const salesRepName = order.salesRepName || "";
+      const territoryName = order.territoryName || "";
+      const localPartnerInfo = `Local Partner: ${salesRepName}${territoryName ? ` (${territoryName})` : ""}`;
+      if (privateNote) {
+        privateNote = `${privateNote}\n${localPartnerInfo}`;
+      } else {
+        privateNote = localPartnerInfo;
+      }
+    }
+
     const payload = {
       CustomerRef: { value: String(order.qboCustomerId) },
       Line: Lines,
@@ -373,7 +386,7 @@ async function createQboInvoice({ order, accessToken, realmId }) {
         .toISOString()
         .slice(0, 10),
       DocNumber: order.invoiceNumber || undefined,
-      PrivateNote: order.note || undefined,
+      PrivateNote: privateNote || undefined,
     };
 
     console.log("⚡ [QBO] Invoice Payload:", payload);

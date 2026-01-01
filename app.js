@@ -7,6 +7,8 @@ const cookieParser = require("cookie-parser");
 const compression = require("compression");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 
 const app = express();
 
@@ -104,6 +106,16 @@ app.get("/", (req, res) => {
     message: "BusyBeans backend is live!",
   });
 });
+
+// Swagger Documentation
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Busy Beans Coffee API Documentation",
+  })
+);
 
 // Test middleware
 app.use((req, res, next) => {

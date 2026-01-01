@@ -9,6 +9,7 @@ const {
   billingAddress,
   shippingCompanies,
   qboToken,
+  sequelize,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
@@ -39,6 +40,125 @@ const {
 const {
   syncPaymentToQuickBooks,
 } = require("../../services/paymentSyncService");
+
+// Service function to handle user bulk creation in background (fire-and-forget)
+// Optimized for performance with transactions, chunking, and disabled validations
+async function bulkCreateUsersBackground(input, counter) {
+  const startTime = Date.now();
+  const BATCH_SIZE = 500; // Process in batches to optimize memory and performance
+
+  try {
+    console.log(`🚀 Starting bulk creation of ${counter} users...`);
+
+    // Process in batches for better memory management and performance
+    for (let offset = 0; offset < counter; offset += BATCH_SIZE) {
+      const batchSize = Math.min(BATCH_SIZE, counter - offset);
+      const batchStartTime = Date.now();
+
+      await processBatch(input, batchSize, offset, sequelize);
+
+      const batchDuration = Date.now() - batchStartTime;
+      console.log(
+        `✅ Batch ${Math.floor(offset / BATCH_SIZE) + 1} completed: ${batchSize} users in ${batchDuration}ms (${(batchSize / (batchDuration / 1000)).toFixed(2)} users/sec)`
+      );
+    }
+
+    const totalDuration = Date.now() - startTime;
+    console.log(
+      `🎉 Bulk creation completed: ${counter} users in ${totalDuration}ms (${(counter / (totalDuration / 1000)).toFixed(2)} users/sec)`
+    );
+  } catch (err) {
+    console.error("❌ Error in bulkCreateUsersBackground:", err);
+    throw err; // Re-throw to allow caller to handle if needed
+  }
+}
+
+/**
+ * Process a single batch of users with optimized bulk operations
+ */
+async function processBatch(input, batchSize, offset, sequelize) {
+  const transaction = await sequelize.transaction();
+  const bcrypt = require("bcryptjs");
+
+  try {
+    // 1. Pre-hash password ONCE (since all test users have the same password)
+    // This avoids hashing 500 times in the beforeBulkCreate hook (which takes ~300ms each)
+    // Hashing once saves ~150 seconds per batch of 500!
+    const baseUserInfo = { ...input.info };
+    let hashedPassword = baseUserInfo.password;
+    if (baseUserInfo.password) {
+      const SALT_ROUNDS = 12;
+      hashedPassword = bcrypt.hashSync(baseUserInfo.password, SALT_ROUNDS);
+      console.log(
+        `🔐 Pre-hashed password once for batch (saved ${batchSize} hash operations)`
+      );
+    }
+
+    // 2. Prepare user creation array (pre-allocated for better performance)
+    const userInfos = new Array(batchSize);
+
+    for (let i = 0; i < batchSize; i++) {
+      const index = offset + i;
+      userInfos[i] = {
+        ...baseUserInfo,
+        password: hashedPassword, // Use pre-hashed password
+        email: `newtestuser2+${index}@gmail.com`,
+        name: `New Test User 2 ${index}`,
+        companyName: `Test Company 2 ${index}`,
+      };
+    }
+
+    // 3. Bulk create users with optimizations
+    // - returning: true to get IDs for addresses
+    // - validate: false for faster inserts (test data)
+    // - transaction: for atomicity and better performance
+    // - hooks: false to skip beforeBulkCreate hook (we already hashed passwords)
+    const newUsers = await user.bulkCreate(userInfos, {
+      returning: true,
+      validate: false, // Skip validation for test data - much faster
+      hooks: false, // Skip hooks - we already hashed passwords, saves ~150 seconds!
+      transaction,
+    });
+
+    // 3. Pre-allocate address arrays (faster than dynamic push)
+    const addressesToCreate = new Array(batchSize);
+    const billingAddressesToCreate = new Array(batchSize);
+    const baseAddress = { ...input.address };
+    const baseBillingAddress = { ...input.billingAddress };
+
+    // Fill arrays directly (faster than forEach with push)
+    for (let i = 0; i < batchSize; i++) {
+      addressesToCreate[i] = {
+        ...baseAddress,
+        userId: newUsers[i].id,
+      };
+      billingAddressesToCreate[i] = {
+        ...baseBillingAddress,
+        userId: newUsers[i].id,
+      };
+    }
+
+    // 4. Bulk create addresses in parallel (already optimized)
+    // validate: false for faster inserts
+    await Promise.all([
+      address.bulkCreate(addressesToCreate, {
+        validate: false,
+        transaction,
+      }),
+      billingAddress.bulkCreate(billingAddressesToCreate, {
+        validate: false,
+        transaction,
+      }),
+    ]);
+
+    // Commit transaction for this batch
+    await transaction.commit();
+  } catch (err) {
+    await transaction.rollback();
+    console.error(`❌ Error processing batch (offset: ${offset}):`, err);
+    throw err;
+  }
+}
 
 exports.createUsersBulk = catchAsync(async (req, res, next) => {
   const input = {
@@ -74,51 +194,91 @@ exports.createUsersBulk = catchAsync(async (req, res, next) => {
   };
 
   let counter = 1000; // Number of users to create
-  const createdUsers = [];
 
-  for (let i = 0; i < counter; i++) {
-    // 1. Prepare the user info, customize the email
-    const uniqueEmail = `newtestuser2+${i}@gmail.com`;
-    const uniqueName = `New Test User 2 ${i}`;
-    const uniqueCompanyName = `Test Company 2 ${i}`;
-    const userInfo = {
-      ...input.info,
-      email: uniqueEmail,
-      name: uniqueName,
-      companyName: uniqueCompanyName,
-    };
+  // Kick off background task - don't await
+  bulkCreateUsersBackground(input, counter);
 
-    // 2. Create the user
-    const newUser = await user.create(userInfo);
-
-    // 3. Prepare and create shipping (address) and billingAddress for the user
-    const addressData = {
-      ...input.address,
-      userId: newUser.id,
-    };
-    const billingAddressData = {
-      ...input.billingAddress,
-      userId: newUser.id,
-    };
-
-    // Create shipping address
-    await address.create(addressData);
-    // Create billing address
-    await billingAddress.create(billingAddressData);
-
-    // createdUsers.push({ userId: newUser.id, email: uniqueEmail });
-  }
-
-  return res.status(200).json({
-    status: "success",
-    data: {
-      //   createdUsersCount: createdUsers.length,
-      //   createdUsers,
-      //   input,
-    },
+  // Immediately respond to client
+  return res.status(202).json({
+    status: "processing",
+    message: `Bulk user creation started for ${counter} users. Users will be created in the background.`,
   });
 });
+/**
+ * Process a single batch of orders with optimized bulk operations
+ */
+async function processOrderBatch(input, batchSize, offset, sequelize) {
+  const transaction = await sequelize.transaction();
 
+  try {
+    const baseOrder = { ...input.order };
+    const baseItems = input.items;
+    const itemsPerOrder = baseItems.length;
+
+    // 1. Prepare orders array with unique invoice numbers
+    const ordersToCreate = new Array(batchSize);
+    for (let i = 0; i < batchSize; i++) {
+      const index = offset + i;
+      ordersToCreate[i] = {
+        ...baseOrder,
+        invoiceNumber: `INV11${index}`,
+      };
+    }
+
+    // 2. Bulk create orders
+    const newOrders = await order.bulkCreate(ordersToCreate, {
+      returning: true,
+      validate: false, // Skip validation for test data - faster
+      transaction,
+    });
+
+    // 3. Prepare items array (flattened for all orders)
+    const itemsToCreate = new Array(batchSize * itemsPerOrder);
+    let itemIndex = 0;
+    for (let i = 0; i < batchSize; i++) {
+      const orderId = newOrders[i].id;
+      for (let j = 0; j < itemsPerOrder; j++) {
+        itemsToCreate[itemIndex] = {
+          ...baseItems[j],
+          orderId: orderId,
+        };
+        itemIndex++;
+      }
+    }
+
+    // 4. Prepare order history array
+    const orderHistoriesToCreate = new Array(batchSize);
+    const currentTime = Date.now();
+    for (let i = 0; i < batchSize; i++) {
+      orderHistoriesToCreate[i] = {
+        statusId: 1,
+        orderId: newOrders[i].id,
+        on: currentTime,
+      };
+    }
+
+    // 5. Bulk create items and order histories in parallel
+    await Promise.all([
+      item.bulkCreate(itemsToCreate, {
+        validate: false,
+        transaction,
+      }),
+      orderHistory.bulkCreate(orderHistoriesToCreate, {
+        validate: false,
+        transaction,
+      }),
+    ]);
+
+    await transaction.commit();
+
+    // Return order IDs for response
+    return newOrders.map((o) => ({ orderId: o.id }));
+  } catch (err) {
+    await transaction.rollback();
+    console.error(`❌ Error processing order batch (offset: ${offset}):`, err);
+    throw err;
+  }
+}
 exports.createOrderDirect = catchAsync(async (req, res, next) => {
   const input = {
     order: {
@@ -159,35 +319,48 @@ exports.createOrderDirect = catchAsync(async (req, res, next) => {
     ],
   };
 
-  let counter = 100; // Number of orders to create
+  const counter = 100; // Number of orders to create
+  const BATCH_SIZE = 50; // Process in batches for better performance
+  const startTime = Date.now();
   const createdOrders = [];
 
-  for (let i = 0; i < counter; i++) {
-    // 1. Create the order from input.order
-    const newOrder = await order.create(input.order);
+  console.log(`🚀 Starting bulk creation of ${counter} orders...`);
 
-    // 2. Attach the orderId to items and create them
-    const itemsWithOrderId = input.items.map((item) => ({
-      ...item,
-      orderId: newOrder.id,
-    }));
-    await item.bulkCreate(itemsWithOrderId);
+  // Process in batches
+  for (let offset = 0; offset < counter; offset += BATCH_SIZE) {
+    const batchSize = Math.min(BATCH_SIZE, counter - offset);
+    const batchStartTime = Date.now();
 
-    // 3. Create order status history records (you can customize as needed)
-    await orderHistory.bulkCreate([
-      {
-        statusId: 1,
-        orderId: newOrder.id,
-        on: Date.now(),
-      },
-    ]);
+    const batchOrders = await processOrderBatch(
+      input,
+      batchSize,
+      offset,
+      sequelize
+    );
 
-    createdOrders.push({ orderId: newOrder.id });
+    createdOrders.push(...batchOrders);
+
+    const batchDuration = Date.now() - batchStartTime;
+    console.log(
+      `✅ Batch ${Math.floor(offset / BATCH_SIZE) + 1} completed: ${batchSize} orders in ${batchDuration}ms (${(batchSize / (batchDuration / 1000)).toFixed(2)} orders/sec)`
+    );
   }
+
+  const totalDuration = Date.now() - startTime;
+  console.log(
+    `🎉 Bulk order creation completed: ${counter} orders in ${totalDuration}ms (${(counter / (totalDuration / 1000)).toFixed(2)} orders/sec)`
+  );
 
   return res.status(200).json({
     status: "success",
-    data: { createdOrdersCount: createdOrders.length, createdOrders, input },
+    data: {
+      createdOrdersCount: createdOrders.length,
+      createdOrders,
+      performance: {
+        totalTime: totalDuration,
+        ordersPerSecond: (counter / (totalDuration / 1000)).toFixed(2),
+      },
+    },
   });
 });
 

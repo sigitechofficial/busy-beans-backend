@@ -17,6 +17,7 @@ const AppError = require("../../utils/appError");
 const { nextFrequencyDate } = require("../../utils/nextFrequencyDate");
 const factory = require("../handlerFactory");
 const { Op, literal, fn, col, where } = require("sequelize");
+const APIFeatures = require("../../utils/apiFeatures");
 const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
@@ -62,6 +63,7 @@ const { setOrderFrequency } = require("../admin/orderFrequencyController");
 console.log(typeof setOrderFrequency);
 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
+  // Build manual filter conditions (preserve existing logic)
   const included = [
     {
       model: item,
@@ -105,53 +107,127 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     [Op.lte]: new Date(), // or moment().toDate()
   };
 
-  const doc = await orderFrequency.findAll({
-    where: {
-      ...condition,
-      nextOrderDate: {
-        [Op.notIn]: literal(`
-          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
-        `),
-      },
+  // Define searchable columns for orderFrequency
+  const searchableFields = ["id", "frequency", "orderId", "userId"];
+
+  // Build API features (filter, search, sort, fields, pagination)
+  const features = new APIFeatures(orderFrequency, req.query)
+    .filter()
+    .search(searchableFields) // Add search functionality
+    .sort()
+    .limitFields()
+    .paginate();
+
+  // Get the base query options
+  const queryOptions = features.getQuery();
+
+  // Add the complex nextOrderDate condition to condition object first
+  const nextOrderDateCondition = {
+    nextOrderDate: {
+      [Op.notIn]: literal(`
+        (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
+      `),
     },
-    include: included,
-    attributes: [
-      "id",
-      [
-        literal(
-          `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
-        ),
-        "customerName",
-      ],
-      [
-        literal(
-          `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
-        ),
-        "companyName",
-      ],
-      [
-        literal(`COALESCE(
-         (SELECT SUM(qty)
-          FROM items
-          WHERE items.orderId = orderFrequency.orderId ), 0)`),
-        "totalQuantity",
-      ],
-      [
-        literal(
-          `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
-        ),
-        "email",
-      ],
-      "status",
-      "orderDate",
-      "nextOrderDate",
-      "frequency",
-      "visibilityDate",
+  };
+
+  // Merge manual filter conditions with existing where conditions
+  // Handle both simple object merge and Op.and structure
+  if (Object.keys(condition).length > 0) {
+    if (queryOptions.where && queryOptions.where[Op.and]) {
+      // If where already has Op.and structure, add condition to it
+      queryOptions.where[Op.and].push({
+        ...condition,
+        ...nextOrderDateCondition,
+      });
+    } else if (queryOptions.where) {
+      // If where exists but no Op.and, create Op.and structure
+      queryOptions.where = {
+        [Op.and]: [
+          queryOptions.where,
+          {
+            ...condition,
+            ...nextOrderDateCondition,
+          },
+        ],
+      };
+    } else {
+      // If no existing where, just use condition with nextOrderDate
+      queryOptions.where = {
+        ...condition,
+        ...nextOrderDateCondition,
+      };
+    }
+  } else {
+    // If no condition object, just add nextOrderDate
+    if (queryOptions.where && queryOptions.where[Op.and]) {
+      queryOptions.where[Op.and].push(nextOrderDateCondition);
+    } else if (queryOptions.where) {
+      queryOptions.where = {
+        [Op.and]: [queryOptions.where, nextOrderDateCondition],
+      };
+    } else {
+      queryOptions.where = nextOrderDateCondition;
+    }
+  }
+
+  // Add custom includes
+  queryOptions.include = included;
+
+  // Custom attributes with literal fields
+  queryOptions.attributes = [
+    "id",
+    [
+      literal(
+        `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+      ),
+      "customerName",
     ],
+    [
+      literal(
+        `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+      ),
+      "companyName",
+    ],
+    [
+      literal(`COALESCE(
+       (SELECT SUM(qty)
+        FROM items
+        WHERE items.orderId = orderFrequency.orderId ), 0)`),
+      "totalQuantity",
+    ],
+    [
+      literal(
+        `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+      ),
+      "email",
+    ],
+    "status",
+    "orderDate",
+    "nextOrderDate",
+    "frequency",
+    "visibilityDate",
+  ];
+
+  // Get pagination metadata using APIFeatures
+  // Need to include the nextOrderDate condition in count query too
+  const paginationCondition = {
+    ...condition,
+    ...nextOrderDateCondition,
+  };
+
+  const pagination = await features.getPaginationMetadata(orderFrequency, {
+    include: queryOptions.include,
+    where: paginationCondition, // Pass complete condition including nextOrderDate
   });
 
+  // Execute the query
+  const doc = await orderFrequency.findAll(queryOptions);
+
+  // Return response
   res.status(200).json({
     status: "success",
+    results: doc.length,
+    pagination: pagination,
     data: {
       order: doc,
     },

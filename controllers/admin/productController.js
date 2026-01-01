@@ -11,6 +11,7 @@ const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
 const { response } = require("../../utils/response");
+const APIFeatures = require("../../utils/apiFeatures");
 
 exports.addProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -46,7 +47,36 @@ exports.addProduct = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.getAllProducts = factory.getAll(product);
+exports.getAllProducts = catchAsync(async (req, res, next) => {
+  // Define searchable columns for products
+  const searchableFields = ["id", "name", "sku", "productCode", "desc"];
+
+  // Build API features (filter, search, sort, fields, pagination)
+  const features = new APIFeatures(product, req.query)
+    .filter()
+    .search(searchableFields) // Add search functionality
+    .sort()
+    .limitFields()
+    .paginate();
+
+  // Get the base query options
+  const queryOptions = features.getQuery();
+
+  // Get pagination metadata
+  const pagination = await features.getPaginationMetadata(product);
+
+  // Execute the query
+  const doc = await product.findAll(queryOptions);
+
+  res.status(200).json({
+    status: "success",
+    results: doc.length,
+    pagination: pagination,
+    data: {
+      data: doc,
+    },
+  });
+});
 
 exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   const data = await product.findAll({

@@ -440,8 +440,20 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     condition.userId = req.user.id;
   }
   console.log("🚀 ~ condition----:", condition);
+
+  // Define searchable columns for orders
+  const searchableFields = [
+    "id",
+    "invoiceNumber",
+    "poNumber",
+    "note",
+    "paymentMethod",
+    "shippingCompany",
+  ];
+
   const features = new APIFeatures(order, req.query)
     .filter()
+    .search(searchableFields) // Add search functionality
     .sort()
     .limitFields()
     .paginate();
@@ -449,8 +461,22 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   // Get the base query options (where, limit, offset, order, etc.)
   const queryOptions = features.getQuery();
 
-  // Merge manual filter conditions
-  queryOptions.where = { ...(queryOptions.where || {}), ...condition };
+  // Merge manual filter conditions with existing where conditions
+  // Handle both simple object merge and Op.and structure
+  if (Object.keys(condition).length > 0) {
+    if (queryOptions.where && queryOptions.where[Op.and]) {
+      // If where already has Op.and structure, add condition to it
+      queryOptions.where[Op.and].push(condition);
+    } else if (queryOptions.where) {
+      // If where exists but no Op.and, create Op.and structure
+      queryOptions.where = {
+        [Op.and]: [queryOptions.where, condition],
+      };
+    } else {
+      // If no existing where, just use condition
+      queryOptions.where = condition;
+    }
+  }
 
   // Add your custom includes
   queryOptions.include = [
@@ -602,13 +628,27 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     ],
   ];
 
+  // Get pagination metadata using APIFeatures
+  // Note: search conditions are already in queryOptions.where, we just need to pass the additional condition
+  const pagination = await features.getPaginationMetadata(order, {
+    include: queryOptions.include,
+    where: condition, // Pass additional where conditions (will be merged with filter and search conditions)
+  });
+
   // Execute the query
+  queryOptions.where;
+
+  console.log("🚀 ~ queryOptions.where:", queryOptions.where);
+  console.log("🚀 ~ pagination:", pagination);
+
   const doc = await order.findAll(queryOptions);
+  console.log("🚀 ~ doc.length:", doc.length);
 
   // Return response
   res.status(200).json({
     status: "success",
     results: doc.length,
+    pagination: pagination,
     data: {
       data: doc,
     },
@@ -1747,6 +1787,7 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
            FROM orders
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
+           AND orders.type = 'regular-order'
            ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
         ),
         "count",

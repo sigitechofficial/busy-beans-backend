@@ -21,7 +21,11 @@ module.exports = (sequelize) => {
         type: DataTypes.DATEONLY,
         allowNull: true,
       },
-
+      deleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+      },
       frequency: {
         type: DataTypes.ENUM(
           "just-onces",

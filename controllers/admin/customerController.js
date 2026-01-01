@@ -17,8 +17,10 @@ const { response } = require("../../utils/response");
 const REDIS = require("../../utils/redisHandling");
 const { Op, literal, fn, col, where } = require("sequelize");
 const Stripe = require("../stripe");
+const APIFeatures = require("../../utils/apiFeatures");
 
 exports.customersList = catchAsync(async (req, res, next) => {
+  // Build manual filter conditions (preserve existing logic)
   const filters = { deleted: 0 };
   if (req.params?.sr == "not-assign") filters.salesRepId = null;
   else if (req.params?.sr == "assign") filters.salesRepId = { [Op.ne]: null };
@@ -45,59 +47,110 @@ exports.customersList = catchAsync(async (req, res, next) => {
   }
   console.log("🚀 ~ filters:", filters);
 
-  const data = await user.findAll({
-    where: filters,
-    attributes: [
-      [
-        literal("(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)"),
-        "totalOrderPlaced",
-      ],
-      [
-        literal(
-          "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)"
-        ),
-        "totalOrderAmount",
-      ],
-      [
-        literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
-        ),
-        "salesRepName",
-      ],
-      [
-        literal(
-          `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
-        ),
-        "salesRepState",
-      ],
-      [
-        literal(
-          `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`
-        ),
-        "preferredPaymentMethod",
-      ],
-      [
-        literal(
-          `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
-        ),
-        "employee",
-      ],
-      `id`,
-      `name`,
-      `email`,
-      `status`,
-      `image`,
-      `phoneNumber`,
-      `countryCode`,
-      `saleTaxNumber`,
-      `emailToSendInvoices`,
-      `companyName`,
+  // Define searchable columns for customers
+  const searchableFields = [
+    "id",
+    "name",
+    "email",
+    "companyName",
+    "phoneNumber",
+    "saleTaxNumber",
+    "emailToSendInvoices",
+  ];
+
+  // Build API features (filter, search, sort, fields, pagination)
+  const features = new APIFeatures(user, req.query)
+    .filter()
+    .search(searchableFields) // Add search functionality
+    .sort()
+    .limitFields()
+    .paginate();
+
+  // Get the base query options
+  const queryOptions = features.getQuery();
+
+  // Merge manual filter conditions with existing where conditions
+  // Handle both simple object merge and Op.and structure
+  if (Object.keys(filters).length > 0) {
+    if (queryOptions.where && queryOptions.where[Op.and]) {
+      // If where already has Op.and structure, add filters to it
+      queryOptions.where[Op.and].push(filters);
+    } else if (queryOptions.where) {
+      // If where exists but no Op.and, create Op.and structure
+      queryOptions.where = {
+        [Op.and]: [queryOptions.where, filters],
+      };
+    } else {
+      // If no existing where, just use filters
+      queryOptions.where = filters;
+    }
+  }
+
+  // Add custom includes
+  queryOptions.include = [{ model: address }];
+
+  // Custom attributes with literal fields
+  queryOptions.attributes = [
+    [
+      literal("(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)"),
+      "totalOrderPlaced",
     ],
-    include: [{ model: address }],
+    [
+      literal(
+        "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)"
+      ),
+      "totalOrderAmount",
+    ],
+    [
+      literal(
+        `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+      ),
+      "salesRepName",
+    ],
+    [
+      literal(
+        `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+      ),
+      "salesRepState",
+    ],
+    [
+      literal(
+        `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`
+      ),
+      "preferredPaymentMethod",
+    ],
+    [
+      literal(
+        `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
+      ),
+      "employee",
+    ],
+    `id`,
+    `name`,
+    `email`,
+    `status`,
+    `image`,
+    `phoneNumber`,
+    `countryCode`,
+    `saleTaxNumber`,
+    `emailToSendInvoices`,
+    `companyName`,
+  ];
+
+  // Get pagination metadata using APIFeatures
+  const pagination = await features.getPaginationMetadata(user, {
+    include: queryOptions.include,
+    where: filters, // Pass additional where conditions (will be merged with filter and search conditions)
   });
 
+  // Execute the query
+  const data = await user.findAll(queryOptions);
+
+  // Return response
   res.status(200).json({
     status: "success",
+    results: data.length,
+    pagination: pagination,
     data: { data },
   });
 });
@@ -202,8 +255,10 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
   );
 
   // Add condition based on qbo-registered or qbo-not-registered
+  console.log("🔵 STEP 1: Setting QBO condition. condition param:", condition);
   if (condition === "qbo-registered") {
     filters[Op.and] = [qboMapExistsSubquery];
+    console.log("🔵 STEP 1: Set filters[Op.and] = EXISTS subquery");
   } else {
     // qbo-not-registered: NOT EXISTS
     filters[Op.and] = [
@@ -217,80 +272,211 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
         )`
       ),
     ];
+    console.log("🔵 STEP 1: Set filters[Op.and] = NOT EXISTS subquery");
   }
+  console.log("🔵 STEP 1: filters[Op.and] exists:", !!filters[Op.and]);
+  console.log("🔵 STEP 1: filters[Op.and] length:", filters[Op.and]?.length);
 
-  console.log(
-    "🚀 ~ customersListByQboStatus ~ filters:",
-    JSON.stringify(filters, null, 2)
-  );
-  console.log("🚀 ~ customersListByQboStatus ~ realmId:", realmId);
-  console.log("🚀 ~ customersListByQboStatus ~ accountId:", accountId);
-  console.log("🚀 ~ customersListByQboStatus ~ salesRepId:", salesRepId);
-  console.log(
-    "🚀 ~ customersListByQboStatus ~ qboMapCondition:",
-    qboMapCondition
-  );
   // If entity is adminEmployee or partnerEmployee, filter for only those created by this employee
   if (
     req.user?.entity === "adminEmployee" ||
     req.user?.entity === "partnerEmployee"
   ) {
     filters.employeeId = req.user.id;
+    console.log("🔵 STEP 1: Added employeeId filter:", req.user.id);
   }
 
-  const data = await user.findAll({
-    where: filters,
-    attributes: [
-      [
-        literal("(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)"),
-        "totalOrderPlaced",
-      ],
-      [
-        literal(
-          "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)"
-        ),
-        "totalOrderAmount",
-      ],
-      [
-        literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
-        ),
-        "salesRepName",
-      ],
-      [
-        literal(
-          `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
-        ),
-        "salesRepState",
-      ],
-      [
-        literal(
-          `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`
-        ),
-        "preferredPaymentMethod",
-      ],
-      [
-        literal(
-          `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
-        ),
-        "employee",
-      ],
-      `id`,
-      `name`,
-      `email`,
-      `status`,
-      `image`,
-      `phoneNumber`,
-      `countryCode`,
-      `saleTaxNumber`,
-      `emailToSendInvoices`,
-      `companyName`,
-    ],
-    include: [{ model: address }],
+  // Define searchable columns for customers
+  const searchableFields = [
+    "id",
+    "name",
+    "email",
+    "companyName",
+    "phoneNumber",
+    "saleTaxNumber",
+    "emailToSendInvoices",
+  ];
+
+  // Build API features (filter, search, sort, fields, pagination)
+  const features = new APIFeatures(user, req.query)
+    .filter()
+    .search(searchableFields) // Add search functionality
+    .sort()
+    .limitFields()
+    .paginate();
+
+  // Get the base query options
+  const queryOptions = features.getQuery();
+
+  // Merge manual filter conditions with existing where conditions
+  // Handle complex Op.and structure with literal subqueries
+  // Extract non-Op.and properties from filters
+  const filterProps = {};
+  const filterOpAndArray = [];
+
+  console.log("🔵 STEP 2: Before extracting filters. condition:", condition);
+  console.log("🔵 STEP 2: filters object keys:", Object.keys(filters));
+  console.log("🔵 STEP 2: filters[Op.and] exists:", !!filters[Op.and]);
+  console.log("🔵 STEP 2: filters[Op.and] length:", filters[Op.and]?.length);
+
+  // CRITICAL: Object.keys() doesn't return Symbol keys, so we need to check Op.and separately
+  // First, extract Op.and if it exists (it's a Symbol key)
+  if (filters[Op.and]) {
+    filterOpAndArray.push(...filters[Op.and]);
+    console.log(
+      "🔵 STEP 2: Extracted Op.and array, filterOpAndArray length:",
+      filterOpAndArray.length
+    );
+  }
+
+  // Then extract string keys (regular properties)
+  Object.keys(filters).forEach((key) => {
+    filterProps[key] = filters[key];
   });
 
+  console.log(
+    "🔵 STEP 2: filterOpAndArray length after extraction:",
+    filterOpAndArray.length
+  );
+  console.log("🔵 STEP 2: filterProps:", filterProps);
+  console.log(
+    "🔵 STEP 2: queryOptions.where before merge:",
+    queryOptions.where ? "exists" : "null"
+  );
+
+  // Build final where clause
+  if (queryOptions.where && queryOptions.where[Op.and]) {
+    // queryOptions.where has Op.and structure (from search)
+    console.log("🔵 STEP 2: Merging into existing Op.and structure");
+    queryOptions.where[Op.and] = [
+      ...queryOptions.where[Op.and],
+      ...filterOpAndArray, // This includes the QBO subquery
+      filterProps,
+    ];
+  } else if (queryOptions.where) {
+    // queryOptions.where exists but no Op.and
+    console.log("🔵 STEP 2: Creating new Op.and structure");
+    const allConditions = [
+      queryOptions.where,
+      ...filterOpAndArray, // This includes the QBO subquery
+      filterProps,
+    ];
+    queryOptions.where = {
+      [Op.and]: allConditions,
+    };
+  } else {
+    // No existing where, build from filters
+    console.log("🔵 STEP 2: Building where from filters only");
+    if (filterOpAndArray.length > 0) {
+      queryOptions.where = {
+        ...filterProps,
+        [Op.and]: filterOpAndArray, // This includes the QBO subquery
+      };
+    } else {
+      queryOptions.where = filterProps;
+    }
+  }
+
+  console.log(
+    "🔵 STEP 2: Final queryOptions.where structure:",
+    queryOptions.where ? "exists" : "null"
+  );
+  console.log(
+    "🔵 STEP 2: queryOptions.where[Op.and] length:",
+    queryOptions.where?.[Op.and]?.length
+  );
+  console.log("🔵 STEP 2: condition param:", condition);
+
+  // CRITICAL: Get total count RIGHT HERE after QBO condition is merged, BEFORE pagination limit/offset
+  // Use the final merged where clause that includes QBO condition + search + filters
+  const countOptions = {
+    where: queryOptions.where, // Includes QBO condition + search + all filters
+    include: [{ model: address }],
+    distinct: true,
+  };
+
+  console.log("🔵 STEP 3: About to count. condition:", condition);
+  console.log(
+    "🔵 STEP 3: countOptions.where[Op.and] length:",
+    countOptions.where?.[Op.and]?.length
+  );
+
+  const totalItems = await user.count(countOptions);
+
+  console.log("🔵 STEP 3: COUNT RESULT - totalItems:", totalItems);
+  console.log("🔵 STEP 3: COUNT RESULT - condition was:", condition);
+
+  // Add custom includes
+  queryOptions.include = [{ model: address }];
+
+  // Custom attributes with literal fields
+  queryOptions.attributes = [
+    [
+      literal("(SELECT COUNT(id) FROM orders WHERE orders.userId = user.id)"),
+      "totalOrderPlaced",
+    ],
+    [
+      literal(
+        "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)"
+      ),
+      "totalOrderAmount",
+    ],
+    [
+      literal(
+        `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+      ),
+      "salesRepName",
+    ],
+    [
+      literal(
+        `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+      ),
+      "salesRepState",
+    ],
+    [
+      literal(
+        `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`
+      ),
+      "preferredPaymentMethod",
+    ],
+    [
+      literal(
+        `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
+      ),
+      "employee",
+    ],
+    `id`,
+    `name`,
+    `email`,
+    `status`,
+    `image`,
+    `phoneNumber`,
+    `countryCode`,
+    `saleTaxNumber`,
+    `emailToSendInvoices`,
+    `companyName`,
+  ];
+
+  // Calculate pagination metadata using the totalItems already calculated (with QBO condition)
+  const page = req.query.page * 1 || 1;
+  const limit = req.query.limit * 1 || 10;
+  const totalPages = Math.ceil(totalItems / limit);
+
+  const pagination = {
+    page,
+    limit,
+    totalItems, // Use the totalItems calculated right after QBO condition
+    totalPages,
+  };
+
+  // Execute the query
+  const data = await user.findAll(queryOptions);
+
+  // Return response
   res.status(200).json({
     status: "success",
+    results: data.length,
+    pagination: pagination,
     data: { data },
   });
 });

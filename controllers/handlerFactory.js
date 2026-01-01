@@ -169,11 +169,23 @@ exports.getAll = (Model, incommingFilter = {}) =>
 
     console.log("🚀 ~ features:", features);
 
-    const doc = await Model.findAll(features.getQuery()); // Apply queryOptions to the findAll method
+    // Get the base query options
+    const queryOptions = features.getQuery();
+
+    // Merge incoming filter conditions
+    queryOptions.where = { ...(queryOptions.where || {}), ...filter };
+
+    // Get pagination metadata using APIFeatures
+    const pagination = await features.getPaginationMetadata(Model, {
+      where: filter, // Pass additional where conditions (will be merged with filter conditions)
+    });
+
+    const doc = await Model.findAll(queryOptions); // Apply queryOptions to the findAll method
 
     res.status(200).json({
       status: "success",
       results: doc.length,
+      pagination: pagination,
       data: {
         data: doc,
       },

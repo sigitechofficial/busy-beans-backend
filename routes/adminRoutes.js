@@ -30,16 +30,76 @@ const { protect } = auth;
 const router = express.Router();
 // LAMDA FUNCTION
 
+/**
+ * @swagger
+ * /api/v1/admin/order-management/fetch-invoice/{orderId}:
+ *   post:
+ *     summary: Fetch invoice for order (Lambda function)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Invoice fetched
+ */
 router.post(
   "/order-management/fetch-invoice/:orderId",
   manageOrderController.fetchInvoice
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/order-management/email-helper:
+ *   post:
+ *     summary: Email helper endpoint (Lambda function)
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Email sent
+ */
 router.post(
   "/order-management/email-helper",
   manageOrderController.emailHelper
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/login:
+ *   post:
+ *     summary: Admin login
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       401:
+ *         description: Invalid credentials
+ */
 router.post(
   "/login",
   (req, res, next) => {
@@ -48,6 +108,33 @@ router.post(
   },
   authController.adminLogin
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/login/sales-rep:
+ *   post:
+ *     summary: Sales rep login
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ */
 router.post(
   "/login/sales-rep",
   (req, res, next) => {
@@ -56,6 +143,33 @@ router.post(
   },
   authController.salesRepLogin
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/login/supplier:
+ *   post:
+ *     summary: Supplier login
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ */
 router.post(
   "/login/supplier",
   (req, res, next) => {
@@ -65,65 +179,548 @@ router.post(
   authController.supplierLogin
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/forgot-password:
+ *   post:
+ *     summary: Admin forgot password
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Password reset email sent
+ */
 router.post("/forgot-password", authController.adminForgotPassword);
+
+/**
+ * @swagger
+ * /api/v1/admin/forgot-password/sales-rep:
+ *   post:
+ *     summary: Sales rep forgot password
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Password reset email sent
+ */
 router.post(
   "/forgot-password/sales-rep",
   authController.salesRepForgotPassword
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/forgot-password/supplier:
+ *   post:
+ *     summary: Supplier forgot password
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Password reset email sent
+ */
 router.post("/forgot-password/supplier", authController.supplierForgotPassword);
 
+/**
+ * @swagger
+ * /api/v1/admin/resend-otp:
+ *   post:
+ *     summary: Resend OTP for admin
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent
+ */
 router.post("/resend-otp", authController.adminResendOtp);
+
+/**
+ * @swagger
+ * /api/v1/admin/resend-otp/sales-rep:
+ *   post:
+ *     summary: Resend OTP for sales rep
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent
+ */
 router.post("/resend-otp/sales-rep", authController.salesRepResendOtp);
+
+/**
+ * @swagger
+ * /api/v1/admin/resend-otp/supplier:
+ *   post:
+ *     summary: Resend OTP for supplier
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: OTP resent
+ */
 router.post("/resend-otp/supplier", authController.supplierResendOtp);
 
+/**
+ * @swagger
+ * /api/v1/admin/otp-verification:
+ *   post:
+ *     summary: Verify OTP for admin
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP verified
+ */
 router.post("/otp-verification", authController.adminOtpVerification);
+
+/**
+ * @swagger
+ * /api/v1/admin/otp-verification/sales-rep:
+ *   post:
+ *     summary: Verify OTP for sales rep
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP verified
+ */
 router.post(
   "/otp-verification/sales-rep",
   authController.salesRepOtpVerification
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/otp-verification/supplier:
+ *   post:
+ *     summary: Verify OTP for supplier
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP verified
+ */
 router.post(
   "/otp-verification/supplier",
   authController.supplierOtpVerification
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/reset-password:
+ *   post:
+ *     summary: Reset password for admin
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - password
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ */
 router.post("/reset-password", authController.adminResetPassword);
+
+/**
+ * @swagger
+ * /api/v1/admin/reset-password/sales-rep:
+ *   post:
+ *     summary: Reset password for sales rep
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - password
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ */
 router.post("/reset-password/sales-rep", authController.salesRepResendOtp);
+
+/**
+ * @swagger
+ * /api/v1/admin/reset-password/supplier:
+ *   post:
+ *     summary: Reset password for supplier
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - password
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ */
 router.post("/reset-password/supplier", authController.supplierResetPassword);
 
+/**
+ * @swagger
+ * /api/v1/admin/product:
+ *   get:
+ *     summary: Get all products (Public)
+ *     tags: [Products]
+ *     responses:
+ *       200:
+ *         description: List of all products
+ */
 router.get("/product", productController.getAllProducts);
+/**
+ * @swagger
+ * /api/v1/admin/lambda-function/pending-pullout-fromlocal-patner-banks:
+ *   post:
+ *     summary: Process pending pullouts from local partner banks (Lambda function)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Pullouts processed
+ */
 router.post(
   "/lambda-function/pending-pullout-fromlocal-patner-banks",
   pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/lambda-function/create-upcomming-orders:
+ *   post:
+ *     summary: Create upcoming orders based on frequency (Lambda function)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Upcoming orders created
+ */
 router.post(
   "/lambda-function/create-upcomming-orders",
   orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction
 );
 
 //! Country Management
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/country/:
+ *   get:
+ *     summary: Get all countries
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: List of countries
+ */
 router.get("/address-management/country/", addressController.getAllCountries);
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/country/{id}:
+ *   get:
+ *     summary: Get country by ID
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Country details
+ */
 router.get("/address-management/country/:id", addressController.getCountry);
 
 //! State Management
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/state/:
+ *   get:
+ *     summary: Get all states
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: List of states
+ */
 router.get("/address-management/state/", addressController.getAllStates);
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/state/{id}:
+ *   get:
+ *     summary: Get state by ID
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: State details
+ */
 router.get("/address-management/state/:id", addressController.getState);
 
 //! City Management
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/city/:
+ *   get:
+ *     summary: Get all cities
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: List of cities
+ */
 router.get("/address-management/city/", addressController.getAllCities);
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/city/{id}:
+ *   get:
+ *     summary: Get city by ID
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: City details
+ */
 router.get("/address-management/city/:id", addressController.getCity);
 
 //! Territory Management
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/territory/:
+ *   get:
+ *     summary: Get all territories
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: List of territories
+ */
 router.get("/address-management/territory/", addressController.getAllTerritory);
+
+/**
+ * @swagger
+ * /api/v1/admin/address-management/territory/{id}:
+ *   get:
+ *     summary: Get territory by ID
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Territory details
+ */
 router.get("/address-management/territory/:id", addressController.getTerritory);
 
 // Create Employee (Admin or SalesRep can create employees)
+
+/**
+ * @swagger
+ * /api/v1/admin/employee:
+ *   post:
+ *     summary: Create a new employee
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Employee created
+ *       401:
+ *         description: Unauthorized
+ */
 router.post(
   "/employee",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
   employeeController.createEmployee
 );
-// routes/employeeRoutes.js
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}:
+ *   get:
+ *     summary: Get employee by ID
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Employee details
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/employee/:employeeId",
   auth.protect,
@@ -131,13 +728,55 @@ router.get(
   employeeController.getEmployee
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/employees:
+ *   get:
+ *     summary: Get all employees
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: List of employees
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/employees",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
   employeeController.getAllEmployee
 );
-// routes/employeeRoutes.js
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}:
+ *   patch:
+ *     summary: Update employee (Admin/LocalPartner)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Employee updated
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch(
   "/employee/:employeeId",
   auth.protect,
@@ -145,7 +784,27 @@ router.patch(
   employeeController.updateEmployee
 );
 
-// routes/employeeRoutes.js
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}:
+ *   delete:
+ *     summary: Delete employee
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Employee deleted
+ *       401:
+ *         description: Unauthorized
+ */
 router.delete(
   "/employee/:employeeId",
   auth.protect,
@@ -153,7 +812,33 @@ router.delete(
   employeeController.deleteEmployee
 );
 
-// routes/employeeRoutes.js
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}:
+ *   put:
+ *     summary: Update employee (Admin/SalesRep)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Employee updated
+ *       401:
+ *         description: Unauthorized
+ */
 router.put(
   "/employee/:employeeId",
   auth.protect,
@@ -161,16 +846,69 @@ router.put(
   employeeController.updateEmployee
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/category/:
+ *   get:
+ *     summary: Get all categories
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: List of categories
+ */
 router.get("/category/", categoryController.getAllCatagories);
 
 //!MIDDLEWARE PRIVATE ROUTES
 router.use(protect);
 
+/**
+ * @swagger
+ * /api/v1/admin/profile/:
+ *   get:
+ *     summary: Get admin/sales rep profile
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile details
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/profile/",
   auth.restrictTo("admin", "salesRep"),
   adminController.getAdmin
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/profile-update/{id}:
+ *   patch:
+ *     summary: Update admin/sales rep profile
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Profile updated
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch(
   "/profile-update/:id",
   auth.restrictTo("admin", "salesRep"),
@@ -238,6 +976,37 @@ const uploadSalesRepImage = multer({
   storage: salesRepImage,
 });
 
+/**
+ * @swagger
+ * /api/v1/admin/product:
+ *   post:
+ *     summary: Add a new product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               price:
+ *                 type: number
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Product created
+ *       401:
+ *         description: Unauthorized
+ */
 router.post(
   "/product",
   uploadProductImage.single("image"),
@@ -245,6 +1014,74 @@ router.post(
 );
 
 // Category by ID routes
+
+/**
+ * @swagger
+ * /api/v1/admin/product/{id}:
+ *   get:
+ *     summary: Get product by ID
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Product details
+ *       401:
+ *         description: Unauthorized
+ *   delete:
+ *     summary: Delete product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Product deleted
+ *       401:
+ *         description: Unauthorized
+ *   patch:
+ *     summary: Update product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Product updated
+ *       401:
+ *         description: Unauthorized
+ */
 router
   .route("/product/:id")
   .get(productController.getProduct) // For fetching a product by ID
@@ -253,9 +1090,97 @@ router
 
 //! Category Management
 
+/**
+ * @swagger
+ * /api/v1/admin/category/:
+ *   post:
+ *     summary: Create a new category
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Category created
+ *       401:
+ *         description: Unauthorized
+ */
 router.route("/category/").post(categoryController.createCatagory); // For creating a new category
 
 // Category by ID routes
+
+/**
+ * @swagger
+ * /api/v1/admin/category/{id}:
+ *   get:
+ *     summary: Get category by ID
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Category details
+ *       401:
+ *         description: Unauthorized
+ *   patch:
+ *     summary: Update category
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Category updated
+ *       401:
+ *         description: Unauthorized
+ *   delete:
+ *     summary: Delete category
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Category deleted
+ *       401:
+ *         description: Unauthorized
+ */
 router
   .route("/category/:id")
   .get(categoryController.getCatagory) // For fetching a category by ID
@@ -264,100 +1189,657 @@ router
 
 //! Order Management
 
+/**
+ * @swagger
+ * /api/v1/admin/orders:
+ *   get:
+ *     summary: Get all orders
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: List of orders
+ *       401:
+ *         description: Unauthorized
+ */
 router.get("/orders", manageOrderController.allOrder);
 
+/**
+ * @swagger
+ * /api/v1/admin/quickbooks-customer-order-management/{qbo}:
+ *   get:
+ *     summary: Get orders filtered by QuickBooks status
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: qbo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of orders
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/quickbooks-customer-order-management/:qbo",
   manageOrderController.allOrder
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/order-management/send-invoice/{orderId}:
+ *   post:
+ *     summary: Send invoice for an order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Invoice sent
+ *       401:
+ *         description: Unauthorized
+ */
 router.post(
   "/order-management/send-invoice/:orderId",
   manageOrderController.sendInvoice
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/order-management/send-invoice:
+ *   post:
+ *     summary: Send invoices for multiple orders
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: Invoices sent
+ *       401:
+ *         description: Unauthorized
+ */
 router.post(
   "/order-management/send-invoice",
   manageOrderController.sendInvoiceMultiple
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/order-management/update-order/{orderId}:
+ *   patch:
+ *     summary: Update an order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Order updated
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch(
   "/order-management/update-order/:orderId",
   manageOrderController.updateOrder
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/delete-order/{orderId}:
+ *   delete:
+ *     summary: Delete an order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Order deleted
+ *       401:
+ *         description: Unauthorized
+ */
 router.delete(
   "/order-management/delete-order/:orderId",
   manageOrderController.deleteOrder
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/order-details/{id}:
+ *   get:
+ *     summary: Get order details by ID
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Order details
+ *       401:
+ *         description: Unauthorized
+ */
 router.get("/order-details/:id", manageOrderController.orderDetails);
 
+/**
+ * @swagger
+ * /api/v1/admin/assign-supplier:
+ *   patch:
+ *     summary: Assign supplier to order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Supplier assigned
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/assign-supplier", manageOrderController.orderJourneryComplete);
 
+/**
+ * @swagger
+ * /api/v1/admin/supplier-acknowledgement:
+ *   patch:
+ *     summary: Update supplier acknowledgement
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Acknowledgement updated
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch(
   "/supplier-acknowledgement",
   manageOrderController.orderJourneryComplete
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/order-dispatch:
+ *   patch:
+ *     summary: Mark order as dispatched
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Order dispatched
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/order-dispatch", manageOrderController.orderJourneryComplete);
 
+/**
+ * @swagger
+ * /api/v1/admin/order-deliver:
+ *   patch:
+ *     summary: Mark order as delivered
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Order delivered
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/order-deliver", manageOrderController.orderJourneryComplete);
 
+/**
+ * @swagger
+ * /api/v1/admin/order-cancel:
+ *   patch:
+ *     summary: Cancel an order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Order cancelled
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/order-cancel", manageOrderController.orderJourneryComplete);
 
+/**
+ * @swagger
+ * /api/v1/admin/edit-order:
+ *   patch:
+ *     summary: Edit order details
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Order edited
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/edit-order", manageOrderController.orderJourneryComplete);
 
+/**
+ * @swagger
+ * /api/v1/admin/add-cheque:
+ *   patch:
+ *     summary: Add cheque to order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Cheque added
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/add-cheque", manageOrderController.orderJourneryComplete);
 
+/**
+ * @swagger
+ * /api/v1/admin/edit-cheque:
+ *   patch:
+ *     summary: Edit cheque details
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Cheque edited
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/edit-cheque", manageOrderController.eidtCheque);
 
 //! Customer Management
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/payment-cards/{id}:
+ *   get:
+ *     summary: Get saved payment cards for customer
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Payment cards
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/payment-cards/:id",
   customerController.fetchSavedCards
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/dahboard-cards:
+ *   get:
+ *     summary: Get customer management dashboard cards
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard cards data
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/dahboard-cards",
   customerController.viewCustomersManagement
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-update/{id}:
+ *   patch:
+ *     summary: Update customer details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Customer updated
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch("/customer-update/:id", customerController.updateCutomer);
+
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/customer-list/{sr}:
+ *   get:
+ *     summary: Get customer list by sales rep
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sr
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Customer list
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/customer-list/:sr",
   customerController.customersList
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/qbo-customer-management/customer-list/{condition}:
+ *   get:
+ *     summary: Get customer list by QuickBooks status
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: condition
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Customer list
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/qbo-customer-management/customer-list/:condition",
   customerController.customersListByQboStatus
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/customer-list/sale-rep/{sr}:
+ *   get:
+ *     summary: Get customer list by sales rep name
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sr
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Customer list
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/customer-list/sale-rep/:sr",
   customerController.customersList
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/customer-list/sale-rep-id/{srId}:
+ *   get:
+ *     summary: Get customer list by sales rep ID
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: srId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Customer list
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/customer-list/sale-rep-id/:srId",
   customerController.customersList
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/customer-list/employee-id/{empId}:
+ *   get:
+ *     summary: Get customer list by employee ID
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: empId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Customer list
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/customer-list/employee-id/:empId",
   customerController.customersList
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/assign-sale-rep/{id}:
+ *   patch:
+ *     summary: Assign sales rep to customer
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               salesRepId:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Sales rep assigned
+ *       401:
+ *         description: Unauthorized
+ */
 router.patch(
   "/customer-management/assign-sale-rep/:id",
   customerController.assignSalesRep
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/invoice-customers-balance:
+ *   get:
+ *     summary: Get invoice customers balance
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Invoice customers balance
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/invoice-customers-balance",
   customerController.InvoiceCustomers
 );
 
+/**
+ * @swagger
+ * /api/v1/admin/customer-management/invoice-customers-balance/sales-rep/{srId}:
+ *   get:
+ *     summary: Get invoice customers balance by sales rep
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: srId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Invoice customers balance
+ *       401:
+ *         description: Unauthorized
+ */
 router.get(
   "/customer-management/invoice-customers-balance/sales-rep/:srId",
   customerController.InvoiceCustomers

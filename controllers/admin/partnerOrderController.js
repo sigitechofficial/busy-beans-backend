@@ -265,9 +265,21 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
 
-  // Build API features (filter, sort, fields, pagination)
+  // Define searchable columns for partner orders
+  const searchableFields = [
+    "id",
+    "invoiceNumber",
+    "poNumber",
+    "note",
+    "paymentMethod",
+    "shippingCompany",
+    "trackingNumber",
+  ];
+
+  // Build API features (filter, search, sort, fields, pagination)
   const features = new APIFeatures(partnerOrder, req.query)
     .filter()
+    .search(searchableFields) // Add search functionality
     .sort()
     .limitFields()
     .paginate();
@@ -321,7 +333,23 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   if (req.user.entity == "localPartner") {
     condition.salesRepId = req.user.localPartnerId;
   }
-  queryOptions.where = { ...(queryOptions.where || {}), ...condition };
+
+  // Merge manual filter conditions with existing where conditions
+  // Handle both simple object merge and Op.and structure
+  if (Object.keys(condition).length > 0) {
+    if (queryOptions.where && queryOptions.where[Op.and]) {
+      // If where already has Op.and structure, add condition to it
+      queryOptions.where[Op.and].push(condition);
+    } else if (queryOptions.where) {
+      // If where exists but no Op.and, create Op.and structure
+      queryOptions.where = {
+        [Op.and]: [queryOptions.where, condition],
+      };
+    } else {
+      // If no existing where, just use condition
+      queryOptions.where = condition;
+    }
+  }
   console.log("🚀 ~ queryOptions.where:", queryOptions.where);
   // Add your custom includes
   queryOptions.include = [
@@ -428,6 +456,12 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
     ],
   ];
 
+  // Get pagination metadata using APIFeatures
+  const pagination = await features.getPaginationMetadata(partnerOrder, {
+    include: queryOptions.include,
+    where: condition, // Pass additional where conditions (will be merged with filter and search conditions)
+  });
+
   // Execute the query
   const doc = await partnerOrder.findAll(queryOptions);
 
@@ -435,6 +469,7 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     results: doc.length,
+    pagination: pagination,
     data: {
       data: doc,
     },
@@ -1076,6 +1111,7 @@ exports.partnerOrderNavigationCounts = catchAsync(async (req, res, next) => {
         literal(
           `(SELECT COUNT(partnerOrders.id) 
            FROM partnerOrders  WHERE partnerOrders.statusId = statuses.id
+           AND partnerOrders.type = 'regular-order'
            ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
         ),
         "count",
