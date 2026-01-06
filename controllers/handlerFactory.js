@@ -164,8 +164,8 @@ exports.getAll = (Model, incommingFilter = {}) =>
     const features = new APIFeatures(Model, req.query) // Pass the Model and query parameters
       .filter()
       .sort()
-      .limitFields()
-      .paginate();
+      .limitFields();
+    //   .paginate();
 
     console.log("🚀 ~ features:", features);
 

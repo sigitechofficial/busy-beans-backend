@@ -1180,11 +1180,11 @@ exports.partnerOrderNavigationCountsLocalPatner = catchAsync(
 
     // Define the literals for both scenarios
     const employeeFilterLiteral = employeeId
-      ? `AND partnerOrders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`
+      ? ``
       : `AND partnerOrders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
 
     const upcomingOrderCountLiteral = employeeId
-      ? `AND partnerOrders.userId IN (SELECT id FROM users WHERE employeeId = ${employeeId})`
+      ? ``
       : `AND partnerOrders.salesRepId = ${req.params?.srId}`; // If employeeId is null, check for salesRepId
 
     // Query to count orders based on employeeId (handling both cases for employeeId)

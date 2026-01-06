@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Controller = require("../controllers/webhook/webhookController");
+const SubscriptionWebhookController = require("../controllers/webhook/subscriptionWebhookController");
 const MetaController = require("../controllers/webhook/metaWebhookController");
 
 const catchAsync = require("../utils/catchAsync");
@@ -9,6 +10,13 @@ const catchAsync = require("../utils/catchAsync");
 router.post(
   "/busy-beans-coffee",
   catchAsync(Controller.stripeSubscriptionWebhookEventHandler)
+);
+
+// Stripe subscription webhook (separate endpoint for subscription events)
+// Needs raw body - handled in app.js
+router.post(
+  "/subscriptions",
+  catchAsync(SubscriptionWebhookController.handleSubscriptionWebhook)
 );
 
 // Meta (Facebook/Instagram) Lead Ads webhook

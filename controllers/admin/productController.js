@@ -79,13 +79,55 @@ exports.getAllProducts = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllProductsUser = catchAsync(async (req, res, next) => {
-  const data = await product.findAll({
-    where: { status: 1, deleted: 0 },
-    attributes: {
-      exclude: ["deleted", "deletedAt", "wholesalePrice"],
-    },
-    raw: true, // return plain objects instead of Sequelize instances
-  });
+  // Define searchable columns for products
+  const searchableFields = ["id", "name", "sku", "productCode", "desc"];
+
+  // Build API features (filter, search, sort, fields, pagination)
+  const features = new APIFeatures(product, req.query)
+    .filter()
+    .search(searchableFields) // Add search functionality
+    .sort()
+    .limitFields()
+    .paginate();
+
+  // Get the base query options
+  const queryOptions = features.getQuery();
+
+  // Ensure base filter (status: 1) is applied (deleted: 0 is already set by filter())
+  queryOptions.where = {
+    ...queryOptions.where,
+    status: 1,
+  };
+
+  // Handle attributes - ensure wholesalePrice, deleted, deletedAt are excluded
+  if (queryOptions.attributes && Array.isArray(queryOptions.attributes)) {
+    // If attributes is an array (specific fields requested), filter out unwanted fields
+    queryOptions.attributes = queryOptions.attributes.filter(
+      (attr) => !["wholesalePrice", "deleted", "deletedAt"].includes(attr)
+    );
+  } else {
+    // If attributes is an exclude object or not set, merge excludes
+    const baseExcludes = ["deleted", "deletedAt", "wholesalePrice"];
+    if (queryOptions.attributes && queryOptions.attributes.exclude) {
+      // Merge with existing excludes
+      queryOptions.attributes.exclude = [
+        ...new Set([...queryOptions.attributes.exclude, ...baseExcludes]),
+      ];
+    } else {
+      // Set default excludes
+      queryOptions.attributes = {
+        exclude: baseExcludes,
+      };
+    }
+  }
+
+  queryOptions.raw = true; // return plain objects instead of Sequelize instances
+
+  // Get pagination metadata (status: 1 is already in queryOptions.where)
+  const pagination = await features.getPaginationMetadata(product);
+
+  // Execute the query
+  const data = await product.findAll(queryOptions);
 
   const activeCategories = await userDiscount.findAll({
     where: { userId: req.params.userId },
@@ -100,7 +142,6 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
   }, {});
 
   // apply discounts
-
   const productsWithDiscount = data.map((prod) => {
     const discount = discountMap[prod.categoryId] || 0;
     const originalPrice = parseFloat(prod.price);
@@ -117,6 +158,8 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
+    results: productsWithDiscount.length,
+    pagination: pagination,
     data: { data: productsWithDiscount },
   });
 });

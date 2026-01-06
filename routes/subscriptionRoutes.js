@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const subscriptionController = require("../controllers/admin/subscriptionController");
+const addonController = require("../controllers/admin/addonController");
 
 /**
  * @swagger
@@ -52,13 +53,141 @@ router.get("/list", subscriptionController.listSubscriptions);
  * @swagger
  * /api/v1/subscription/addons:
  *   get:
- *     summary: List all available add-ons
+ *     summary: List all available add-ons (for subscription selection)
  *     tags: [Subscriptions]
  *     responses:
  *       200:
  *         description: List of add-ons
  */
 router.get("/addons", subscriptionController.listAddons);
+
+/**
+ * @swagger
+ * /api/v1/subscription/addons/all:
+ *   get:
+ *     summary: Get all addons (with filtering, sorting, pagination)
+ *     tags: [Addons]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of all addons
+ */
+router.get("/addons", addonController.getAllAddons);
+
+/**
+ * @swagger
+ * /api/v1/subscription/addons/{id}:
+ *   get:
+ *     summary: Get addon by ID
+ *     tags: [Addons]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Addon details
+ *       404:
+ *         description: Addon not found
+ */
+router.get("/addons/:id", addonController.getAddon);
+
+/**
+ * @swagger
+ * /api/v1/subscription/addons:
+ *   post:
+ *     summary: Create a new addon
+ *     tags: [Addons]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - price
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               price:
+ *                 type: number
+ *               status:
+ *                 type: boolean
+ *     responses:
+ *       201:
+ *         description: Addon created successfully
+ *       400:
+ *         description: Bad request - validation error
+ */
+router.post("/addons", addonController.createAddon);
+
+/**
+ * @swagger
+ * /api/v1/subscription/addons/{id}:
+ *   patch:
+ *     summary: Update an addon
+ *     tags: [Addons]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               price:
+ *                 type: number
+ *               status:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Addon updated successfully
+ *       404:
+ *         description: Addon not found
+ */
+router.patch("/addons/:id", addonController.updateAddon);
+
+/**
+ * @swagger
+ * /api/v1/subscription/addons/{id}:
+ *   delete:
+ *     summary: Delete an addon (soft delete)
+ *     tags: [Addons]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Addon deleted successfully
+ *       404:
+ *         description: Addon not found
+ */
+router.delete("/addons/:id", addonController.deleteAddon);
 
 /**
  * @swagger

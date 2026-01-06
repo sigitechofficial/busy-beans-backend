@@ -9,7 +9,7 @@ const machineController = require("../controllers/admin/machineController");
 const machineSubController = require("../controllers/customer/machineSubController");
 const leadController = require("../controllers/admin/leadController");
 const subscriptionController = require("../controllers/admin/subscriptionController");
-
+const categoryController = require("../controllers/admin/categoriesController");
 const Authorization = require("../middlewares/protect");
 const router = express.Router();
 
@@ -836,6 +836,8 @@ router.get("/address/view-all", profileController.getAllAddress);
  *         description: Unauthorized
  */
 router.get(`/product`, productController.getAllProducts);
+
+router.get("/category", categoryController.getAllCatagories);
 
 /**
  * @swagger
