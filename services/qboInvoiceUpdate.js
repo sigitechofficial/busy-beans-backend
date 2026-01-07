@@ -33,8 +33,50 @@ function buildQboInvoiceUpdatePayload({
 
   for (const it of order.items || []) {
     const qty = Number(it.qty || 1);
-    const amount = +Number(it.price || it.total || 0).toFixed(2);
-    const unitPrice = +(amount / qty).toFixed(2);
+
+    // CRITICAL: DB stores total price (after discounts), not unit price
+    // QBO requires: Amount = UnitPrice * Qty (exact match, no rounding differences)
+    // Strategy: Calculate unitPrice from DB total, then recalculate amount to ensure exact match
+    let amount;
+    let unitPrice;
+
+    // Get the line total from DB (this is the actual charged amount after discounts)
+    const totalNum = Number(it.total || it.price || 0);
+
+    if (it.wholesalePrice && qty > 0) {
+      // If wholesalePrice exists, use it as unit price (most reliable)
+      unitPrice = Number(it.wholesalePrice);
+      // Calculate amount from unitPrice to ensure exact match
+      amount = Math.round(unitPrice * qty * 100) / 100;
+    } else if (totalNum > 0 && qty > 0) {
+      // Calculate unitPrice from total
+      // Use the exact division result without premature rounding
+      unitPrice = totalNum / qty;
+
+      // Calculate amount from unitPrice - this ensures Amount = UnitPrice * Qty exactly
+      // Round only at the final step to 2 decimal places
+      amount = Math.round(unitPrice * qty * 100) / 100;
+
+      // Round unitPrice to 8 decimal places for QBO (they accept up to 8 decimals)
+      // This preserves precision while ensuring the calculation works
+      unitPrice = Math.round(unitPrice * 100000000) / 100000000;
+
+      // Final verification: recalculate amount one more time to ensure exact match
+      const finalAmount = Math.round(unitPrice * qty * 100) / 100;
+      if (Math.abs(amount - finalAmount) > 0.0001) {
+        amount = finalAmount;
+      }
+    } else {
+      amount = 0;
+      unitPrice = 0;
+    }
+
+    // Final verification: Amount MUST equal UnitPrice * Qty exactly (QBO requirement)
+    const verification = Math.round(unitPrice * qty * 100) / 100;
+    if (Math.abs(amount - verification) > 0.0001) {
+      // Force exact match - QBO validation requires this
+      amount = verification;
+    }
 
     const itemRef = it.productId ? productItemId : serviceItemId;
 

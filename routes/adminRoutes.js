@@ -2115,6 +2115,18 @@ router.get(
 );
 router.get("/supplier-dashboard/:id", dashboardsController.supplierDashboard);
 
+router.get("/dashboard/sales", dashboardsController.getSalesDashboard);
+
+router.get(
+  "/dashboard/franchisee-sales",
+  dashboardsController.getFranchiseeSalesDashboard
+);
+
+router.get(
+  "/dashboard/local-partner-sales/:srId",
+  dashboardsController.getLocalPartnerSalesDashboard
+);
+
 router.get(
   "/orders-pending-pullouts/:srId",
   manageOrderController.ordersPendingPullouts

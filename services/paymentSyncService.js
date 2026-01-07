@@ -67,7 +67,7 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
     return false;
   }
 
-  const { paymentId } = await createQboPayment({
+  const paymentResult = await createQboPayment({
     accessToken,
     invoiceId: ord.quickBooksInvoiceId,
     order: ord,
@@ -75,13 +75,32 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
     qboCustomerId: qboCustomerOnAdmin?.qboCustomerId,
   });
 
-  await MODEL.update(
-    {
-      quickBooksPaymentId: paymentId,
-      paymentSyncedToQBO: true,
-    },
-    { where: { id: ord.id } }
-  );
+  const paymentId = paymentResult?.paymentId;
+
+  // Only update DB if we have a payment ID (either newly created or found existing)
+  if (paymentId) {
+    await MODEL.update(
+      {
+        quickBooksPaymentId: paymentId,
+        paymentSyncedToQBO: true,
+      },
+      { where: { id: ord.id } }
+    );
+    console.log(
+      `✅ [QBO] Updated order ${ord.id} with payment ID: ${paymentId}`
+    );
+  } else if (paymentResult?.skipped) {
+    // Payment was skipped (invoice already paid but payment not found)
+    // Don't update DB and don't throw error - just log
+    console.log(
+      `ℹ️ [QBO] Payment sync skipped for order ${ord.id} - invoice already paid but payment not found in QBO`
+    );
+  } else {
+    // This shouldn't happen, but if paymentId is null and not skipped, log warning
+    console.warn(
+      `⚠️ [QBO] No payment ID returned for order ${ord.id} - payment may have failed`
+    );
+  }
 }
 
 /* ===================================================================
@@ -133,7 +152,7 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
     return;
   }
 
-  const { paymentId } = await createQboPayment({
+  const paymentResult = await createQboPayment({
     accessToken,
     invoiceId: ord.quickBooksInvoiceIdPartner,
     order: ord,
@@ -141,13 +160,32 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
     qboCustomerId: qboCustomerOnPartner?.qboCustomerId,
   });
 
-  await MODEL.update(
-    {
-      quickBooksPaymentIdPartner: paymentId,
-      paymentSyncedToQBO: true,
-    },
-    { where: { id: ord.id } }
-  );
+  const paymentId = paymentResult?.paymentId;
+
+  // Only update DB if we have a payment ID (either newly created or found existing)
+  if (paymentId) {
+    await MODEL.update(
+      {
+        quickBooksPaymentIdPartner: paymentId,
+        paymentSyncedToQBO: true,
+      },
+      { where: { id: ord.id } }
+    );
+    console.log(
+      `✅ [QBO] Updated order ${ord.id} with partner payment ID: ${paymentId}`
+    );
+  } else if (paymentResult?.skipped) {
+    // Payment was skipped (invoice already paid but payment not found)
+    // Don't update DB and don't throw error - just log
+    console.log(
+      `ℹ️ [QBO] Partner payment sync skipped for order ${ord.id} - invoice already paid but payment not found in QBO`
+    );
+  } else {
+    // This shouldn't happen, but if paymentId is null and not skipped, log warning
+    console.warn(
+      `⚠️ [QBO] No partner payment ID returned for order ${ord.id} - payment may have failed`
+    );
+  }
 }
 
 /**

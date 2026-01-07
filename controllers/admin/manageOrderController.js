@@ -69,7 +69,7 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
 
   const orderData = await model.findOne({
     where: { id: orderId },
-    attributes: ["id", "type"],
+    attributes: ["id", "type", "invoiceDate"],
   });
   if (!orderData) {
     return next(new AppError("Order not found", 404));
@@ -84,7 +84,10 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
   } else if (emailType == "paid-invoice") {
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId, orderType });
   } else if (emailType == "invoice-sent" || emailType == "invoice-reminder") {
-    await model.update({ invoiceDate: new Date() }, { where: { id: orderId } });
+    const input = {};
+    if (!orderData.invoiceDate) input.invoiceDate = new Date();
+    if (orderData.invoiceDate) input.invoiceReminder = new Date();
+    await model.update(input, { where: { id: orderId } });
     sentPaymentInvoiceEvent({ orderId, orderType });
   } else if (emailType == "order-dispatch") {
     orderDispatchEvent({ orderId, orderType });
@@ -1690,9 +1693,10 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     parseFloat(input?.order?.vat || 0) +
     parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
 
-  if (placedOrder.invoiceDate && !input?.order?.emailInvoiceToCustomer) {
+  if (placedOrder.invoiceDate || !input?.order?.emailInvoiceToCustomer) {
     delete input.order.invoiceDate;
   }
+
   await order.update(input?.order, { where: { id: placedOrder?.id } });
   await item.destroy({ where: { orderId: placedOrder?.id } });
   await item.bulkCreate(finalItems);
