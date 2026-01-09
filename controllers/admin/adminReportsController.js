@@ -809,35 +809,17 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
   }
 
   // Build the SQL query using raw SQL
-  // Returns both product items and shipping charges (items.type = 'charges')
+  // Returns both product items and shipping charges from orders.shippingCharges
   const query = `
     SELECT 
       items.id,
       items.qty AS quantity,
       items.price,
-      CASE 
-        WHEN items.type = 'product' THEN 'product'
-        WHEN items.type = 'charges' THEN 'shipping'
-        ELSE items.type
-      END AS type,
+      'product' AS type,
       items.productId,
-      CASE 
-        WHEN items.type = 'product' THEN products.name
-        WHEN items.type = 'charges' THEN 'Shipping'
-        ELSE items.productName
-      END AS productName,
-      CASE 
-        WHEN items.type = 'product' THEN 
-          (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1)
-        WHEN items.type = 'charges' THEN 'Shipping'
-        ELSE NULL
-      END AS categoryName,
-      CASE 
-        WHEN items.type = 'product' THEN 
-          (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1)
-        WHEN items.type = 'charges' THEN COALESCE(items.productName, 'Shipping Charges')
-        ELSE NULL
-      END AS memo,
+      products.name AS productName,
+      (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1) AS categoryName,
+      (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1) AS memo,
       orders.invoiceNumber,
       orders.on AS transactionDate,
       'Invoice' AS transactionType,
@@ -845,13 +827,37 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
       items.price AS amount
     FROM items
     INNER JOIN orders ON orders.id = items.orderId
-    LEFT JOIN products ON products.id = items.productId AND items.type = 'product'
+    LEFT JOIN products ON products.id = items.productId
     WHERE orders.userId = :userId
       AND orders.on >= :startDate
       AND orders.on <= :endDate
       AND items.deleted = 0
-      -- No type filter - includes both 'product' and 'charges' (shipping) items
-    ORDER BY orders.on DESC, orders.invoiceNumber, items.id
+      AND items.type = 'product'
+    
+    UNION ALL
+    
+    SELECT 
+      CONCAT(orders.id, '-shipping') AS id,
+      1 AS quantity,
+      orders.shippingCharges AS price,
+      'shipping' AS type,
+      NULL AS productId,
+      'Shipping' AS productName,
+      'Shipping' AS categoryName,
+      CONCAT('Shipping Charges', CASE WHEN orders.shippingCompany IS NOT NULL THEN CONCAT(' (', orders.shippingCompany, ')') ELSE '' END) AS memo,
+      orders.invoiceNumber,
+      orders.on AS transactionDate,
+      'Invoice' AS transactionType,
+      orders.shippingCharges AS unitPrice,
+      orders.shippingCharges AS amount
+    FROM orders
+    WHERE orders.userId = :userId
+      AND orders.on >= :startDate
+      AND orders.on <= :endDate
+      AND orders.shippingCharges > 0
+      AND orders.deleted = 0
+    
+    ORDER BY transactionDate DESC, invoiceNumber, id
   `;
 
   const doc = await order.sequelize.query(query, {

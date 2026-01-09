@@ -652,296 +652,226 @@ exports.employeeDashboardlocalPartner = catchAsync(async (req, res, next) => {
 // ],
 
 // Get Sales Dashboard with MTD and Last Month Sales
-exports.getSalesDashboard = catchAsync(async (req, res, next) => {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const currentDay = now.getDate();
+// exports.getSalesDashboard = catchAsync(async (req, res, next) => {
+//   const now = new Date();
+//   const currentYear = now.getFullYear();
+//   const currentMonth = now.getMonth();
+//   const currentDay = now.getDate();
 
-  // Month-to-Date: First day of current month to today
-  const mtdStart = new Date(currentYear, currentMonth, 1);
-  const mtdEnd = new Date(currentYear, currentMonth, currentDay);
+//   // Month-to-Date: First day of current month to today
+//   const mtdStart = new Date(currentYear, currentMonth, 1);
+//   const mtdEnd = new Date(currentYear, currentMonth, currentDay);
 
-  // Last Month: First day of last month to last day of last month
-  const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
-  const lastMonthEnd = new Date(currentYear, currentMonth, 0);
+//   // Last Month: First day of last month to last day of last month
+//   const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
+//   const lastMonthEnd = new Date(currentYear, currentMonth, 0);
 
-  // Format dates for SQL (YYYY-MM-DD) - matching report format exactly
-  const mtdStartStr = "2026-01-01";
-  const mtdEndStr = "2026-01-07  ";
-  const lastMonthStartStr = "2025-12-01";
-  const lastMonthEndStr = "2025-12-31";
+//   // Format dates for SQL (YYYY-MM-DD) - matching report format exactly
+//   const mtdStartStr = "2026-01-01";
+//   const mtdEndStr = "2026-01-31  ";
+//   const lastMonthStartStr = "2025-12-01";
+//   const lastMonthEndStr = "2025-12-31";
 
-  console.log("🚀 ~ getSalesDashboard ~ mtdStartStr:", mtdStartStr);
-  console.log("🚀 ~ getSalesDashboard ~ mtdEndStr:", mtdEndStr);
+//   console.log("ðŸš€ ~ getSalesDashboard ~ mtdStartStr:", mtdStartStr);
+//   console.log("ðŸš€ ~ getSalesDashboard ~ mtdEndStr:", mtdEndStr);
 
-  // Month-to-Date Sales Summary - Using same approach as customerSalesSummary report
-  // Note: Report uses 'orders.on >= startDate AND orders.on <= endDate' (inclusive on both ends)
-  // orders.on is DATEONLY type, so direct comparison works
-  const mtdDateFilter = `AND orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'`;
-  console.log("🚀 ~ getSalesDashboard ~ mtdDateFilter:", mtdDateFilter);
-  // Note: Report doesn't filter by deleted field - matching report exactly
-  // The report query structure uses user.findAll with subqueries, but we're querying orders directly
-  const mtdSalesSummaryResult = await order.sequelize.query(
-    `SELECT 
-      COALESCE(SUM(totalBill), 0) as totalSales,
-      COUNT(*) as orders,
-      COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
-    FROM orders
-    WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'`,
-    {
-      type: order.sequelize.QueryTypes.SELECT,
-    }
-  );
-  const mtdSalesSummary = mtdSalesSummaryResult?.[0] || {
-    totalSales: 0,
-    orders: 0,
-    avgOrderValue: 0,
-  };
+//   // Month-to-Date Sales Summary - Using same approach as customerSalesSummary report
+//   // Note: Report uses 'orders.on >= startDate AND orders.on <= endDate' (inclusive on both ends)
+//   // orders.on is DATEONLY type, so direct comparison works
+//   const mtdDateFilter = `AND orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'`;
+//   console.log("ðŸš€ ~ getSalesDashboard ~ mtdDateFilter:", mtdDateFilter);
+//   // Note: Report doesn't filter by deleted field - matching report exactly
+//   // The report query structure uses user.findAll with subqueries, but we're querying orders directly
+//   const mtdSalesSummaryResult = await order.sequelize.query(
+//     `SELECT
+//         COALESCE(SUM(totalBill), 0) as totalSales,
+//         COUNT(*) as orders,
+//         COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
+//       FROM orders
+//       WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'`,
+//     {
+//       type: order.sequelize.QueryTypes.SELECT,
+//     }
+//   );
+//   const mtdSalesSummary = mtdSalesSummaryResult?.[0] || {
+//     totalSales: 0,
+//     orders: 0,
+//     avgOrderValue: 0,
+//   };
 
-  // Last Month Sales Summary - Using same approach as customerSalesSummary report
-  const lastMonthDateFilter = `AND orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}'`;
-  const lastMonthSalesSummaryResult = await order.sequelize.query(
-    `SELECT 
-      COALESCE(SUM(totalBill), 0) as totalSales,
-      COUNT(*) as orders,
-      COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
-    FROM orders
-    WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}'`,
-    {
-      type: order.sequelize.QueryTypes.SELECT,
-    }
-  );
-  const lastMonthSalesSummary = lastMonthSalesSummaryResult?.[0] || {
-    totalSales: 0,
-    orders: 0,
-    avgOrderValue: 0,
-  };
+//   // Last Month Sales Summary - Using same approach as customerSalesSummary report
+//   const lastMonthDateFilter = `AND orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}'`;
+//   const lastMonthSalesSummaryResult = await order.sequelize.query(
+//     `SELECT
+//         COALESCE(SUM(totalBill), 0) as totalSales,
+//         COUNT(*) as orders,
+//         COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
+//       FROM orders
+//       WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}'`,
+//     {
+//       type: order.sequelize.QueryTypes.SELECT,
+//     }
+//   );
+//   const lastMonthSalesSummary = lastMonthSalesSummaryResult?.[0] || {
+//     totalSales: 0,
+//     orders: 0,
+//     avgOrderValue: 0,
+//   };
 
-  // Calculate percentage change vs last month (MTD)
-  const mtdTotalSales = parseFloat(mtdSalesSummary?.totalSales || 0);
-  const lastMonthTotalSales = parseFloat(
-    lastMonthSalesSummary?.totalSales || 0
-  );
-  const lastMonthMTDStart = new Date(currentYear, currentMonth - 1, 1);
-  const lastMonthMTDEnd = new Date(
-    currentYear,
-    currentMonth - 1,
-    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate())
-  );
-  const lastMonthMTDStartStr = lastMonthMTDStart.toISOString().split("T")[0];
-  const lastMonthMTDEndStr = lastMonthMTDEnd.toISOString().split("T")[0];
+//   // Calculate percentage change vs last month (MTD)
+//   const mtdTotalSales = parseFloat(mtdSalesSummary?.totalSales || 0);
+//   const lastMonthTotalSales = parseFloat(
+//     lastMonthSalesSummary?.totalSales || 0
+//   );
+//   const lastMonthMTDStart = new Date(currentYear, currentMonth - 1, 1);
+//   const lastMonthMTDEnd = new Date(
+//     currentYear,
+//     currentMonth - 1,
+//     Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate())
+//   );
+//   const lastMonthMTDStartStr = lastMonthMTDStart.toISOString().split("T")[0];
+//   const lastMonthMTDEndStr = lastMonthMTDEnd.toISOString().split("T")[0];
 
-  const lastMonthMTDDateFilter = `AND orders.on >= '${lastMonthMTDStartStr}' AND orders.on <= '${lastMonthMTDEndStr}'`;
-  const lastMonthMTDSales = await order.sequelize.query(
-    `SELECT SUM(totalBill) as totalSales
-    FROM orders
-    WHERE 1=1 ${lastMonthMTDDateFilter}`,
-    {
-      type: order.sequelize.QueryTypes.SELECT,
-    }
-  );
+//   const lastMonthMTDDateFilter = `AND orders.on >= '${lastMonthMTDStartStr}' AND orders.on <= '${lastMonthMTDEndStr}'`;
+//   const lastMonthMTDSales = await order.sequelize.query(
+//     `SELECT SUM(totalBill) as totalSales
+//       FROM orders
+//       WHERE 1=1 ${lastMonthMTDDateFilter}`,
+//     {
+//       type: order.sequelize.QueryTypes.SELECT,
+//     }
+//   );
 
-  const lastMonthMTDTotalSales = parseFloat(lastMonthMTDSales?.totalSales || 0);
-  const vsLastMonthPercent =
-    lastMonthMTDTotalSales > 0
-      ? ((mtdTotalSales - lastMonthMTDTotalSales) / lastMonthMTDTotalSales) *
-        100
-      : 0;
+//   const lastMonthMTDTotalSales = parseFloat(lastMonthMTDSales?.totalSales || 0);
+//   const vsLastMonthPercent =
+//     lastMonthMTDTotalSales > 0
+//       ? ((mtdTotalSales - lastMonthMTDTotalSales) / lastMonthMTDTotalSales) *
+//         100
+//       : 0;
 
-  // MTD Sales by Franchisee
-  const mtdSalesByFranchisee = await order.findAll({
-    where: {
-      on: {
-        [Op.between]: [mtdStartStr, mtdEndStr],
-      },
-      salesRepId: { [Op.ne]: null },
-    },
-    attributes: [
-      "salesRepId",
-      [
-        literal(`
-          (SELECT salesReps.id 
-           FROM salesReps 
-           WHERE salesReps.id = order.salesRepId)
-        `),
-        "franchiseeId",
-      ],
-      [
-        literal(`
-          (SELECT salesReps.srName 
-           FROM salesReps 
-           WHERE salesReps.id = order.salesRepId)
-        `),
-        "franchiseeName",
-      ],
-      [
-        literal(`
-          (SELECT salesReps.territoryName 
-           FROM salesReps 
-           WHERE salesReps.id = order.salesRepId)
-        `),
-        "territoryName",
-      ],
-      [
-        literal(`
-          SUM(
-            CASE 
-              WHEN order.salesRepId IS NULL THEN order.totalBill
-              ELSE order.totalBill - (
-                SELECT COALESCE(SUM(items.price - items.wholesalePrice), 0)
-                FROM items 
-                WHERE items.orderId = order.id
-              )
-            END
-          )
-        `),
-        "totalSales",
-      ],
-    ],
-    group: ["salesRepId"],
-    order: [[literal("totalSales"), "DESC"]],
-    limit: 5,
-    raw: true,
-  });
+//   // MTD Sales by Franchisee - Only orders with salesRepId (franchisee orders)
+//   // Using raw SQL to ensure date filter works correctly
+//   const mtdSalesByFranchisee = await order.sequelize.query(
+//     `SELECT
+//       orders.salesRepId as franchiseeId,
+//       orders.salesRepId as salesRepId,
+//       COALESCE(salesReps.srName, '') as franchiseeName,
+//       COALESCE(salesReps.territoryName, '') as territoryName,
+//       SUM(orders.totalBill) as totalSales
+//     FROM orders
+//     INNER JOIN salesReps ON salesReps.id = orders.salesRepId
+//     WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'
+//       AND orders.salesRepId IS NOT NULL
+//     GROUP BY orders.salesRepId, salesReps.srName, salesReps.territoryName
+//     ORDER BY totalSales DESC
+//     LIMIT 5`,
+//     {
+//       type: order.sequelize.QueryTypes.SELECT,
+//     }
+//   );
 
-  // YTD Sales by Franchisee
-  const ytdStart = new Date(currentYear, 0, 1);
-  const ytdEnd = new Date(currentYear, currentMonth, currentDay);
-  const ytdStartStr = ytdStart.toISOString().split("T")[0];
-  const ytdEndStr = ytdEnd.toISOString().split("T")[0];
+//   // YTD Sales by Franchisee - Only orders with salesRepId (franchisee orders)
+//   // Using raw SQL to ensure date filter works correctly
+//   const ytdStart = new Date(currentYear, 0, 1);
+//   const ytdEnd = new Date(currentYear, currentMonth, currentDay);
+//   const ytdStartStr = ytdStart.toISOString().split("T")[0];
+//   const ytdEndStr = ytdEnd.toISOString().split("T")[0];
 
-  const ytdSalesByFranchisee = await order.findAll({
-    where: {
-      on: {
-        [Op.between]: [ytdStartStr, ytdEndStr],
-      },
-      salesRepId: { [Op.ne]: null },
-    },
-    attributes: [
-      "salesRepId",
-      [
-        literal(`
-          (SELECT salesReps.id 
-           FROM salesReps 
-           WHERE salesReps.id = order.salesRepId)
-        `),
-        "franchiseeId",
-      ],
-      [
-        literal(`
-          (SELECT salesReps.srName 
-           FROM salesReps 
-           WHERE salesReps.id = order.salesRepId)
-        `),
-        "franchiseeName",
-      ],
-      [
-        literal(`
-          (SELECT salesReps.territoryName 
-           FROM salesReps 
-           WHERE salesReps.id = order.salesRepId)
-        `),
-        "territoryName",
-      ],
-      [
-        literal(`
-          SUM(
-            CASE 
-              WHEN order.salesRepId IS NULL THEN order.totalBill
-              ELSE order.totalBill - (
-                SELECT COALESCE(SUM(items.price - items.wholesalePrice), 0)
-                FROM items 
-                WHERE items.orderId = order.id
-              )
-            END
-          )
-        `),
-        "totalSales",
-      ],
-    ],
-    group: ["salesRepId"],
-    order: [[literal("totalSales"), "DESC"]],
-    limit: 5,
-    raw: true,
-  });
+//   const ytdSalesByFranchisee = await order.sequelize.query(
+//     `SELECT
+//       orders.salesRepId as franchiseeId,
+//       orders.salesRepId as salesRepId,
+//       COALESCE(salesReps.srName, '') as franchiseeName,
+//       COALESCE(salesReps.territoryName, '') as territoryName,
+//       SUM(orders.totalBill) as totalSales
+//     FROM orders
+//     INNER JOIN salesReps ON salesReps.id = orders.salesRepId
+//     WHERE orders.on >= '${ytdStartStr}' AND orders.on <= '${ytdEndStr}'
+//       AND orders.salesRepId IS NOT NULL
+//     GROUP BY orders.salesRepId, salesReps.srName, salesReps.territoryName
+//     ORDER BY totalSales DESC
+//     LIMIT 5`,
+//     {
+//       type: order.sequelize.QueryTypes.SELECT,
+//     }
+//   );
 
-  // MTD Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
-  const mtdSalesByCustomer = await order.sequelize.query(
-    `SELECT 
-      orders.userId,
-      COALESCE(users.companyName, users.name) as customerName,
-      SUM(orders.totalBill) as totalSales
-    FROM orders
-    INNER JOIN users ON users.id = orders.userId
-    WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'
-    GROUP BY orders.userId
-    ORDER BY totalSales DESC
-    LIMIT 5`,
-    {
-      type: order.sequelize.QueryTypes.SELECT,
-    }
-  );
+//   // MTD Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
+//   const mtdSalesByCustomer = await order.sequelize.query(
+//     `SELECT
+//         orders.userId,
+//         COALESCE(users.companyName, users.name) as customerName,
+//         SUM(orders.totalBill) as totalSales
+//       FROM orders
+//       INNER JOIN users ON users.id = orders.userId
+//       WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'
+//       GROUP BY orders.userId
+//       ORDER BY totalSales DESC
+//       LIMIT 5`,
+//     {
+//       type: order.sequelize.QueryTypes.SELECT,
+//     }
+//   );
 
-  // Last Month Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
-  const lastMonthSalesByCustomer = await order.sequelize.query(
-    `SELECT 
-      orders.userId,
-      COALESCE(users.companyName, users.name) as customerName,
-      SUM(orders.totalBill) as totalSales
-    FROM orders
-    INNER JOIN users ON users.id = orders.userId
-    WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}'
-    GROUP BY orders.userId
-    ORDER BY totalSales DESC
-    LIMIT 5`,
-    {
-      type: order.sequelize.QueryTypes.SELECT,
-    }
-  );
+//   // Last Month Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
+//   const lastMonthSalesByCustomer = await order.sequelize.query(
+//     `SELECT
+//         orders.userId,
+//         COALESCE(users.companyName, users.name) as customerName,
+//         SUM(orders.totalBill) as totalSales
+//       FROM orders
+//       INNER JOIN users ON users.id = orders.userId
+//       WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}'
+//       GROUP BY orders.userId
+//       ORDER BY totalSales DESC
+//       LIMIT 5`,
+//     {
+//       type: order.sequelize.QueryTypes.SELECT,
+//     }
+//   );
 
-  res.status(200).json({
-    status: "success",
-    data: {
-      monthToDateSales: {
-        totalSales: mtdSalesSummary?.totalSales || 0,
-        orders: mtdSalesSummary?.orders || 0,
-        avgOrderValue: mtdSalesSummary?.avgOrderValue || 0,
-        vsLastMonthPercent: parseFloat(vsLastMonthPercent.toFixed(2)),
-      },
-      mtdSalesByCustomer: mtdSalesByCustomer.map((customer) => ({
-        customerId: customer.userId,
-        customerName: customer.customerName,
-        totalSales: parseFloat(customer.totalSales || 0),
-      })),
-      lastMonthSales: {
-        totalSales: lastMonthSalesSummary?.totalSales || 0,
-        orders: lastMonthSalesSummary?.orders || 0,
-        avgOrderValue: lastMonthSalesSummary?.avgOrderValue || 0,
-        monthClosed: "Completed",
-      },
-      lastMonthSalesByCustomer: lastMonthSalesByCustomer.map((customer) => ({
-        customerId: customer.userId,
-        customerName: customer.customerName,
-        totalSales: parseFloat(customer.totalSales || 0),
-      })),
-      mtdSalesByFranchisee: mtdSalesByFranchisee.map((franchisee) => ({
-        franchiseeId: franchisee.franchiseeId,
-        salesRepId: franchisee.salesRepId,
-        franchiseeName: franchisee.franchiseeName,
-        territoryName: franchisee.territoryName,
-        totalSales: parseFloat(franchisee.totalSales || 0),
-      })),
-      ytdSalesByFranchisee: ytdSalesByFranchisee.map((franchisee) => ({
-        franchiseeId: franchisee.franchiseeId,
-        salesRepId: franchisee.salesRepId,
-        franchiseeName: franchisee.franchiseeName,
-        territoryName: franchisee.territoryName,
-        totalSales: parseFloat(franchisee.totalSales || 0),
-      })),
-    },
-  });
-});
+//   res.status(200).json({
+//     status: "success",
+//     data: {
+//       monthToDateSales: {
+//         totalSales: mtdSalesSummary?.totalSales || 0,
+//         orders: mtdSalesSummary?.orders || 0,
+//         avgOrderValue: mtdSalesSummary?.avgOrderValue || 0,
+//         vsLastMonthPercent: parseFloat(vsLastMonthPercent.toFixed(2)),
+//       },
+//       mtdSalesByCustomer: mtdSalesByCustomer.map((customer) => ({
+//         customerId: customer.userId,
+//         customerName: customer.customerName,
+//         totalSales: parseFloat(customer.totalSales || 0),
+//       })),
+//       lastMonthSales: {
+//         totalSales: lastMonthSalesSummary?.totalSales || 0,
+//         orders: lastMonthSalesSummary?.orders || 0,
+//         avgOrderValue: lastMonthSalesSummary?.avgOrderValue || 0,
+//         monthClosed: "Completed",
+//       },
+//       lastMonthSalesByCustomer: lastMonthSalesByCustomer.map((customer) => ({
+//         customerId: customer.userId,
+//         customerName: customer.customerName,
+//         totalSales: parseFloat(customer.totalSales || 0),
+//       })),
+//       mtdSalesByFranchisee: mtdSalesByFranchisee.map((franchisee) => ({
+//         franchiseeId: franchisee.franchiseeId,
+//         salesRepId: franchisee.salesRepId,
+//         franchiseeName: franchisee.franchiseeName,
+//         territoryName: franchisee.territoryName,
+//         totalSales: parseFloat(franchisee.totalSales || 0),
+//       })),
+//       ytdSalesByFranchisee: ytdSalesByFranchisee.map((franchisee) => ({
+//         franchiseeId: franchisee.franchiseeId,
+//         salesRepId: franchisee.salesRepId,
+//         franchiseeName: franchisee.franchiseeName,
+//         territoryName: franchisee.territoryName,
+//         totalSales: parseFloat(franchisee.totalSales || 0),
+//       })),
+//     },
+//   });
+// });
 
 // Get Franchisee Sales Dashboard with MTD and YTD Sales
 exports.getFranchiseeSalesDashboard = catchAsync(async (req, res, next) => {
@@ -1265,6 +1195,305 @@ exports.getLocalPartnerSalesDashboard = catchAsync(async (req, res, next) => {
         customerName: customer.customerName,
         totalSales: parseFloat(customer.totalSales || 0),
       })),
+    },
+  });
+});
+
+exports.getSalesDashboard = catchAsync(async (req, res, next) => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentDay = now.getDate();
+
+  // Month-to-Date: First day of current month to today
+  const mtdStart = new Date(currentYear, currentMonth, 1);
+  const mtdEnd = new Date(currentYear, currentMonth, currentDay);
+
+  // Last Month: First day of last month to last day of last month
+  const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
+  const lastMonthEnd = new Date(currentYear, currentMonth, 0);
+
+  // Format dates for SQL (YYYY-MM-DD) - matching report format exactly
+  const mtdStartStr =
+    req.query.mtdStart || mtdStart.toISOString().split("T")[0];
+  const mtdEndStr = req.query.mtdEnd || mtdEnd.toISOString().split("T")[0];
+  const lastMonthStartStr =
+    req.query.lastMonthStart || lastMonthStart.toISOString().split("T")[0];
+  const lastMonthEndStr =
+    req.query.lastMonthEnd || lastMonthEnd.toISOString().split("T")[0];
+
+  console.log("🚀 ~ getSalesDashboardAllEntities ~ mtdStartStr:", mtdStartStr);
+  console.log("🚀 ~ getSalesDashboardAllEntities ~ mtdEndStr:", mtdEndStr);
+  console.log(
+    "🚀 ~ getSalesDashboardAllEntities ~ req.user.entity:",
+    req.user.entity
+  );
+
+  // Build entity-based filters
+  let entityFilter = "";
+  let salesRepIdFilter = "";
+  let employeeIdFilter = "";
+
+  const isAdmin =
+    req.user.entity === "admin" || req.user.entity === "adminEmployee";
+  const isLocalPartner =
+    req.user.entity === "localPartner" || req.user.entity === "partnerEmployee";
+
+  // For local partners: filter by salesRepId
+  if (isLocalPartner && req.user.localPartnerId) {
+    const salesRepId = req.user.localPartnerId;
+    salesRepIdFilter = `AND orders.salesRepId = ${salesRepId}`;
+    console.log(
+      "🚀 ~ getSalesDashboard ~ Applied salesRepId filter:",
+      salesRepId
+    );
+  }
+
+  // For employees (adminEmployee or partnerEmployee): filter by employeeId
+  if (
+    req.user.entity === "adminEmployee" ||
+    req.user.entity === "partnerEmployee"
+  ) {
+    const employeeId = req.user.employeeId || req.user.id;
+    employeeIdFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+    console.log(
+      "🚀 ~ getSalesDashboard ~ Applied employeeId filter:",
+      employeeId
+    );
+  }
+
+  // Combine filters
+  entityFilter = `${salesRepIdFilter} ${employeeIdFilter}`.trim();
+  if (entityFilter) {
+    entityFilter = entityFilter.startsWith("AND")
+      ? entityFilter
+      : `AND ${entityFilter}`;
+  }
+
+  // Month-to-Date Sales Summary - Using same approach as customerSalesSummary report
+  // Note: Report uses 'orders.on >= startDate AND orders.on <= endDate' (inclusive on both ends)
+  // orders.on is DATEONLY type, so direct comparison works
+  const mtdDateFilter = `AND orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'`;
+  console.log("🚀 ~ getSalesDashboard ~ mtdDateFilter:", mtdDateFilter);
+  // Note: Report doesn't filter by deleted field - matching report exactly
+  // The report query structure uses user.findAll with subqueries, but we're querying orders directly
+  const mtdSalesSummaryResult = await order.sequelize.query(
+    `SELECT 
+        COALESCE(SUM(totalBill), 0) as totalSales,
+        COUNT(*) as orders,
+        COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
+      FROM orders
+      WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}' ${entityFilter}`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    }
+  );
+  const mtdSalesSummary = mtdSalesSummaryResult?.[0] || {
+    totalSales: 0,
+    orders: 0,
+    avgOrderValue: 0,
+  };
+
+  // Last Month Sales Summary - Using same approach as customerSalesSummary report
+  const lastMonthDateFilter = `AND orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}'`;
+  const lastMonthSalesSummaryResult = await order.sequelize.query(
+    `SELECT 
+        COALESCE(SUM(totalBill), 0) as totalSales,
+        COUNT(*) as orders,
+        COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
+      FROM orders
+      WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}' ${entityFilter}`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    }
+  );
+  const lastMonthSalesSummary = lastMonthSalesSummaryResult?.[0] || {
+    totalSales: 0,
+    orders: 0,
+    avgOrderValue: 0,
+  };
+
+  // Calculate percentage change vs last month (MTD)
+  const mtdTotalSales = parseFloat(mtdSalesSummary?.totalSales || 0);
+  const lastMonthTotalSales = parseFloat(
+    lastMonthSalesSummary?.totalSales || 0
+  );
+  const lastMonthMTDStart = new Date(currentYear, currentMonth - 1, 1);
+  const lastMonthMTDEnd = new Date(
+    currentYear,
+    currentMonth - 1,
+    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate())
+  );
+  const lastMonthMTDStartStr = lastMonthMTDStart.toISOString().split("T")[0];
+  const lastMonthMTDEndStr = lastMonthMTDEnd.toISOString().split("T")[0];
+
+  const lastMonthMTDDateFilter = `AND orders.on >= '${lastMonthMTDStartStr}' AND orders.on <= '${lastMonthMTDEndStr}'`;
+  const lastMonthMTDSales = await order.sequelize.query(
+    `SELECT SUM(totalBill) as totalSales
+      FROM orders
+      WHERE orders.on >= '${lastMonthMTDStartStr}' AND orders.on <= '${lastMonthMTDEndStr}' ${entityFilter}`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    }
+  );
+
+  const lastMonthMTDTotalSales = parseFloat(lastMonthMTDSales?.totalSales || 0);
+  const vsLastMonthPercent =
+    lastMonthMTDTotalSales > 0
+      ? ((mtdTotalSales - lastMonthMTDTotalSales) / lastMonthMTDTotalSales) *
+        100
+      : 0;
+
+  // MTD Sales by Franchisee - Only orders with salesRepId (franchisee orders)
+  // Build entity filter for franchisee query
+  let franchiseeEntityFilter = "";
+  if (isLocalPartner && req.user.localPartnerId) {
+    franchiseeEntityFilter = `AND orders.salesRepId = ${req.user.localPartnerId}`;
+  }
+  if (
+    req.user.entity === "adminEmployee" ||
+    req.user.entity === "partnerEmployee"
+  ) {
+    const employeeId = req.user.employeeId || req.user.id;
+    franchiseeEntityFilter += ` AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+  }
+
+  const mtdSalesByFranchisee = await order.sequelize.query(
+    `SELECT 
+      orders.salesRepId as franchiseeId,
+      orders.salesRepId as salesRepId,
+      COALESCE(salesReps.srName, '') as franchiseeName,
+      COALESCE(salesReps.territoryName, '') as territoryName,
+      SUM(orders.totalBill) as totalSales
+    FROM orders
+    INNER JOIN salesReps ON salesReps.id = orders.salesRepId
+    WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'
+      AND orders.salesRepId IS NOT NULL
+      ${franchiseeEntityFilter}
+    GROUP BY orders.salesRepId, salesReps.srName, salesReps.territoryName
+    ORDER BY totalSales DESC
+    LIMIT 5`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    }
+  );
+
+  // YTD Sales by Franchisee - Only orders with salesRepId (franchisee orders)
+  const ytdStart = new Date(currentYear, 0, 1);
+  const ytdEnd = new Date(currentYear, currentMonth, currentDay);
+  const ytdStartStr = ytdStart.toISOString().split("T")[0];
+  const ytdEndStr = ytdEnd.toISOString().split("T")[0];
+
+  // Reuse the same entity filter logic for YTD
+  let ytdFranchiseeEntityFilter = "";
+  if (isLocalPartner && req.user.localPartnerId) {
+    ytdFranchiseeEntityFilter = `AND orders.salesRepId = ${req.user.localPartnerId}`;
+  }
+  if (
+    req.user.entity === "adminEmployee" ||
+    req.user.entity === "partnerEmployee"
+  ) {
+    const employeeId = req.user.employeeId || req.user.id;
+    ytdFranchiseeEntityFilter += ` AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+  }
+
+  const ytdSalesByFranchisee = await order.sequelize.query(
+    `SELECT 
+      orders.salesRepId as franchiseeId,
+      orders.salesRepId as salesRepId,
+      COALESCE(salesReps.srName, '') as franchiseeName,
+      COALESCE(salesReps.territoryName, '') as territoryName,
+      SUM(orders.totalBill) as totalSales
+    FROM orders
+    INNER JOIN salesReps ON salesReps.id = orders.salesRepId
+    WHERE orders.on >= '${ytdStartStr}' AND orders.on <= '${ytdEndStr}'
+      AND orders.salesRepId IS NOT NULL
+      ${ytdFranchiseeEntityFilter}
+    GROUP BY orders.salesRepId, salesReps.srName, salesReps.territoryName
+    ORDER BY totalSales DESC
+    LIMIT 5`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    }
+  );
+
+  // MTD Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
+  const mtdSalesByCustomer = await order.sequelize.query(
+    `SELECT 
+        orders.userId,
+        COALESCE(users.companyName, users.name) as customerName,
+        SUM(orders.totalBill) as totalSales
+      FROM orders
+      INNER JOIN users ON users.id = orders.userId
+      WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}' ${entityFilter}
+      GROUP BY orders.userId
+      ORDER BY totalSales DESC
+      LIMIT 5`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    }
+  );
+
+  // Last Month Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
+  const lastMonthSalesByCustomer = await order.sequelize.query(
+    `SELECT 
+        orders.userId,
+        COALESCE(users.companyName, users.name) as customerName,
+        SUM(orders.totalBill) as totalSales
+      FROM orders
+      INNER JOIN users ON users.id = orders.userId
+      WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}' ${entityFilter}
+      GROUP BY orders.userId
+      ORDER BY totalSales DESC
+      LIMIT 5`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    }
+  );
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      monthToDateSales: {
+        totalSales: mtdSalesSummary?.totalSales || 0,
+        orders: mtdSalesSummary?.orders || 0,
+        avgOrderValue: mtdSalesSummary?.avgOrderValue || 0,
+        vsLastMonthPercent: parseFloat(vsLastMonthPercent.toFixed(2)),
+      },
+      mtdSalesByCustomer: mtdSalesByCustomer.map((customer) => ({
+        customerId: customer.userId,
+        customerName: customer.customerName,
+        totalSales: parseFloat(customer.totalSales || 0),
+      })),
+      lastMonthSales: {
+        totalSales: lastMonthSalesSummary?.totalSales || 0,
+        orders: lastMonthSalesSummary?.orders || 0,
+        avgOrderValue: lastMonthSalesSummary?.avgOrderValue || 0,
+        monthClosed: "Completed",
+      },
+      lastMonthSalesByCustomer: lastMonthSalesByCustomer.map((customer) => ({
+        customerId: customer.userId,
+        customerName: customer.customerName,
+        totalSales: parseFloat(customer.totalSales || 0),
+      })),
+      // Only include franchisee data for admin and adminEmployee users
+      ...((req.user.entity === "admin" ||
+        req.user.entity === "adminEmployee") && {
+        mtdSalesByFranchisee: mtdSalesByFranchisee.map((franchisee) => ({
+          franchiseeId: franchisee.franchiseeId,
+          salesRepId: franchisee.salesRepId,
+          franchiseeName: franchisee.franchiseeName,
+          territoryName: franchisee.territoryName,
+          totalSales: parseFloat(franchisee.totalSales || 0),
+        })),
+        ytdSalesByFranchisee: ytdSalesByFranchisee.map((franchisee) => ({
+          franchiseeId: franchisee.franchiseeId,
+          salesRepId: franchisee.salesRepId,
+          franchiseeName: franchisee.franchiseeName,
+          territoryName: franchisee.territoryName,
+          totalSales: parseFloat(franchisee.totalSales || 0),
+        })),
+      }),
     },
   });
 });
