@@ -809,6 +809,7 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
   }
 
   // Build the SQL query using raw SQL
+  // Returns both product items and shipping charges (items.type = 'charges')
   const query = `
     SELECT 
       items.id,
@@ -849,6 +850,7 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
       AND orders.on >= :startDate
       AND orders.on <= :endDate
       AND items.deleted = 0
+      -- No type filter - includes both 'product' and 'charges' (shipping) items
     ORDER BY orders.on DESC, orders.invoiceNumber, items.id
   `;
 
