@@ -1014,6 +1014,112 @@ async function transferToLocalPatners({
   }
 }
 
+async function transferToEmployee({
+  amount,
+  employeeAccountId,
+  orderId,
+  invoiceId,
+  paymentIntentId,
+}) {
+  try {
+    // Step 1: Retrieve the invoice if provided
+    const invoice = invoiceId
+      ? await stripe.invoices.retrieve(invoiceId)
+      : null;
+    console.log("🚀 ~ transferToEmployee ~ invoice:", invoice);
+    const piId = invoice ? invoice?.payment_intent : paymentIntentId;
+
+    if (!piId) throw new Error("No valid PaymentIntent ID found.");
+
+    // Step 2: Retrieve PaymentIntent with expanded charges
+    const paymentIntent = await stripe.paymentIntents.retrieve(piId, {
+      expand: ["charges"],
+    });
+
+    console.log("🚀 ~ transferToEmployee ~ paymentIntent:", paymentIntent);
+
+    // Step 3: Retrieve the charge (either from expanded charges or using latest_charge fallback)
+    let charge;
+    if (paymentIntent?.charges?.data?.length) {
+      charge = paymentIntent.charges.data[0];
+    } else if (paymentIntent?.latest_charge) {
+      charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
+    } else {
+      throw new Error("No charge found in PaymentIntent");
+    }
+
+    // Step 4: Retrieve the balance transaction to get Stripe fee
+    const balanceTransaction = await stripe.balanceTransactions.retrieve(
+      charge.balance_transaction
+    );
+
+    // Step 5: Stripe values are in cents
+    const totalAmountCents = balanceTransaction.amount;
+    console.log(
+      "🚀 ~ transferToEmployee ~ totalAmountCents:",
+      totalAmountCents
+    );
+    const stripeFeeCents = balanceTransaction.fee;
+    console.log(
+      "🚀 ~ transferToEmployee ~ stripeFeeCents:",
+      stripeFeeCents
+    );
+
+    // Step 6: Calculate net amount (total - stripe fee) in cents
+    const netAmountCents = totalAmountCents - stripeFeeCents;
+    console.log(
+      "🚀 ~ transferToEmployee ~ netAmountCents:",
+      netAmountCents
+    );
+
+    // Step 7: Convert employee commission amount to cents (amount is already in dollars)
+    const employeeCommissionCents = convertToCents(amount);
+    console.log("🚀 ~ transferToEmployee ~ amount:", amount);
+    console.log(
+      "🚀 ~ transferToEmployee ~ employeeCommissionCents:",
+      employeeCommissionCents
+    );
+
+    // Step 8: Calculate proportional Stripe fee for employee commission
+    // Fee ratio = employee commission / net amount
+    const feeRatio = employeeCommissionCents / netAmountCents;
+    const proportionalStripeFee = Math.round(stripeFeeCents * feeRatio);
+    console.log(
+      "🚀 ~ transferToEmployee ~ proportionalStripeFee:",
+      proportionalStripeFee
+    );
+
+    // Step 9: Calculate net employee amount (commission - proportional fee)
+    const netEmployeeAmount = employeeCommissionCents - proportionalStripeFee;
+    console.log(
+      "🚀 ~ transferToEmployee ~ netEmployeeAmount:",
+      netEmployeeAmount
+    );
+
+    // Step 10: Create description for audit/debug
+    const description = `For Order ${orderId} - Employee Commission: $${(employeeCommissionCents / 100).toFixed(2)} - Stripe Fee: $${(proportionalStripeFee / 100).toFixed(2)} = Net: $${(netEmployeeAmount / 100).toFixed(2)}`;
+
+    // Step 11: Create the transfer
+    const transfer = await stripe.transfers.create({
+      amount: netEmployeeAmount,
+      currency: "usd",
+      destination: employeeAccountId,
+      transfer_group: invoice?.id || undefined,
+      description,
+    });
+
+    return {
+      transfer,
+      netEmployeeAmount: netEmployeeAmount / 100,
+      proportionalStripeFee: proportionalStripeFee / 100,
+      grossEmployeeAmount: employeeCommissionCents / 100,
+    };
+  } catch (error) {
+    console.error("Transfer to employee failed:", error);
+    throw new AppError(`${error?.message}`, 200);
+  }
+}
+
 async function getInvoiceDetails({ invoiceId }) {
   console.log("🚀 ~ getInvoiceDetails ~ getInvoiceDetails:");
   try {
@@ -1206,6 +1312,7 @@ module.exports = {
   createInvoiceWithItems,
   paymentIntentForWebsitePayments,
   transferToLocalPatners,
+  transferToEmployee,
   getInvoiceDetails,
   createStandardConnectAccount,
 };

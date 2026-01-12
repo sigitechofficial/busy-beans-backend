@@ -9,6 +9,7 @@ const {
   item,
   order,
   partnerOrder,
+  employee,
 } = require("../../models");
 const { parseOrderString } = require("../../utils/webhookHelpersFunctions");
 const {
@@ -115,10 +116,29 @@ const invoicePaid = async (event) => {
         });
       }
     } else {
-      const orderPlaced = await order.findOne({
+      const result = await order.findOne({
         where: condition,
+        include: [
+          {
+            model: user,
+            attributes: ["id", "employeeId", "salesRepId"],
+            include: [
+              {
+                model: employee,
+                attributes: [
+                  "id",
+                  "commissionPercentage",
+                  "stripeConnectAccountId",
+                  "employeeOf",
+                ],
+                required: false,
+              },
+            ],
+          },
+        ],
         attributes: [
           "id",
+          "totalBill",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
           "quickBooksPaymentId",
@@ -141,20 +161,104 @@ const invoicePaid = async (event) => {
             "adminEarnings",
           ],
         ],
-        raw: true,
+        raw: false,
       });
 
-      console.log("🚀 ~ invoicePaid ~ orderId:", orderPlaced);
+      const orderPlaced = JSON.parse(JSON.stringify(result));
+      console.log("🚀 ~ invoicePaid ~ orderPlaced:", orderPlaced);
+
+      // Check if customer has NO local partner (salesRepId is null) AND has an Admin employee
+      const customer = orderPlaced?.user;
+      const hasNoLocalPartner = !customer?.salesRepId;
+      const hasEmployee =
+        customer?.employee && customer.employee.employeeOf === "Admin";
+
+      let employeeCommissionData = {
+        employeeId: null,
+        AppliedEmployeeCommisionPercentage: null,
+        employeeCommisionAmount: 0,
+      };
+
+      if (hasNoLocalPartner && hasEmployee) {
+        const emp = customer.employee;
+        const commissionPercentage = parseFloat(emp.commissionPercentage) || 0;
+
+        if (commissionPercentage > 0 && emp.stripeConnectAccountId) {
+          try {
+            // Get payment intent to calculate net amount
+            const paymentIntentId = invoice.payment_intent;
+            const paymentIntent = await stripe.paymentIntents.retrieve(
+              paymentIntentId,
+              {
+                expand: ["latest_charge"],
+              }
+            );
+
+            const chargeId = paymentIntent.latest_charge;
+            const charge = await stripe.charges.retrieve(
+              typeof chargeId === "string" ? chargeId : chargeId.id,
+              { expand: ["balance_transaction"] }
+            );
+
+            const balanceTransaction = charge.balance_transaction;
+            const stripeFee = balanceTransaction.fee || 0; // in cents
+            const totalAmount = charge.amount; // in cents
+
+            // Calculate net amount (total - stripe fee) in dollars
+            const netAmount = (totalAmount - stripeFee) / 100;
+
+            // Apply commission percentage on net amount
+            const employeeCommissionAmount =
+              (netAmount * commissionPercentage) / 100;
+
+            console.log("🚀 ~ invoicePaid ~ Employee Commission Calculation:");
+            console.log("  Total Amount:", totalAmount / 100);
+            console.log("  Stripe Fee:", stripeFee / 100);
+            console.log("  Net Amount:", netAmount);
+            console.log("  Commission %:", commissionPercentage);
+            console.log("  Employee Commission:", employeeCommissionAmount);
+
+            // Transfer to employee
+            const transfer = await Stripe.transferToEmployee({
+              amount: employeeCommissionAmount,
+              employeeAccountId: emp.stripeConnectAccountId,
+              orderId: orderId,
+              invoiceId: invoice.id,
+              paymentIntentId: paymentIntentId,
+            });
+
+            // Store employee commission data
+            employeeCommissionData = {
+              employeeId: emp.id,
+              AppliedEmployeeCommisionPercentage: commissionPercentage,
+              employeeCommisionAmount: transfer.netEmployeeAmount,
+            };
+
+            console.log("✅ Employee commission transferred successfully");
+          } catch (error) {
+            console.error("❌ Error processing employee commission:", error);
+            // Continue with order update but without employee commission
+          }
+        } else {
+          // No commission or no Stripe account - still store employee info if exists
+          if (emp) {
+            employeeCommissionData.employeeId = emp.id;
+          }
+        }
+      }
+
+      // Update order with all data including employee commission
       await order.update(
         {
           paymentMethod: "card",
-          localPatnerCommission: orderPlaced?.totalSalerCommission,
-          adminReceivableAmount: orderPlaced?.adminEarnings,
+          localPatnerCommission: orderPlaced?.totalSalerCommission || 0,
+          adminReceivableAmount: orderPlaced?.adminEarnings || 0,
           adminReceivableStatus: true,
           paymentStatus: "done",
           invoicePaidDate: Date.now(),
           pulloutDate: Date.now(),
           paymentIntentId: invoice.payment_intent,
+          ...employeeCommissionData,
         },
         { where: { id: orderPlaced?.id } }
       );
@@ -376,6 +480,114 @@ const onPaymentIntentSucceeded = async (event) => {
     feeAmountMinor != null
       ? `, stripe fee ${formatAmount(feeAmountMinor, feeCurrency)}`
       : "";
+
+  // Handle employee commission if order exists
+  const orderId = pi.metadata?.orderId;
+  if (orderId) {
+    try {
+      const result = await order.findOne({
+        where: { id: orderId },
+        include: [
+          {
+            model: user,
+            attributes: ["id", "employeeId", "salesRepId"],
+            include: [
+              {
+                model: employee,
+                attributes: [
+                  "id",
+                  "commissionPercentage",
+                  "stripeConnectAccountId",
+                  "employeeOf",
+                ],
+                required: false,
+              },
+            ],
+          },
+        ],
+        attributes: [
+          "id",
+          "totalBill",
+          "employeeId",
+          "AppliedEmployeeCommisionPercentage",
+          "employeeCommisionAmount",
+        ],
+        raw: false,
+      });
+
+      const orderPlaced = JSON.parse(JSON.stringify(result));
+      console.log("🚀 ~ onPaymentIntentSucceeded ~ orderPlaced:", orderPlaced);
+
+      // Check if customer has NO local partner (salesRepId is null) AND has an Admin employee
+      const customer = orderPlaced?.user;
+      const hasNoLocalPartner = !customer?.salesRepId;
+      const hasEmployee =
+        customer?.employee && customer.employee.employeeOf === "Admin";
+
+      // Only process if commission hasn't been processed yet
+      const commissionNotProcessed =
+        !orderPlaced?.employeeId ||
+        !orderPlaced?.AppliedEmployeeCommisionPercentage ||
+        orderPlaced?.employeeCommisionAmount === 0;
+
+      if (hasNoLocalPartner && hasEmployee && commissionNotProcessed) {
+        const emp = customer.employee;
+        const commissionPercentage = parseFloat(emp.commissionPercentage) || 0;
+
+        if (commissionPercentage > 0 && emp.stripeConnectAccountId) {
+          try {
+            // Calculate net amount (total - stripe fee) in dollars
+            const totalAmount = pi.amount; // in cents
+            const stripeFee = feeAmountMinor || 0; // in cents
+            const netAmount = (totalAmount - stripeFee) / 100;
+
+            // Apply commission percentage on net amount
+            const employeeCommissionAmount =
+              (netAmount * commissionPercentage) / 100;
+
+            console.log(
+              "🚀 ~ onPaymentIntentSucceeded ~ Employee Commission Calculation:"
+            );
+            console.log("  Total Amount:", totalAmount / 100);
+            console.log("  Stripe Fee:", stripeFee / 100);
+            console.log("  Net Amount:", netAmount);
+            console.log("  Commission %:", commissionPercentage);
+            console.log("  Employee Commission:", employeeCommissionAmount);
+
+            // Get invoice ID if available
+            const invoiceId = pi.invoice || null;
+
+            // Transfer to employee
+            const transfer = await Stripe.transferToEmployee({
+              amount: employeeCommissionAmount,
+              employeeAccountId: emp.stripeConnectAccountId,
+              orderId: orderId,
+              invoiceId: invoiceId,
+              paymentIntentId: pi.id,
+            });
+
+            // Update order with employee commission
+            await order.update(
+              {
+                employeeId: emp.id,
+                AppliedEmployeeCommisionPercentage: commissionPercentage,
+                employeeCommisionAmount: transfer.netEmployeeAmount,
+              },
+              { where: { id: orderId } }
+            );
+
+            console.log("✅ Employee commission transferred successfully");
+          } catch (error) {
+            console.error("❌ Error processing employee commission:", error);
+            // Continue without blocking
+          }
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error checking order for employee commission:", error);
+      // Continue without blocking
+    }
+  }
 
   // get transfer to find connected account + destination payment
   const transfer = await stripe.transfers.retrieve(transferId);

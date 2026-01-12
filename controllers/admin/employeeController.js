@@ -15,6 +15,7 @@ const {
 const factory = require("../handlerFactory");
 const APIFeatures = require("../../utils/apiFeatures");
 const { Op, literal, where, fn, col } = require("sequelize");
+const Stripe = require("../stripe");
 
 console.log("🚀 ~ literal:", process.env.BASE_URL);
 
@@ -159,3 +160,125 @@ exports.deleteEmployee = async (req, res, next) => {
 
   res.status(200).json({ status: "success", message: "Employee deleted" });
 };
+
+// Create Stripe Connect Account for Admin Employee
+exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
+  const emp = await employee.findOne({
+    where: {
+      id: req.params.employeeId,
+      employeeOf: "Admin", // Only for admin employees
+    },
+  });
+
+  if (!emp) {
+    return next(
+      new AppError("Employee not found or not an admin employee!", 404)
+    );
+  }
+
+  const connectAccount = await Stripe.createConnectAccount({
+    email: emp.email,
+    returnUrl: req.body.returnUrl,
+  });
+
+  emp.stripeConnectAccountId = connectAccount.accountId;
+  await emp.save();
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      message: "Stripe Connect Account created.",
+      data: connectAccount,
+    },
+  });
+});
+
+// Get Stripe Connect Account Link (for onboarding)
+exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
+  const emp = await employee.findOne({
+    where: {
+      id: req.params.employeeId,
+      employeeOf: "Admin",
+      stripeConnectAccountId: { [Op.ne]: null },
+    },
+  });
+
+  if (!emp) {
+    return next(
+      new AppError("Employee not found or Stripe account not created!", 404)
+    );
+  }
+
+  const connectAccount = await Stripe.createStripeAccountLink({
+    accountId: emp.stripeConnectAccountId,
+    returnUrl: req.body.returnUrl,
+  });
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      message: "Stripe Connect Account Link.",
+      data: { connectAccount },
+    },
+  });
+});
+
+// Get Stripe Connect Account Dashboard Link
+exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
+  const emp = await employee.findOne({
+    where: {
+      id: req.params.employeeId,
+      employeeOf: "Admin",
+      stripeConnectAccountId: { [Op.ne]: null },
+    },
+  });
+
+  if (!emp) {
+    return next(
+      new AppError("Employee not found or Stripe account not created!", 404)
+    );
+  }
+
+  const connectAccount = await Stripe.createStripeLoginLink({
+    accountId: emp.stripeConnectAccountId,
+  });
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      message: "Stripe Connect Account Dashboard.",
+      data: { connectAccount },
+    },
+  });
+});
+
+// Update Commission Percentage
+exports.updateCommission = catchAsync(async (req, res, next) => {
+  const { employeeId } = req.params;
+  const { commissionPercentage } = req.body;
+
+  if (commissionPercentage !== undefined) {
+    if (commissionPercentage < 0 || commissionPercentage > 100) {
+      return next(
+        new AppError("Commission percentage must be between 0 and 100", 400)
+      );
+    }
+  }
+
+  const emp = await employee.findByPk(employeeId);
+  if (!emp) {
+    return next(new AppError("Employee not found!", 404));
+  }
+
+  await employee.update(
+    { commissionPercentage },
+    { where: { id: employeeId } }
+  );
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      message: "Commission percentage updated successfully.",
+    },
+  });
+});

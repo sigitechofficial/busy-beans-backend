@@ -848,6 +848,147 @@ router.put(
 
 /**
  * @swagger
+ * /api/v1/admin/employee/{employeeId}/stripe-connect-account:
+ *   post:
+ *     summary: Create Stripe Connect account for admin employee
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               returnUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Stripe Connect account created
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/employee/:employeeId/stripe-connect-account",
+  auth.protect,
+  auth.restrictTo("admin"),
+  employeeController.stripeConnectAccount
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/stripe-connect-account-link:
+ *   post:
+ *     summary: Get Stripe Connect account onboarding link
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               returnUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Stripe Connect account link
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/employee/:employeeId/stripe-connect-account-link",
+  auth.protect,
+  auth.restrictTo("admin"),
+  employeeController.stripeConnectAccountLink
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/stripe-connect-account-dashboard:
+ *   get:
+ *     summary: Get Stripe Connect account dashboard link
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Stripe Connect dashboard link
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/employee/:employeeId/stripe-connect-account-dashboard",
+  auth.protect,
+  auth.restrictTo("admin"),
+  employeeController.stripeConnectAccountDashboard
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/commission:
+ *   patch:
+ *     summary: Update employee commission percentage
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               commissionPercentage:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 100
+ *     responses:
+ *       200:
+ *         description: Commission percentage updated
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  "/employee/:employeeId/commission",
+  auth.protect,
+  auth.restrictTo("admin"),
+  employeeController.updateCommission
+);
+
+/**
+ * @swagger
  * /api/v1/admin/category/:
  *   get:
  *     summary: Get all categories
