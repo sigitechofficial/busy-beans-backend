@@ -245,7 +245,7 @@ async function createConnectAccount({ email, country = "US", returnUrl }) {
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
-        us_bank_account_payments: { requested: true },
+        us_bank_account_ach_payments: { requested: true },
       },
     });
 
@@ -315,7 +315,7 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
   const accountLink = await stripe.accountLinks.create({
     account: accountId,
     refresh_url: "https://example.com/reauth",
-    return_url: returnUrl || "https://google.com",
+    return_url: returnUrl || "https://admin.busybeancoffee.com",
     type: "account_onboarding",
   });
   return accountLink.url;
@@ -1060,17 +1060,11 @@ async function transferToEmployee({
       totalAmountCents
     );
     const stripeFeeCents = balanceTransaction.fee;
-    console.log(
-      "🚀 ~ transferToEmployee ~ stripeFeeCents:",
-      stripeFeeCents
-    );
+    console.log("🚀 ~ transferToEmployee ~ stripeFeeCents:", stripeFeeCents);
 
     // Step 6: Calculate net amount (total - stripe fee) in cents
     const netAmountCents = totalAmountCents - stripeFeeCents;
-    console.log(
-      "🚀 ~ transferToEmployee ~ netAmountCents:",
-      netAmountCents
-    );
+    console.log("🚀 ~ transferToEmployee ~ netAmountCents:", netAmountCents);
 
     // Step 7: Convert employee commission amount to cents (amount is already in dollars)
     const employeeCommissionCents = convertToCents(amount);

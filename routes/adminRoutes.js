@@ -879,7 +879,7 @@ router.put(
 router.post(
   "/employee/:employeeId/stripe-connect-account",
   auth.protect,
-  auth.restrictTo("admin"),
+  auth.restrictTo("admin", "adminEmployee"),
   employeeController.stripeConnectAccount
 );
 
@@ -916,7 +916,7 @@ router.post(
 router.post(
   "/employee/:employeeId/stripe-connect-account-link",
   auth.protect,
-  auth.restrictTo("admin"),
+  auth.restrictTo("admin", "adminEmployee"),
   employeeController.stripeConnectAccountLink
 );
 
@@ -944,7 +944,7 @@ router.post(
 router.get(
   "/employee/:employeeId/stripe-connect-account-dashboard",
   auth.protect,
-  auth.restrictTo("admin"),
+  auth.restrictTo("admin", "adminEmployee"),
   employeeController.stripeConnectAccountDashboard
 );
 
@@ -2217,7 +2217,7 @@ router.get(
 //! SALESREP REPORTS SECTION
 
 router.get(
-  "/sales-rep-reports/orders-placed-report/:supId",
+  "/sales-rep-reports/orders-placed-report/:srId",
   salesRepReportsController.ordersPlacedReport
 );
 

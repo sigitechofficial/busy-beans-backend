@@ -163,6 +163,12 @@ exports.deleteEmployee = async (req, res, next) => {
 
 // Create Stripe Connect Account for Admin Employee
 exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
+  const { returnUrl } = req.body;
+
+  if (!returnUrl) {
+    return next(new AppError("returnUrl is required in request body", 400));
+  }
+
   const emp = await employee.findOne({
     where: {
       id: req.params.employeeId,
@@ -176,9 +182,62 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
     );
   }
 
+  // Check if account already exists
+  if (emp.stripeConnectAccountId) {
+    try {
+      // Check if account is active and ready to receive payments
+      const accountStatus = await Stripe.retrieveConnectAccount({
+        accountId: emp.stripeConnectAccountId,
+      });
+
+      // If account is active (all checks passed in retrieveConnectAccount)
+      res.status(200).json({
+        status: "success",
+        data: {
+          message: "Account is connected",
+          accountState: true,
+          accountId: emp.stripeConnectAccountId,
+          account: accountStatus,
+        },
+      });
+      return;
+    } catch (error) {
+      // Account exists but not active - need to complete onboarding
+      console.log(
+        "🚀 ~ Account exists but not active, getting onboarding link:",
+        error.message
+      );
+
+      try {
+        const onboardingLink = await Stripe.createStripeAccountLink({
+          accountId: emp.stripeConnectAccountId,
+          returnUrl: returnUrl,
+        });
+
+        res.status(200).json({
+          status: "success",
+          data: {
+            message: "Account connect pending",
+            accountState: false,
+            accountId: emp.stripeConnectAccountId,
+            onboardingLink: onboardingLink,
+          },
+        });
+        return;
+      } catch (linkError) {
+        // If getting link fails, create new account
+        console.log(
+          "🚀 ~ Error getting link, creating new account:",
+          linkError.message
+        );
+      }
+    }
+  }
+
+  // Account doesn't exist - create new account
   const connectAccount = await Stripe.createConnectAccount({
     email: emp.email,
-    returnUrl: req.body.returnUrl,
+    returnUrl: returnUrl,
   });
 
   emp.stripeConnectAccountId = connectAccount.accountId;
@@ -187,8 +246,10 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     data: {
-      message: "Stripe Connect Account created.",
-      data: connectAccount,
+      message: "Account connect pending",
+      accountState: false,
+      accountId: connectAccount.accountId,
+      onboardingLink: connectAccount.accountLink?.url || null,
     },
   });
 });

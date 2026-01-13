@@ -1382,7 +1382,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   const ytdStart = new Date(currentYear, 0, 1);
   const ytdEnd = new Date(currentYear, currentMonth, currentDay);
   const ytdStartStr = ytdStart.toISOString().split("T")[0];
-  const ytdEndStr = ytdEnd.toISOString().split("T")[0];
+  const ytdEndStr = mtdEndStr || ytdEnd.toISOString().split("T")[0];
 
   // Reuse the same entity filter logic for YTD
   let ytdFranchiseeEntityFilter = "";
