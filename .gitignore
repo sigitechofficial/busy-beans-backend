@@ -17,6 +17,7 @@ public/
 .vscode/
 
 .env
+firebase.json
 # Compiled Java class files
 *.class
 
@@ -50,6 +51,7 @@ Thumbs.db
 *.app
 *.exe
 *.war
+*.db
 
 # Large media files
 *.mp4
