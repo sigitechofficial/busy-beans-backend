@@ -712,14 +712,25 @@ class LeadController {
         assignedAt: new Date(),
       };
 
-      // Only update salesRepId if explicitly provided in request
-      if (salesRepId !== undefined) {
-        updateData.salesRepId = salesRepId;
-      }
-
       // Only update employeeId if explicitly provided in request
       if (employeeId !== undefined) {
         updateData.employeeId = employeeId;
+      }
+
+      // Handle salesRepId based on entity and what's provided
+      if (salesRepId !== undefined) {
+        // If salesRepId is explicitly provided, use it
+        updateData.salesRepId = salesRepId;
+      } else if (employeeId !== undefined) {
+        // If employeeId is provided but salesRepId is not:
+        if (req.user?.entity === "admin") {
+          // Admin assigning employee: clear salesRepId
+          updateData.salesRepId = null;
+        } else if (req.user?.entity === "localPartner" && lead.salesRepId) {
+          // LocalPartner assigning employee: preserve existing salesRepId
+          // Don't include salesRepId in updateData, so it remains unchanged
+        }
+        // For other entities or if lead has no salesRepId, don't modify salesRepId
       }
 
       // Update lead assignment
