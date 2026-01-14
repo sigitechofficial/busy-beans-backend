@@ -1020,14 +1020,36 @@ async function transferToEmployee({
   orderId,
   invoiceId,
   paymentIntentId,
+  invoiceNumber,
 }) {
   try {
-    // Step 1: Retrieve the invoice if provided
-    const invoice = invoiceId
-      ? await stripe.invoices.retrieve(invoiceId)
-      : null;
-    console.log("🚀 ~ transferToEmployee ~ invoice:", invoice);
-    const piId = invoice ? invoice?.payment_intent : paymentIntentId;
+    // Step 1: Retrieve the invoice if provided (only if it's a valid invoice ID, not a checkout session)
+    let invoice = null;
+    let piId = paymentIntentId;
+    let stripeInvoiceNumber = null;
+
+    if (invoiceId && !invoiceId.startsWith("cs_")) {
+      // Only retrieve if it's not a checkout session ID (checkout sessions start with 'cs_')
+      try {
+        invoice = await stripe.invoices.retrieve(invoiceId);
+        console.log("🚀 ~ transferToEmployee ~ invoice:", invoice);
+        piId = invoice?.payment_intent || paymentIntentId;
+        stripeInvoiceNumber = invoice?.number || null;
+      } catch (error) {
+        // If invoice retrieval fails, use paymentIntentId directly
+        console.log(
+          "🚀 ~ transferToEmployee ~ Invoice retrieval failed, using paymentIntentId:",
+          error.message
+        );
+        piId = paymentIntentId;
+      }
+    } else if (invoiceId && invoiceId.startsWith("cs_")) {
+      // It's a checkout session ID, not an invoice - skip invoice retrieval
+      console.log(
+        "🚀 ~ transferToEmployee ~ invoiceId is a checkout session, skipping invoice retrieval"
+      );
+      piId = paymentIntentId;
+    }
 
     if (!piId) throw new Error("No valid PaymentIntent ID found.");
 
@@ -1067,35 +1089,42 @@ async function transferToEmployee({
     console.log("🚀 ~ transferToEmployee ~ netAmountCents:", netAmountCents);
 
     // Step 7: Convert employee commission amount to cents (amount is already in dollars)
+    // Note: The amount passed is already calculated on net amount (after Stripe fee),
+    // so we transfer the full commission amount without deducting proportional fee
     const employeeCommissionCents = convertToCents(amount);
     console.log("🚀 ~ transferToEmployee ~ amount:", amount);
     console.log(
       "🚀 ~ transferToEmployee ~ employeeCommissionCents:",
-      employeeCommissionCents
+      employeeCommissionCents,
+      "cents ($" + (employeeCommissionCents / 100).toFixed(2) + ")"
     );
-
-    // Step 8: Calculate proportional Stripe fee for employee commission
-    // Fee ratio = employee commission / net amount
-    const feeRatio = employeeCommissionCents / netAmountCents;
-    const proportionalStripeFee = Math.round(stripeFeeCents * feeRatio);
     console.log(
-      "🚀 ~ transferToEmployee ~ proportionalStripeFee:",
-      proportionalStripeFee
+      "🚀 ~ transferToEmployee ~ Note: Commission is calculated on net amount (after Stripe fee), so full amount is transferred"
     );
 
-    // Step 9: Calculate net employee amount (commission - proportional fee)
-    const netEmployeeAmount = employeeCommissionCents - proportionalStripeFee;
-    console.log(
-      "🚀 ~ transferToEmployee ~ netEmployeeAmount:",
-      netEmployeeAmount
+    // Step 8: Create description with invoice information
+    const descriptionParts = [];
+
+    // Prefer order invoice number, then Stripe invoice number, then invoice ID, then order ID
+    if (invoiceNumber) {
+      descriptionParts.push(`Payment from Invoice #${invoiceNumber}`);
+    } else if (stripeInvoiceNumber) {
+      descriptionParts.push(`Payment from Invoice #${stripeInvoiceNumber}`);
+    } else if (invoiceId && !invoiceId.startsWith("cs_")) {
+      descriptionParts.push(`Payment from Invoice ${invoiceId}`);
+    } else {
+      descriptionParts.push(`Payment from Order #${orderId}`);
+    }
+
+    descriptionParts.push(
+      `- Employee Commission: $${(employeeCommissionCents / 100).toFixed(2)}`
     );
 
-    // Step 10: Create description for audit/debug
-    const description = `For Order ${orderId} - Employee Commission: $${(employeeCommissionCents / 100).toFixed(2)} - Stripe Fee: $${(proportionalStripeFee / 100).toFixed(2)} = Net: $${(netEmployeeAmount / 100).toFixed(2)}`;
+    const description = descriptionParts.join(" ");
 
-    // Step 11: Create the transfer
+    // Step 9: Create the transfer (transfer full commission amount since it's already calculated on net)
     const transfer = await stripe.transfers.create({
-      amount: netEmployeeAmount,
+      amount: employeeCommissionCents,
       currency: "usd",
       destination: employeeAccountId,
       transfer_group: invoice?.id || undefined,
@@ -1104,8 +1133,8 @@ async function transferToEmployee({
 
     return {
       transfer,
-      netEmployeeAmount: netEmployeeAmount / 100,
-      proportionalStripeFee: proportionalStripeFee / 100,
+      netEmployeeAmount: employeeCommissionCents / 100,
+      proportionalStripeFee: 0, // No additional fee deduction since commission is on net amount
       grossEmployeeAmount: employeeCommissionCents / 100,
     };
   } catch (error) {

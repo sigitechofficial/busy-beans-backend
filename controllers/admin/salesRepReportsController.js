@@ -74,7 +74,7 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
 
   // Build API features (filter, search, sort, fields, pagination) - exclude date params
   const features = new APIFeatures(order, otherQueryParams)
-    .filter()
+    // .filter()
     .search(searchableFields) // Add search functionality
     .sort()
     .limitFields()

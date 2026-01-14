@@ -108,7 +108,7 @@ const invoicePaid = async (event) => {
           orderType: "local-partner",
         });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
-      } else if (!doc.quickBooksInvoiceId) {
+      } else if (!orderPlaced?.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
         await syncInvoiceOnQuikBooks({
           orderId: orderPlaced.id,
@@ -139,6 +139,7 @@ const invoicePaid = async (event) => {
         attributes: [
           "id",
           "totalBill",
+          "invoiceNumber",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
           "quickBooksPaymentId",
@@ -167,11 +168,29 @@ const invoicePaid = async (event) => {
       const orderPlaced = JSON.parse(JSON.stringify(result));
       console.log("🚀 ~ invoicePaid ~ orderPlaced:", orderPlaced);
 
-      // Check if customer has NO local partner (salesRepId is null) AND has an Admin employee
+      // Check if customer has NO local partner (salesRepId is null) AND has an employee
+      // When customer has no local partner, any employee associated should get commission
       const customer = orderPlaced?.user;
       const hasNoLocalPartner = !customer?.salesRepId;
       const hasEmployee =
-        customer?.employee && customer.employee.employeeOf === "Admin";
+        customer?.employee !== null && customer?.employee !== undefined;
+
+      console.log("🚀 ~ invoicePaid ~ hasNoLocalPartner:", hasNoLocalPartner);
+      console.log("🚀 ~ invoicePaid ~ hasEmployee:", hasEmployee);
+      if (customer?.employee) {
+        console.log(
+          "🚀 ~ invoicePaid ~ employee.employeeOf:",
+          customer.employee.employeeOf
+        );
+        console.log(
+          "🚀 ~ invoicePaid ~ employee.commissionPercentage:",
+          customer.employee.commissionPercentage
+        );
+        console.log(
+          "🚀 ~ invoicePaid ~ employee.stripeConnectAccountId:",
+          customer.employee.stripeConnectAccountId
+        );
+      }
 
       let employeeCommissionData = {
         employeeId: null,
@@ -225,6 +244,7 @@ const invoicePaid = async (event) => {
               orderId: orderId,
               invoiceId: invoice.id,
               paymentIntentId: paymentIntentId,
+              invoiceNumber: orderPlaced?.invoiceNumber || "",
             });
 
             // Store employee commission data
@@ -273,7 +293,10 @@ const invoicePaid = async (event) => {
           orderType: "customer",
         });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
-      } else if (!doc.quickBooksInvoiceId || !doc.quickBooksInvoiceIdPartner) {
+      } else if (
+        !orderPlaced?.quickBooksInvoiceId ||
+        !orderPlaced?.quickBooksInvoiceIdPartner
+      ) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
         await syncInvoiceOnQuikBooks({
           orderId: orderPlaced.id,
@@ -508,21 +531,63 @@ const onPaymentIntentSucceeded = async (event) => {
         attributes: [
           "id",
           "totalBill",
-          "employeeId",
+          "invoiceNumber",
+          "quickBooksInvoiceId",
+          "quickBooksInvoiceIdPartner",
+          "quickBooksPaymentId",
+          "quickBooksPaymentIdPartner",
           "AppliedEmployeeCommisionPercentage",
           "employeeCommisionAmount",
+          "employeeId",
+          [
+            literal(`COALESCE(
+                 (SELECT SUM(salerCommission)
+                  FROM items
+                  WHERE items.orderId = order.id ), 0)`),
+            "totalSalerCommission",
+          ],
+          [
+            literal(`
+                COALESCE(order.totalBill, 0) - COALESCE((
+                  SELECT SUM(salerCommission)
+                  FROM items
+                  WHERE items.orderId = order.id
+                ), 0)
+              `),
+            "adminEarnings",
+          ],
         ],
-        raw: false,
       });
 
       const orderPlaced = JSON.parse(JSON.stringify(result));
       console.log("🚀 ~ onPaymentIntentSucceeded ~ orderPlaced:", orderPlaced);
 
-      // Check if customer has NO local partner (salesRepId is null) AND has an Admin employee
+      // Check if customer has NO local partner (salesRepId is null) AND has an employee
+      // When customer has no local partner, any employee associated should get commission
       const customer = orderPlaced?.user;
       const hasNoLocalPartner = !customer?.salesRepId;
       const hasEmployee =
-        customer?.employee && customer.employee.employeeOf === "Admin";
+        customer?.employee !== null && customer?.employee !== undefined;
+
+      console.log(
+        "🚀 ~ onPaymentIntentSucceeded ~ hasNoLocalPartner:",
+        hasNoLocalPartner
+      );
+      console.log("🚀 ~ onPaymentIntentSucceeded ~ hasEmployee:", hasEmployee);
+      if (customer?.employee) {
+        console.log(
+          "🚀 ~ onPaymentIntentSucceeded ~ employee.employeeOf:",
+          customer.employee.employeeOf
+        );
+        console.log(
+          "🚀 ~ onPaymentIntentSucceeded ~ employee.commissionPercentage:",
+          customer.employee.commissionPercentage
+        );
+        console.log(
+          "🚀 ~ onPaymentIntentSucceeded ~ employee.stripeConnectAccountId:",
+          customer.employee.stripeConnectAccountId
+        );
+      }
 
       // Only process if commission hasn't been processed yet
       const commissionNotProcessed =
@@ -564,6 +629,7 @@ const onPaymentIntentSucceeded = async (event) => {
               orderId: orderId,
               invoiceId: invoiceId,
               paymentIntentId: pi.id,
+              invoiceNumber: orderPlaced?.invoiceNumber || "",
             });
 
             // Update order with employee commission
