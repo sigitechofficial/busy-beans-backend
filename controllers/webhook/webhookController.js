@@ -237,7 +237,20 @@ const invoicePaid = async (event) => {
             console.log("  Commission %:", commissionPercentage);
             console.log("  Employee Commission:", employeeCommissionAmount);
 
-            // Transfer to employee
+            // Step 1: Save commission data to DB FIRST (before transfer)
+            await order.update(
+              {
+                employeeId: emp.id,
+                AppliedEmployeeCommisionPercentage: commissionPercentage,
+                employeeCommisionAmount: employeeCommissionAmount,
+                // employeeTransferId will remain NULL until transfer succeeds
+              },
+              { where: { id: orderPlaced?.id } }
+            );
+
+            console.log("✅ Commission data saved to DB");
+
+            // Step 2: Transfer to employee
             const transfer = await Stripe.transferToEmployee({
               amount: employeeCommissionAmount,
               employeeAccountId: emp.stripeConnectAccountId,
@@ -247,17 +260,36 @@ const invoicePaid = async (event) => {
               invoiceNumber: orderPlaced?.invoiceNumber || "",
             });
 
-            // Store employee commission data
+            // Step 3: Save transfer ID if transfer succeeded
+            await order.update(
+              {
+                employeeTransferId: transfer.transfer?.id || null,
+              },
+              { where: { id: orderPlaced?.id } }
+            );
+
+            // Store employee commission data for the main order update
             employeeCommissionData = {
               employeeId: emp.id,
               AppliedEmployeeCommisionPercentage: commissionPercentage,
-              employeeCommisionAmount: transfer.netEmployeeAmount,
+              employeeCommisionAmount: employeeCommissionAmount,
+              employeeTransferId: transfer.transfer?.id || null,
             };
 
             console.log("✅ Employee commission transferred successfully");
           } catch (error) {
             console.error("❌ Error processing employee commission:", error);
-            // Continue with order update but without employee commission
+            // If transfer fails, commission data is already saved but employeeTransferId remains NULL
+            // This allows for retry later
+            // Still include employee data in the main update
+            if (emp) {
+              employeeCommissionData = {
+                employeeId: emp.id,
+                AppliedEmployeeCommisionPercentage: commissionPercentage,
+                employeeCommisionAmount: employeeCommissionAmount || 0,
+                // employeeTransferId remains NULL on failure
+              };
+            }
           }
         } else {
           // No commission or no Stripe account - still store employee info if exists
@@ -619,10 +651,23 @@ const onPaymentIntentSucceeded = async (event) => {
             console.log("  Commission %:", commissionPercentage);
             console.log("  Employee Commission:", employeeCommissionAmount);
 
+            // Step 1: Save commission data to DB FIRST (before transfer)
+            await order.update(
+              {
+                employeeId: emp.id,
+                AppliedEmployeeCommisionPercentage: commissionPercentage,
+                employeeCommisionAmount: employeeCommissionAmount,
+                // employeeTransferId will remain NULL until transfer succeeds
+              },
+              { where: { id: orderId } }
+            );
+
+            console.log("✅ Commission data saved to DB");
+
             // Get invoice ID if available
             const invoiceId = pi.invoice || null;
 
-            // Transfer to employee
+            // Step 2: Transfer to employee
             const transfer = await Stripe.transferToEmployee({
               amount: employeeCommissionAmount,
               employeeAccountId: emp.stripeConnectAccountId,
@@ -632,12 +677,10 @@ const onPaymentIntentSucceeded = async (event) => {
               invoiceNumber: orderPlaced?.invoiceNumber || "",
             });
 
-            // Update order with employee commission
+            // Step 3: Save transfer ID if transfer succeeded
             await order.update(
               {
-                employeeId: emp.id,
-                AppliedEmployeeCommisionPercentage: commissionPercentage,
-                employeeCommisionAmount: transfer.netEmployeeAmount,
+                employeeTransferId: transfer.transfer?.id || null,
               },
               { where: { id: orderId } }
             );
@@ -645,6 +688,8 @@ const onPaymentIntentSucceeded = async (event) => {
             console.log("✅ Employee commission transferred successfully");
           } catch (error) {
             console.error("❌ Error processing employee commission:", error);
+            // If transfer fails, commission data is already saved but employeeTransferId remains NULL
+            // This allows for retry later
             // Continue without blocking
           }
         }

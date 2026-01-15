@@ -233,6 +233,10 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: 0,
     },
+    employeeTransferId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   });
 
   // Hook to exclude deletedAt and updatedAt from query results

@@ -1283,7 +1283,8 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         COUNT(*) as orders,
         COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
       FROM orders
-      WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}' ${entityFilter}`,
+      WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}' 
+        AND orders.statusId != 6 ${entityFilter}`,
     {
       type: order.sequelize.QueryTypes.SELECT,
     }
@@ -1302,7 +1303,8 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         COUNT(*) as orders,
         COALESCE(SUM(totalBill) / NULLIF(COUNT(*), 0), 0) as avgOrderValue
       FROM orders
-      WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}' ${entityFilter}`,
+      WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}' 
+        AND orders.statusId != 6 ${entityFilter}`,
     {
       type: order.sequelize.QueryTypes.SELECT,
     }
@@ -1331,7 +1333,8 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   const lastMonthMTDSales = await order.sequelize.query(
     `SELECT SUM(totalBill) as totalSales
       FROM orders
-      WHERE orders.on >= '${lastMonthMTDStartStr}' AND orders.on <= '${lastMonthMTDEndStr}' ${entityFilter}`,
+      WHERE orders.on >= '${lastMonthMTDStartStr}' AND orders.on <= '${lastMonthMTDEndStr}' 
+        AND orders.statusId != 6 ${entityFilter}`,
     {
       type: order.sequelize.QueryTypes.SELECT,
     }
@@ -1369,6 +1372,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
     INNER JOIN salesReps ON salesReps.id = orders.salesRepId
     WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'
       AND orders.salesRepId IS NOT NULL
+      AND orders.statusId != 6
       ${franchiseeEntityFilter}
     GROUP BY orders.salesRepId, salesReps.srName, salesReps.territoryName
     ORDER BY totalSales DESC
@@ -1408,6 +1412,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
     INNER JOIN salesReps ON salesReps.id = orders.salesRepId
     WHERE orders.on >= '${ytdStartStr}' AND orders.on <= '${ytdEndStr}'
       AND orders.salesRepId IS NOT NULL
+      AND orders.statusId != 6
       ${ytdFranchiseeEntityFilter}
     GROUP BY orders.salesRepId, salesReps.srName, salesReps.territoryName
     ORDER BY totalSales DESC
@@ -1425,7 +1430,8 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         SUM(orders.totalBill) as totalSales
       FROM orders
       INNER JOIN users ON users.id = orders.userId
-      WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}' ${entityFilter}
+      WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}' 
+        AND orders.statusId != 6 ${entityFilter}
       GROUP BY orders.userId
       ORDER BY totalSales DESC
       LIMIT 5`,
@@ -1442,7 +1448,8 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         SUM(orders.totalBill) as totalSales
       FROM orders
       INNER JOIN users ON users.id = orders.userId
-      WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}' ${entityFilter}
+      WHERE orders.on >= '${lastMonthStartStr}' AND orders.on <= '${lastMonthEndStr}' 
+        AND orders.statusId != 6 ${entityFilter}
       GROUP BY orders.userId
       ORDER BY totalSales DESC
       LIMIT 5`,

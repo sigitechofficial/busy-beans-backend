@@ -28,6 +28,9 @@ const AppError = require("../../utils/appError");
 const Stripe = require("../stripe");
 const factory = require("../handlerFactory");
 const { response } = require("../../utils/response");
+const {
+  calculateAndSaveEmployeeCommission,
+} = require("../../utils/employeeCommissionUtils");
 
 const {
   dataForEmailAndNotifications,
@@ -1229,6 +1232,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       manualPaymentEmail = true;
     }
 
+    if (!isPartnerOrder && orderId && doc?.paymentStatus != "done") {
+      await calculateAndSaveEmployeeCommission({ orderId: orderId });
+    }
+
     await Model.update(req.body?.orderData, {
       where: { id: orderId || partnerOrderId },
     });
@@ -1971,7 +1978,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
         400
       )
     );
-  } else if (placedOrder.statusId >= 4) {
+  } else if (placedOrder.statusId >= 4 && placedOrder.statusId <= 5) {
     return next(
       new AppError(
         "This order has already been dispatched and cannot be deleted.",

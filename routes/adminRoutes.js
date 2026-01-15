@@ -989,6 +989,121 @@ router.patch(
 
 /**
  * @swagger
+ * /api/v1/admin/employee-commission-orders:
+ *   get:
+ *     summary: Get orders with employee commission (transferred/not-transferred)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [transferred, not-transferred]
+ *         description: Filter by transfer status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Orders with employee commission
+ *       400:
+ *         description: Invalid status parameter
+ *       403:
+ *         description: Only admin can access
+ */
+router.get(
+  "/employee-commission-orders/:status",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.getEmployeeCommissionOrders
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/transfer-commission-to-employee:
+ *   post:
+ *     summary: Transfer commission to employees for multiple orders
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderIds
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of order IDs to transfer commission for
+ *                 example: [123, 456, 789]
+ *     responses:
+ *       200:
+ *         description: Transfer results
+ *       400:
+ *         description: Invalid input
+ *       403:
+ *         description: Only admin and admin employees can access
+ */
+router.post(
+  "/transfer-commission-to-employee",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.transferCommissionToEmployeeController
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/bulk-transfer-commission-to-employee:
+ *   post:
+ *     summary: Bulk transfer commission to employees - sums all commissions per employee and transfers once
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderIds
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of order IDs that have employee commission data
+ *                 example: [123, 456, 789]
+ *     responses:
+ *       200:
+ *         description: Bulk transfer results grouped by employee
+ *       400:
+ *         description: Invalid input
+ *       403:
+ *         description: Only admin and admin employees can access
+ */
+router.post(
+  "/bulk-transfer-commission-to-employee",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.bulkTransferCommissionToEmployeeController
+);
+
+/**
+ * @swagger
  * /api/v1/admin/category/:
  *   get:
  *     summary: Get all categories
