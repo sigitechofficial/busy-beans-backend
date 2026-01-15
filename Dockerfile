@@ -21,3 +21,5 @@ EXPOSE 8011
 
 # Start the application
 CMD ["node", "bb.js"]
+
+
