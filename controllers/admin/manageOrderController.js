@@ -1188,10 +1188,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
     }
-    // paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-    //   orderId: orderId || partnerOrderId,
-    //   orderType: isPartnerOrder ? "local-partner" : "customer",
-    // });
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      orderId: orderId || partnerOrderId,
+      orderType: isPartnerOrder ? "local-partner" : "customer",
+    });
   }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
@@ -1233,6 +1233,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     }
 
     if (!isPartnerOrder && orderId && doc?.paymentStatus != "done") {
+       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+            orderId: orderId || partnerOrderId,
+            orderType: isPartnerOrder ? "local-partner" : "customer",
+       });
       await calculateAndSaveEmployeeCommission({ orderId: orderId });
     }
 

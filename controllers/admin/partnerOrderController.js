@@ -158,8 +158,36 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     return element; // Return the transformed element
   });
 
+  // Handle typeCharges if provided
+  if (input?.typeCharges?.length > 0) {
+    console.log(
+      "🚀 ~ req.body?.typeCharges?.length:",
+      input?.typeCharges?.length
+    );
+    input?.typeCharges.forEach((obj) => {
+      const element = {};
+      element.code = obj.code;
+      element.qty = obj.qty;
+      element.price = obj.total;
+      console.log("🚀 ~  element.price = obj.total;:", obj.total);
+      element.productName = obj.name;
+      element.type = "charges";
+      element.discount = 0;
+
+      itemsPrice += parseFloat(element?.price || 0);
+      console.log("🚀 ~ itemsPrice TYPE CHARGES:", itemsPrice);
+
+      // Handle salesRep commission if applicable
+      // For partner orders, commission handling may differ
+      element.wholesalePrice = 0;
+      element.salerCommission = 0;
+
+      finalItems.push(element);
+    });
+  }
+
   const shippingCompany = input.order?.invoiceOnly
-    ? { charges: 0 }
+    ? { charges: req.body?.order?.shippingCharges || 0 }
     : await shippingCompanies.findOne({
         where: {
           weightFrom: {

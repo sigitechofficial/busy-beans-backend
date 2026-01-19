@@ -6,12 +6,13 @@ const stripe = require("stripe")(STRIPE_SECRET_KEY);
 
 /**
  * Calculate and save employee commission data for an order (offline/manual payments)
- * This function does NOT perform the transfer, only calculates and saves commission data
+ * Also attempts to transfer the commission. If transfer succeeds, saves transfer ID.
+ * If transfer fails, commission data is still saved and can be transferred later.
  * Uses order totalBill directly (no Stripe fee calculation for offline payments)
  *
  * @param {Object} params - Parameters object
  * @param {number} params.orderId - The ID of the order
- * @returns {Promise<Object|false>} - Object containing commission details on success, false on error
+ * @returns {Promise<Object|false>} - Object containing commission and transfer details on success, false on error
  */
 
 async function calculateAndSaveEmployeeCommission({ orderId }) {
@@ -40,9 +41,12 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
       attributes: [
         "id",
         "totalBill",
+        "paymentIntentId",
+        "invoiceNumber",
         "employeeId",
         "AppliedEmployeeCommisionPercentage",
         "employeeCommisionAmount",
+        "employeeTransferId",
       ],
     });
 
@@ -50,17 +54,6 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
       console.error(`❌ Order with ID ${orderId} not found`);
       return false;
     }
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
-    console.error(`❌ Order with ID ${orderId} not found`);
 
     const orderPlaced = JSON.parse(JSON.stringify(orderData));
     const customer = orderPlaced?.user;
@@ -113,33 +106,183 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
     console.log("  Commission %:", commissionPercentage);
     console.log("  Employee Commission:", employeeCommissionAmount);
 
-    // Step 5: Update order with commission data (NOT transferId)
+    // Step 5: Update order with commission data
     await order.update(
       {
         employeeId: emp.id,
         AppliedEmployeeCommisionPercentage: commissionPercentage,
         employeeCommisionAmount: employeeCommissionAmount,
-        // Note: employeeTransferId is NOT updated - remains NULL or existing value
+        // Note: employeeTransferId will be updated if transfer succeeds
       },
       { where: { id: orderId } }
     );
 
-    console.log("✅ Commission data saved to DB (transferId not updated)");
+    console.log("✅ Commission data saved to DB");
 
-    return {
-      success: true,
-      orderId: orderId,
+    // Step 6: Attempt to transfer commission using already-fetched data
+    console.log("🚀 Attempting to transfer commission...");
+    
+    // Prepare order data with updated commission values
+    const orderDataForTransfer = {
+      ...orderPlaced,
       employeeId: emp.id,
-      commissionPercentage: commissionPercentage,
-      employeeCommissionAmount: employeeCommissionAmount,
-      orderTotal: orderTotal,
-      message: "Commission calculated and saved successfully",
+      employeeCommisionAmount: employeeCommissionAmount,
+      employeeTransferId: null, // Will be updated after transfer
     };
+
+    const transferResult = await transferEmployeeCommissionWithData({
+      orderData: orderDataForTransfer,
+      employeeData: emp,
+      commissionAmount: employeeCommissionAmount,
+    });
+
+    if (transferResult && transferResult.success && transferResult.transferId) {
+      // Transfer succeeded - transferEmployeeCommission already updated the order with transfer ID
+      console.log("✅ Transfer completed and transfer ID saved to DB");
+      console.log("  Transfer ID:", transferResult.transferId);
+
+      return {
+        success: true,
+        orderId: orderId,
+        employeeId: emp.id,
+        commissionPercentage: commissionPercentage,
+        employeeCommissionAmount: employeeCommissionAmount,
+        orderTotal: orderTotal,
+        transferId: transferResult.transferId,
+        transferCompleted: true,
+        message: "Commission calculated, saved, and transferred successfully",
+      };
+    } else {
+      // Transfer failed - commission data is already saved, just log the error
+      console.error(
+        `⚠️ Commission saved but transfer failed for order ${orderId}. Transfer can be retried later.`
+      );
+
+      return {
+        success: true,
+        orderId: orderId,
+        employeeId: emp.id,
+        commissionPercentage: commissionPercentage,
+        employeeCommissionAmount: employeeCommissionAmount,
+        orderTotal: orderTotal,
+        transferCompleted: false,
+        message:
+          "Commission calculated and saved, but transfer failed. You can retry transfer later.",
+      };
+    }
   } catch (error) {
     console.error(
       "❌ Error in calculateAndSaveEmployeeCommission:",
       error.message
     );
+    return false;
+  }
+}
+
+/**
+ * Transfer employee commission using already-fetched order data
+ * This is an optimized version that avoids re-fetching the order from the database
+ *
+ * @param {Object} params - Parameters object
+ * @param {Object} params.orderData - The order data object (already fetched from DB)
+ * @param {Object} params.employeeData - The employee data object (with stripeConnectAccountId)
+ * @param {number} params.commissionAmount - The commission amount to transfer
+ * @returns {Promise<Object|false>} - Object containing transfer details on success, false on error
+ */
+async function transferEmployeeCommissionWithData({
+  orderData,
+  employeeData,
+  commissionAmount,
+}) {
+  try {
+    const orderPlaced = JSON.parse(JSON.stringify(orderData));
+    const orderId = orderPlaced.id;
+
+    // Step 1: Check if transfer already completed
+    if (orderPlaced?.employeeTransferId) {
+      console.error(
+        `❌ Order ${orderId} already has a transfer ID (${orderPlaced.employeeTransferId}). Transfer already completed.`
+      );
+      return false;
+    }
+
+    // Step 2: Validate employee has Stripe Connect account
+    if (!employeeData?.stripeConnectAccountId) {
+      console.error(
+        `❌ Employee ${employeeData?.id} does not have a Stripe Connect account ID. Cannot transfer.`
+      );
+      return false;
+    }
+
+    console.log("🚀 ~ transferEmployeeCommissionWithData ~ Transfer Details:");
+    console.log("  Order ID:", orderId);
+    console.log("  Employee ID:", employeeData.id);
+    console.log("  Commission Amount:", commissionAmount);
+    console.log("  Stripe Connect Account:", employeeData.stripeConnectAccountId);
+
+    // Step 3: Perform transfer based on payment type
+    let transferResult;
+
+    if (orderPlaced?.paymentIntentId) {
+      // Online payment - use existing transferToEmployee function
+      console.log("  Payment Type: Online (has paymentIntentId)");
+
+      transferResult = await Stripe.transferToEmployee({
+        amount: commissionAmount,
+        employeeAccountId: employeeData.stripeConnectAccountId,
+        orderId: orderId,
+        invoiceId: null,
+        paymentIntentId: orderPlaced.paymentIntentId,
+        invoiceNumber: orderPlaced?.invoiceNumber || "",
+      });
+    } else {
+      // Offline payment - create direct transfer
+      console.log("  Payment Type: Offline (no paymentIntentId)");
+
+      const commissionAmountCents = Math.round(commissionAmount * 100);
+      const description = `Payment from Order #${orderId} - Employee Commission: $${commissionAmount.toFixed(2)}`;
+
+      const transfer = await stripe.transfers.create({
+        amount: commissionAmountCents,
+        currency: "usd",
+        destination: employeeData.stripeConnectAccountId,
+        description,
+      });
+
+      transferResult = {
+        transfer,
+        netEmployeeAmount: commissionAmount,
+        proportionalStripeFee: 0,
+        grossEmployeeAmount: commissionAmount,
+      };
+    }
+
+    // Step 4: Update order with transfer ID
+    if (transferResult?.transfer?.id) {
+      await order.update(
+        {
+          employeeTransferId: transferResult.transfer.id,
+        },
+        { where: { id: orderId } }
+      );
+
+      console.log("✅ Transfer completed successfully");
+      console.log("  Transfer ID:", transferResult.transfer.id);
+
+      return {
+        success: true,
+        orderId: orderId,
+        employeeId: employeeData.id,
+        transferId: transferResult.transfer.id,
+        commissionAmount: commissionAmount,
+        message: "Employee commission transferred successfully",
+      };
+    } else {
+      console.error("❌ Transfer completed but no transfer ID returned");
+      return false;
+    }
+  } catch (error) {
+    console.error("❌ Error in transferEmployeeCommissionWithData:", error.message);
     return false;
   }
 }
