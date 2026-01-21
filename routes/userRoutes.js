@@ -312,6 +312,7 @@ router.post("/otp/verfication", authController.otpVerification);
  *         description: Password reset email sent
  */
 router.post("/forgot-password", authController.forgotPassword);
+router.get(`/product`, productController.getAllProducts);
 
 /**
  * @swagger
@@ -835,7 +836,6 @@ router.get("/address/view-all", profileController.getAllAddress);
  *       401:
  *         description: Unauthorized
  */
-router.get(`/product`, productController.getAllProductsUser);
 router.get(`/product/:userId`, productController.getAllProductsUser);
 
 router.get("/category", categoryController.getAllCatagories);
