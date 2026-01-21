@@ -8,7 +8,7 @@ const stripe = require("stripe")(STRIPE_SECRET_KEY);
  * Calculate and save employee commission data for an order (offline/manual payments)
  * Also attempts to transfer the commission. If transfer succeeds, saves transfer ID.
  * If transfer fails, commission data is still saved and can be transferred later.
- * Uses order totalBill directly (no Stripe fee calculation for offline payments)
+ * Uses order subTotal directly (excluding shipping charges, no Stripe fee calculation for offline payments)
  *
  * @param {Object} params - Parameters object
  * @param {number} params.orderId - The ID of the order
@@ -40,10 +40,11 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
       ],
       attributes: [
         "id",
-        "totalBill",
+        "subTotal",
         "paymentIntentId",
         "invoiceNumber",
         "employeeId",
+        "salesRepId",
         "AppliedEmployeeCommisionPercentage",
         "employeeCommisionAmount",
         "employeeTransferId",
@@ -59,7 +60,8 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
     const customer = orderPlaced?.user;
 
     // Step 2: Check conditions for employee commission
-    const hasNoLocalPartner = !customer?.salesRepId;
+    let hasNoLocalPartner = !customer?.salesRepId;
+    hasNoLocalPartner = !orderPlaced?.salesRepId;
     const hasEmployee =
       customer?.employee !== null && customer?.employee !== undefined;
 
@@ -85,24 +87,24 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
       return false;
     }
 
-    // Step 3: Get order total
-    const orderTotal = parseFloat(orderPlaced?.totalBill) || 0;
+    // Step 3: Get order subtotal (excluding shipping charges)
+    const orderSubTotal = parseFloat(orderPlaced?.subTotal) || 0;
 
-    if (orderTotal <= 0) {
+    if (orderSubTotal <= 0) {
       console.error(
-        `❌ Order total is invalid or zero (${orderTotal}). Cannot calculate commission.`
+        `❌ Order subtotal is invalid or zero (${orderSubTotal}). Cannot calculate commission.`
       );
       return false;
     }
 
-    // Step 4: Calculate commission based on order total
-    // For offline payments, commission is calculated directly on totalBill
-    const employeeCommissionAmount = (orderTotal * commissionPercentage) / 100;
+    // Step 4: Calculate commission based on order subtotal
+    // Commission is calculated on subtotal (excluding shipping charges which are admin-only)
+    const employeeCommissionAmount = (orderSubTotal * commissionPercentage) / 100;
 
     console.log("🚀 ~ calculateAndSaveEmployeeCommission ~ Calculation:");
     console.log("  Order ID:", orderId);
     console.log("  Employee ID:", emp.id);
-    console.log("  Order Total:", orderTotal);
+    console.log("  Order SubTotal:", orderSubTotal);
     console.log("  Commission %:", commissionPercentage);
     console.log("  Employee Commission:", employeeCommissionAmount);
 
@@ -147,7 +149,7 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
         employeeId: emp.id,
         commissionPercentage: commissionPercentage,
         employeeCommissionAmount: employeeCommissionAmount,
-        orderTotal: orderTotal,
+        orderSubTotal: orderSubTotal,
         transferId: transferResult.transferId,
         transferCompleted: true,
         message: "Commission calculated, saved, and transferred successfully",
@@ -164,7 +166,7 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
         employeeId: emp.id,
         commissionPercentage: commissionPercentage,
         employeeCommissionAmount: employeeCommissionAmount,
-        orderTotal: orderTotal,
+        orderSubTotal: orderSubTotal,
         transferCompleted: false,
         message:
           "Commission calculated and saved, but transfer failed. You can retry transfer later.",
@@ -491,7 +493,7 @@ async function calculateAndTransferEmployeeCommission({ orderId }) {
       employeeId: commissionResult.employeeId,
       commissionPercentage: commissionResult.commissionPercentage,
       commissionAmount: commissionResult.employeeCommissionAmount,
-      orderTotal: commissionResult.orderTotal,
+      orderSubTotal: commissionResult.orderSubTotal,
       transferId: transferResult.transferId,
       message: "Commission calculated and transferred successfully",
     };

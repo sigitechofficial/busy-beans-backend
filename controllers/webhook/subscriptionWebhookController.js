@@ -1,9 +1,9 @@
-const { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECERET } = process.env;
+const { STRIPE_SECRET_KEY, STRIPE_SUBSCRIPTION_WEBHOOK_SECERET } = process.env;
 const stripe = require("stripe")(STRIPE_SECRET_KEY);
 const { subscription, user, coffeeMachine } = require("../../models");
 const { Op } = require("sequelize");
 
-const endpointSecret = 'whsec_cPIoqV6sWQd4CGpkD4BtwHYAItgw0vvE';
+const endpointSecret = `${STRIPE_SUBSCRIPTION_WEBHOOK_SECERET}`;
 
 /**
  * Main webhook handler for Stripe subscription events

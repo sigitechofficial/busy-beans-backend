@@ -837,51 +837,48 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
   };
 
   try {
-    // ====== BRANCH 1: DIRECT PARTNER (payment intent on connected account; no platform/customer/fees) ======
+    // ====== BRANCH 1: DIRECT PARTNER (payment intent on platform; admin gets only Stripe fee, rest to connected account) ======
     if (order.partnerType === "direct-partner") {
       if (!order.connectAccountId) {
         throw new Error("connectAccountId is required for direct-partner.");
       }
 
-      const directParams = { ...base };
+      // Calculate Stripe fee (admin only receives this)
+      const stripeFee = estimateStripeFeeFromDollars(order.totalBill || totalAmount);
+      const stripeFeeInCents = convertToCents(stripeFee);
 
-      // If you have a customer that actually exists on the connected account, put it in order.connectedCustomerId
-      // Also try to use platform customer if available (for save card functionality)
-      if (order.connectedCustomerId) {
-        directParams.customer = order.connectedCustomerId;
-        // Enable save card option for future use
-        directParams.setup_future_usage = "off_session";
-      } else if (order?.stripeCustomerId) {
-        // Use platform customer if connected customer not available
-        directParams.customer = order.stripeCustomerId;
+      const directParams = {
+        ...base,
+        customer: order?.stripeCustomerId || undefined, // Use platform customer
+      };
+
+      // Enable save card option for future use
+      if (order?.stripeCustomerId) {
         directParams.setup_future_usage = "off_session";
       }
 
-      // No application_fee_amount, no transfer_data — it's a direct charge on the connected account
+      // Admin receives only Stripe fee, all remaining amount goes to connected account
+      directParams.application_fee_amount = stripeFeeInCents;
+      directParams.transfer_data = {
+        destination: order.connectAccountId,
+      };
 
-      // Create the Payment Intent **on** the connected account
-      const paymentIntent = await stripe.paymentIntents.create(
-        directParams,
-        { stripeAccount: order.connectAccountId } // key line: header `Stripe-Account`
-      );
-
-      // Retrieve connected account to get publishable key
-      const connectedAccount = await stripe.accounts.retrieve(
-        order.connectAccountId
-      );
+      // Create the Payment Intent **on** the platform account
+      const paymentIntent = await stripe.paymentIntents.create(directParams);
 
       return {
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
-        proportionalStripeFee: 0, // not calculated in this flow
+        proportionalStripeFee: stripeFee,
         connectAccountId: order.connectAccountId,
         isDirectPartner: true,
-        // Note: For Express accounts, use platform publishable key with account parameter
-        // For Standard/Custom accounts, you may need to retrieve their publishable key separately
+        // Note: PaymentIntent is on platform account, so use platform publishable key
+        // Connected account receives: totalAmount - stripeFee
+        // Admin receives: stripeFee only
       };
     }
 
-    // ====== BRANCH 2: EXISTING DROPSHIP / OTHER PARTNERS (destination charge with application fee) ======
+    // ====== BRANCH 2: EXISTING DROPSHIP / OTHER PARTNERS OR ADMIN-ONLY ORDERS ======
     const platformFeeInCents = convertToCents(order.adminReceivableAmount || 0);
     const stripeFee = estimateStripeFeeFromDollars(order.totalBill || 0);
     const stripeFeeInCents = convertToCents(stripeFee);
@@ -897,12 +894,17 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
       input.setup_future_usage = "off_session";
     }
 
+    // If there's a local partner (connectAccountId), split payment
     if (order.connectAccountId) {
+      // Dropship/Other Partners: Admin gets adminReceivableAmount + Stripe fee
+      // Connected Account gets: Total - (adminReceivableAmount + Stripe fee)
       input.application_fee_amount = adminProfitCents;
       input.transfer_data = {
         destination: order.connectAccountId,
       };
     }
+    // If no local partner (no connectAccountId), all amount stays with admin
+    // No application_fee_amount, no transfer_data — full amount goes to admin
 
     const paymentIntent = await stripe.paymentIntents.create(input);
 

@@ -138,7 +138,7 @@ const invoicePaid = async (event) => {
         ],
         attributes: [
           "id",
-          "totalBill",
+          "subTotal",
           "invoiceNumber",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
@@ -204,36 +204,25 @@ const invoicePaid = async (event) => {
 
         if (commissionPercentage > 0 && emp.stripeConnectAccountId) {
           try {
-            // Get payment intent to calculate net amount
+            // Get payment intent for transfer
             const paymentIntentId = invoice.payment_intent;
-            const paymentIntent = await stripe.paymentIntents.retrieve(
-              paymentIntentId,
-              {
-                expand: ["latest_charge"],
-              }
-            );
 
-            const chargeId = paymentIntent.latest_charge;
-            const charge = await stripe.charges.retrieve(
-              typeof chargeId === "string" ? chargeId : chargeId.id,
-              { expand: ["balance_transaction"] }
-            );
+            // Calculate commission based on order subtotal (excluding shipping charges)
+            const orderSubTotal = parseFloat(orderPlaced?.subTotal) || 0;
 
-            const balanceTransaction = charge.balance_transaction;
-            const stripeFee = balanceTransaction.fee || 0; // in cents
-            const totalAmount = charge.amount; // in cents
+            if (orderSubTotal <= 0) {
+              console.error(
+                `❌ Order subtotal is invalid or zero (${orderSubTotal}). Cannot calculate commission.`
+              );
+              return;
+            }
 
-            // Calculate net amount (total - stripe fee) in dollars
-            const netAmount = (totalAmount - stripeFee) / 100;
-
-            // Apply commission percentage on net amount
+            // Apply commission percentage on subtotal
             const employeeCommissionAmount =
-              (netAmount * commissionPercentage) / 100;
+              (orderSubTotal * commissionPercentage) / 100;
 
             console.log("🚀 ~ invoicePaid ~ Employee Commission Calculation:");
-            console.log("  Total Amount:", totalAmount / 100);
-            console.log("  Stripe Fee:", stripeFee / 100);
-            console.log("  Net Amount:", netAmount);
+            console.log("  Order SubTotal:", orderSubTotal);
             console.log("  Commission %:", commissionPercentage);
             console.log("  Employee Commission:", employeeCommissionAmount);
 
@@ -562,7 +551,7 @@ const onPaymentIntentSucceeded = async (event) => {
         ],
         attributes: [
           "id",
-          "totalBill",
+          "subTotal",
           "invoiceNumber",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
@@ -633,21 +622,24 @@ const onPaymentIntentSucceeded = async (event) => {
 
         if (commissionPercentage > 0 && emp.stripeConnectAccountId) {
           try {
-            // Calculate net amount (total - stripe fee) in dollars
-            const totalAmount = pi.amount; // in cents
-            const stripeFee = feeAmountMinor || 0; // in cents
-            const netAmount = (totalAmount - stripeFee) / 100;
+            // Calculate commission based on order subtotal (excluding shipping charges)
+            const orderSubTotal = parseFloat(orderPlaced?.subTotal) || 0;
 
-            // Apply commission percentage on net amount
+            if (orderSubTotal <= 0) {
+              console.error(
+                `❌ Order subtotal is invalid or zero (${orderSubTotal}). Cannot calculate commission.`
+              );
+              return;
+            }
+
+            // Apply commission percentage on subtotal
             const employeeCommissionAmount =
-              (netAmount * commissionPercentage) / 100;
+              (orderSubTotal * commissionPercentage) / 100;
 
             console.log(
               "🚀 ~ onPaymentIntentSucceeded ~ Employee Commission Calculation:"
             );
-            console.log("  Total Amount:", totalAmount / 100);
-            console.log("  Stripe Fee:", stripeFee / 100);
-            console.log("  Net Amount:", netAmount);
+            console.log("  Order SubTotal:", orderSubTotal);
             console.log("  Commission %:", commissionPercentage);
             console.log("  Employee Commission:", employeeCommissionAmount);
 

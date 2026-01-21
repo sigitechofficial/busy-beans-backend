@@ -414,6 +414,8 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
   queryOptions.attributes = [
     "id",
     "totalBill",
+    "subTotal",
+    "shippingCharges",
     // Add employee name and user company name via Sequelize literal
     [
       literal(
