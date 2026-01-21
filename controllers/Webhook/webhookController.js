@@ -18,6 +18,9 @@ const {
   paidInvoiceAdminOrLocalPatnerEventAndCustomer,
 } = require("../events/paymentInvoicePaidEvent");
 const { Op, literal } = require("sequelize");
+const {
+  calculateAndTransferEmployeeCommissionWithData,
+} = require("../../utils/employeeCommissionUtils");
 
 const endpointSecret = `${STRIPE_WEBHOOK_SECERET}`;
 console.log("🚀 ~ endpointSecret:", endpointSecret);
@@ -140,6 +143,7 @@ const invoicePaid = async (event) => {
           "id",
           "subTotal",
           "invoiceNumber",
+          "employeeTransferId",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
           "quickBooksPaymentId",
@@ -168,124 +172,28 @@ const invoicePaid = async (event) => {
       const orderPlaced = JSON.parse(JSON.stringify(result));
       console.log("🚀 ~ invoicePaid ~ orderPlaced:", orderPlaced);
 
-      // Check if customer has NO local partner (salesRepId is null) AND has an employee
-      // When customer has no local partner, any employee associated should get commission
-      const customer = orderPlaced?.user;
-      const hasNoLocalPartner = !customer?.salesRepId;
-      const hasEmployee =
-        customer?.employee !== null && customer?.employee !== undefined;
-
-      console.log("🚀 ~ invoicePaid ~ hasNoLocalPartner:", hasNoLocalPartner);
-      console.log("🚀 ~ invoicePaid ~ hasEmployee:", hasEmployee);
-      if (customer?.employee) {
-        console.log(
-          "🚀 ~ invoicePaid ~ employee.employeeOf:",
-          customer.employee.employeeOf
-        );
-        console.log(
-          "🚀 ~ invoicePaid ~ employee.commissionPercentage:",
-          customer.employee.commissionPercentage
-        );
-        console.log(
-          "🚀 ~ invoicePaid ~ employee.stripeConnectAccountId:",
-          customer.employee.stripeConnectAccountId
-        );
-      }
-
+      // Initialize employee commission data
       let employeeCommissionData = {
         employeeId: null,
         AppliedEmployeeCommisionPercentage: null,
         employeeCommisionAmount: 0,
       };
 
-      if (hasNoLocalPartner && hasEmployee) {
-        const emp = customer.employee;
-        const commissionPercentage = parseFloat(emp.commissionPercentage) || 0;
+      // Process employee commission using utility function
+      const commissionResult = await calculateAndTransferEmployeeCommissionWithData({
+        orderData: result,
+        invoiceId: invoice.id,
+        paymentIntentId: invoice.payment_intent,
+      });
 
-        if (commissionPercentage > 0 && emp.stripeConnectAccountId) {
-          try {
-            // Get payment intent for transfer
-            const paymentIntentId = invoice.payment_intent;
-
-            // Calculate commission based on order subtotal (excluding shipping charges)
-            const orderSubTotal = parseFloat(orderPlaced?.subTotal) || 0;
-
-            if (orderSubTotal <= 0) {
-              console.error(
-                `❌ Order subtotal is invalid or zero (${orderSubTotal}). Cannot calculate commission.`
-              );
-              return;
-            }
-
-            // Apply commission percentage on subtotal
-            const employeeCommissionAmount =
-              (orderSubTotal * commissionPercentage) / 100;
-
-            console.log("🚀 ~ invoicePaid ~ Employee Commission Calculation:");
-            console.log("  Order SubTotal:", orderSubTotal);
-            console.log("  Commission %:", commissionPercentage);
-            console.log("  Employee Commission:", employeeCommissionAmount);
-
-            // Step 1: Save commission data to DB FIRST (before transfer)
-            await order.update(
-              {
-                employeeId: emp.id,
-                AppliedEmployeeCommisionPercentage: commissionPercentage,
-                employeeCommisionAmount: employeeCommissionAmount,
-                // employeeTransferId will remain NULL until transfer succeeds
-              },
-              { where: { id: orderPlaced?.id } }
-            );
-
-            console.log("✅ Commission data saved to DB");
-
-            // Step 2: Transfer to employee
-            const transfer = await Stripe.transferToEmployee({
-              amount: employeeCommissionAmount,
-              employeeAccountId: emp.stripeConnectAccountId,
-              orderId: orderId,
-              invoiceId: invoice.id,
-              paymentIntentId: paymentIntentId,
-              invoiceNumber: orderPlaced?.invoiceNumber || "",
-            });
-
-            // Step 3: Save transfer ID if transfer succeeded
-            await order.update(
-              {
-                employeeTransferId: transfer.transfer?.id || null,
-              },
-              { where: { id: orderPlaced?.id } }
-            );
-
-            // Store employee commission data for the main order update
-            employeeCommissionData = {
-              employeeId: emp.id,
-              AppliedEmployeeCommisionPercentage: commissionPercentage,
-              employeeCommisionAmount: employeeCommissionAmount,
-              employeeTransferId: transfer.transfer?.id || null,
-            };
-
-            console.log("✅ Employee commission transferred successfully");
-          } catch (error) {
-            console.error("❌ Error processing employee commission:", error);
-            // If transfer fails, commission data is already saved but employeeTransferId remains NULL
-            // This allows for retry later
-            // Still include employee data in the main update
-            if (emp) {
-              employeeCommissionData = {
-                employeeId: emp.id,
-                AppliedEmployeeCommisionPercentage: commissionPercentage,
-                employeeCommisionAmount: employeeCommissionAmount || 0,
-                // employeeTransferId remains NULL on failure
-              };
-            }
-          }
-        } else {
-          // No commission or no Stripe account - still store employee info if exists
-          if (emp) {
-            employeeCommissionData.employeeId = emp.id;
-          }
-        }
+      // If commission was processed, update employeeCommissionData
+      if (commissionResult && commissionResult.success) {
+        employeeCommissionData = {
+          employeeId: commissionResult.employeeId,
+          AppliedEmployeeCommisionPercentage: commissionResult.commissionPercentage,
+          employeeCommisionAmount: commissionResult.employeeCommissionAmount,
+          employeeTransferId: commissionResult.transferId || null,
+        };
       }
 
       // Update order with all data including employee commission
@@ -553,6 +461,7 @@ const onPaymentIntentSucceeded = async (event) => {
           "id",
           "subTotal",
           "invoiceNumber",
+          "employeeTransferId",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
           "quickBooksPaymentId",
@@ -583,109 +492,13 @@ const onPaymentIntentSucceeded = async (event) => {
       const orderPlaced = JSON.parse(JSON.stringify(result));
       console.log("🚀 ~ onPaymentIntentSucceeded ~ orderPlaced:", orderPlaced);
 
-      // Check if customer has NO local partner (salesRepId is null) AND has an employee
-      // When customer has no local partner, any employee associated should get commission
-      const customer = orderPlaced?.user;
-      const hasNoLocalPartner = !customer?.salesRepId;
-      const hasEmployee =
-        customer?.employee !== null && customer?.employee !== undefined;
-
-      console.log(
-        "🚀 ~ onPaymentIntentSucceeded ~ hasNoLocalPartner:",
-        hasNoLocalPartner
-      );
-      console.log("🚀 ~ onPaymentIntentSucceeded ~ hasEmployee:", hasEmployee);
-      if (customer?.employee) {
-        console.log(
-          "🚀 ~ onPaymentIntentSucceeded ~ employee.employeeOf:",
-          customer.employee.employeeOf
-        );
-        console.log(
-          "🚀 ~ onPaymentIntentSucceeded ~ employee.commissionPercentage:",
-          customer.employee.commissionPercentage
-        );
-        console.log(
-          "🚀 ~ onPaymentIntentSucceeded ~ employee.stripeConnectAccountId:",
-          customer.employee.stripeConnectAccountId
-        );
-      }
-
-      // Only process if commission hasn't been processed yet
-      const commissionNotProcessed =
-        !orderPlaced?.employeeId ||
-        !orderPlaced?.AppliedEmployeeCommisionPercentage ||
-        orderPlaced?.employeeCommisionAmount === 0;
-
-      if (hasNoLocalPartner && hasEmployee && commissionNotProcessed) {
-        const emp = customer.employee;
-        const commissionPercentage = parseFloat(emp.commissionPercentage) || 0;
-
-        if (commissionPercentage > 0 && emp.stripeConnectAccountId) {
-          try {
-            // Calculate commission based on order subtotal (excluding shipping charges)
-            const orderSubTotal = parseFloat(orderPlaced?.subTotal) || 0;
-
-            if (orderSubTotal <= 0) {
-              console.error(
-                `❌ Order subtotal is invalid or zero (${orderSubTotal}). Cannot calculate commission.`
-              );
-              return;
-            }
-
-            // Apply commission percentage on subtotal
-            const employeeCommissionAmount =
-              (orderSubTotal * commissionPercentage) / 100;
-
-            console.log(
-              "🚀 ~ onPaymentIntentSucceeded ~ Employee Commission Calculation:"
-            );
-            console.log("  Order SubTotal:", orderSubTotal);
-            console.log("  Commission %:", commissionPercentage);
-            console.log("  Employee Commission:", employeeCommissionAmount);
-
-            // Step 1: Save commission data to DB FIRST (before transfer)
-            await order.update(
-              {
-                employeeId: emp.id,
-                AppliedEmployeeCommisionPercentage: commissionPercentage,
-                employeeCommisionAmount: employeeCommissionAmount,
-                // employeeTransferId will remain NULL until transfer succeeds
-              },
-              { where: { id: orderId } }
-            );
-
-            console.log("✅ Commission data saved to DB");
-
-            // Get invoice ID if available
-            const invoiceId = pi.invoice || null;
-
-            // Step 2: Transfer to employee
-            const transfer = await Stripe.transferToEmployee({
-              amount: employeeCommissionAmount,
-              employeeAccountId: emp.stripeConnectAccountId,
-              orderId: orderId,
-              invoiceId: invoiceId,
-              paymentIntentId: pi.id,
-              invoiceNumber: orderPlaced?.invoiceNumber || "",
-            });
-
-            // Step 3: Save transfer ID if transfer succeeded
-            await order.update(
-              {
-                employeeTransferId: transfer.transfer?.id || null,
-              },
-              { where: { id: orderId } }
-            );
-
-            console.log("✅ Employee commission transferred successfully");
-          } catch (error) {
-            console.error("❌ Error processing employee commission:", error);
-            // If transfer fails, commission data is already saved but employeeTransferId remains NULL
-            // This allows for retry later
-            // Continue without blocking
-          }
-        }
-      }
+      // Process employee commission using utility function
+      // The utility function handles all checks including employeeTransferId
+      await calculateAndTransferEmployeeCommissionWithData({
+        orderData: result,
+        invoiceId: pi.invoice || null,
+        paymentIntentId: pi.id,
+      });
     } catch (error) {
       console.error("❌ Error checking order for employee commission:", error);
       // Continue without blocking

@@ -59,7 +59,15 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
     const orderPlaced = JSON.parse(JSON.stringify(orderData));
     const customer = orderPlaced?.user;
 
-    // Step 2: Check conditions for employee commission
+    // Step 2: Check if commission already transferred
+    if (orderPlaced?.employeeTransferId) {
+      console.log(
+        `ℹ️ Order ${orderId} already has a transfer ID (${orderPlaced.employeeTransferId}). Commission already transferred. Skipping.`
+      );
+      return false;
+    }
+
+    // Step 3: Check conditions for employee commission
     let hasNoLocalPartner = !customer?.salesRepId;
     hasNoLocalPartner = !orderPlaced?.salesRepId;
     const hasEmployee =
@@ -87,7 +95,7 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
       return false;
     }
 
-    // Step 3: Get order subtotal (excluding shipping charges)
+    // Step 4: Get order subtotal (excluding shipping charges)
     const orderSubTotal = parseFloat(orderPlaced?.subTotal) || 0;
 
     if (orderSubTotal <= 0) {
@@ -97,7 +105,7 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
       return false;
     }
 
-    // Step 4: Calculate commission based on order subtotal
+    // Step 5: Calculate commission based on order subtotal
     // Commission is calculated on subtotal (excluding shipping charges which are admin-only)
     const employeeCommissionAmount = (orderSubTotal * commissionPercentage) / 100;
 
@@ -108,7 +116,7 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
     console.log("  Commission %:", commissionPercentage);
     console.log("  Employee Commission:", employeeCommissionAmount);
 
-    // Step 5: Update order with commission data
+    // Step 6: Update order with commission data
     await order.update(
       {
         employeeId: emp.id,
@@ -121,7 +129,7 @@ async function calculateAndSaveEmployeeCommission({ orderId }) {
 
     console.log("✅ Commission data saved to DB");
 
-    // Step 6: Attempt to transfer commission using already-fetched data
+    // Step 7: Attempt to transfer commission using already-fetched data
     console.log("🚀 Attempting to transfer commission...");
     
     // Prepare order data with updated commission values
@@ -738,9 +746,160 @@ async function bulkTransferEmployeeCommission({ orderIds }) {
   }
 }
 
+/**
+ * Calculate and transfer employee commission using already-fetched order data
+ * This is optimized for webhooks that already have the order data
+ *
+ * @param {Object} params - Parameters object
+ * @param {Object} params.orderData - The order data object (already fetched from DB with user and employee)
+ * @param {string} params.invoiceId - Optional invoice ID for transfer
+ * @param {string} params.paymentIntentId - Payment intent ID for transfer
+ * @returns {Promise<Object|false>} - Object containing commission and transfer details on success, false on error
+ */
+async function calculateAndTransferEmployeeCommissionWithData({
+  orderData,
+  invoiceId = null,
+  paymentIntentId = null,
+}) {
+  try {
+    const orderPlaced = JSON.parse(JSON.stringify(orderData));
+    const orderId = orderPlaced.id;
+
+    // Step 1: Check if commission already transferred
+    if (orderPlaced?.employeeTransferId) {
+      console.log(
+        `ℹ️ Order ${orderId} already has a transfer ID (${orderPlaced.employeeTransferId}). Commission already transferred. Skipping.`
+      );
+      return false;
+    }
+
+    // Step 2: Check conditions for employee commission
+    const customer = orderPlaced?.user;
+    const hasNoLocalPartner = !customer?.salesRepId;
+    const hasEmployee =
+      customer?.employee !== null && customer?.employee !== undefined;
+
+    if (!hasNoLocalPartner) {
+      console.error(
+        "❌ Order has a local partner (salesRepId). Employee commission only applies to admin customers."
+      );
+      return false;
+    }
+
+    if (!hasEmployee) {
+      console.error("❌ Order customer does not have an associated employee.");
+      return false;
+    }
+
+    const emp = customer.employee;
+    const commissionPercentage = parseFloat(emp.commissionPercentage) || 0;
+
+    if (commissionPercentage <= 0) {
+      console.error(
+        `❌ Employee has no commission percentage set (${commissionPercentage}%)`
+      );
+      return false;
+    }
+
+    if (!emp.stripeConnectAccountId) {
+      console.error(
+        `❌ Employee ${emp.id} does not have a Stripe Connect account ID. Cannot transfer.`
+      );
+      return false;
+    }
+
+    // Step 3: Get order subtotal (excluding shipping charges)
+    const orderSubTotal = parseFloat(orderPlaced?.subTotal) || 0;
+
+    if (orderSubTotal <= 0) {
+      console.error(
+        `❌ Order subtotal is invalid or zero (${orderSubTotal}). Cannot calculate commission.`
+      );
+      return false;
+    }
+
+    // Step 4: Calculate commission based on order subtotal
+    const employeeCommissionAmount = (orderSubTotal * commissionPercentage) / 100;
+
+    console.log("🚀 ~ calculateAndTransferEmployeeCommissionWithData ~ Calculation:");
+    console.log("  Order ID:", orderId);
+    console.log("  Employee ID:", emp.id);
+    console.log("  Order SubTotal:", orderSubTotal);
+    console.log("  Commission %:", commissionPercentage);
+    console.log("  Employee Commission:", employeeCommissionAmount);
+
+    // Step 5: Save commission data to DB FIRST (before transfer)
+    await order.update(
+      {
+        employeeId: emp.id,
+        AppliedEmployeeCommisionPercentage: commissionPercentage,
+        employeeCommisionAmount: employeeCommissionAmount,
+        // employeeTransferId will remain NULL until transfer succeeds
+      },
+      { where: { id: orderId } }
+    );
+
+    console.log("✅ Commission data saved to DB");
+
+    // Step 6: Transfer to employee
+    const transfer = await Stripe.transferToEmployee({
+      amount: employeeCommissionAmount,
+      employeeAccountId: emp.stripeConnectAccountId,
+      orderId: orderId,
+      invoiceId: invoiceId,
+      paymentIntentId: paymentIntentId || orderPlaced?.paymentIntentId,
+      invoiceNumber: orderPlaced?.invoiceNumber || "",
+    });
+
+    // Step 7: Save transfer ID if transfer succeeded
+    if (transfer?.transfer?.id) {
+      await order.update(
+        {
+          employeeTransferId: transfer.transfer.id,
+        },
+        { where: { id: orderId } }
+      );
+
+      console.log("✅ Employee commission transferred successfully");
+      console.log("  Transfer ID:", transfer.transfer.id);
+
+      return {
+        success: true,
+        orderId: orderId,
+        employeeId: emp.id,
+        commissionPercentage: commissionPercentage,
+        employeeCommissionAmount: employeeCommissionAmount,
+        orderSubTotal: orderSubTotal,
+        transferId: transfer.transfer.id,
+        transferCompleted: true,
+        message: "Commission calculated, saved, and transferred successfully",
+      };
+    } else {
+      console.error("⚠️ Transfer completed but no transfer ID returned");
+      return {
+        success: true,
+        orderId: orderId,
+        employeeId: emp.id,
+        commissionPercentage: commissionPercentage,
+        employeeCommissionAmount: employeeCommissionAmount,
+        orderSubTotal: orderSubTotal,
+        transferCompleted: false,
+        message: "Commission calculated and saved, but transfer ID not found.",
+      };
+    }
+  } catch (error) {
+    console.error(
+      "❌ Error in calculateAndTransferEmployeeCommissionWithData:",
+      error.message
+    );
+    return false;
+  }
+}
+
 module.exports = {
   calculateAndSaveEmployeeCommission,
   transferEmployeeCommission,
   calculateAndTransferEmployeeCommission,
   bulkTransferEmployeeCommission,
+  calculateAndTransferEmployeeCommissionWithData,
 };

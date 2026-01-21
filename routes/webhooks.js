@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const Controller = require("../controllers/webhook/webhookController");
-const SubscriptionWebhookController = require("../controllers/webhook/subscriptionWebhookController");
-const MetaController = require("../controllers/webhook/metaWebhookController");
+const Controller = require("../controllers/Webhook/webhookController");
+const SubscriptionWebhookController = require("../controllers/Webhook/subscriptionWebhookController");
+const MetaController = require("../controllers/Webhook/metaWebhookController");
 
 const catchAsync = require("../utils/catchAsync");
 
@@ -14,6 +14,7 @@ router.post(
 
 // Stripe subscription webhook (separate endpoint for subscription events)
 // Needs raw body - handled in app.js
+// Endpoint: /webhook/busy-beans-coffee/subscriptions
 router.post(
   "/subscriptions",
   catchAsync(SubscriptionWebhookController.handleSubscriptionWebhook)
