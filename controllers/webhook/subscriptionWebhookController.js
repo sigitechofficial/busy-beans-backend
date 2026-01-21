@@ -3,7 +3,7 @@ const stripe = require("stripe")(STRIPE_SECRET_KEY);
 const { subscription, user, coffeeMachine } = require("../../models");
 const { Op } = require("sequelize");
 
-const endpointSecret = STRIPE_WEBHOOK_SECERET;
+const endpointSecret = 'whsec_cPIoqV6sWQd4CGpkD4BtwHYAItgw0vvE';
 
 /**
  * Main webhook handler for Stripe subscription events
@@ -56,14 +56,10 @@ exports.handleSubscriptionWebhook = async (req, res) => {
         await handleInvoiceUpcoming(event);
         break;
 
-      // Payment intent events (for 3D Secure confirmations)
-      case "payment_intent.succeeded":
-        await handlePaymentIntentSucceeded(event);
-        break;
-
-      case "payment_intent.payment_failed":
-        await handlePaymentIntentFailed(event);
-        break;
+      // Note: payment_intent.succeeded is NOT handled here for subscriptions
+      // because invoice.payment_succeeded already handles subscription payments
+      // and both events fire for the same payment, causing duplicate processing.
+      // payment_intent.succeeded is handled in webhookController.js for order payments only.
 
       // Trial events
       case "customer.subscription.trial_will_end":
@@ -401,135 +397,13 @@ const handleInvoiceUpcoming = async (event) => {
   );
 };
 
-/**
- * Handle payment_intent.succeeded event
- * When a payment intent succeeds (e.g., 3D Secure confirmation)
- */
-const handlePaymentIntentSucceeded = async (event) => {
-  const paymentIntent = event.data.object;
-
-  // Only process if payment intent is for a subscription invoice
-  if (!paymentIntent.invoice) {
-    console.log("ℹ️ Payment intent is not for an invoice, skipping...");
-    return;
-  }
-
-  try {
-    // Retrieve invoice to get subscription ID
-    const invoice = await stripe.invoices.retrieve(paymentIntent.invoice);
-
-    if (!invoice.subscription) {
-      console.log("ℹ️ Invoice is not for a subscription, skipping...");
-      return;
-    }
-
-    console.log(
-      `📝 Processing payment_intent.succeeded for subscription: ${invoice.subscription}`
-    );
-
-    // Find subscription by stripeSubscriptionId
-    const subscriptionRecord = await subscription.findOne({
-      where: {
-        stripeSubscriptionId: invoice.subscription,
-      },
-    });
-
-    if (!subscriptionRecord) {
-      console.warn(
-        `⚠️ Subscription not found in database for Stripe subscription: ${invoice.subscription}`
-      );
-      return;
-    }
-
-    // Retrieve full subscription from Stripe to get latest status
-    const stripeSubscription = await stripe.subscriptions.retrieve(
-      invoice.subscription
-    );
-
-    // Update subscription status
-    const updateData = {
-      status: stripeSubscription.status,
-      currentPeriodStart: new Date(
-        stripeSubscription.current_period_start * 1000
-      ),
-      currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
-    };
-
-    // If subscription is now active, clear canceledAt
-    if (stripeSubscription.status === "active") {
-      updateData.canceledAt = null;
-    }
-
-    await subscriptionRecord.update(updateData);
-
-    console.log(
-      `✅ Subscription ${subscriptionRecord.id} updated from payment_intent.succeeded. Status: ${updateData.status}`
-    );
-  } catch (error) {
-    console.error(
-      `❌ Error processing payment_intent.succeeded:`,
-      error.message
-    );
-  }
-};
-
-/**
- * Handle payment_intent.payment_failed event
- * When a payment intent fails
- */
-const handlePaymentIntentFailed = async (event) => {
-  const paymentIntent = event.data.object;
-
-  // Only process if payment intent is for a subscription invoice
-  if (!paymentIntent.invoice) {
-    console.log("ℹ️ Payment intent is not for an invoice, skipping...");
-    return;
-  }
-
-  try {
-    // Retrieve invoice to get subscription ID
-    const invoice = await stripe.invoices.retrieve(paymentIntent.invoice);
-
-    if (!invoice.subscription) {
-      console.log("ℹ️ Invoice is not for a subscription, skipping...");
-      return;
-    }
-
-    console.log(
-      `📝 Processing payment_intent.payment_failed for subscription: ${invoice.subscription}`
-    );
-
-    // Find subscription by stripeSubscriptionId
-    const subscriptionRecord = await subscription.findOne({
-      where: {
-        stripeSubscriptionId: invoice.subscription,
-      },
-    });
-
-    if (!subscriptionRecord) {
-      console.warn(
-        `⚠️ Subscription not found in database for Stripe subscription: ${invoice.subscription}`
-      );
-      return;
-    }
-
-    // Update subscription status to incomplete or past_due
-    await subscriptionRecord.update({
-      status: "incomplete",
-    });
-
-    console.log(
-      `✅ Subscription ${subscriptionRecord.id} marked as incomplete from payment_intent.payment_failed`
-    );
-
-    // TODO: Send notification email to customer about failed payment
-  } catch (error) {
-    console.error(
-      `❌ Error processing payment_intent.payment_failed:`,
-      error.message
-    );
-  }
-};
+// Removed handlePaymentIntentSucceeded and handlePaymentIntentFailed
+// These handlers were causing duplicate processing because:
+// 1. Both invoice.payment_succeeded and payment_intent.succeeded fire for the same subscription payment
+// 2. Both handlers update the same fields (status, currentPeriodStart, currentPeriodEnd, canceledAt)
+// 3. invoice.payment_succeeded is more reliable and specific for subscription payments
+// 
+// payment_intent events are still handled in webhookController.js for order payments only
 
 /**
  * Handle customer.subscription.trial_will_end event
@@ -566,5 +440,5 @@ const handleTrialWillEnd = async (event) => {
   });
 
   // TODO: Send trial ending reminder email
-  console.log(`ℹ️ Trial ending soon for subscription ${subscriptionRecord.id}`);
+  console.log(`ℹ️ Trial ending soon for subscription. ${subscriptionRecord.id}`);
 };

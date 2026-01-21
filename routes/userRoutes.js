@@ -41,7 +41,7 @@ const router = express.Router();
  *                   items:
  *                     type: object
  */
-router.get(`/product/:userId`, productController.getAllProductsUser);
+// router.get(`/product/:userId`, productController.getAllProductsUser);
 
 /**
  * @swagger
@@ -835,7 +835,8 @@ router.get("/address/view-all", profileController.getAllAddress);
  *       401:
  *         description: Unauthorized
  */
-router.get(`/product`, productController.getAllProducts);
+router.get(`/product`, productController.getAllProductsUser);
+router.get(`/product/:userId`, productController.getAllProductsUser);
 
 router.get("/category", categoryController.getAllCatagories);
 

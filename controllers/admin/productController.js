@@ -79,90 +79,71 @@ exports.getAllProducts = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllProductsUser = catchAsync(async (req, res, next) => {
-  // Define searchable columns for products
-  const searchableFields = ["id", "name", "sku", "productCode", "desc"];
-
-  // Build API features (filter, search, sort, fields, pagination)
-  const features = new APIFeatures(product, req.query)
-    .filter()
-    .search(searchableFields) // Add search functionality
-    .sort()
-    .limitFields()
-    .paginate();
-
-  // Get the base query options
-  const queryOptions = features.getQuery();
-
-  // Ensure base filter (status: 1) is applied (deleted: 0 is already set by filter())
-  queryOptions.where = {
-    ...queryOptions.where,
-    status: 1,
-  };
-
-  // Handle attributes - ensure wholesalePrice, deleted, deletedAt are excluded
-  if (queryOptions.attributes && Array.isArray(queryOptions.attributes)) {
-    // If attributes is an array (specific fields requested), filter out unwanted fields
-    queryOptions.attributes = queryOptions.attributes.filter(
-      (attr) => !["wholesalePrice", "deleted", "deletedAt"].includes(attr)
-    );
-  } else {
-    // If attributes is an exclude object or not set, merge excludes
-    const baseExcludes = ["deleted", "deletedAt", "wholesalePrice"];
-    if (queryOptions.attributes && queryOptions.attributes.exclude) {
-      // Merge with existing excludes
-      queryOptions.attributes.exclude = [
-        ...new Set([...queryOptions.attributes.exclude, ...baseExcludes]),
-      ];
-    } else {
-      // Set default excludes
-      queryOptions.attributes = {
-        exclude: baseExcludes,
-      };
+    // 🔐 SAFETY GUARD (PREVENTS 500 ERROR)
+    if (!req.user || !req.user.id) {
+      return next(new AppError("User not authenticated", 401));
     }
-  }
-
-  queryOptions.raw = true; // return plain objects instead of Sequelize instances
-
-  // Get pagination metadata (status: 1 is already in queryOptions.where)
-  const pagination = await features.getPaginationMetadata(product);
-
-  // Execute the query
-  const data = await product.findAll(queryOptions);
-
-  const activeCategories = await userDiscount.findAll({
-    where: { userId: req.params.userId },
-    attributes: ["percentage", "categoryId"],
-    raw: true,
-  });
-
-  // build a lookup map for faster access
-  const discountMap = activeCategories.reduce((map, item) => {
-    map[item.categoryId] = parseFloat(item.percentage);
-    return map;
-  }, {});
-
-  // apply discounts
-  const productsWithDiscount = data.map((prod) => {
-    const discount = discountMap[prod.categoryId] || 0;
-    const originalPrice = parseFloat(prod.price);
-    const discountedPrice = discount
-      ? (originalPrice - (originalPrice * discount) / 100).toFixed(2)
-      : originalPrice.toFixed(2);
-
-    prod.price = discountedPrice;
-    return {
-      ...prod,
-      appliedDiscount: discount,
+  
+    const searchableFields = ["id", "name", "sku", "productCode", "desc"];
+  
+    const features = new APIFeatures(product, req.query)
+      .filter()
+      .search(searchableFields)
+      .sort()
+      .limitFields()
+      .paginate();
+  
+    const queryOptions = features.getQuery();
+  
+    queryOptions.where = {
+      ...queryOptions.where,
+      status: 1,
     };
+  
+    const baseExcludes = ["deleted", "deletedAt", "wholesalePrice"];
+    queryOptions.attributes = {
+      exclude: baseExcludes,
+    };
+  
+    queryOptions.raw = true;
+  
+    const pagination = await features.getPaginationMetadata(product);
+    const products = await product.findAll(queryOptions);
+  
+    // ✅ USER ID FROM TOKEN (NOT URL)
+    const activeCategories = await userDiscount.findAll({
+      where: { userId: req.user.id },
+      attributes: ["percentage", "categoryId"],
+      raw: true,
+    });
+  
+    const discountMap = activeCategories.reduce((map, item) => {
+      map[item.categoryId] = Number(item.percentage);
+      return map;
+    }, {});
+  
+    const productsWithDiscount = products.map((prod) => {
+      const discount = discountMap[prod.categoryId] || 0;
+      const originalPrice = Number(prod.price);
+      const finalPrice = discount
+        ? (originalPrice - (originalPrice * discount) / 100).toFixed(2)
+        : originalPrice.toFixed(2);
+  
+      return {
+        ...prod,
+        price: finalPrice,
+        appliedDiscount: discount,
+      };
+    });
+  
+    res.status(200).json({
+      status: "success",
+      results: productsWithDiscount.length,
+      pagination,
+      data: { data: productsWithDiscount },
+    });
   });
-
-  res.status(200).json({
-    status: "success",
-    results: productsWithDiscount.length,
-    pagination: pagination,
-    data: { data: productsWithDiscount },
-  });
-});
+  
 
 exports.getProduct = catchAsync(async (req, res, next) => {
   const data = await product.findOne({
