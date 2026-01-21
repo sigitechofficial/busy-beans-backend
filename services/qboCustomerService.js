@@ -67,6 +67,7 @@ function mapToQboCustomer(u) {
 }
 
 function escapeQboValue(str = "") {
+  // Escape single quotes by doubling them (SQL standard)
   return str.replace(/'/g, "''").trim();
 }
 
@@ -79,6 +80,7 @@ const formatPhone = (countryCode, number) => {
 };
 
 // ✅ **ONLY DISPLAYNAME SEARCH** (as you ordered)
+// Enhanced to handle apostrophes and case-insensitive search
 async function findQboCustomerByDisplayName({
   accessToken,
   realmId,
@@ -88,22 +90,160 @@ async function findQboCustomerByDisplayName({
 
   if (!displayName) return null;
 
+  // Strategy 1: Try exact match (case-sensitive) with escaped apostrophe
   const safe = escapeQboValue(displayName);
-
-  const q = encodeURIComponent(
+  let q = encodeURIComponent(
     `select Id, DisplayName from Customer where DisplayName='${safe}'`
   );
 
-  const url = `${QBO(realmId)}/query?query=${q}&minorversion=${MINOR}`;
+  let url = `${QBO(realmId)}/query?query=${q}&minorversion=${MINOR}`;
+  console.log(
+    "🔍 [QBO Search] Attempt 1 - Exact match query:",
+    decodeURIComponent(q)
+  );
 
-  const r = await axios.get(url, {
+  let r = await axios.get(url, {
     headers,
     validateStatus: () => true,
   });
 
-  const found = r.data?.QueryResponse?.Customer?.[0];
+  let found = r.data?.QueryResponse?.Customer?.[0];
 
-  console.log("🚀 ~ findQboCustomerByDisplayName:", found);
+  // Strategy 2: If not found, try case-insensitive search using UPPER()
+  if (!found) {
+    const safeUpper = escapeQboValue(displayName.toUpperCase());
+    q = encodeURIComponent(
+      `select Id, DisplayName from Customer where UPPER(DisplayName)='${safeUpper}'`
+    );
+
+    url = `${QBO(realmId)}/query?query=${q}&minorversion=${MINOR}`;
+    console.log(
+      "🔍 [QBO Search] Attempt 2 - Case-insensitive query:",
+      decodeURIComponent(q)
+    );
+
+    r = await axios.get(url, {
+      headers,
+      validateStatus: () => true,
+    });
+
+    found = r.data?.QueryResponse?.Customer?.[0];
+  }
+
+  // Strategy 3: If still not found and name contains apostrophe, try variations
+  if (!found && displayName.includes("'")) {
+    // Try searching with different apostrophe characters
+    const apostropheVariations = [
+      "'", // straight apostrophe
+      "'", // right single quotation mark
+      "'", // left single quotation mark
+    ];
+
+    for (const apostropheChar of apostropheVariations) {
+      const testName = displayName.replace(/'/g, apostropheChar);
+      const safe = escapeQboValue(testName);
+      q = encodeURIComponent(
+        `select Id, DisplayName from Customer where DisplayName='${safe}'`
+      );
+
+      url = `${QBO(realmId)}/query?query=${q}&minorversion=${MINOR}`;
+      console.log(
+        `🔍 [QBO Search] Attempt 3 - Testing apostrophe variation:`,
+        decodeURIComponent(q)
+      );
+
+      r = await axios.get(url, {
+        headers,
+        validateStatus: () => true,
+      });
+
+      found = r.data?.QueryResponse?.Customer?.[0];
+      if (found) break;
+    }
+
+    // If still not found, try LIKE with parts split by apostrophe
+    if (!found) {
+      const parts = displayName.split("'");
+      if (parts.length === 2) {
+        // Name like "Marriott's Royal Palms" -> search for "Marriott" and "Royal Palms"
+        const part1 = escapeQboValue(parts[0].trim());
+        const part2 = escapeQboValue(parts[1].trim());
+        q = encodeURIComponent(
+          `select Id, DisplayName from Customer where DisplayName LIKE '${part1}%${part2}%'`
+        );
+
+        url = `${QBO(realmId)}/query?query=${q}&minorversion=${MINOR}`;
+        console.log(
+          "🔍 [QBO Search] Attempt 3b - LIKE pattern (split apostrophe):",
+          decodeURIComponent(q)
+        );
+
+        r = await axios.get(url, {
+          headers,
+          validateStatus: () => true,
+        });
+
+        const customers = r.data?.QueryResponse?.Customer || [];
+        if (customers.length > 0) {
+          // Find exact match
+          found = customers.find(
+            (c) =>
+              c.DisplayName?.toLowerCase() === displayName.toLowerCase() ||
+              c.DisplayName === displayName
+          );
+          // If no exact match, take the first one
+          if (!found && customers.length > 0) {
+            found = customers[0];
+          }
+        }
+      }
+    }
+  }
+
+  // Strategy 4: Try searching by first word (for names with apostrophes) - more efficient
+  if (!found && displayName.includes("'")) {
+    console.log("🔍 [QBO Search] Attempt 4 - Searching by first word...");
+
+    // Get the first word before apostrophe (e.g., "Marriott" from "Marriott's Royal Palms")
+    const firstWord = displayName.split(/['\s]/)[0].trim();
+    if (firstWord) {
+      const safeFirst = escapeQboValue(firstWord);
+      q = encodeURIComponent(
+        `select Id, DisplayName from Customer where DisplayName LIKE '${safeFirst}%' MAXRESULTS 50`
+      );
+
+      url = `${QBO(realmId)}/query?query=${q}&minorversion=${MINOR}`;
+      console.log(
+        "🔍 [QBO Search] Attempt 4 - First word search:",
+        decodeURIComponent(q)
+      );
+
+      r = await axios.get(url, {
+        headers,
+        validateStatus: () => true,
+      });
+
+      const customers = r.data?.QueryResponse?.Customer || [];
+      if (customers.length > 0) {
+        const displayNameLower = displayName.toLowerCase().trim();
+
+        // Find exact match or match with normalized apostrophes
+        found = customers.find((c) => {
+          if (!c.DisplayName) return false;
+          const qboName = c.DisplayName.toLowerCase().trim();
+          // Exact match
+          if (qboName === displayNameLower) return true;
+          // Match ignoring apostrophe variations (straight vs curly)
+          const normalizedQbo = qboName.replace(/[''']/g, "'");
+          const normalizedSearch = displayNameLower.replace(/[''']/g, "'");
+          return normalizedQbo === normalizedSearch;
+        });
+      }
+    }
+  }
+
+  console.log("🚀 ~ findQboCustomerByDisplayName ~ displayName:", displayName);
+  console.log("🚀 ~ findQboCustomerByDisplayName ~ found:", found);
 
   return found || null;
 }
@@ -122,7 +262,7 @@ async function upsertQboCustomer({ u, condition, userType }) {
       realmId,
       displayName,
     });
-
+    console.log("🚀 ~ upsertQboCustomer ~ existing:", existing);
     if (existing?.Id) {
       const qboCustomerId = existing.Id;
       //   await updateQboCustomerId(u, qboCustomerId, userType);
@@ -149,10 +289,65 @@ async function upsertQboCustomer({ u, condition, userType }) {
 
     return qboCustomerId;
   } catch (err) {
+    // Handle duplicate name error specifically
+    if (
+      err?.response?.data?.Fault?.Error?.[0]?.code === "6240" ||
+      err?.response?.data?.Fault?.Error?.[0]?.Message?.includes(
+        "Duplicate Name"
+      )
+    ) {
+      console.log(
+        "⚠️ [QBO] Duplicate name detected, attempting to find existing customer..."
+      );
+
+      const displayName = getDisplayName(u);
+      // Try to find the customer again (maybe it was created between search and create)
+      try {
+        const { accessToken: retryToken, realmId: retryRealmId } =
+          await refreshAccessTokenIfNeeded({
+            condition,
+          });
+
+        if (retryToken && retryRealmId) {
+          const existing = await findQboCustomerByDisplayName({
+            accessToken: retryToken,
+            realmId: retryRealmId,
+            displayName,
+          });
+
+          if (existing?.Id) {
+            console.log(
+              "✅ [QBO] Found existing customer after duplicate error:",
+              existing.Id
+            );
+            return existing.Id;
+          }
+        }
+      } catch (retryErr) {
+        console.error(
+          "❌ [QBO] Error during retry search after duplicate error:",
+          retryErr.message
+        );
+      }
+
+      // If still not found, log and return null (don't throw to allow import to continue)
+      console.error(
+        "❌ [QBO] Duplicate name error but customer not found in search. DisplayName:",
+        displayName
+      );
+      handleQboError({
+        err,
+        context: `[QBO][Customer] ----❌ upsertQboCustomer (duplicate name):`,
+      });
+      return null; // Return null instead of throwing to allow import to continue
+    }
+
+    // For other errors, log and throw
     handleQboError({
       err,
       context: `[QBO][Customer] ----❌ upsertQboCustomer:`,
     });
+    throw err; // Re-throw to let caller handle
   }
 }
 
@@ -177,6 +372,14 @@ async function importCustomersToQuickBooks({
   console.log("🚀 ~ importCustomersToQuickBooks ~ limitIds:", limitIds);
   console.log("🚀 ~ importCustomersToQuickBooks ~ limitIds:", limitIds);
   console.log("🚀 ~ importCustomersToQuickBooks ~ limitIds:", userType);
+
+  // Delete any records in qboCustomerMap where qboCustomerId is null
+  await qboCustomerMap.destroy({
+    where: {
+      qboCustomerId: null,
+    },
+  });
+
   const where = {};
   if (limitIds.length) where.id = limitIds;
 
@@ -245,23 +448,30 @@ async function importCustomersToQuickBooks({
           userType,
         });
 
-        const adminInput = {
-          ...adminCondition,
-          qboCustomerId: adminCustomerId,
-        };
+        // Only create mapping if we got a valid customer ID
+        if (adminCustomerId) {
+          const adminInput = {
+            ...adminCondition,
+            qboCustomerId: adminCustomerId,
+          };
 
-        if (userType == "customer") {
-          adminInput.userId = u.id;
+          if (userType == "customer") {
+            adminInput.userId = u.id;
+          } else {
+            adminInput.salesRepId = u.id;
+          }
+
+          console.log(
+            "🚀 ~ importCustomersToQuickBooks ~ adminInput:",
+            adminInput
+          );
+          await qboCustomerMap.create(adminInput);
+          results.push(adminInput);
         } else {
-          adminInput.salesRepId = u.id;
+          console.log(
+            `⚠️ [QBO] Failed to create/find customer for ${u.email}, skipping...`
+          );
         }
-
-        console.log(
-          "🚀 ~ importCustomersToQuickBooks ~ adminInput:",
-          adminInput
-        );
-        await qboCustomerMap.create(adminInput);
-        results.push(adminInput);
       }
 
       // --- (2) If customer belongs to a sales rep, export to partner too
@@ -292,17 +502,24 @@ async function importCustomersToQuickBooks({
               userType,
             });
 
-            const partnerInput = {
-              ...repCondition,
-              qboCustomerId: partnerCustomerId,
-              userId: u?.id,
-            };
-            console.log(
-              "🚀 ~ importCustomersToQuickBooks ~ partnerInput:",
-              partnerInput
-            );
-            await qboCustomerMap.create(partnerInput);
-            results.push(partnerInput);
+            // Only create mapping if we got a valid customer ID
+            if (partnerCustomerId) {
+              const partnerInput = {
+                ...repCondition,
+                qboCustomerId: partnerCustomerId,
+                userId: u?.id,
+              };
+              console.log(
+                "🚀 ~ importCustomersToQuickBooks ~ partnerInput:",
+                partnerInput
+              );
+              await qboCustomerMap.create(partnerInput);
+              results.push(partnerInput);
+            } else {
+              console.log(
+                `⚠️ [QBO] Failed to create/find partner customer for ${u.email}, skipping...`
+              );
+            }
           }
         } catch (partnerErr) {
           handleQboError({

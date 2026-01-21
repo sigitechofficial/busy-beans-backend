@@ -245,7 +245,7 @@ async function createConnectAccount({ email, country = "US", returnUrl }) {
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
-        us_bank_account_payments: { requested: true },
+        us_bank_account_ach_payments: { requested: true },
       },
     });
 
@@ -315,7 +315,7 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
   const accountLink = await stripe.accountLinks.create({
     account: accountId,
     refresh_url: "https://example.com/reauth",
-    return_url: returnUrl || "https://google.com",
+    return_url: returnUrl || "https://admin.busybeancoffee.com",
     type: "account_onboarding",
   });
   return accountLink.url;
@@ -837,51 +837,48 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
   };
 
   try {
-    // ====== BRANCH 1: DIRECT PARTNER (payment intent on connected account; no platform/customer/fees) ======
+    // ====== BRANCH 1: DIRECT PARTNER (payment intent on platform; admin gets only Stripe fee, rest to connected account) ======
     if (order.partnerType === "direct-partner") {
       if (!order.connectAccountId) {
         throw new Error("connectAccountId is required for direct-partner.");
       }
 
-      const directParams = { ...base };
+      // Calculate Stripe fee (admin only receives this)
+      const stripeFee = estimateStripeFeeFromDollars(order.totalBill || totalAmount);
+      const stripeFeeInCents = convertToCents(stripeFee);
 
-      // If you have a customer that actually exists on the connected account, put it in order.connectedCustomerId
-      // Also try to use platform customer if available (for save card functionality)
-      if (order.connectedCustomerId) {
-        directParams.customer = order.connectedCustomerId;
-        // Enable save card option for future use
-        directParams.setup_future_usage = "off_session";
-      } else if (order?.stripeCustomerId) {
-        // Use platform customer if connected customer not available
-        directParams.customer = order.stripeCustomerId;
+      const directParams = {
+        ...base,
+        customer: order?.stripeCustomerId || undefined, // Use platform customer
+      };
+
+      // Enable save card option for future use
+      if (order?.stripeCustomerId) {
         directParams.setup_future_usage = "off_session";
       }
 
-      // No application_fee_amount, no transfer_data — it's a direct charge on the connected account
+      // Admin receives only Stripe fee, all remaining amount goes to connected account
+      directParams.application_fee_amount = stripeFeeInCents;
+      directParams.transfer_data = {
+        destination: order.connectAccountId,
+      };
 
-      // Create the Payment Intent **on** the connected account
-      const paymentIntent = await stripe.paymentIntents.create(
-        directParams,
-        { stripeAccount: order.connectAccountId } // key line: header `Stripe-Account`
-      );
-
-      // Retrieve connected account to get publishable key
-      const connectedAccount = await stripe.accounts.retrieve(
-        order.connectAccountId
-      );
+      // Create the Payment Intent **on** the platform account
+      const paymentIntent = await stripe.paymentIntents.create(directParams);
 
       return {
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
-        proportionalStripeFee: 0, // not calculated in this flow
+        proportionalStripeFee: stripeFee,
         connectAccountId: order.connectAccountId,
         isDirectPartner: true,
-        // Note: For Express accounts, use platform publishable key with account parameter
-        // For Standard/Custom accounts, you may need to retrieve their publishable key separately
+        // Note: PaymentIntent is on platform account, so use platform publishable key
+        // Connected account receives: totalAmount - stripeFee
+        // Admin receives: stripeFee only
       };
     }
 
-    // ====== BRANCH 2: EXISTING DROPSHIP / OTHER PARTNERS (destination charge with application fee) ======
+    // ====== BRANCH 2: EXISTING DROPSHIP / OTHER PARTNERS OR ADMIN-ONLY ORDERS ======
     const platformFeeInCents = convertToCents(order.adminReceivableAmount || 0);
     const stripeFee = estimateStripeFeeFromDollars(order.totalBill || 0);
     const stripeFeeInCents = convertToCents(stripeFee);
@@ -897,12 +894,17 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
       input.setup_future_usage = "off_session";
     }
 
+    // If there's a local partner (connectAccountId), split payment
     if (order.connectAccountId) {
+      // Dropship/Other Partners: Admin gets adminReceivableAmount + Stripe fee
+      // Connected Account gets: Total - (adminReceivableAmount + Stripe fee)
       input.application_fee_amount = adminProfitCents;
       input.transfer_data = {
         destination: order.connectAccountId,
       };
     }
+    // If no local partner (no connectAccountId), all amount stays with admin
+    // No application_fee_amount, no transfer_data — full amount goes to admin
 
     const paymentIntent = await stripe.paymentIntents.create(input);
 
@@ -1010,6 +1012,135 @@ async function transferToLocalPatners({
     };
   } catch (error) {
     console.error("Transfer to local partner failed:", error);
+    throw new AppError(`${error?.message}`, 200);
+  }
+}
+
+async function transferToEmployee({
+  amount,
+  employeeAccountId,
+  orderId,
+  invoiceId,
+  paymentIntentId,
+  invoiceNumber,
+}) {
+  try {
+    // Step 1: Retrieve the invoice if provided (only if it's a valid invoice ID, not a checkout session)
+    let invoice = null;
+    let piId = paymentIntentId;
+    let stripeInvoiceNumber = null;
+
+    if (invoiceId && !invoiceId.startsWith("cs_")) {
+      // Only retrieve if it's not a checkout session ID (checkout sessions start with 'cs_')
+      try {
+        invoice = await stripe.invoices.retrieve(invoiceId);
+        console.log("🚀 ~ transferToEmployee ~ invoice:", invoice);
+        piId = invoice?.payment_intent || paymentIntentId;
+        stripeInvoiceNumber = invoice?.number || null;
+      } catch (error) {
+        // If invoice retrieval fails, use paymentIntentId directly
+        console.log(
+          "🚀 ~ transferToEmployee ~ Invoice retrieval failed, using paymentIntentId:",
+          error.message
+        );
+        piId = paymentIntentId;
+      }
+    } else if (invoiceId && invoiceId.startsWith("cs_")) {
+      // It's a checkout session ID, not an invoice - skip invoice retrieval
+      console.log(
+        "🚀 ~ transferToEmployee ~ invoiceId is a checkout session, skipping invoice retrieval"
+      );
+      piId = paymentIntentId;
+    }
+
+    if (!piId) throw new Error("No valid PaymentIntent ID found.");
+
+    // Step 2: Retrieve PaymentIntent with expanded charges
+    const paymentIntent = await stripe.paymentIntents.retrieve(piId, {
+      expand: ["charges"],
+    });
+
+    console.log("🚀 ~ transferToEmployee ~ paymentIntent:", paymentIntent);
+
+    // Step 3: Retrieve the charge (either from expanded charges or using latest_charge fallback)
+    let charge;
+    if (paymentIntent?.charges?.data?.length) {
+      charge = paymentIntent.charges.data[0];
+    } else if (paymentIntent?.latest_charge) {
+      charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
+    } else {
+      throw new Error("No charge found in PaymentIntent");
+    }
+
+    // Step 4: Retrieve the balance transaction to get Stripe fee
+    const balanceTransaction = await stripe.balanceTransactions.retrieve(
+      charge.balance_transaction
+    );
+
+    // Step 5: Stripe values are in cents
+    const totalAmountCents = balanceTransaction.amount;
+    console.log(
+      "🚀 ~ transferToEmployee ~ totalAmountCents:",
+      totalAmountCents
+    );
+    const stripeFeeCents = balanceTransaction.fee;
+    console.log("🚀 ~ transferToEmployee ~ stripeFeeCents:", stripeFeeCents);
+
+    // Step 6: Calculate net amount (total - stripe fee) in cents
+    const netAmountCents = totalAmountCents - stripeFeeCents;
+    console.log("🚀 ~ transferToEmployee ~ netAmountCents:", netAmountCents);
+
+    // Step 7: Convert employee commission amount to cents (amount is already in dollars)
+    // Note: The amount passed is already calculated on net amount (after Stripe fee),
+    // so we transfer the full commission amount without deducting proportional fee
+    const employeeCommissionCents = convertToCents(amount);
+    console.log("🚀 ~ transferToEmployee ~ amount:", amount);
+    console.log(
+      "🚀 ~ transferToEmployee ~ employeeCommissionCents:",
+      employeeCommissionCents,
+      "cents ($" + (employeeCommissionCents / 100).toFixed(2) + ")"
+    );
+    console.log(
+      "🚀 ~ transferToEmployee ~ Note: Commission is calculated on net amount (after Stripe fee), so full amount is transferred"
+    );
+
+    // Step 8: Create description with invoice information
+    const descriptionParts = [];
+
+    // Prefer order invoice number, then Stripe invoice number, then invoice ID, then order ID
+    if (invoiceNumber) {
+      descriptionParts.push(`Payment from Invoice #${invoiceNumber}`);
+    } else if (stripeInvoiceNumber) {
+      descriptionParts.push(`Payment from Invoice #${stripeInvoiceNumber}`);
+    } else if (invoiceId && !invoiceId.startsWith("cs_")) {
+      descriptionParts.push(`Payment from Invoice ${invoiceId}`);
+    } else {
+      descriptionParts.push(`Payment from Order #${orderId}`);
+    }
+
+    descriptionParts.push(
+      `- Employee Commission: $${(employeeCommissionCents / 100).toFixed(2)}`
+    );
+
+    const description = descriptionParts.join(" ");
+
+    // Step 9: Create the transfer (transfer full commission amount since it's already calculated on net)
+    const transfer = await stripe.transfers.create({
+      amount: employeeCommissionCents,
+      currency: "usd",
+      destination: employeeAccountId,
+      transfer_group: invoice?.id || undefined,
+      description,
+    });
+
+    return {
+      transfer,
+      netEmployeeAmount: employeeCommissionCents / 100,
+      proportionalStripeFee: 0, // No additional fee deduction since commission is on net amount
+      grossEmployeeAmount: employeeCommissionCents / 100,
+    };
+  } catch (error) {
+    console.error("Transfer to employee failed:", error);
     throw new AppError(`${error?.message}`, 200);
   }
 }
@@ -1206,6 +1337,7 @@ module.exports = {
   createInvoiceWithItems,
   paymentIntentForWebsitePayments,
   transferToLocalPatners,
+  transferToEmployee,
   getInvoiceDetails,
   createStandardConnectAccount,
 };

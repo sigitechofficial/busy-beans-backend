@@ -185,9 +185,14 @@ async function createPaymentForInvoice({
     );
   }
 
-  if (Number(inv.Balance) <= 0) {
-    throw new Error(`Invoice ${invoiceId} is already paid or closed.`);
-  }
+  // Log invoice details for debugging
+  console.log("🔍 [QBO] Invoice details:", {
+    invoiceId,
+    balance: inv.Balance,
+    totalAmt: inv.TotalAmt,
+    paidAmt: inv.TotalAmt - (inv.Balance || 0),
+    hasPaymentRef: !!inv.PaymentRefNum,
+  });
 
   const safeAmount = Number(amount) || 0.01;
   const safeDate = new Date(
@@ -196,13 +201,219 @@ async function createPaymentForInvoice({
     .toISOString()
     .slice(0, 10);
 
+  // Check if invoice is already paid - return existing payment ID if found
+  if (Number(inv.Balance) <= 0) {
+    console.log(
+      `⚠️ [QBO] Invoice ${invoiceId} is already paid or closed. Checking for existing payment...`
+    );
+
+    // QBO doesn't support querying payments by LinkedTxn.TxnId directly
+    // Method: Query payments by customer, then filter in code by LinkedTxn
+    try {
+      console.log("🔍 [QBO] Querying payments by customer...");
+
+      // Query payments for this customer (QBO syntax: CustomerRef = 'customerId')
+      const query = `select Id, TotalAmt, TxnDate, LinkedTxn from Payment where CustomerRef = '${String(customerId)}'`;
+      const queryUrl = `${QBO(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR}`;
+      const queryRes = await axios.get(queryUrl, {
+        headers: headers(accessToken),
+        validateStatus: () => true,
+      });
+
+      console.log("🔍 [QBO] Payment query response:", {
+        status: queryRes?.status,
+        hasData: !!queryRes?.data,
+        error: queryRes?.data?.Fault?.Error?.[0]?.Message,
+        errorDetail: queryRes?.data?.Fault?.Error?.[0]?.Detail,
+        payments: queryRes?.data?.QueryResponse?.Payment?.length || 0,
+      });
+
+      // Check for errors
+      if (queryRes?.status === 400 || queryRes?.data?.Fault) {
+        console.warn(
+          "⚠️ [QBO] Payment query failed, cannot find existing payment"
+        );
+      } else if (queryRes?.data?.QueryResponse?.Payment) {
+        // Query succeeded - filter payments
+        const payments = Array.isArray(queryRes.data.QueryResponse.Payment)
+          ? queryRes.data.QueryResponse.Payment
+          : [queryRes.data.QueryResponse.Payment];
+
+        console.log(
+          `🔍 [QBO] Found ${payments.length} payments for customer, filtering by invoice ${invoiceId}...`
+        );
+
+        // Log all payments' LinkedTxn for debugging
+        payments.forEach((p, idx) => {
+          console.log(`🔍 [QBO] Payment ${idx + 1} (ID: ${p.Id}):`, {
+            totalAmt: p.TotalAmt,
+            txnDate: p.TxnDate,
+            linkedTxn: p.LinkedTxn,
+            linkedTxnType: typeof p.LinkedTxn,
+            linkedTxnIsArray: Array.isArray(p.LinkedTxn),
+          });
+        });
+
+        // Filter payments to find one linked to this invoice
+        const matchingPayment = payments.find((p) => {
+          if (!p.LinkedTxn) {
+            console.log(`⚠️ [QBO] Payment ${p.Id} has no LinkedTxn`);
+            return false;
+          }
+
+          // Handle different LinkedTxn structures
+          let linkedTxns = [];
+          if (Array.isArray(p.LinkedTxn)) {
+            linkedTxns = p.LinkedTxn;
+          } else if (p.LinkedTxn && typeof p.LinkedTxn === "object") {
+            // Might be a single object or wrapped differently
+            linkedTxns = [p.LinkedTxn];
+          }
+
+          console.log(
+            `🔍 [QBO] Checking payment ${p.Id}, linkedTxns:`,
+            JSON.stringify(linkedTxns, null, 2)
+          );
+
+          const matches = linkedTxns.some((lt) => {
+            // Try different possible field names
+            const txnId = String(
+              lt?.TxnId || lt?.TxnID || lt?.Id || lt?.value || ""
+            );
+            const txnType = String(lt?.TxnType || lt?.Type || "");
+            const matches =
+              txnId === String(invoiceId) && txnType === "Invoice";
+
+            if (matches) {
+              console.log(
+                `✅ [QBO] Found match! Payment ${p.Id} linked to invoice ${invoiceId}`
+              );
+            } else {
+              console.log(
+                `🔍 [QBO] Payment ${p.Id} - TxnId: ${txnId}, TxnType: ${txnType}, Looking for: ${invoiceId}`
+              );
+            }
+
+            return matches;
+          });
+
+          return matches;
+        });
+
+        if (matchingPayment?.Id) {
+          console.log(
+            `✅ [QBO] Found existing payment ${matchingPayment.Id} for invoice ${invoiceId}`
+          );
+          return {
+            id: matchingPayment.Id,
+            totalAmt: matchingPayment.TotalAmt,
+            txnDate: matchingPayment.TxnDate || safeDate,
+            raw: matchingPayment,
+            isExisting: true,
+          };
+        } else {
+          console.log(
+            `⚠️ [QBO] Found ${payments.length} payments for customer but none linked to invoice ${invoiceId}`
+          );
+          // Try alternative: check if any payment has matching amount and date
+          const amountMatch = payments.find(
+            (p) => Math.abs(Number(p.TotalAmt) - safeAmount) < 0.01
+          );
+          if (amountMatch) {
+            console.log(
+              `⚠️ [QBO] Found payment ${amountMatch.Id} with matching amount (${amountMatch.TotalAmt}) but LinkedTxn doesn't match invoice ${invoiceId}`
+            );
+            console.log(
+              `🔍 [QBO] This payment's LinkedTxn:`,
+              JSON.stringify(amountMatch.LinkedTxn, null, 2)
+            );
+          }
+        }
+      }
+    } catch (findErr) {
+      console.warn(
+        `⚠️ [QBO] Error in payment query:`,
+        findErr.message,
+        findErr.response?.data?.Fault?.Error?.[0]
+      );
+    }
+
+    // Method 3: Check if invoice has payment info in its response
+    // Sometimes QBO includes payment references in the invoice
+    if (inv?.PaymentRefNum || inv?.PaymentId) {
+      console.log(
+        `ℹ️ [QBO] Invoice has payment reference but couldn't query payment directly`
+      );
+    }
+
+    // Invoice is paid but no payment found - return early without error
+    console.log(
+      `ℹ️ [QBO] Invoice ${invoiceId} is already paid, skipping payment creation`
+    );
+    return {
+      id: null,
+      totalAmt: 0,
+      txnDate: safeDate,
+      isExisting: false,
+      skipped: true,
+    };
+  }
+
   /* -----------------------------------------------------------
-   ✅ 2. Normalize & map payment name to QBO-safe format
+   ✅ 2. Check for existing payment before creating (same method as above)
+  ----------------------------------------------------------- */
+  // Use same customer-based query method
+  try {
+    const query = `select Id, TotalAmt, TxnDate, LinkedTxn from Payment where CustomerRef = '${String(customerId)}'`;
+    const queryUrl = `${QBO(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR}`;
+    const queryRes = await axios.get(queryUrl, {
+      headers: headers(accessToken),
+      validateStatus: () => true,
+    });
+
+    if (queryRes?.data?.QueryResponse?.Payment) {
+      const payments = Array.isArray(queryRes.data.QueryResponse.Payment)
+        ? queryRes.data.QueryResponse.Payment
+        : [queryRes.data.QueryResponse.Payment];
+
+      const existingPayment = payments.find((p) => {
+        if (!p.LinkedTxn) return false;
+        const linkedTxns = Array.isArray(p.LinkedTxn)
+          ? p.LinkedTxn
+          : [p.LinkedTxn];
+        return linkedTxns.some(
+          (lt) => lt?.TxnId === String(invoiceId) && lt?.TxnType === "Invoice"
+        );
+      });
+
+      if (existingPayment?.Id) {
+        console.log(
+          `✅ [QBO] Payment already exists for invoice ${invoiceId}: ${existingPayment.Id}`
+        );
+        return {
+          id: existingPayment.Id,
+          totalAmt: existingPayment.TotalAmt,
+          txnDate: existingPayment.TxnDate || safeDate,
+          raw: existingPayment,
+          isExisting: true,
+        };
+      }
+    }
+  } catch (preCheckErr) {
+    console.warn(
+      `⚠️ [QBO] Pre-check for existing payment failed:`,
+      preCheckErr.message
+    );
+    // Continue with payment creation
+  }
+
+  /* -----------------------------------------------------------
+   ✅ 3. Normalize & map payment name to QBO-safe format
   ----------------------------------------------------------- */
   const normalizedName = mapPaymentMethodName(paymentMethodName);
 
   /* -----------------------------------------------------------
-   ✅ 3. Get or Create PaymentMethod
+   ✅ 4. Get or Create PaymentMethod
   ----------------------------------------------------------- */
   const paymentMethodId = await ensurePaymentMethod({
     accessToken,
@@ -215,13 +426,22 @@ async function createPaymentForInvoice({
   }
 
   /* -----------------------------------------------------------
-   ✅ 4. Build Payment Payload
+   ✅ 5. Build Payment Payload
   ----------------------------------------------------------- */
+  // QBO has a 21 character limit for PaymentRefNum
+  let safeRefNumber = refNumber || `ref-${invoiceId}`;
+  if (safeRefNumber.length > 21) {
+    console.warn(
+      `⚠️ [QBO] PaymentRefNum too long (${safeRefNumber.length} chars), truncating to 21 characters`
+    );
+    safeRefNumber = safeRefNumber.substring(0, 21);
+  }
+
   const payload = {
     CustomerRef: { value: String(customerId) },
     TotalAmt: safeAmount,
     TxnDate: safeDate,
-    PaymentRefNum: refNumber || `ref-${invoiceId}`,
+    PaymentRefNum: safeRefNumber,
     PaymentMethodRef: { value: String(paymentMethodId) },
     // ✅ REQUIRED: accounts receivable reference
     // ARAccountRef: { value: "33" }, // QBO auto-resolves this for most accounts, override if needed
@@ -245,7 +465,7 @@ async function createPaymentForInvoice({
   console.log("🚀 ~ createPaymentForInvoice ~ payload:", payload);
 
   /* -----------------------------------------------------------
-   ✅ 5. Send Request to QBO
+   ✅ 6. Send Request to QBO
   ----------------------------------------------------------- */
   try {
     const res = await axios.post(
@@ -269,8 +489,64 @@ async function createPaymentForInvoice({
       totalAmt: payment.TotalAmt,
       txnDate: payment.TxnDate,
       raw: payment,
+      isExisting: false,
     };
   } catch (error) {
+    // Handle duplicate payment or validation errors
+    const errorCode = error?.response?.data?.Fault?.Error?.[0]?.code;
+    const errorMessage =
+      error?.response?.data?.Fault?.Error?.[0]?.Message || "";
+    const errorDetail = error?.response?.data?.Fault?.Error?.[0]?.Detail || "";
+
+    console.log("🔍 [QBO] Payment error details:", {
+      errorCode,
+      errorMessage,
+      errorDetail,
+    });
+
+    // Check if it's a duplicate payment error or validation error
+    if (
+      errorCode === "6000" ||
+      errorMessage.includes("already exists") ||
+      errorMessage.includes("duplicate") ||
+      errorDetail.includes("already")
+    ) {
+      console.log(
+        "⚠️ [QBO] Duplicate payment detected, finding existing payment..."
+      );
+
+      try {
+        // Query QBO to find existing payment for this invoice
+        const query = encodeURIComponent(
+          `select Id, TotalAmt from Payment where Any(LinkedTxn.TxnId) = '${String(invoiceId)}' and Any(LinkedTxn.TxnType) = 'Invoice'`
+        );
+        const queryUrl = `${QBO(realmId)}/query?query=${query}&minorversion=${MINOR}`;
+        const queryRes = await axios.get(queryUrl, {
+          headers: headers(accessToken),
+          validateStatus: () => true,
+        });
+
+        const existingPayment = queryRes?.data?.QueryResponse?.Payment?.[0];
+        if (existingPayment?.Id) {
+          console.log(
+            `✅ [QBO] Found existing payment ${existingPayment.Id} for invoice ${invoiceId}`
+          );
+          return {
+            id: existingPayment.Id,
+            totalAmt: existingPayment.TotalAmt,
+            txnDate: safeDate,
+            raw: existingPayment,
+            isExisting: true,
+          };
+        }
+      } catch (findErr) {
+        console.error(
+          "❌ [QBO] Error while trying to find existing payment:",
+          findErr.message
+        );
+      }
+    }
+
     handleQboError({
       err: error,
       context: `[QBO][Payment] ----❌ QBO Payment Failed:`,
@@ -302,11 +578,30 @@ async function createQboPayment({
     });
 
     const paymentId = paymentRes?.id;
-    if (!paymentId) throw new Error("QBO Payment creation failed.");
+
+    // Handle different scenarios
+    if (paymentRes?.skipped) {
+      // Invoice is already paid but payment not found - this is unusual
+      console.log(
+        `ℹ️ [QBO] Payment skipped - invoice already paid but payment not found: ${paymentRes.note || ""}`
+      );
+      // Return null so caller can handle (don't update DB)
+      return { paymentId: null, skipped: true };
+    }
+
+    if (paymentRes?.isExisting) {
+      // Found existing payment - return it so DB can be updated
+      console.log(`✅ [QBO] Using existing payment: ${paymentId}`);
+      return { paymentId, isExisting: true };
+    }
+
+    if (!paymentId) {
+      throw new Error("QBO Payment creation failed - no payment ID returned.");
+    }
 
     console.log("✅ [QBO] Payment Created:", paymentId);
 
-    return { paymentId };
+    return { paymentId, isExisting: false };
   } catch (err) {
     handleQboError({
       err: err,
@@ -317,6 +612,9 @@ async function createQboPayment({
 }
 
 async function createQboInvoice({ order, accessToken, realmId }) {
+  // Define payload outside try block so it's accessible in catch block
+  let payload = null;
+
   try {
     console.log("⚡ [QBO] Creating Invoice for Order:", order?.id);
 
@@ -326,8 +624,95 @@ async function createQboInvoice({ order, accessToken, realmId }) {
 
     const Lines = (order.items || []).map((it) => {
       const qty = Number(it.qty || 1);
-      const amount = +Number(it.price || it.total || 0).toFixed(2);
-      const unitPrice = +(amount / qty).toFixed(2);
+
+      // Log input values for debugging
+      console.log("🔍 [QBO] Item calculation input:", {
+        product: it.product,
+        qty,
+        price: it.price,
+        total: it.total,
+        wholesalePrice: it.wholesalePrice,
+      });
+
+      // CRITICAL: DB stores total price (after discounts), not unit price
+      // QBO requires: Amount = UnitPrice * Qty (exact match, no rounding differences)
+      // Strategy: Calculate unitPrice from DB total, then recalculate amount to ensure exact match
+      let amount;
+      let unitPrice;
+
+      // Get the line total from DB (this is the actual charged amount after discounts)
+      const totalNum = Number(it.total || it.price || 0);
+
+      // CRITICAL: Always prioritize DB total (it.total or it.price) as it's the actual charged amount
+      // Use wholesalePrice only if DB total is not available
+      if (totalNum > 0 && qty > 0) {
+        // Calculate unitPrice from total
+        // Use the exact division result without premature rounding
+        unitPrice = totalNum / qty;
+
+        // Calculate amount from unitPrice - this ensures Amount = UnitPrice * Qty exactly
+        // Round only at the final step to 2 decimal places
+        amount = Math.round(unitPrice * qty * 100) / 100;
+
+        // Round unitPrice to 8 decimal places for QBO (they accept up to 8 decimals)
+        // This preserves precision while ensuring the calculation works
+        unitPrice = Math.round(unitPrice * 100000000) / 100000000;
+
+        // Final verification: recalculate amount one more time to ensure exact match
+        const finalAmount = Math.round(unitPrice * qty * 100) / 100;
+        if (Math.abs(amount - finalAmount) > 0.0001) {
+          amount = finalAmount;
+        }
+
+        // Log if there's a significant difference from DB total
+        const difference = Math.abs(totalNum - amount);
+        if (difference > 0.01) {
+          console.warn("⚠️ [QBO] Difference between DB total and QBO amount:", {
+            product: it.product,
+            dbTotal: totalNum,
+            qboAmount: amount,
+            difference: difference.toFixed(4),
+            note: "Using calculated amount to satisfy QBO validation (Amount = UnitPrice * Qty)",
+          });
+        }
+      } else if (it.wholesalePrice && qty > 0) {
+        // Fallback: If DB total not available, use wholesalePrice as unit price
+        unitPrice = Number(it.wholesalePrice);
+        // Calculate amount from unitPrice to ensure exact match
+        amount = Math.round(unitPrice * qty * 100) / 100;
+        // Round unitPrice to 8 decimal places
+        unitPrice = Math.round(unitPrice * 100000000) / 100000000;
+      } else {
+        amount = 0;
+        unitPrice = 0;
+      }
+
+      // Final verification: Amount MUST equal UnitPrice * Qty exactly (QBO requirement)
+      const verification = Math.round(unitPrice * qty * 100) / 100;
+      const isExactMatch = Math.abs(amount - verification) < 0.0001;
+
+      console.log("🔍 [QBO] Final line item:", {
+        product: it.product,
+        unitPrice: unitPrice.toFixed(8),
+        qty,
+        amount,
+        verification,
+        isExactMatch,
+        difference: Math.abs(amount - verification),
+        dbTotal: totalNum,
+      });
+
+      if (!isExactMatch) {
+        console.error("❌ [QBO] Amount mismatch - using verification value!", {
+          product: it.product,
+          unitPrice,
+          qty,
+          amount,
+          expected: verification,
+        });
+        // Force exact match - QBO validation requires this
+        amount = verification;
+      }
 
       return {
         Amount: amount,
@@ -373,7 +758,7 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       }
     }
 
-    const payload = {
+    payload = {
       CustomerRef: { value: String(order.qboCustomerId) },
       Line: Lines,
       TxnDate: new Date(order.invoiceDate || Date.now())
@@ -405,6 +790,102 @@ async function createQboInvoice({ order, accessToken, realmId }) {
 
     return { invoiceId, payload, invRes };
   } catch (err) {
+    // Handle duplicate document number error
+    const errorCode = err?.response?.data?.Fault?.Error?.[0]?.code;
+    const errorMessage = err?.response?.data?.Fault?.Error?.[0]?.Message || "";
+    const errorDetail = err?.response?.data?.Fault?.Error?.[0]?.Detail || "";
+
+    console.log("🔍 [QBO] Error details:", {
+      errorCode,
+      errorMessage,
+      errorDetail,
+    });
+
+    if (
+      errorCode === "6140" ||
+      errorMessage.includes("Duplicate Document Number")
+    ) {
+      console.log(
+        "⚠️ [QBO] Duplicate document number detected, finding existing invoice..."
+      );
+
+      const docNumber = order.invoiceNumber;
+      if (!docNumber) {
+        console.error(
+          "❌ [QBO] Cannot find duplicate invoice - no DocNumber provided"
+        );
+        handleQboError({
+          err: err,
+          context: `❌ [QBO Invoice ERROR]:`,
+        });
+        throw err;
+      }
+
+      try {
+        // Try to extract TxnId from error message first
+        // Error format: "DocNumber=INV001110 is assigned to TxnType=Invoice with TxnId=1109"
+        const txnIdMatch = errorDetail.match(/TxnId=(\d+)/);
+        let existingInvoiceId = txnIdMatch ? txnIdMatch[1] : null;
+
+        console.log("🔍 [QBO] Extracted TxnId from error:", existingInvoiceId);
+
+        // If not found in error message, query QBO to find invoice by DocNumber
+        if (!existingInvoiceId) {
+          console.log(
+            "🔍 [QBO] TxnId not in error message, querying QBO by DocNumber..."
+          );
+          const query = encodeURIComponent(
+            `select Id, DocNumber from Invoice where DocNumber='${docNumber.replace(/'/g, "''")}'`
+          );
+          const queryUrl = `${QBO(realmId)}/query?query=${query}&minorversion=${MINOR}`;
+
+          const queryRes = await axios.get(queryUrl, {
+            headers: headers(accessToken),
+            validateStatus: () => true, // Don't throw on error
+          });
+
+          const existingInvoice = queryRes?.data?.QueryResponse?.Invoice?.[0];
+          if (existingInvoice?.Id) {
+            existingInvoiceId = existingInvoice.Id;
+            console.log("🔍 [QBO] Found invoice via query:", existingInvoiceId);
+          } else {
+            console.log("🔍 [QBO] No invoice found via query");
+          }
+        }
+
+        if (existingInvoiceId) {
+          console.log(
+            `✅ [QBO] Found existing invoice with DocNumber ${docNumber}: ${existingInvoiceId}`
+          );
+          // Return the existing invoice ID instead of throwing error
+          return {
+            invoiceId: existingInvoiceId,
+            payload: payload || undefined, // payload may be null if error occurred before it was set
+            isExisting: true,
+          };
+        } else {
+          console.error(
+            `❌ [QBO] Duplicate DocNumber error but could not find existing invoice: ${docNumber}`
+          );
+          handleQboError({
+            err: err,
+            context: `❌ [QBO Invoice ERROR]:`,
+          });
+          throw err;
+        }
+      } catch (findErr) {
+        console.error(
+          "❌ [QBO] Error while trying to find existing invoice:",
+          findErr.message
+        );
+        handleQboError({
+          err: err,
+          context: `❌ [QBO Invoice ERROR]:`,
+        });
+        throw err; // Throw original error
+      }
+    }
+
     handleQboError({
       err: err,
       context: `❌ [QBO Invoice ERROR]:`,
@@ -476,7 +957,13 @@ async function handleAdminQboSync({
           condition: adminQboCondition,
         });
 
-        if (accessToken && realmId && !order?.quickBooksInvoiceId) {
+        // Skip admin sync if invoice already exists (unless update requested)
+        if (order?.quickBooksInvoiceId && !updateRequest) {
+          console.log(
+            `[QBO] Admin invoice already exists (${order.quickBooksInvoiceId}), skipping admin sync`
+          );
+        } else if (accessToken && realmId && !order?.quickBooksInvoiceId) {
+          // Create admin invoice only if it doesn't exist
           const adminQboInvoice = await createQboInvoice({
             order,
             accessToken,

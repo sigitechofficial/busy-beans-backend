@@ -1,4 +1,4 @@
-const { coffeeMachine, Lead, Logs } = require("../../models");
+const { coffeeMachine, Lead } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");

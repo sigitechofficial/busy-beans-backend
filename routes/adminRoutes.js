@@ -848,6 +848,262 @@ router.put(
 
 /**
  * @swagger
+ * /api/v1/admin/employee/{employeeId}/stripe-connect-account:
+ *   post:
+ *     summary: Create Stripe Connect account for admin employee
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               returnUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Stripe Connect account created
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/employee/:employeeId/stripe-connect-account",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.stripeConnectAccount
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/stripe-connect-account-link:
+ *   post:
+ *     summary: Get Stripe Connect account onboarding link
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               returnUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Stripe Connect account link
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/employee/:employeeId/stripe-connect-account-link",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.stripeConnectAccountLink
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/stripe-connect-account-dashboard:
+ *   get:
+ *     summary: Get Stripe Connect account dashboard link
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Stripe Connect dashboard link
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/employee/:employeeId/stripe-connect-account-dashboard",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.stripeConnectAccountDashboard
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/commission:
+ *   patch:
+ *     summary: Update employee commission percentage
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               commissionPercentage:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 100
+ *     responses:
+ *       200:
+ *         description: Commission percentage updated
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  "/employee/:employeeId/commission",
+  auth.protect,
+  auth.restrictTo("admin"),
+  employeeController.updateCommission
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee-commission-orders:
+ *   get:
+ *     summary: Get orders with employee commission (transferred/not-transferred)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [transferred, not-transferred]
+ *         description: Filter by transfer status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Orders with employee commission
+ *       400:
+ *         description: Invalid status parameter
+ *       403:
+ *         description: Only admin can access
+ */
+router.get(
+  "/employee-commission-orders/:status",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.getEmployeeCommissionOrders
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/transfer-commission-to-employee:
+ *   post:
+ *     summary: Transfer commission to employees for multiple orders
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderIds
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of order IDs to transfer commission for
+ *                 example: [123, 456, 789]
+ *     responses:
+ *       200:
+ *         description: Transfer results
+ *       400:
+ *         description: Invalid input
+ *       403:
+ *         description: Only admin and admin employees can access
+ */
+router.post(
+  "/transfer-commission-to-employee",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.transferCommissionToEmployeeController
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/bulk-transfer-commission-to-employee:
+ *   post:
+ *     summary: Bulk transfer commission to employees - sums all commissions per employee and transfers once
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderIds
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of order IDs that have employee commission data
+ *                 example: [123, 456, 789]
+ *     responses:
+ *       200:
+ *         description: Bulk transfer results grouped by employee
+ *       400:
+ *         description: Invalid input
+ *       403:
+ *         description: Only admin and admin employees can access
+ */
+router.post(
+  "/bulk-transfer-commission-to-employee",
+  auth.protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  employeeController.bulkTransferCommissionToEmployeeController
+);
+
+/**
+ * @swagger
  * /api/v1/admin/category/:
  *   get:
  *     summary: Get all categories
@@ -2076,7 +2332,7 @@ router.get(
 //! SALESREP REPORTS SECTION
 
 router.get(
-  "/sales-rep-reports/orders-placed-report/:supId",
+  "/sales-rep-reports/orders-placed-report/:srId",
   salesRepReportsController.ordersPlacedReport
 );
 
@@ -2114,6 +2370,18 @@ router.get(
   dashboardsController.employeeDashboardAdmin
 );
 router.get("/supplier-dashboard/:id", dashboardsController.supplierDashboard);
+
+router.get("/dashboard/sales", dashboardsController.getSalesDashboard);
+
+router.get(
+  "/dashboard/franchisee-sales",
+  dashboardsController.getFranchiseeSalesDashboard
+);
+
+router.get(
+  "/dashboard/local-partner-sales/:srId",
+  dashboardsController.getLocalPartnerSalesDashboard
+);
 
 router.get(
   "/orders-pending-pullouts/:srId",

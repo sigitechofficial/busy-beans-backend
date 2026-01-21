@@ -1,4 +1,5 @@
 const Stripe = require("stripe");
+const { Sequelize } = require("sequelize");
 const {
   subscription,
   addon,
@@ -70,10 +71,35 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
     }
   }
 
-  // 3. Validate addons of type "addon" (with addonId)
+  // 3. Validate addons
+  // Check that "extra" type addons don't have addonId
+  const extraTypeAddons = addons.filter((a) => a.type === "extra");
+  for (const extraAddon of extraTypeAddons) {
+    if (extraAddon.addonId != null) {
+      return next(
+        new AppError(
+          `addonId should not be provided for addons of type "extra". Addon "${extraAddon.name || "unnamed"}" has addonId: ${extraAddon.addonId}`,
+          400
+        )
+      );
+    }
+  }
+
+  // Validate addons of type "addon" (with addonId)
   const addonTypeAddons = addons.filter((a) => a.type === "addon");
   if (addonTypeAddons.length > 0) {
-    const addonIds = addonTypeAddons.map((a) => a.addonId);
+    const addonIds = addonTypeAddons
+      .map((a) => a.addonId)
+      .filter((id) => id != null); // Filter out null/undefined values
+
+    // Check if all addonIds are provided
+    if (addonIds.length !== addonTypeAddons.length) {
+      return next(
+        new AppError("addonId is required for addons of type 'addon'", 400)
+      );
+    }
+
+    // Validate that all addonIds exist and are active
     const foundAddons = await addon.findAll({
       where: {
         id: addonIds,
@@ -82,9 +108,28 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
       },
     });
 
+    console.log("🔍 Addon Validation:", {
+      requestedAddonIds: addonIds,
+      foundAddonIds: foundAddons.map((a) => a.id),
+      foundCount: foundAddons.length,
+      requestedCount: addonIds.length,
+    });
+
     if (foundAddons.length !== addonIds.length) {
+      // Find which addonIds are missing
+      const foundAddonIds = foundAddons.map((a) => a.id);
+      const missingAddonIds = addonIds.filter(
+        (id) => !foundAddonIds.includes(id)
+      );
+      console.error(
+        "❌ Addon validation failed. Missing addon IDs:",
+        missingAddonIds
+      );
       return next(
-        new AppError("One or more add-ons not found or inactive", 400)
+        new AppError(
+          `One or more add-ons not found or inactive. Missing addon IDs: ${missingAddonIds.join(", ")}`,
+          400
+        )
       );
     }
   }
@@ -135,16 +180,106 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
 
     // Save subscription add-ons
     if (addons.length > 0) {
-      const subscriptionAddonRecords = addons.map((addonItem) => ({
-        subscriptionId: newSubscription.id,
-        addonId: addonItem.addonId || null,
-        type: addonItem.type,
-        name: addonItem.name || null,
-        quantity: addonItem.quantity,
-        unitPrice: addonItem.unitPrice,
-        totalPrice: addonItem.totalPrice,
-      }));
-      await subscriptionAddon.bulkCreate(subscriptionAddonRecords);
+      // Separate "addon" type (with addonId) and "extra" type (without addonId)
+      // Insert them separately to avoid MySQL foreign key constraint issues
+      const addonTypeRecords = [];
+      const extraTypeRecords = [];
+
+      for (const addonItem of addons) {
+        const record = {
+          subscriptionId: newSubscription.id,
+          type: addonItem.type,
+          name: addonItem.name || null,
+          quantity: addonItem.quantity,
+          unitPrice: addonItem.unitPrice,
+          totalPrice: addonItem.totalPrice,
+        };
+
+        if (addonItem.type === "addon") {
+          // For "addon" type, addonId is required and should be valid
+          if (!addonItem.addonId) {
+            return next(
+              new AppError(
+                `addonId is required for addon type "addon" but was not provided`,
+                400
+              )
+            );
+          }
+          record.addonId = addonItem.addonId;
+          addonTypeRecords.push(record);
+        } else if (addonItem.type === "extra") {
+          // For "extra" type, store record for raw SQL insert with NULL addonId
+          extraTypeRecords.push(record);
+        }
+      }
+
+      console.log("📝 Creating subscription addons:", {
+        addonType: addonTypeRecords.length,
+        extraType: extraTypeRecords.length,
+      });
+
+      // Insert "addon" type records first (with valid addonIds)
+      if (addonTypeRecords.length > 0) {
+        try {
+          await subscriptionAddon.bulkCreate(addonTypeRecords);
+        } catch (error) {
+          if (
+            error.name === "SequelizeForeignKeyConstraintError" &&
+            error.fields?.includes("addonId")
+          ) {
+            console.error(
+              "❌ Foreign key constraint error for addonId:",
+              error
+            );
+            const problematicAddonId = addonTypeRecords.find(
+              (r) => r.addonId != null
+            )?.addonId;
+            return next(
+              new AppError(
+                `Invalid addon ID: ${problematicAddonId || "unknown"}. This addon does not exist in the database or is inactive.`,
+                400
+              )
+            );
+          }
+          throw error;
+        }
+      }
+
+      // Insert "extra" type records separately using raw SQL
+      // Note: For "extra" type, addonId should be NULL (not from addons table)
+      if (extraTypeRecords.length > 0) {
+        try {
+          // Use raw SQL to insert with explicit NULL for addonId
+          const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+          const values = extraTypeRecords
+            .map((record) => {
+              const escapedName = record.name
+                ? record.name.replace(/'/g, "''").replace(/\\/g, "\\\\")
+                : "";
+              return `('${record.subscriptionId}', NULL, '${record.type}', ${record.name ? `'${escapedName}'` : "NULL"}, ${record.quantity}, ${record.unitPrice}, ${record.totalPrice}, '${now}', '${now}')`;
+            })
+            .join(", ");
+
+          const sql = `INSERT INTO \`subscriptionAddons\` (\`subscriptionId\`, \`addonId\`, \`type\`, \`name\`, \`quantity\`, \`unitPrice\`, \`totalPrice\`, \`createdAt\`, \`updatedAt\`) VALUES ${values}`;
+
+          await subscriptionAddon.sequelize.query(sql);
+        } catch (error) {
+          console.error("❌ Error creating extra type addons:", error);
+          // If foreign key constraint fails, provide helpful error message
+          if (
+            error.code === "ER_NO_REFERENCED_ROW_2" ||
+            error.code === "ER_BAD_NULL_ERROR"
+          ) {
+            return next(
+              new AppError(
+                "Database schema issue: addonId column must allow NULL for 'extra' type addons. Please run the migration script to fix this: ALTER TABLE subscriptionAddons DROP FOREIGN KEY subscriptionaddons_ibfk_14; ALTER TABLE subscriptionAddons MODIFY COLUMN addonId INT NULL; ALTER TABLE subscriptionAddons ADD CONSTRAINT subscriptionaddons_ibfk_14 FOREIGN KEY (addonId) REFERENCES addons(id) ON DELETE CASCADE ON UPDATE CASCADE;",
+                500
+              )
+            );
+          }
+          throw error;
+        }
+      }
     }
 
     // Send invitation email with payment link
@@ -296,16 +431,103 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
 
   // 10. Save subscription add-ons
   if (addons.length > 0) {
-    const subscriptionAddonRecords = addons.map((addonItem) => ({
-      subscriptionId: newSubscription.id,
-      addonId: addonItem.addonId || null,
-      type: addonItem.type,
-      name: addonItem.name || null,
-      quantity: addonItem.quantity,
-      unitPrice: addonItem.unitPrice,
-      totalPrice: addonItem.totalPrice,
-    }));
-    await subscriptionAddon.bulkCreate(subscriptionAddonRecords);
+    // Separate "addon" type (with addonId) and "extra" type (without addonId)
+    // Insert them separately to avoid MySQL foreign key constraint issues
+    const addonTypeRecords = [];
+    const extraTypeRecords = [];
+
+    for (const addonItem of addons) {
+      const record = {
+        subscriptionId: newSubscription.id,
+        type: addonItem.type,
+        name: addonItem.name || null,
+        quantity: addonItem.quantity,
+        unitPrice: addonItem.unitPrice,
+        totalPrice: addonItem.totalPrice,
+      };
+
+      if (addonItem.type === "addon") {
+        // For "addon" type, addonId is required and should be valid
+        if (!addonItem.addonId) {
+          return next(
+            new AppError(
+              `addonId is required for addon type "addon" but was not provided`,
+              400
+            )
+          );
+        }
+        record.addonId = addonItem.addonId;
+        addonTypeRecords.push(record);
+      } else if (addonItem.type === "extra") {
+        // For "extra" type, store record for raw SQL insert with NULL addonId
+        extraTypeRecords.push(record);
+      }
+    }
+
+    console.log("📝 Creating subscription addons:", {
+      addonType: addonTypeRecords.length,
+      extraType: extraTypeRecords.length,
+    });
+
+    // Insert "addon" type records first (with valid addonIds)
+    if (addonTypeRecords.length > 0) {
+      try {
+        await subscriptionAddon.bulkCreate(addonTypeRecords);
+      } catch (error) {
+        if (
+          error.name === "SequelizeForeignKeyConstraintError" &&
+          error.fields?.includes("addonId")
+        ) {
+          console.error("❌ Foreign key constraint error for addonId:", error);
+          const problematicAddonId = addonTypeRecords.find(
+            (r) => r.addonId != null
+          )?.addonId;
+          return next(
+            new AppError(
+              `Invalid addon ID: ${problematicAddonId || "unknown"}. This addon does not exist in the database or is inactive.`,
+              400
+            )
+          );
+        }
+        throw error;
+      }
+    }
+
+    // Insert "extra" type records separately using raw SQL
+    // Note: For "extra" type, addonId should be NULL (not from addons table)
+    if (extraTypeRecords.length > 0) {
+      try {
+        // Use raw SQL to insert with explicit NULL for addonId
+        const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+        const values = extraTypeRecords
+          .map((record) => {
+            const escapedName = record.name
+              ? record.name.replace(/'/g, "''").replace(/\\/g, "\\\\")
+              : "";
+            return `('${record.subscriptionId}', NULL, '${record.type}', ${record.name ? `'${escapedName}'` : "NULL"}, ${record.quantity}, ${record.unitPrice}, ${record.totalPrice}, '${now}', '${now}')`;
+          })
+          .join(", ");
+
+        const sql = `INSERT INTO \`subscriptionAddons\` (\`subscriptionId\`, \`addonId\`, \`type\`, \`name\`, \`quantity\`, \`unitPrice\`, \`totalPrice\`, \`createdAt\`, \`updatedAt\`) VALUES ${values}`;
+
+        await subscriptionAddon.sequelize.query(sql);
+      } catch (error) {
+        console.error("❌ Error creating extra type addons:", error);
+        // If foreign key constraint fails, provide helpful error message
+        if (
+          error.code === "ER_NO_REFERENCED_ROW_2" ||
+          error.code === "ER_BAD_NULL_ERROR"
+        ) {
+          return next(
+            new AppError(
+              "Database schema issue: addonId column must allow NULL for 'extra' type addons. Please run the migration script to fix this: ALTER TABLE subscriptionAddons DROP FOREIGN KEY subscriptionaddons_ibfk_14; ALTER TABLE subscriptionAddons MODIFY COLUMN addonId INT NULL; ALTER TABLE subscriptionAddons ADD CONSTRAINT subscriptionaddons_ibfk_14 FOREIGN KEY (addonId) REFERENCES addons(id) ON DELETE CASCADE ON UPDATE CASCADE;",
+              500
+            )
+          );
+        }
+        throw error;
+      }
+    }
   }
 
   console.log("✅ Subscription saved to database:", newSubscription.id);
