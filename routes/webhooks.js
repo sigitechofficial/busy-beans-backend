@@ -1,11 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const Controller = require("../controllers/Webhook/webhookController");
-const SubscriptionWebhookController = require("../controllers/Webhook/subscriptionWebhookController");
-const MetaController = require("../controllers/Webhook/metaWebhookController");
+const Controller = require("../controllers/webhook/webhookController");
+const SubscriptionWebhookController = require("../controllers/webhook/subscriptionWebhookController");
+const MetaController = require("../controllers/webhook/metaWebhookController");
 
 const catchAsync = require("../utils/catchAsync");
-
 // Stripe webhook (needs raw body - handled in app.js)
 router.post(
   "/busy-beans-coffee",
