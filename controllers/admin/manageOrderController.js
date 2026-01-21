@@ -15,6 +15,7 @@ const {
   userDiscount,
   partnerOrder,
   account,
+  employee,
 } = require("../../models");
 
 const fs = require("fs");
@@ -339,7 +340,7 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
   // Check if order exists
   const orderData = await model.findOne({
     where: { id: orderId },
-    attributes: ["id", "paymentStatus"],
+    attributes: ["id", "paymentStatus", "salesRepId"],
   });
 
   if (!orderData) {
@@ -377,6 +378,20 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
   await model.update(updateData, {
     where: { id: orderId },
   });
+
+  // Process employee commission if this is a customer order (not local-partner)
+  if (orderType !== "local-partner" && !orderData?.salesRepId) {
+    try {
+      // Process employee commission using utility function (same as orderJourneyComplete)
+      await calculateAndSaveEmployeeCommission({ orderId: orderId });
+    } catch (error) {
+      // Log error but don't fail the payment confirmation
+      console.error(
+        "❌ Error processing employee commission in confirmPaymentForInvoiceIntent:",
+        error.message
+      );
+    }
+  }
 
   return res.status(200).json({
     status: "success",
@@ -1757,6 +1772,18 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
         orderId: placedOrder?.id,
       });
+      // Only process employee commission if order has no local partner (salesRepId)
+      if (!placedOrder?.salesRepId) {
+        try {
+          await calculateAndSaveEmployeeCommission({ orderId: placedOrder?.id });
+        } catch (error) {
+          // Log error but don't disrupt the overall API flow
+          console.error(
+            "❌ Error processing employee commission in payment capture:",
+            error.message
+          );
+        }
+      }
       return res.status(200).json({
         status: "success",
         message: "Payment capture success",
