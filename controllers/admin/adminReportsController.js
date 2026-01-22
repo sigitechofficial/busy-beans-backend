@@ -616,6 +616,7 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
   console.log("🚀 ~ customerSalesSummary ~ salesRepId:", salesRepId);
   console.log("🚀 ~ customerSalesSummary ~ userType:", userType);
   console.log("🚀 ~ customerSalesSummary ~ salesRepNe:", salesRepNe);
+  console.log("🚀 ~ customerSalesSummary ~ req.user.entity:", req.user?.entity);
 
   if (!startDate || !endDate) {
     return next(new AppError("startDate and endDate are required", 400));
@@ -639,83 +640,157 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
     return next(new AppError("Invalid date values", 400));
   }
 
+  // Build entity-based filters
+  const isAdmin = req.user?.entity === "admin";
+  const isAdminEmployee = req.user?.entity === "adminEmployee";
+  const isLocalPartner =
+    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+
+  // Validate: Only admin can use salesRepId query parameter to view specific local partner
+  if (salesRepId && !isAdmin) {
+    return next(
+      new AppError(
+        "Only admin users can filter by specific salesRepId",
+        403
+      )
+    );
+  }
+
+  // Check if admin is requesting a specific local partner's data
+  const requestedSalesRepId = salesRepId
+    ? Array.isArray(salesRepId)
+      ? salesRepId[0]
+      : typeof salesRepId === "string" && salesRepId.includes(",")
+      ? null
+      : parseInt(salesRepId)
+    : null;
+  const isAdminViewingLocalPartner = isAdmin && requestedSalesRepId && !userType;
+
+  // Check if admin wants to see only direct admin orders (salesRepId IS NULL)
+  const isAdminOnlyCondition = isAdmin && userType === "admin";
+
   // Build salesRep filter condition
   let salesRepFilter = "";
+  let employeeIdFilter = "";
 
-  // Handle userType=admin (salesRepId IS NULL) - takes precedence
-  if (userType === "admin") {
+  // Apply entity-based filtering
+  // IMPORTANT: Admin users see ALL data - no entity filtering applied
+  // EXCEPTION: If userType=admin, admin will see only direct admin orders (salesRepId IS NULL) - takes highest precedence
+  // EXCEPTION: If salesRepId is provided (and userType is not admin), admin will see data for that local partner only
+  // Priority: userType=admin > entity-based filters > query parameter filters
+
+  // Check userType=admin FIRST - takes highest precedence for admin users
+  if (isAdminOnlyCondition) {
     salesRepFilter = "AND orders.salesRepId IS NULL";
-    console.log("🚀 ~ customerSalesSummary ~ Applied userType=admin filter");
+    console.log("🚀 ~ customerSalesSummary ~ Applied userType=admin filter (highest precedence)");
   }
-  // Handle salesRep[ne]=null (salesRepId IS NOT NULL)
-  else if (salesRepNe === "null" || salesRepNe === null) {
-    salesRepFilter = "AND orders.salesRepId IS NOT NULL";
-    console.log("🚀 ~ customerSalesSummary ~ Applied salesRep[ne]=null filter");
-  }
-  // Handle salesRepId array [29,27] or comma-separated string
-  else if (salesRepId) {
-    let salesRepIds = [];
-
-    // Handle array format: [29,27] or "29,27"
-    if (Array.isArray(salesRepId)) {
-      salesRepIds = salesRepId
-        .map((id) => parseInt(id))
-        .filter((id) => !isNaN(id));
+  // Apply entity-based filtering (only if userType=admin is not set)
+  else if (!isAdmin || isAdminViewingLocalPartner) {
+    // For local partners: filter by their own salesRepId
+    if (isLocalPartner && req.user?.localPartnerId) {
+      const localPartnerSalesRepId = req.user.localPartnerId;
+      salesRepFilter = `AND orders.salesRepId = ${localPartnerSalesRepId}`;
       console.log(
-        "🚀 ~ customerSalesSummary ~ salesRepId is Array:",
-        salesRepIds
+        "🚀 ~ customerSalesSummary ~ Applied local partner salesRepId filter:",
+        localPartnerSalesRepId
       );
-    } else if (typeof salesRepId === "string") {
-      // Handle string format like "[29,27]" or "29,27" or "[28]"
-      let cleaned = salesRepId.trim();
-      // Remove brackets if present
-      if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
-        cleaned = cleaned.slice(1, -1);
+    }
+    // For admin viewing a specific local partner's data
+    else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+      salesRepFilter = `AND orders.salesRepId = ${requestedSalesRepId}`;
+      console.log(
+        "🚀 ~ customerSalesSummary ~ Admin viewing local partner, salesRepId filter:",
+        requestedSalesRepId
+      );
+    }
+    // For employees (adminEmployee or partnerEmployee): filter by employeeId
+    if (
+      req.user?.entity === "adminEmployee" ||
+      req.user?.entity === "partnerEmployee"
+    ) {
+      const employeeId = req.user?.employeeId || req.user?.id;
+      employeeIdFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+      console.log(
+        "🚀 ~ customerSalesSummary ~ Applied employeeId filter:",
+        employeeId
+      );
+    }
+  } else {
+    // Admin without entity filters and without userType=admin - apply query parameter filters if provided
+    // Handle salesRep[ne]=null (salesRepId IS NOT NULL)
+    if (salesRepNe === "null" || salesRepNe === null) {
+      salesRepFilter = "AND orders.salesRepId IS NOT NULL";
+      console.log(
+        "🚀 ~ customerSalesSummary ~ Applied salesRep[ne]=null filter"
+      );
+    }
+    // Handle salesRepId array [29,27] or comma-separated string
+    else if (salesRepId) {
+      let salesRepIds = [];
+
+      // Handle array format: [29,27] or "29,27"
+      if (Array.isArray(salesRepId)) {
+        salesRepIds = salesRepId
+          .map((id) => parseInt(id))
+          .filter((id) => !isNaN(id));
+        console.log(
+          "🚀 ~ customerSalesSummary ~ salesRepId is Array:",
+          salesRepIds
+        );
+      } else if (typeof salesRepId === "string") {
+        // Handle string format like "[29,27]" or "29,27" or "[28]"
+        let cleaned = salesRepId.trim();
+        // Remove brackets if present
+        if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+          cleaned = cleaned.slice(1, -1);
+        }
+        // Split by comma and parse each ID
+        const parts = cleaned.split(",");
+        salesRepIds = parts
+          .map((id) => parseInt(id.trim()))
+          .filter((id) => !isNaN(id) && id > 0);
+        console.log(
+          "🚀 ~ customerSalesSummary ~ salesRepId is String, original:",
+          salesRepId
+        );
+        console.log("🚀 ~ customerSalesSummary ~ salesRepId cleaned:", cleaned);
+        console.log(
+          "🚀 ~ customerSalesSummary ~ Parsed salesRepIds:",
+          salesRepIds
+        );
+      } else if (typeof salesRepId === "number") {
+        // Handle single number
+        salesRepIds = [parseInt(salesRepId)];
+        console.log(
+          "🚀 ~ customerSalesSummary ~ salesRepId is Number:",
+          salesRepIds
+        );
       }
-      // Split by comma and parse each ID
-      const parts = cleaned.split(",");
-      salesRepIds = parts
-        .map((id) => parseInt(id.trim()))
-        .filter((id) => !isNaN(id) && id > 0);
-      console.log(
-        "🚀 ~ customerSalesSummary ~ salesRepId is String, original:",
-        salesRepId
-      );
-      console.log("🚀 ~ customerSalesSummary ~ salesRepId cleaned:", cleaned);
-      console.log(
-        "🚀 ~ customerSalesSummary ~ Parsed salesRepIds:",
-        salesRepIds
-      );
-    } else if (typeof salesRepId === "number") {
-      // Handle single number
-      salesRepIds = [parseInt(salesRepId)];
-      console.log(
-        "🚀 ~ customerSalesSummary ~ salesRepId is Number:",
-        salesRepIds
-      );
-    }
 
-    if (salesRepIds.length > 0) {
-      const placeholders = salesRepIds.map((id) => `${id}`).join(", ");
-      salesRepFilter = `AND orders.salesRepId IN (${placeholders})`;
-      console.log(
-        "🚀 ~ customerSalesSummary ~ Applied salesRepId IN filter:",
-        salesRepFilter
-      );
-    } else {
-      console.log(
-        "🚀 ~ customerSalesSummary ~ WARNING: salesRepIds array is empty after parsing!"
-      );
+      if (salesRepIds.length > 0) {
+        const placeholders = salesRepIds.map((id) => `${id}`).join(", ");
+        salesRepFilter = `AND orders.salesRepId IN (${placeholders})`;
+        console.log(
+          "🚀 ~ customerSalesSummary ~ Applied salesRepId IN filter:",
+          salesRepFilter
+        );
+      } else {
+        console.log(
+          "🚀 ~ customerSalesSummary ~ WARNING: salesRepIds array is empty after parsing!"
+        );
+      }
     }
   }
 
-  console.log(
-    "🚀 ~ customerSalesSummary ~ Final salesRepFilter:",
-    salesRepFilter
-  );
+  // Combine filters
+  const combinedFilter = `${salesRepFilter} ${employeeIdFilter}`.trim();
+  const finalFilter = combinedFilter ? combinedFilter : "";
+
+  console.log("🚀 ~ customerSalesSummary ~ Final filter:", finalFilter);
 
   // Build date filter condition for SQL queries
-  const dateFilter = `AND orders.on >= '${startDate}' AND orders.on <= '${endDate}' ${salesRepFilter}`;
+  // Match dashboard filters: statusId != 6 (exclude cancelled orders)
+  const dateFilter = `AND orders.on >= '${startDate}' AND orders.on <= '${endDate}' AND orders.statusId != 6 ${finalFilter}`;
   console.log("🚀 ~ customerSalesSummary ~ dateFilter:", dateFilter);
 
   // Build the WHERE clause with filter
@@ -808,18 +883,97 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
     return next(new AppError("Invalid date values", 400));
   }
 
+  // Build entity-based filters
+  const isAdmin = req.user?.entity === "admin";
+  const isAdminEmployee = req.user?.entity === "adminEmployee";
+  const isLocalPartner =
+    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+
+  // Build entity-based access control filters
+  let entityFilter = "";
+
+  // For local partners: verify customer belongs to them and filter orders
+  if (isLocalPartner && req.user?.localPartnerId) {
+    const localPartnerSalesRepId = req.user.localPartnerId;
+    
+    // Verify that the requested userId has orders with this local partner
+    const hasAccess = await order.findOne({
+      where: {
+        userId: userId,
+        salesRepId: localPartnerSalesRepId,
+      },
+      attributes: ["id"],
+    });
+
+    if (!hasAccess) {
+      return next(
+        new AppError(
+          "You do not have access to view this customer's details",
+          403
+        )
+      );
+    }
+
+    entityFilter = `AND orders.salesRepId = ${localPartnerSalesRepId}`;
+    console.log(
+      "🚀 ~ customerDetailsSummary ~ Applied local partner filter:",
+      localPartnerSalesRepId
+    );
+  }
+  // For employees: verify customer is assigned to them and filter orders
+  else if (
+    req.user?.entity === "adminEmployee" ||
+    req.user?.entity === "partnerEmployee"
+  ) {
+    const employeeId = req.user?.employeeId || req.user?.id;
+    
+    // Verify that the requested userId is assigned to this employee
+    const customerUser = await user.findOne({
+      where: {
+        id: userId,
+        employeeId: employeeId,
+      },
+      attributes: ["id"],
+    });
+
+    if (!customerUser) {
+      return next(
+        new AppError(
+          "You do not have access to view this customer's details",
+          403
+        )
+      );
+    }
+
+    entityFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+    console.log(
+      "🚀 ~ customerDetailsSummary ~ Applied employee filter:",
+      employeeId
+    );
+  }
+
   // Build the SQL query using raw SQL
-  // Returns both product items and shipping charges from orders.shippingCharges
+  // Returns both product items, charges, and shipping charges from orders.shippingCharges
+  // No type filter - shows all items regardless of type (product or charges)
   const query = `
     SELECT 
       items.id,
       items.qty AS quantity,
       items.price,
-      'product' AS type,
+      items.type,
       items.productId,
-      products.name AS productName,
-      (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1) AS categoryName,
-      (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1) AS memo,
+      CASE 
+        WHEN items.type = 'charges' THEN items.productName
+        ELSE products.name
+      END AS productName,
+      CASE 
+        WHEN items.type = 'charges' THEN 'Charges'
+        ELSE (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1)
+      END AS categoryName,
+      CASE 
+        WHEN items.type = 'charges' THEN items.productName
+        ELSE (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1)
+      END AS memo,
       orders.invoiceNumber,
       orders.on AS transactionDate,
       'Invoice' AS transactionType,
@@ -827,12 +981,13 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
       items.price AS amount
     FROM items
     INNER JOIN orders ON orders.id = items.orderId
-    LEFT JOIN products ON products.id = items.productId
+    LEFT JOIN products ON products.id = items.productId AND items.type = 'product'
     WHERE orders.userId = :userId
       AND orders.on >= :startDate
       AND orders.on <= :endDate
+      AND orders.statusId != 6
       AND items.deleted = 0
-      AND items.type = 'product'
+      ${entityFilter}
     
     UNION ALL
     
@@ -854,8 +1009,10 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
     WHERE orders.userId = :userId
       AND orders.on >= :startDate
       AND orders.on <= :endDate
+      AND orders.statusId != 6
       AND orders.shippingCharges > 0
       AND orders.deleted = 0
+      ${entityFilter}
     
     ORDER BY transactionDate DESC, invoiceNumber, id
   `;
@@ -872,7 +1029,7 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
 });
 
 exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
-  const { startDate, endDate, salesRepId, userType } = req.query;
+  const { startDate, endDate, salesRepId, userType, productId } = req.query;
   const salesRepNe = req.query["salesRep[ne]"];
 
   if (!startDate || !endDate) {
@@ -897,50 +1054,151 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
     return next(new AppError("Invalid date values", 400));
   }
 
+  // Build entity-based filters
+  const isAdmin = req.user?.entity === "admin";
+  const isAdminEmployee = req.user?.entity === "adminEmployee";
+  const isLocalPartner =
+    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+
+  // Validate: Only admin can use salesRepId query parameter to view specific local partner
+  if (salesRepId && !isAdmin) {
+    return next(
+      new AppError(
+        "Only admin users can filter by specific salesRepId",
+        403
+      )
+    );
+  }
+
+  // Check if admin is requesting a specific local partner's data
+  const requestedSalesRepId = salesRepId
+    ? Array.isArray(salesRepId)
+      ? salesRepId[0]
+      : typeof salesRepId === "string" && salesRepId.includes(",")
+      ? null
+      : parseInt(salesRepId)
+    : null;
+  const isAdminViewingLocalPartner = isAdmin && requestedSalesRepId && !userType;
+
+  // Check if admin wants to see only direct admin orders (salesRepId IS NULL)
+  const isAdminOnlyCondition = isAdmin && userType === "admin";
+
   // Build salesRep filter conditions
   let orderSalesRepFilter = "";
   let partnerOrderSalesRepFilter = "";
+  let orderEmployeeIdFilter = "";
+  let partnerOrderEmployeeIdFilter = "";
   const replacements = { startDate, endDate };
 
-  // Handle userType=admin (salesRepId IS NULL) - takes precedence
-  if (userType === "admin") {
+  // Build productId filter condition
+  let productIdFilter = "";
+  if (productId) {
+    const productIdNum = parseInt(productId);
+    if (!isNaN(productIdNum) && productIdNum > 0) {
+      productIdFilter = "AND items.productId = :productId";
+      replacements.productId = productIdNum;
+    }
+  }
+
+  // Build productId filter for partner orders
+  let partnerProductIdFilter = "";
+  if (productId) {
+    const productIdNum = parseInt(productId);
+    if (!isNaN(productIdNum) && productIdNum > 0) {
+      partnerProductIdFilter = "AND partnerOrderItems.productId = :productId";
+      // productId already added to replacements above
+    }
+  }
+
+  // Apply entity-based filtering
+  // IMPORTANT: Admin users see ALL data - no entity filtering applied
+  // EXCEPTION: If userType=admin, admin will see only direct admin orders (salesRepId IS NULL) - takes highest precedence
+  // EXCEPTION: If salesRepId is provided (and userType is not admin), admin will see data for that local partner only
+  // Priority: userType=admin > entity-based filters > query parameter filters
+
+  // Check userType=admin FIRST - takes highest precedence for admin users
+  if (isAdminOnlyCondition) {
     orderSalesRepFilter = "AND orders.salesRepId IS NULL";
     partnerOrderSalesRepFilter = "AND partnerOrders.salesRepId IS NULL";
+    console.log("🚀 ~ categoryWiseProductSalesSummary ~ Applied userType=admin filter (highest precedence)");
   }
-  // Handle salesRep[ne]=null (salesRepId IS NOT NULL)
-  else if (salesRepNe === "null" || salesRepNe === null) {
-    orderSalesRepFilter = "AND orders.salesRepId IS NOT NULL";
-    partnerOrderSalesRepFilter = "AND partnerOrders.salesRepId IS NOT NULL";
-  }
-  // Handle salesRepId array [29,27] or comma-separated string
-  else if (salesRepId) {
-    let salesRepIds = [];
-
-    // Handle array format: [29,27] or "29,27"
-    if (Array.isArray(salesRepId)) {
-      salesRepIds = salesRepId
-        .map((id) => parseInt(id))
-        .filter((id) => !isNaN(id));
-    } else if (typeof salesRepId === "string") {
-      // Handle string format like "[29,27]" or "29,27"
-      const cleaned = salesRepId.replace(/[\[\]]/g, "");
-      salesRepIds = cleaned
-        .split(",")
-        .map((id) => parseInt(id.trim()))
-        .filter((id) => !isNaN(id));
+  // Apply entity-based filtering (only if userType=admin is not set)
+  else if (!isAdmin || isAdminViewingLocalPartner) {
+    // For local partners: filter by their own salesRepId
+    if (isLocalPartner && req.user?.localPartnerId) {
+      const localPartnerSalesRepId = req.user.localPartnerId;
+      orderSalesRepFilter = `AND orders.salesRepId = ${localPartnerSalesRepId}`;
+      partnerOrderSalesRepFilter = `AND partnerOrders.salesRepId = ${localPartnerSalesRepId}`;
+      console.log(
+        "🚀 ~ categoryWiseProductSalesSummary ~ Applied local partner salesRepId filter:",
+        localPartnerSalesRepId
+      );
     }
+    // For admin viewing a specific local partner's data
+    else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+      orderSalesRepFilter = `AND orders.salesRepId = ${requestedSalesRepId}`;
+      partnerOrderSalesRepFilter = `AND partnerOrders.salesRepId = ${requestedSalesRepId}`;
+      console.log(
+        "🚀 ~ categoryWiseProductSalesSummary ~ Admin viewing local partner, salesRepId filter:",
+        requestedSalesRepId
+      );
+    }
+    // For employees (adminEmployee or partnerEmployee): filter by employeeId
+    if (
+      req.user?.entity === "adminEmployee" ||
+      req.user?.entity === "partnerEmployee"
+    ) {
+      const employeeId = req.user?.employeeId || req.user?.id;
+      orderEmployeeIdFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+      // Note: partnerOrders don't have employeeId filtering like customer orders
+      console.log(
+        "🚀 ~ categoryWiseProductSalesSummary ~ Applied employeeId filter:",
+        employeeId
+      );
+    }
+  } else {
+    // Admin without entity filters and without userType=admin - apply query parameter filters if provided
+    // Handle salesRep[ne]=null (salesRepId IS NOT NULL)
+    if (salesRepNe === "null" || salesRepNe === null) {
+      orderSalesRepFilter = "AND orders.salesRepId IS NOT NULL";
+      partnerOrderSalesRepFilter = "AND partnerOrders.salesRepId IS NOT NULL";
+      console.log(
+        "🚀 ~ categoryWiseProductSalesSummary ~ Applied salesRep[ne]=null filter"
+      );
+    }
+    // Handle salesRepId array [29,27] or comma-separated string
+    else if (salesRepId) {
+      let salesRepIds = [];
 
-    if (salesRepIds.length > 0) {
-      const placeholders = salesRepIds
-        .map((_, index) => `:salesRepId${index}`)
-        .join(", ");
-      orderSalesRepFilter = `AND orders.salesRepId IN (${placeholders})`;
-      partnerOrderSalesRepFilter = `AND partnerOrders.salesRepId IN (${placeholders})`;
+      // Handle array format: [29,27] or "29,27"
+      if (Array.isArray(salesRepId)) {
+        salesRepIds = salesRepId
+          .map((id) => parseInt(id))
+          .filter((id) => !isNaN(id));
+      } else if (typeof salesRepId === "string") {
+        // Handle string format like "[29,27]" or "29,27"
+        const cleaned = salesRepId.replace(/[\[\]]/g, "");
+        salesRepIds = cleaned
+          .split(",")
+          .map((id) => parseInt(id.trim()))
+          .filter((id) => !isNaN(id));
+      }
 
-      // Add replacements for each salesRepId
-      salesRepIds.forEach((id, index) => {
-        replacements[`salesRepId${index}`] = id;
-      });
+      if (salesRepIds.length > 0) {
+        const placeholders = salesRepIds
+          .map((_, index) => `:salesRepId${index}`)
+          .join(", ");
+        orderSalesRepFilter = `AND orders.salesRepId IN (${placeholders})`;
+        partnerOrderSalesRepFilter = `AND partnerOrders.salesRepId IN (${placeholders})`;
+
+        // Add replacements for each salesRepId
+        salesRepIds.forEach((id, index) => {
+          replacements[`salesRepId${index}`] = id;
+        });
+        console.log(
+          "🚀 ~ categoryWiseProductSalesSummary ~ Applied salesRepId IN filter"
+        );
+      }
     }
   }
 
@@ -1079,9 +1337,12 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       LEFT JOIN categories ON categories.id = products.categoryId
       WHERE orders.on >= :startDate
         AND orders.on <= :endDate
+        AND orders.statusId != 6
         ${orderSalesRepFilter}
+        ${orderEmployeeIdFilter}
         AND items.deleted = 0
         AND items.type = 'product'
+        ${productIdFilter}
         AND products.id IS NOT NULL
       GROUP BY categories.id, categories.name, products.id, products.name
       
@@ -1102,9 +1363,12 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       LEFT JOIN categories ON categories.id = products.categoryId
       WHERE partnerOrders.on >= :startDate
         AND partnerOrders.on <= :endDate
+        AND partnerOrders.statusId != 6
         ${partnerOrderSalesRepFilter}
+        ${partnerOrderEmployeeIdFilter}
         AND partnerOrderItems.deleted = 0
         AND partnerOrderItems.type = 'product'
+        ${partnerProductIdFilter}
         AND products.id IS NOT NULL
       GROUP BY categories.id, categories.name, products.id, partnerOrderItems.productName, products.name
     ) AS combined
