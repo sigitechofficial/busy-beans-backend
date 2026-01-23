@@ -57,6 +57,12 @@ jobs:
           echo "Creating firebase.json..."
           echo "${{ secrets.FIREBASE_CONTENT_PROD }}" > firebase.json
 
+      - name: Create temporary Webhook folder on server (to allow deletion)
+        run: |
+          echo "Creating temporary Webhook folder structure..."
+          mkdir -p controllers/Webhook
+          touch controllers/Webhook/.gitkeep
+
       - name: 📂 Sync files to production
         uses: SamKirkland/FTP-Deploy-Action@v4.2.0
         with:
@@ -108,6 +114,12 @@ jobs:
         run: |
           echo "Creating firebase.json..."
           echo "${{ secrets.FIREBASE_CONTENT_STAGE }}" > firebase.json
+
+      - name: Create temporary Webhook folder on server (to allow deletion)
+        run: |
+          echo "Creating temporary Webhook folder structure..."
+          mkdir -p controllers/Webhook
+          touch controllers/Webhook/.gitkeep
 
       - name: 📂 Sync files to development
         uses: SamKirkland/FTP-Deploy-Action@v4.2.0
