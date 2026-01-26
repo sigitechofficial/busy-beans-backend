@@ -216,6 +216,27 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: "regular-order",
     },
+    employeeId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "employees",
+        key: "id",
+      },
+    },
+    AppliedEmployeeCommisionPercentage: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    employeeCommisionAmount: {
+      type: DataTypes.DECIMAL(20, 2),
+      allowNull: true,
+      defaultValue: 0,
+    },
+    employeeTransferId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   });
 
   // Hook to exclude deletedAt and updatedAt from query results
@@ -254,6 +275,10 @@ module.exports = (sequelize) => {
 
     order.hasOne(models.transfersToSalesRep);
     models.transfersToSalesRep.belongsTo(order);
+
+    order.belongsTo(models.employee, {
+      foreignKey: "employeeId",
+    });
   };
 
   return order;

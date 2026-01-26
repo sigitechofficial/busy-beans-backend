@@ -45,6 +45,15 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: "Local Partner",
       },
+      commissionPercentage: {
+        type: DataTypes.DECIMAL(5, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
+      stripeConnectAccountId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       status: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
@@ -103,6 +112,9 @@ module.exports = (sequelize) => {
 
     employee.hasMany(models.user);
     models.user.belongsTo(employee);
+
+    employee.hasMany(models.order);
+    models.order.belongsTo(employee);
   };
 
   return employee;

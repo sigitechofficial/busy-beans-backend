@@ -122,7 +122,7 @@ class APIFeatures {
     const limit = this.queryString.limit * 1 || undefined;
     const offset = (page - 1) * limit;
 
-    this.queryOptions.limit = limit || 10;
+    this.queryOptions.limit = limit || 10000;
     this.queryOptions.offset = offset || 0;
 
     return this;
@@ -181,7 +181,7 @@ class APIFeatures {
    */
   async getPaginationMetadata(Model, additionalQueryOptions = {}) {
     const page = this.queryString.page * 1 || 1;
-    const limit = this.queryString.limit * 1 || 10;
+    const limit = this.queryString.limit * 1 || 10000;
 
     // Create count query options (same conditions but without limit, offset, attributes, order)
     const countOptions = {

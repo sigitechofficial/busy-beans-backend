@@ -1,9 +1,9 @@
-const { category, product } = require('../../models');
-const catchAsync = require('../../utils/catchAsync');
-const AppError = require('../../utils/appError');
-const factory = require('../handlerFactory');
-const APIFeatures = require('../../utils/apiFeatures');
-const { Op, literal, where, fn, col } = require('sequelize');
+const { category, product } = require("../../models");
+const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
+const factory = require("../handlerFactory");
+const APIFeatures = require("../../utils/apiFeatures");
+const { Op, literal, where, fn, col } = require("sequelize");
 
 exports.getAllCatagories = catchAsync(async (req, res, next) => {
   // Build manual conditions based on query/params
@@ -27,12 +27,12 @@ exports.getAllCatagories = catchAsync(async (req, res, next) => {
   // Custom attributes with literal fields
 
   queryOptions.attributes = [
-    'id',
+    "id",
     [
       literal(
-        `(SELECT COUNT(*) FROM products WHERE products.categoryId = category.id AND products.deleted = 0)`,
+        `(SELECT COUNT(*) FROM products WHERE products.categoryId = category.id AND products.deleted = 0)`
       ),
-      'numberOfProducts',
+      "numberOfProducts",
     ],
     `name`,
     `status`,
@@ -44,7 +44,7 @@ exports.getAllCatagories = catchAsync(async (req, res, next) => {
 
   // Return response
   res.status(200).json({
-    status: 'success',
+    status: "success",
     results: doc.length,
     data: {
       data: doc,
@@ -52,19 +52,19 @@ exports.getAllCatagories = catchAsync(async (req, res, next) => {
   });
 });
 exports.getCatagory = factory.getOne(category);
-exports.createCatagory = factory.createOne(category, ['name']);
+exports.createCatagory = factory.createOne(category, ["name"]);
 exports.updateCatagory = factory.updateOne(category);
 exports.deleteCatagory = catchAsync(async (req, res, next) => {
   const data = await category.findOne({
     where: { id: req.params?.id },
-    attributes: ['id', 'deleted'],
+    attributes: ["id", "deleted"],
   });
   data.deleted = true;
   await data.save();
   await product.update({ deleted: 1 }, { where: { categoryId: data?.id } });
 
   res.status(200).json({
-    status: 'success',
+    status: "success",
     data: {},
   });
 });

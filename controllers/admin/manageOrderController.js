@@ -15,6 +15,7 @@ const {
   userDiscount,
   partnerOrder,
   account,
+  employee,
 } = require("../../models");
 
 const fs = require("fs");
@@ -28,6 +29,9 @@ const AppError = require("../../utils/appError");
 const Stripe = require("../stripe");
 const factory = require("../handlerFactory");
 const { response } = require("../../utils/response");
+const {
+  calculateAndSaveEmployeeCommission,
+} = require("../../utils/employeeCommissionUtils");
 
 const {
   dataForEmailAndNotifications,
@@ -69,7 +73,7 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
 
   const orderData = await model.findOne({
     where: { id: orderId },
-    attributes: ["id", "type"],
+    attributes: ["id", "type", "invoiceDate"],
   });
   if (!orderData) {
     return next(new AppError("Order not found", 404));
@@ -84,7 +88,10 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
   } else if (emailType == "paid-invoice") {
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId, orderType });
   } else if (emailType == "invoice-sent" || emailType == "invoice-reminder") {
-    await model.update({ invoiceDate: new Date() }, { where: { id: orderId } });
+    const input = {};
+    if (!orderData.invoiceDate) input.invoiceDate = new Date();
+    if (orderData.invoiceDate) input.invoiceReminder = new Date();
+    await model.update(input, { where: { id: orderId } });
     sentPaymentInvoiceEvent({ orderId, orderType });
   } else if (emailType == "order-dispatch") {
     orderDispatchEvent({ orderId, orderType });
@@ -333,7 +340,7 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
   // Check if order exists
   const orderData = await model.findOne({
     where: { id: orderId },
-    attributes: ["id", "paymentStatus"],
+    attributes: ["id", "paymentStatus", "salesRepId"],
   });
 
   if (!orderData) {
@@ -371,6 +378,20 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
   await model.update(updateData, {
     where: { id: orderId },
   });
+
+  // Process employee commission if this is a customer order (not local-partner)
+  if (orderType !== "local-partner" && !orderData?.salesRepId) {
+    try {
+      // Process employee commission using utility function (same as orderJourneyComplete)
+      await calculateAndSaveEmployeeCommission({ orderId: orderId });
+    } catch (error) {
+      // Log error but don't fail the payment confirmation
+      console.error(
+        "❌ Error processing employee commission in confirmPaymentForInvoiceIntent:",
+        error.message
+      );
+    }
+  }
 
   return res.status(200).json({
     status: "success",
@@ -1182,10 +1203,10 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
     }
-    // paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-    //   orderId: orderId || partnerOrderId,
-    //   orderType: isPartnerOrder ? "local-partner" : "customer",
-    // });
+    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      orderId: orderId || partnerOrderId,
+      orderType: isPartnerOrder ? "local-partner" : "customer",
+    });
   }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
@@ -1209,21 +1230,31 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
             where: { id: orderId || partnerOrderId },
           }
         );
-        syncPaymentToQuickBooks({
-          orderId: orderId || partnerOrderId,
-          orderType: isPartnerOrder ? "local-partner" : "customer",
-        });
+        // syncPaymentToQuickBooks({
+        //   orderId: orderId || partnerOrderId,
+        //   orderType: isPartnerOrder ? "local-partner" : "customer",
+        // });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
       } else if (!doc.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
-        syncInvoiceOnQuikBooks({
-          orderId: orderId || partnerOrderId,
-          orderType: isPartnerOrder ? "local-partner" : "customer",
-        });
+        // syncInvoiceOnQuikBooks({
+        //   orderId: orderId || partnerOrderId,
+        //   orderType: isPartnerOrder ? "local-partner" : "customer",
+        // });
       }
       req.body.orderData.invoicePaidDate = new Date();
       req.body.orderData.paymentMethod = "Bank Check";
       manualPaymentEmail = true;
+    }
+
+    if (!isPartnerOrder && orderId && doc?.paymentStatus != "done") {
+        console.log("🚀 ~ exports.orderJourneryComplete ~ doc?.paymentStatus:", doc?.paymentStatus);
+ 
+       await calculateAndSaveEmployeeCommission({ orderId: orderId });
+    //    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+    //         orderId: orderId || partnerOrderId,
+    //         orderType: isPartnerOrder ? "local-partner" : "customer",
+    //    });
     }
 
     await Model.update(req.body?.orderData, {
@@ -1690,9 +1721,10 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     parseFloat(input?.order?.vat || 0) +
     parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
 
-  if (placedOrder.invoiceDate && !input?.order?.emailInvoiceToCustomer) {
+  if (placedOrder.invoiceDate || !input?.order?.emailInvoiceToCustomer) {
     delete input.order.invoiceDate;
   }
+
   await order.update(input?.order, { where: { id: placedOrder?.id } });
   await item.destroy({ where: { orderId: placedOrder?.id } });
   await item.bulkCreate(finalItems);
@@ -1740,6 +1772,18 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
         orderId: placedOrder?.id,
       });
+      // Only process employee commission if order has no local partner (salesRepId)
+      if (!placedOrder?.salesRepId) {
+        try {
+          await calculateAndSaveEmployeeCommission({ orderId: placedOrder?.id });
+        } catch (error) {
+          // Log error but don't disrupt the overall API flow
+          console.error(
+            "❌ Error processing employee commission in payment capture:",
+            error.message
+          );
+        }
+      }
       return res.status(200).json({
         status: "success",
         message: "Payment capture success",
@@ -1967,7 +2011,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
         400
       )
     );
-  } else if (placedOrder.statusId >= 4) {
+  } else if (placedOrder.statusId >= 4 && placedOrder.statusId <= 5) {
     return next(
       new AppError(
         "This order has already been dispatched and cannot be deleted.",

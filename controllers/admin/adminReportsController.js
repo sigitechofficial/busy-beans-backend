@@ -809,34 +809,17 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
   }
 
   // Build the SQL query using raw SQL
+  // Returns both product items and shipping charges from orders.shippingCharges
   const query = `
     SELECT 
       items.id,
       items.qty AS quantity,
       items.price,
-      CASE 
-        WHEN items.type = 'product' THEN 'product'
-        WHEN items.type = 'charges' THEN 'shipping'
-        ELSE items.type
-      END AS type,
+      'product' AS type,
       items.productId,
-      CASE 
-        WHEN items.type = 'product' THEN products.name
-        WHEN items.type = 'charges' THEN 'Shipping'
-        ELSE items.productName
-      END AS productName,
-      CASE 
-        WHEN items.type = 'product' THEN 
-          (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1)
-        WHEN items.type = 'charges' THEN 'Shipping'
-        ELSE NULL
-      END AS categoryName,
-      CASE 
-        WHEN items.type = 'product' THEN 
-          (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1)
-        WHEN items.type = 'charges' THEN COALESCE(items.productName, 'Shipping Charges')
-        ELSE NULL
-      END AS memo,
+      products.name AS productName,
+      (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1) AS categoryName,
+      (SELECT categories.name FROM categories WHERE categories.id = products.categoryId LIMIT 1) AS memo,
       orders.invoiceNumber,
       orders.on AS transactionDate,
       'Invoice' AS transactionType,
@@ -844,12 +827,37 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
       items.price AS amount
     FROM items
     INNER JOIN orders ON orders.id = items.orderId
-    LEFT JOIN products ON products.id = items.productId AND items.type = 'product'
+    LEFT JOIN products ON products.id = items.productId
     WHERE orders.userId = :userId
       AND orders.on >= :startDate
       AND orders.on <= :endDate
       AND items.deleted = 0
-    ORDER BY orders.on DESC, orders.invoiceNumber, items.id
+      AND items.type = 'product'
+    
+    UNION ALL
+    
+    SELECT 
+      CONCAT(orders.id, '-shipping') AS id,
+      1 AS quantity,
+      orders.shippingCharges AS price,
+      'shipping' AS type,
+      NULL AS productId,
+      'Shipping' AS productName,
+      'Shipping' AS categoryName,
+      CONCAT('Shipping Charges', CASE WHEN orders.shippingCompany IS NOT NULL THEN CONCAT(' (', orders.shippingCompany, ')') ELSE '' END) AS memo,
+      orders.invoiceNumber,
+      orders.on AS transactionDate,
+      'Invoice' AS transactionType,
+      orders.shippingCharges AS unitPrice,
+      orders.shippingCharges AS amount
+    FROM orders
+    WHERE orders.userId = :userId
+      AND orders.on >= :startDate
+      AND orders.on <= :endDate
+      AND orders.shippingCharges > 0
+      AND orders.deleted = 0
+    
+    ORDER BY transactionDate DESC, invoiceNumber, id
   `;
 
   const doc = await order.sequelize.query(query, {
@@ -947,8 +955,11 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       COALESCE(SUM(CAST(i.qty AS DECIMAL(10,2))), 0) + 
       COALESCE(SUM(CAST(poi.qty AS DECIMAL(10,2))), 0) AS quantity,
       COALESCE(SUM(i.price), 0) + COALESCE(SUM(poi.price), 0) AS amount,
-      COALESCE(SUM(i.wholesalePrice), 0) + 
-      COALESCE(SUM(CAST(poi.qty AS DECIMAL(10,2)) * COALESCE(prod_po.wholesalePrice, 0)), 0) AS costOfGoodsSold
+      -- COGS: Use wholesalePrice if exists (wholesale customer), otherwise use price (regular customer)
+      -- For partnerOrderItems, price is always wholesale cost
+      -- All values are already totals (qty * unit price), so we just SUM them
+      COALESCE(SUM(COALESCE(i.wholesalePrice, i.price)), 0) + 
+      COALESCE(SUM(poi.price), 0) AS costOfGoodsSold
     FROM (
       SELECT 
         items.id,
@@ -1005,7 +1016,8 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       products.name AS productName,
       COALESCE(SUM(CAST(items.qty AS DECIMAL(10,2))), 0) AS quantity,
       COALESCE(SUM(items.price), 0) AS amount,
-      COALESCE(SUM(items.wholesalePrice), 0) AS costOfGoodsSold
+      -- COGS: Use wholesalePrice if exists (wholesale customer), otherwise use price (regular customer)
+      COALESCE(SUM(COALESCE(items.wholesalePrice, items.price)), 0) AS costOfGoodsSold
     FROM items
     INNER JOIN orders ON orders.id = items.orderId
     LEFT JOIN products ON products.id = items.productId
@@ -1026,7 +1038,8 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       COALESCE(partnerOrderItems.productName, products.name) AS productName,
       COALESCE(SUM(CAST(partnerOrderItems.qty AS DECIMAL(10,2))), 0) AS quantity,
       COALESCE(SUM(partnerOrderItems.price), 0) AS amount,
-      COALESCE(SUM(CAST(partnerOrderItems.qty AS DECIMAL(10,2)) * COALESCE(products.wholesalePrice, 0)), 0) AS costOfGoodsSold
+      -- partnerOrderItems.price is already total wholesale cost (can vary per partner), so we just SUM it
+      COALESCE(SUM(partnerOrderItems.price), 0) AS costOfGoodsSold
     FROM partnerOrderItems
     INNER JOIN partnerOrders ON partnerOrders.id = partnerOrderItems.partnerOrderId
     LEFT JOIN products ON products.id = partnerOrderItems.productId
@@ -1057,7 +1070,9 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
         products.name COLLATE utf8mb4_unicode_ci AS productName,
         COALESCE(SUM(CAST(items.qty AS DECIMAL(10,2))), 0) AS quantity,
         COALESCE(SUM(items.price), 0) AS amount,
-        COALESCE(SUM(items.wholesalePrice), 0) AS costOfGoodsSold
+        -- COGS: Use wholesalePrice if exists (wholesale customer), otherwise use price (regular customer)
+        -- Both are already totals (qty * unit price), so we just SUM them
+        COALESCE(SUM(COALESCE(items.wholesalePrice, items.price)), 0) AS costOfGoodsSold
       FROM items
       INNER JOIN orders ON orders.id = items.orderId
       LEFT JOIN products ON products.id = items.productId
@@ -1079,7 +1094,8 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
         COALESCE(partnerOrderItems.productName, products.name) COLLATE utf8mb4_unicode_ci AS productName,
         COALESCE(SUM(CAST(partnerOrderItems.qty AS DECIMAL(10,2))), 0) AS quantity,
         COALESCE(SUM(partnerOrderItems.price), 0) AS amount,
-        COALESCE(SUM(CAST(partnerOrderItems.qty AS DECIMAL(10,2)) * COALESCE(products.wholesalePrice, 0)), 0) AS costOfGoodsSold
+        -- partnerOrderItems.price is already total wholesale cost (can vary per partner), so we just SUM it
+        COALESCE(SUM(partnerOrderItems.price), 0) AS costOfGoodsSold
       FROM partnerOrderItems
       INNER JOIN partnerOrders ON partnerOrders.id = partnerOrderItems.partnerOrderId
       LEFT JOIN products ON products.id = partnerOrderItems.productId

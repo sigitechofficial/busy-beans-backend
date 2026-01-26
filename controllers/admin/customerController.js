@@ -158,6 +158,12 @@ exports.customersList = catchAsync(async (req, res, next) => {
 exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
   const filters = { deleted: 0 };
   const condition = req.params?.condition;
+  // Delete any records in qboCustomerMap where qboCustomerId is null (cleanup)
+  await qboCustomerMap.destroy({
+    where: {
+      qboCustomerId: null,
+    },
+  });
 
   // Validate condition
   if (condition !== "qbo-registered" && condition !== "qbo-not-registered") {
@@ -249,7 +255,7 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
     `EXISTS (
       SELECT 1
       FROM qboCustomerMaps
-      WHERE qboCustomerMaps.userId = user.id
+      WHERE qboCustomerMaps.userId = user.id AND qboCustomerMaps.qboCustomerId IS NOT NULL
         AND ${qboMapCondition} 
     )`
   );

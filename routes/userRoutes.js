@@ -9,7 +9,7 @@ const machineController = require("../controllers/admin/machineController");
 const machineSubController = require("../controllers/customer/machineSubController");
 const leadController = require("../controllers/admin/leadController");
 const subscriptionController = require("../controllers/admin/subscriptionController");
-
+const categoryController = require("../controllers/admin/categoriesController");
 const Authorization = require("../middlewares/protect");
 const router = express.Router();
 
@@ -41,7 +41,7 @@ const router = express.Router();
  *                   items:
  *                     type: object
  */
-router.get(`/product/:userId`, productController.getAllProductsUser);
+// router.get(`/product/:userId`, productController.getAllProductsUser);
 
 /**
  * @swagger
@@ -312,6 +312,7 @@ router.post("/otp/verfication", authController.otpVerification);
  *         description: Password reset email sent
  */
 router.post("/forgot-password", authController.forgotPassword);
+router.get(`/product`, productController.getAllProducts);
 
 /**
  * @swagger
@@ -835,7 +836,9 @@ router.get("/address/view-all", profileController.getAllAddress);
  *       401:
  *         description: Unauthorized
  */
-router.get(`/product`, productController.getAllProducts);
+router.get(`/product/:userId`, productController.getAllProductsUser);
+
+router.get("/category", categoryController.getAllCatagories);
 
 /**
  * @swagger

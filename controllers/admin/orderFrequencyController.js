@@ -22,8 +22,11 @@ const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
 } = require("../events/orderEvents");
-const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
 
+// const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
+const {
+  sentPaymentInvoiceEvent,
+} = require("../events/sentPaymentInvoiceEvent");
 exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
   try {
     if (!orderData) return false;
@@ -417,8 +420,39 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     return element; // Return the transformed element
   });
 
+  // Handle typeCharges if provided
+  if (input?.typeCharges?.length > 0) {
+    console.log(
+      "🚀 ~ req.body?.typeCharges?.length:",
+      input?.typeCharges?.length
+    );
+    input?.typeCharges.forEach((obj) => {
+      const element = {};
+      element.code = obj.code;
+      element.qty = obj.qty;
+      element.price = obj.total;
+      console.log("🚀 ~  element.price = obj.total;:", obj.total);
+      element.productName = obj.name;
+      element.type = "charges";
+      element.discount = 0;
+
+      itemsPrice += parseFloat(element?.price || 0);
+      console.log("🚀 ~ itemsPrice TYPE CHARGES:", itemsPrice);
+
+      // Handle salesRep commission if applicable
+      if (customer?.salesRepId) {
+        element.salerCommission = parseFloat(element?.price);
+      } else {
+        element.wholesalePrice = 0;
+        element.salerCommission = 0;
+      }
+
+      finalItems.push(element);
+    });
+  }
+
   const shippingCompany = input.order?.invoiceOnly
-    ? { charges: 0 }
+    ? { charges: input?.order?.shippingCharges || 0 }
     : await shippingCompanies.findOne({
         where: {
           weightFrom: {
@@ -456,6 +490,12 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     parseFloat(input?.order?.vat || 0) +
     parseFloat(shippingCompany?.charges || 0);
 
+  if (
+    input?.orderType == "direct-invoice" &&
+    input?.order?.emailInvoiceToCustomer
+  ) {
+    input.order.invoiceDate = new Date();
+  }
   const newOrder = await order.create(input?.order);
   newOrder.invoiceNumber = `INV00${newOrder?.id}`;
   await newOrder.save();
@@ -494,9 +534,19 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       salesRepId: customer?.salesRepId,
     });
 
-  if (input?.items && input.items?.length > 0) {
+  if (
+    input?.items &&
+    input.items?.length > 0 &&
+    input?.order?.type != "direct-invoice" &&
+    !input?.order?.emailInvoiceToCustomer
+  ) {
     orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
     orderEvents({ orderId: newOrder?.id });
+  } else if (
+    input?.order?.type == "direct-invoice" &&
+    input?.order?.emailInvoiceToCustomer
+  ) {
+    sentPaymentInvoiceEvent({ orderId: newOrder?.id, orderType: "customer" });
   }
 
   return res.status(200).json({
@@ -505,6 +555,292 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   });
 });
 
+// exports.bookNewOrder = catchAsync(async (req, res, next) => {
+//     const input = req.body;
+//     console.log(
+//       "🚀 ~ exports.bookNewOrder=catchAsync ~ input:",
+//       input?.order?.userId
+//     );
+//     // if (input?.items?.length < 1) {
+//     //   throw new AppError('Cart is empty add products to place order', 404);
+//     // }
+
+//     const customer = await user.findOne({
+//       where: { id: input?.order?.userId },
+//       attributes: [
+//         "id",
+//         "salesRepId",
+//         "defaultDiscount",
+//         [
+//           literal(
+//             `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+//           ),
+//           "salesRepName",
+//         ],
+//         [
+//           literal(
+//             `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+//           ),
+//           "partnerType",
+//         ],
+//       ],
+//       raw: true,
+//     });
+//     console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
+//     if (!customer) {
+//       return next(new AppError("Customer not found.", 404));
+//     }
+
+//     if (!input?.order?.shippingCharges) {
+//       return next(
+//         new AppError(
+//           "Not dealing in such weights. Contact customer support for this order.",
+//           400
+//         )
+//       );
+//     }
+
+//     if (customer?.salesRepId && customer?.partnerType == "dropship-partner") {
+//       const credit = await salesRep.findOne({
+//         where: {
+//           id: customer?.salesRepId,
+//         },
+//         attributes: [
+//           "creditLimit",
+//           [
+//             literal(`
+//                 (
+//                   SELECT SUM(items.price)
+//                   FROM orders
+//                   JOIN items ON items.orderId = orders.id
+//                   WHERE orders.salesRepId = salesRep.id
+//                     AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+//                 )
+//               `),
+//             "creditUsed",
+//           ],
+//         ],
+//       });
+
+//       let percentage =
+//         (credit?.dataValues?.creditUsed / credit?.creditLimit) * 100;
+//       console.log(
+//         "---------------------------------creaditUed",
+//         credit?.dataValues?.creditUsed
+//       );
+//       console.log(
+//         "---------------------------------creditLimit",
+//         credit?.creditLimit
+//       );
+
+//       if (percentage >= 80) {
+//         throw new AppError(
+//           `You've used over 80% of your credit limit. Please clear your balance before placing further orders.`,
+//           404
+//         );
+//       }
+//     }
+
+//     input.order.statusId = input.order?.invoiceOnly ? 5 : 1;
+//     input.order.userId = customer.id;
+//     input.order.salesRepId = customer?.salesRepId;
+//     let itemsPrice = 0;
+//     let discountOnItemsPrice = 0;
+//     let totalWeight = 0;
+//     let productIds = input?.items.map((item) => item.productId);
+//     console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+//     const products = await product.findAll({
+//       where: {
+//         id: {
+//           [Op.in]: productIds,
+//         },
+//       },
+//       attributes: [
+//         `id`,
+//         `name`,
+//         `quantity`,
+//         `price`,
+//         `categoryId`,
+//         `wholesalePrice`,
+//         `weight`,
+//         `sku`,
+//         `grind`,
+//         `productCode`,
+//         [
+//           literal(`
+//               (SELECT percentage
+//               FROM userDiscounts
+//               WHERE userDiscounts.categoryId = product.categoryId
+//                 AND userDiscounts.userId = ${customer.id}
+//               LIMIT 1)
+//             `),
+//           "discountPercentage",
+//         ],
+//       ],
+//     });
+
+//     console.log(
+//       "🚀 ~ exports.bookOrder=catchAsync ~ products:",
+//       products?.length
+//     );
+
+//     // let percentageDiscount = input?.order?.discountPercentage
+//     //   ? parseFloat(input?.order?.discountPercentage)
+//     //   : parseFloat(customer?.defaultDiscount);
+
+//     const finalItems = products.map((obj) => {
+//       const element = {};
+//       const percentageDiscount = parseFloat(
+//         obj.dataValues?.discountPercentage || 0
+//       );
+//       element.productId = obj.id;
+//       element.categoryId = obj?.categoryId;
+//       // console.log("🚀 ~ finalItems ~ obj:", obj)
+
+//       // Find the matching product in input.items based on productId
+//       let prod = input?.items.find((item) => item.productId == obj.id);
+
+//       // Set the qty from input.items or default to 1 if not found
+//       let qty = prod ? parseInt(prod.qty) : 1;
+//       console.log("🚀 ~ finalItems ~ qty:", qty);
+//       element.qty = qty;
+//       // Calculate price, wholesalePrice, and weight for the item
+//       element.price = obj.price * qty;
+//       element.wholesalePrice = obj.wholesalePrice * qty;
+//       element.weight = obj.weight * qty;
+//       element.categoryId = obj.categoryId;
+//       element.discount = 0;
+//       if (percentageDiscount > 0) {
+//         // Calculate discount amount
+//         const discountAmount = (element.price * percentageDiscount) / 100;
+//         // Calculate final price after discount
+//         const discountedPrice = element.price - discountAmount;
+
+//         element.price = discountedPrice;
+//         element.discount = discountAmount;
+//       }
+//       // Accumulate the total weight and price
+//       discountOnItemsPrice += element.discount;
+//       itemsPrice += element.price;
+//       totalWeight += element.weight;
+//       // Handle salesRep commission if applicable
+//       if (customer?.salesRepId) {
+//         if (customer.partnerType == "direct-partner") {
+//           element.salerCommission = parseFloat(element.price);
+//           element.wholesalePrice = 0;
+//         } else {
+//           element.salerCommission =
+//             parseFloat(element.price) - parseFloat(element.wholesalePrice || 0);
+//         }
+//       } else {
+//         element.wholesalePrice = 0;
+//       }
+//       return element; // Return the transformed element
+//     });
+
+//     const shippingCompany = input.order?.invoiceOnly
+//       ? { charges: 0 }
+//       : await shippingCompanies.findOne({
+//           where: {
+//             weightFrom: {
+//               [Op.lte]: totalWeight, // Less than or equal to the weight
+//             },
+//             weightTo: {
+//               [Op.gte]: totalWeight, // Greater than or equal to the weight
+//             },
+//           },
+//           attributes: ["charges"],
+//         });
+
+//     if (!shippingCompany) {
+//       return next(
+//         new AppError(
+//           "Not dealing in such weights. Contact customer support for this order.",
+//           400
+//         )
+//       );
+//     }
+
+//     console.log("🚀 ~ shippingCompany:", shippingCompany);
+
+//     input.order.itemsPrice = itemsPrice;
+//     input.order.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
+//     input.order.discountPrice = discountOnItemsPrice;
+//     // input.order.discountPercentage = percentageDiscount;
+//     input.order.shippingCharges = shippingCompany?.charges;
+//     input.order.totalWeight = parseFloat(totalWeight || 0);
+//     input.order.shippingCompany =
+//       input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
+//     input.order.subTotal = itemsPrice + parseFloat(input.order.vat || 0);
+//     input.order.totalBill =
+//       parseFloat(itemsPrice) +
+//       parseFloat(input?.order?.vat || 0) +
+//       parseFloat(shippingCompany?.charges || 0);
+
+//     if (
+//       input?.orderType == "direct-invoice" &&
+//       input?.order?.emailInvoiceToCustomer
+//     ) {
+//       input.order.invoiceDate = new Date();
+//     }
+//     const newOrder = await order.create(input?.order);
+//     newOrder.invoiceNumber = `INV00${newOrder?.id}`;
+//     await newOrder.save();
+
+//     const historyEntry = [
+//       {
+//         statusId: 1,
+//         orderId: newOrder.id,
+//         on: Date.now(),
+//       },
+//       {
+//         statusId: 2,
+//         orderId: newOrder.id,
+//         on: Date.now(),
+//       },
+//     ];
+
+//     if (customer.partnerType == "direct-partner") {
+//       historyEntry.push({
+//         statusId: 3,
+//         orderId: newOrder.id,
+//         on: Date.now(),
+//       });
+//     }
+//     await orderHistory.bulkCreate(historyEntry);
+
+//     finalItems.forEach((element) => {
+//       element.orderId = newOrder.id;
+//     });
+
+//     await item.bulkCreate(finalItems);
+
+//     if (newOrder.frequency != "just-onces")
+//       setOrderFrequency({
+//         orderData: newOrder,
+//         salesRepId: customer?.salesRepId,
+//       });
+
+//     if (
+//       input?.items &&
+//       input.items?.length > 0 &&
+//       input?.order?.type != "direct-invoice" &&
+//       !input?.order?.emailInvoiceToCustomer
+//     ) {
+//       orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
+//       orderEvents({ orderId: newOrder?.id });
+//     } else if (
+//       input?.order?.type == "direct-invoice" &&
+//       input?.order?.emailInvoiceToCustomer
+//     ) {
+//       sentPaymentInvoiceEvent({ orderId: newOrder?.id, orderType: "customer" });
+//     }
+
+//     return res.status(200).json({
+//       status: "success",
+//       data: { id: newOrder?.id },
+//     });
+//   });
 // exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //   const input = req.body;
 
