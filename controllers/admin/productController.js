@@ -100,7 +100,7 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
       status: 1,
     };
   
-    const baseExcludes = ["deleted", "deletedAt", "wholesalePrice"];
+    const baseExcludes = ["deleted", "deletedAt", "wholesalePrice",];
     queryOptions.attributes = {
       exclude: baseExcludes,
     };

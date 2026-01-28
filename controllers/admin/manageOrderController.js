@@ -1771,7 +1771,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       await order.update(payment?.data, { where: { id: placedOrder?.id } });
       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
         orderId: placedOrder?.id,
-      });
+      });  
       // Only process employee commission if order has no local partner (salesRepId)
       if (!placedOrder?.salesRepId) {
         try {

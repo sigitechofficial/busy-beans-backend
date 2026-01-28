@@ -9,6 +9,7 @@ const customerController = require("../controllers/admin/customerController");
 const orderFrequencyController = require("../controllers/admin/orderFrequencyController");
 const supplierController = require("../controllers/admin/supplierController");
 const salesRepController = require("../controllers/admin/salesRepController");
+const salesRepProductPriceController = require("../controllers/admin/salesRepProductPriceController");
 const adminReportsController = require("../controllers/admin/adminReportsController");
 const supplierReportsController = require("../controllers/admin/supplierReportsController");
 const salesRepReportsController = require("../controllers/admin/salesRepReportsController");
@@ -1343,6 +1344,248 @@ router
   .get(productController.getProduct) // For fetching a product by ID
   .delete(productController.deleteProduct) // For deleting a product by ID
   .patch(uploadProductImage.single("image"), productController.updateProduct); // For updating a product (including image upload)
+
+//! Sales Rep Product Price Management
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   post:
+ *     summary: Create sales rep product prices (bulk)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required:
+ *                 - productId
+ *                 - salesRepId
+ *                 - price
+ *               properties:
+ *                 productId:
+ *                   type: integer
+ *                 salesRepId:
+ *                   type: integer
+ *                 price:
+ *                   type: number
+ *                 status:
+ *                   type: boolean
+ *                   default: true
+ *     responses:
+ *       201:
+ *         description: Prices created successfully
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Product or Sales Rep not found
+ *       409:
+ *         description: Duplicate pricing entry exists
+ */
+router.post(
+  "/sales-rep-product-price",
+  protect,
+  salesRepProductPriceController.createSalesRepProductPrices
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   patch:
+ *     summary: Update sales rep product prices (bulk)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required:
+ *                 - productId
+ *                 - salesRepId
+ *               properties:
+ *                 productId:
+ *                   type: integer
+ *                 salesRepId:
+ *                   type: integer
+ *                 price:
+ *                   type: number
+ *                 status:
+ *                   type: boolean
+ *     responses:
+ *       200:
+ *         description: Prices updated successfully
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Pricing entries not found
+ */
+router.patch(
+  "/sales-rep-product-price",
+  protect,
+  salesRepProductPriceController.updateSalesRepProductPrices
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   get:
+ *     summary: Get all sales rep product prices
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: productId
+ *         schema:
+ *           type: integer
+ *         description: Filter by product ID
+ *       - in: query
+ *         name: salesRepId
+ *         schema:
+ *           type: integer
+ *         description: Filter by sales rep ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: boolean
+ *         description: Filter by status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Items per page
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *         description: Sort field and order (e.g., "price,asc" or "-createdAt")
+ *     responses:
+ *       200:
+ *         description: List of pricing entries
+ */
+router.get(
+  "/products/sales-rep",
+  protect,
+  salesRepProductPriceController.getAllSalesRepProductPrices
+);
+
+router.get(
+    "/products/sales-rep/import",
+    protect,
+    salesRepProductPriceController.productsFromAdminForSalesRep
+  );
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price/{id}:
+ *   get:
+ *     summary: Get sales rep product price by ID
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Pricing entry ID
+ *     responses:
+ *       200:
+ *         description: Pricing entry details
+ *       404:
+ *         description: Pricing entry not found
+ */
+router.get(
+  "/sales-rep-product-price/:id",
+  protect,
+  salesRepProductPriceController.getSalesRepProductPrice
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price/{id}:
+ *   delete:
+ *     summary: Delete sales rep product price by ID (hard delete - permanent)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Pricing entry ID
+ *     responses:
+ *       200:
+ *         description: Pricing entry deleted successfully
+ *       404:
+ *         description: Pricing entry not found
+ */
+router.delete(
+  "/sales-rep-product-price/:id",
+  protect,
+  salesRepProductPriceController.deleteSalesRepProductPrice
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   delete:
+ *     summary: Delete sales rep product prices (bulk hard delete - permanent)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               oneOf:
+ *                 - required:
+ *                     - id
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                 - required:
+ *                     - productId
+ *                     - salesRepId
+ *                   properties:
+ *                     productId:
+ *                       type: integer
+ *                     salesRepId:
+ *                       type: integer
+ *     responses:
+ *       200:
+ *         description: Prices deleted successfully
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: No pricing entries found to delete
+ */
+router.delete(
+  "/sales-rep-product-price",
+  protect,
+  salesRepProductPriceController.deleteSalesRepProductPrices
+);
 
 //! Category Management
 

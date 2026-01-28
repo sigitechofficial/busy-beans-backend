@@ -15,16 +15,238 @@ const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 const MINOR = 70;
 
 /**
+ * Find Sales Rep custom field DefinitionId by querying existing invoices
+ * This finds the DefinitionId from an invoice that already has the Sales Rep field populated
+ */
+async function findSalesRepCustomFieldDefinitionId({ accessToken, realmId }) {
+  try {
+    // Query for invoices that have custom fields
+    const queryUrl = `${QBO(realmId)}/query?query=SELECT * FROM Invoice MAXRESULTS 10&minorversion=${MINOR}`;
+    const response = await axios.get(queryUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      validateStatus: () => true,
+    });
+
+    if (response?.data?.QueryResponse?.Invoice) {
+      const invoices = Array.isArray(response.data.QueryResponse.Invoice)
+        ? response.data.QueryResponse.Invoice
+        : [response.data.QueryResponse.Invoice];
+
+      // Look through invoices for one with a custom field that has a value
+      for (const invoice of invoices) {
+        if (invoice?.CustomField) {
+          const customFields = Array.isArray(invoice.CustomField)
+            ? invoice.CustomField
+            : [invoice.CustomField];
+
+          // If we find a custom field with a StringValue, it's likely the Sales Rep field
+          // (since the user manually created it and it's a text field)
+          const salesRepField = customFields.find(f => f.StringValue && f.DefinitionId);
+          
+          if (salesRepField?.DefinitionId) {
+            console.log(`✅ [QBO] Found Sales Rep custom field DefinitionId: ${salesRepField.DefinitionId} from existing invoice`);
+            return salesRepField.DefinitionId;
+          }
+        }
+      }
+    }
+
+    console.log("⚠️ [QBO] Could not find Sales Rep custom field DefinitionId from existing invoices");
+    return null;
+  } catch (err) {
+    console.warn("⚠️ [QBO] Error finding Sales Rep custom field DefinitionId:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Query QBO for Sales Rep custom field DefinitionId
+ * Uses GraphQL API to find custom field by name
+ */
+async function getSalesRepCustomFieldDefinitionId({ accessToken, realmId }) {
+  try {
+    // GraphQL endpoint for custom field definitions
+    const graphqlUrl = "https://qb.api.intuit.com/graphql";
+    
+    const query = `
+      query {
+        appFoundationsCustomFieldDefinitions {
+          id
+          name
+          type
+          legacyIdV2
+        }
+      }
+    `;
+
+    const response = await axios.post(
+      graphqlUrl,
+      { query },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        validateStatus: () => true, // Don't throw on error
+      }
+    );
+
+    if (response?.data?.data?.appFoundationsCustomFieldDefinitions) {
+      const customFields = response.data.data.appFoundationsCustomFieldDefinitions;
+      
+      // Look for "Sales Rep" field (case-insensitive)
+      const salesRepField = customFields.find(
+        (field) =>
+          field.name &&
+          (field.name.toLowerCase() === "sales rep" ||
+            field.name.toLowerCase() === "salesrep" ||
+            field.name.toLowerCase() === "local partner")
+      );
+
+      if (salesRepField?.legacyIdV2) {
+        console.log(
+          `✅ [QBO] Found Sales Rep custom field: ${salesRepField.name} (DefinitionId: ${salesRepField.legacyIdV2})`
+        );
+        return salesRepField.legacyIdV2;
+      }
+    }
+
+    console.log("⚠️ [QBO] Sales Rep custom field not found via GraphQL query");
+    return null;
+  } catch (err) {
+    console.warn(
+      "⚠️ [QBO] Error querying custom field definitions:",
+      err.message
+    );
+    // GraphQL might not be available or scopes missing - that's okay, we'll use fallback
+    return null;
+  }
+}
+
+/**
+ * Create Sales Rep custom field in QBO if it doesn't exist
+ * Uses GraphQL API to create custom field definition
+ */
+async function createSalesRepCustomField({ accessToken, realmId }) {
+  try {
+    console.log("🔧 [QBO] Creating Sales Rep custom field...");
+    
+    // GraphQL endpoint for custom field definitions
+    const graphqlUrl = "https://qb.api.intuit.com/graphql";
+    
+    const mutation = `
+      mutation {
+        appFoundationsCreateCustomFieldDefinition(
+          input: {
+            name: "Sales Rep"
+            type: StringType
+          }
+        ) {
+          customFieldDefinition {
+            id
+            name
+            type
+            legacyIdV2
+          }
+          errors {
+            message
+            code
+          }
+        }
+      }
+    `;
+
+    const response = await axios.post(
+      graphqlUrl,
+      { query: mutation },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        validateStatus: () => true, // Don't throw on error
+      }
+    );
+
+    // Log full response for debugging
+    console.log("🔍 [QBO] GraphQL Custom Field Creation Response:", {
+      status: response.status,
+      statusText: response.statusText,
+      data: JSON.stringify(response.data, null, 2),
+    });
+
+    // Check for errors in response
+    if (response?.data?.errors) {
+      console.warn("⚠️ [QBO] GraphQL errors:", JSON.stringify(response.data.errors, null, 2));
+    }
+
+    if (response?.data?.data?.appFoundationsCreateCustomFieldDefinition?.customFieldDefinition) {
+      const createdField = response.data.data.appFoundationsCreateCustomFieldDefinition.customFieldDefinition;
+      
+      if (createdField?.legacyIdV2) {
+        console.log(
+          `✅ [QBO] Created Sales Rep custom field: ${createdField.name} (DefinitionId: ${createdField.legacyIdV2})`
+        );
+        return createdField.legacyIdV2;
+      }
+    }
+
+    // Check for mutation errors
+    if (response?.data?.data?.appFoundationsCreateCustomFieldDefinition?.errors) {
+      const errors = response.data.data.appFoundationsCreateCustomFieldDefinition.errors;
+      console.warn("⚠️ [QBO] Custom field creation errors:", JSON.stringify(errors, null, 2));
+      
+      // If field already exists error, try to find it
+      if (errors.some(e => e.message?.toLowerCase().includes("already exists") || 
+                          e.message?.toLowerCase().includes("duplicate"))) {
+        console.log("⚠️ [QBO] Custom field may already exist, trying to find it...");
+        return await getSalesRepCustomFieldDefinitionId({ accessToken, realmId });
+      }
+    }
+
+    console.log("⚠️ [QBO] Failed to create Sales Rep custom field - Full response:", JSON.stringify(response.data, null, 2));
+    return null;
+  } catch (err) {
+    console.warn(
+      "⚠️ [QBO] Error creating custom field definition:",
+      err.message,
+      err.response?.data
+    );
+    return null;
+  }
+}
+
+/**
+ * Get or Create Sales Rep custom field DefinitionId
+ * First tries to find existing field, if not found creates it
+ */
+async function getOrCreateSalesRepCustomField({ accessToken, realmId }) {
+  // First, try to find existing field
+  let definitionId = await getSalesRepCustomFieldDefinitionId({ accessToken, realmId });
+  
+  // If not found, create it
+  if (!definitionId) {
+    console.log("🔧 [QBO] Sales Rep custom field not found, creating new one...");
+    definitionId = await createSalesRepCustomField({ accessToken, realmId });
+  }
+  
+  return definitionId;
+}
+
+/**
  * Build QBO Invoice Payload (Lines + Shipping + Sparse Payload)
  * Does NOT send to QBO — only PREPARES the payload.
+ * Now async to support custom field creation
  */
-function buildQboInvoiceUpdatePayload({
+async function buildQboInvoiceUpdatePayload({
   order,
   qboInvoiceId,
   syncToken,
   productItemId,
   serviceItemId,
   shippingItemId,
+  accessToken = null,
+  realmId = null,
 }) {
   /* -------------------------------------------------------
       3. Build line items
@@ -113,7 +335,36 @@ function buildQboInvoiceUpdatePayload({
   }
 
   /* -------------------------------------------------------
-      5. Build sparse payload
+      5. Build Sales Rep info - simple, just the name
+  --------------------------------------------------------*/
+  let salesRepName = null;
+  if (order.userId && order.salesRepId && order.salesRepName) {
+    salesRepName = order.salesRepName;
+  }
+
+  // Get the custom field DefinitionId for "Sales Rep"
+  let salesRepDefinitionId = process.env.QBO_SALES_REP_CUSTOM_FIELD_ID || null;
+  
+  if (!salesRepDefinitionId && salesRepName && accessToken && realmId) {
+    try {
+      salesRepDefinitionId = await findSalesRepCustomFieldDefinitionId({ accessToken, realmId });
+    } catch (err) {
+      console.warn("⚠️ [QBO] Could not find Sales Rep custom field DefinitionId:", err.message);
+    }
+  }
+
+  // Build custom fields array if we have the DefinitionId
+  let customFields = [];
+  if (salesRepName && salesRepDefinitionId) {
+    customFields.push({
+      DefinitionId: salesRepDefinitionId,
+      StringValue: salesRepName,
+    });
+    console.log(`✅ [QBO] Adding Sales Rep to custom field: ${salesRepName}`);
+  }
+
+  /* -------------------------------------------------------
+      6. Build sparse payload
   --------------------------------------------------------*/
   return {
     Id: String(qboInvoiceId),
@@ -145,6 +396,9 @@ function buildQboInvoiceUpdatePayload({
           Country: order.address.country,
         }
       : undefined,
+
+    // Add custom field for Sales Rep
+    ...(customFields.length > 0 ? { CustomField: customFields } : {}),
   };
 }
 
@@ -206,13 +460,15 @@ async function updateInvoiceInQuickBooks({
     /* -------------------------------------------------------
         3 + 4 + 5 = Build Sparse Payload via helper
     --------------------------------------------------------*/
-    const payload = buildQboInvoiceUpdatePayload({
+    const payload = await buildQboInvoiceUpdatePayload({
       order,
       qboInvoiceId,
       syncToken: currentInvoice.SyncToken,
       productItemId,
       serviceItemId,
       shippingItemId,
+      accessToken, // Pass accessToken for custom field creation
+      realmId,     // Pass realmId for custom field creation
     });
     console.log("🚀 ~ updateInvoiceInQuickBooks ~ payload:", payload);
 

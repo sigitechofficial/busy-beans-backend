@@ -115,11 +115,43 @@ async function runMigration(connection, migrationFile, migrationName) {
       try {
         await connection.query(statement);
       } catch (error) {
-        // Check if error is about column/constraint already existing
-        if (error.code === 'ER_DUP_FIELDNAME' || 
-            error.code === 'ER_DUP_KEYNAME' || 
-            error.code === 'ER_DUP_ENTRY' ||
-            error.code === 'ER_CANT_DROP_FIELD_OR_KEY') {
+        // Check if error is about column/constraint already existing or not existing
+        // These are "safe" errors that we can ignore
+        const safeErrorCodes = [
+          'ER_DUP_FIELDNAME',      // Column already exists
+          'ER_DUP_KEYNAME',        // Index/key already exists
+          'ER_DUP_ENTRY',          // Duplicate entry
+          'ER_CANT_DROP_FIELD_OR_KEY', // Can't drop (doesn't exist)
+          'ER_CANT_DROP_FOREIGN_KEY',  // Can't drop foreign key (doesn't exist)
+          'ER_UNKNOWN_TABLE',      // Table doesn't exist
+        ];
+        
+        const safeErrorNos = [
+          1091,  // Column/key doesn't exist (DROP)
+          1025,  // Error on rename (constraint doesn't exist)
+          1092,  // Key doesn't exist
+        ];
+        
+        // Check if error message indicates a "safe" error (constraint/column doesn't exist)
+        const errorMessage = error.message || '';
+        const sqlStatement = statement.toUpperCase();
+        
+        // Special case: "Table already exists" error when adding foreign key
+        // This is a MySQL quirk - it happens when foreign key constraint already exists
+        const isTableExistsOnFK = 
+          error.code === 'ER_TABLE_EXISTS_ERROR' &&
+          (sqlStatement.includes('FOREIGN KEY') || sqlStatement.includes('ADD CONSTRAINT'));
+        
+        const isSafeError = 
+          safeErrorCodes.includes(error.code) ||
+          safeErrorNos.includes(error.errno) ||
+          isTableExistsOnFK ||
+          errorMessage.includes("doesn't exist") ||
+          errorMessage.includes("Unknown key") ||
+          errorMessage.includes("check that column/key exists") ||
+          errorMessage.includes("Duplicate key name");
+        
+        if (isSafeError) {
           console.log(`  ⚠️  Warning: ${error.message.split('\n')[0]}`);
           // Continue execution
         } else {
