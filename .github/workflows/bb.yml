@@ -147,3 +147,6 @@ jobs:
             --service ${{ env.ECS_SERVICE }} \
             --task-definition ${{ env.TASK_DEFINITION }} \
             --force-new-deployment
+
+
+            
