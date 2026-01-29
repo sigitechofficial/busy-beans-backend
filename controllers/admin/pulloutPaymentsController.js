@@ -12,6 +12,7 @@ const factory = require("../handlerFactory");
 const { Op, literal, where, fn } = require("sequelize");
 const APIFeatures = require("../../utils/apiFeatures");
 const Stripe = require("../stripe");
+const sendPaymentPulloutEmail = require("../../helper/paymentPulloutEmail");
 
 //TODO creaete a model where we save that paymentintent and the amount update all order and add pulloutsId against them . pull out has status processiong we will add webhook if succeedd than status change orther wise set all order pulloutsId null so we can pull again
 
@@ -20,10 +21,10 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
     const patner = await salesRep.findOne({ where: { id: req.params.srId } });
     // console.log('🚀 ~ patner:', patner);
 
-    const { amount, orderList } = req.body;
+    const { amount, orderList ,dateAndTime} = req.body;
     console.log(
       "🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ orderList:",
-      orderList
+      req.body
     );
 
     const orderIds = orderList.map((order) => order.id);
@@ -75,9 +76,26 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
           { where: { id: ele.id } }
         );
       }
+      
+      // Send email notification to partner about payment pullout
+      if (patner?.email) {
+        try {
+          await sendPaymentPulloutEmail({
+            partnerEmail: patner.email,
+            partner: patner,
+            amount: amount,
+            orderList: orderList,
+            dateAndTime,
+          });
+          console.log("✅ Payment pullout notification email sent to:", patner.email);
+        } catch (emailError) {
+          console.error("❌ Failed to send pullout email:", emailError);
+          // Don't fail the whole operation if email fails
+        }
+      }
     } else {
       return next(
-        new AppError("Something Want so wrong Payments can’t be pulled.", 400)
+        new AppError("Unable to process payment pullout at this time.", 400)
       );
     }
 
@@ -114,6 +132,9 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
 
     // Step 3: If payment successful, update orders
     if (pullouts) {
+      // Generate dateAndTime for email (YYYY-MM-DD format to avoid timezone issues)
+      const pulloutDateTime = new Date().toISOString().split("T")[0];
+      
       // Set adminReceivableStatus true for all involved orders
       await order.update(
         {
@@ -135,6 +156,23 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
           },
           { where: { id: ele.id } }
         );
+      }
+      
+      // Send email notification to partner about payment pullout
+      if (patner?.email) {
+        try {
+          await sendPaymentPulloutEmail({
+            partnerEmail: patner.email,
+            partner: patner,
+            amount: amount,
+            orderList: orderList,
+            dateAndTime: pulloutDateTime,
+          });
+          console.log("✅ Automated pullout notification email sent to:", patner.email);
+        } catch (emailError) {
+          console.error("❌ Failed to send automated pullout email:", emailError);
+          // Don't fail the whole operation if email fails
+        }
       }
     }
 
