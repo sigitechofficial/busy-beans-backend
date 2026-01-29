@@ -331,34 +331,48 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  const productAttributes = [
+    `id`,
+    `name`,
+    `quantity`,
+    `categoryId`,
+    `wholesalePrice`,
+    `weight`,
+    `sku`,
+    `grind`,
+    `productCode`,
+    [
+      literal(`
+          (SELECT percentage
+          FROM userDiscounts
+          WHERE userDiscounts.categoryId = product.categoryId
+            AND userDiscounts.userId = ${customer.id}
+          LIMIT 1)
+        `),
+      "discountPercentage",
+    ],
+  ]
+  if (customer?.salesRepId) {
+    console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVERTORY PRICE APPLIED:", customer?.salesRepId);
+    productAttributes.push([
+        literal(
+          `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`
+        ),
+        "price",
+      ],);
+  }else{
+    console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVERTORY PRICE APPLIED:", customer?.salesRepId);
+    productAttributes.push(`price`);
+  }
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      [
-        literal(`
-            (SELECT percentage
-            FROM userDiscounts
-            WHERE userDiscounts.categoryId = product.categoryId
-              AND userDiscounts.userId = ${customer.id}
-            LIMIT 1)
-          `),
-        "discountPercentage",
-      ],
-    ],
+    attributes: productAttributes,
+    raw: true,
   });
 
   console.log(
@@ -373,7 +387,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const finalItems = products.map((obj) => {
     const element = {};
     const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
+      obj?.discountPercentage || 0
     );
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;

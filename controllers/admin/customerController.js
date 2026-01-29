@@ -30,7 +30,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
     filters.employeeId = { [Op.eq]: null };
   console.log("🚀 ~ filters:", filters);
 
-  if (req.params?.srId) filters.salesRepId = req.params?.srId;
+ 
   if (req.params?.empId) filters.employeeId = req.params?.empId;
   //   if (req.params?.condition) {
   //     if (req.user.localPartnerId) filters.salesRepId = req.user.localPartnerId;
@@ -59,6 +59,10 @@ exports.customersList = catchAsync(async (req, res, next) => {
   ];
 
   // Build API features (filter, search, sort, fields, pagination)
+  if (req.params?.srId) filters.salesRepId = req.params?.srId;
+  console.log("req.params?.srId >>>>>>>>>>>>>",req.params?.srId);
+  console.log("filters >>>>>>>>>>>>>",filters);
+  
   const features = new APIFeatures(user, req.query)
     .filter()
     .search(searchableFields) // Add search functionality

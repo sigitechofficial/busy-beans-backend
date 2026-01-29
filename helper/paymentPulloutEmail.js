@@ -28,13 +28,6 @@ module.exports = async function sendPaymentPulloutEmail({
     let footer = await Footer();
 
     // Use partner's footer if available
-    if (partner) {
-      footer = generateFooterHtml({
-        address: `${partner?.address || ""}, ${partner?.city || ""}, ${partner?.state || ""}, ${partner?.zipCode || ""}, ${partner?.country || ""}`,
-        supportEmail: `${partner?.email || ""}`,
-        supportNumber: `${partner.countryCode || ""} ${partner.phoneNumber || ""}`,
-      });
-    }
 
     const emailAttachments = [...attachments().footer];
 
@@ -238,9 +231,7 @@ module.exports = async function sendPaymentPulloutEmail({
             color: rgba(0, 0, 0, 0.8);
           "
         >
-          <strong style="color: #8F5D46;">📋 Important Information:</strong><br />
-          • This amount has been automatically deducted from your default bank account<br />
-          • You will receive a separate receipt from your bank for this transaction<br />
+          <strong style="color: #8F5D46;">📋 Important Information:</strong><br /> 
           • Your commission amounts remain credited to your partner account<br />
           • This pullout covers the admin receivable amounts for the orders listed above
         </td>
@@ -262,7 +253,7 @@ module.exports = async function sendPaymentPulloutEmail({
           Thank you for your continued partnership with Busy Bean Coffee!
           <br /><br />
           <strong>Best regards,</strong><br />
-          <span style="color: #8F5D46; font-weight: 600;">The Busy Bean Coffee Team</span>
+          <span style="color: #8F5D46; font-weight: 600;">Busy Bean Coffee, Inc.</span>
         </td>
       </tr>
 

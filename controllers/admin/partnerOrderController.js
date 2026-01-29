@@ -405,16 +405,6 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
       ],
     },
   ];
-  if (
-    req.user.entity == "adminEmployee" ||
-    req.user.entity == "partnerEmployee"
-  ) {
-    queryOptions.include.push({
-      model: user,
-      where: { employeeId: req.user?.id },
-      attributes: [],
-    });
-  }
   // Custom attributes with literal fields
 
   queryOptions.attributes = [

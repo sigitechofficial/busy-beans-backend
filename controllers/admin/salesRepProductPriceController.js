@@ -10,20 +10,43 @@ const APIFeatures = require("../../utils/apiFeatures");
 const { Op, literal } = require("sequelize");
 
 /**
- * Get All Sales Rep Product Prices (localPartner / partnerEmployee only – returns products with custom prices)
+ * Get All Sales Rep Product Prices (localPartner / partnerEmployee / admin / adminEmployee)
  * GET /api/v1/admin/sales-rep-product-price
- * Query params: productId, status, page, limit, sort, fields. salesRepId is forced to req.user.localPartnerId.
+ * Query params: productId, status, page, limit, sort, fields, salesRepId (required for admin/adminEmployee).
+ * - Local partners/employees: salesRepId is forced to req.user.localPartnerId
+ * - Admin/admin employees: salesRepId comes from req.query.salesRepId
  */
 exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
   const isLocalPartnerOrEmployee =
     req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
-  if (!isLocalPartnerOrEmployee || !req.user?.localPartnerId) {
+  const isAdminOrEmployee =
+    req.user?.entity === "admin" || req.user?.entity === "adminEmployee";
+
+  // Determine salesRepId based on user type
+  let salesRepId;
+
+  if (isLocalPartnerOrEmployee) {
+    // Local partner or partner employee: use their own localPartnerId
+    if (!req.user?.localPartnerId) {
+      return next(
+        new AppError("Local partner ID not found in user data.", 403)
+      );
+    }
+    salesRepId = req.user.localPartnerId;
+  } else if (isAdminOrEmployee) {
+    // Admin or admin employee: use salesRepId from query
+    if (!req.query.salesRepId) {
+      return next(
+        new AppError("salesRepId query parameter is required for admin users.", 400)
+      );
+    }
+    salesRepId = req.query.salesRepId;
+  } else {
+    // Not authorized
     return next(
-      new AppError("This route is only for local partner or partner employee.", 403)
+      new AppError("This route is only accessible to authorized users.", 403)
     );
   }
-
-  const salesRepId = req.user.localPartnerId;
   const searchableFields = ["id", "name", "sku", "productCode", "desc"];
 
   // Don't pass salesRepId to filter – product table has no salesRepId column
@@ -59,6 +82,12 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     "desc",
     "image",
     "weight",
+    "quantity",
+    "wholesalePrice",
+    "unit",  
+    "categoryId",  
+    "createdAt",
+    "updatedAt",
     [
       literal(
         `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
@@ -67,7 +96,7 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     ],
     [
         literal(
-          `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
+          `(SELECT srpp.id FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
         ),
         "pid",
      ],
@@ -76,12 +105,6 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
         `(SELECT srpp.status FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
       ),
       "status",
-    ],
-    [
-      literal(
-        `(SELECT srpp.id FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
-      ),
-      "priceId",
     ],
   ];
 
