@@ -1,10 +1,17 @@
 const redis = require('redis');
 
+// FIX: Use Environment Variables for ECS, fallback to localhost for dev
+const redisHost = process.env.REDIS_HOST || 'localhost';
+const redisPort = process.env.REDIS_PORT || 6379;
+
 const client = redis.createClient({
-  socket: { host: 'localhost', port: 6379 },
+  socket: { 
+    host: redisHost, 
+    port: redisPort 
+  },
 });
 
-client.on('connect', () => console.log('✅ Redis connected'));
+client.on('connect', () => console.log(`✅ Redis connected to ${redisHost}:${redisPort}`));
 client.on('ready', () => console.log('🚀 Redis ready'));
 client.on('error', (err) => console.error('❌ Redis error:', err));
 client.on('end', () => console.log('🛑 Redis disconnected'));
@@ -18,10 +25,12 @@ async function connectRedis() {
       isConnected = true;
     } catch (err) {
       console.error('Redis connection failed:', err);
+      // Optional: Exit process if Redis is critical
+      // process.exit(1); 
     }
   }
 }
 
-connectRedis(); // <- async call inside function
+connectRedis();
 
 module.exports = client;
