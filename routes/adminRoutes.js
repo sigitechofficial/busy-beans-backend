@@ -49,7 +49,7 @@ const router = express.Router();
  */
 router.post(
   "/order-management/fetch-invoice/:orderId",
-  manageOrderController.fetchInvoice
+  manageOrderController.fetchInvoice,
 );
 
 /**
@@ -70,7 +70,7 @@ router.post(
  */
 router.post(
   "/order-management/email-helper",
-  manageOrderController.emailHelper
+  manageOrderController.emailHelper,
 );
 
 /**
@@ -107,7 +107,7 @@ router.post(
     req.params.entity = "admin";
     next();
   },
-  authController.adminLogin
+  authController.adminLogin,
 );
 
 /**
@@ -142,7 +142,7 @@ router.post(
     req.params.entity = "localPartner";
     next();
   },
-  authController.salesRepLogin
+  authController.salesRepLogin,
 );
 
 /**
@@ -177,7 +177,7 @@ router.post(
     req.params.entity = "supplier";
     next();
   },
-  authController.supplierLogin
+  authController.supplierLogin,
 );
 
 /**
@@ -228,7 +228,7 @@ router.post("/forgot-password", authController.adminForgotPassword);
  */
 router.post(
   "/forgot-password/sales-rep",
-  authController.salesRepForgotPassword
+  authController.salesRepForgotPassword,
 );
 
 /**
@@ -381,7 +381,7 @@ router.post("/otp-verification", authController.adminOtpVerification);
  */
 router.post(
   "/otp-verification/sales-rep",
-  authController.salesRepOtpVerification
+  authController.salesRepOtpVerification,
 );
 
 /**
@@ -411,7 +411,7 @@ router.post(
  */
 router.post(
   "/otp-verification/supplier",
-  authController.supplierOtpVerification
+  authController.supplierOtpVerification,
 );
 
 /**
@@ -518,7 +518,7 @@ router.get("/product", productController.getAllProducts);
  */
 router.post(
   "/lambda-function/pending-pullout-fromlocal-patner-banks",
-  pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts
+  pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts,
 );
 
 /**
@@ -533,7 +533,7 @@ router.post(
  */
 router.post(
   "/lambda-function/create-upcomming-orders",
-  orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction
+  orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
 );
 
 //! Country Management
@@ -698,7 +698,7 @@ router.post(
   "/employee",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.createEmployee
+  employeeController.createEmployee,
 );
 
 /**
@@ -726,7 +726,7 @@ router.get(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.getEmployee
+  employeeController.getEmployee,
 );
 
 /**
@@ -748,7 +748,7 @@ router.get(
   "/employees",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.getAllEmployee
+  employeeController.getAllEmployee,
 );
 
 /**
@@ -782,7 +782,7 @@ router.patch(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.updateEmployee
+  employeeController.updateEmployee,
 );
 
 /**
@@ -810,7 +810,7 @@ router.delete(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.deleteEmployee
+  employeeController.deleteEmployee,
 );
 
 /**
@@ -844,7 +844,7 @@ router.put(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "salesRep"),
-  employeeController.updateEmployee
+  employeeController.updateEmployee,
 );
 
 /**
@@ -881,7 +881,7 @@ router.post(
   "/employee/:employeeId/stripe-connect-account",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.stripeConnectAccount
+  employeeController.stripeConnectAccount,
 );
 
 /**
@@ -918,7 +918,7 @@ router.post(
   "/employee/:employeeId/stripe-connect-account-link",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.stripeConnectAccountLink
+  employeeController.stripeConnectAccountLink,
 );
 
 /**
@@ -946,7 +946,7 @@ router.get(
   "/employee/:employeeId/stripe-connect-account-dashboard",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.stripeConnectAccountDashboard
+  employeeController.stripeConnectAccountDashboard,
 );
 
 /**
@@ -985,7 +985,7 @@ router.patch(
   "/employee/:employeeId/commission",
   auth.protect,
   auth.restrictTo("admin"),
-  employeeController.updateCommission
+  employeeController.updateCommission,
 );
 
 /**
@@ -1024,7 +1024,7 @@ router.get(
   "/employee-commission-orders/:status",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.getEmployeeCommissionOrders
+  employeeController.getEmployeeCommissionOrders,
 );
 
 /**
@@ -1062,7 +1062,7 @@ router.post(
   "/transfer-commission-to-employee",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.transferCommissionToEmployeeController
+  employeeController.transferCommissionToEmployeeController,
 );
 
 /**
@@ -1100,7 +1100,7 @@ router.post(
   "/bulk-transfer-commission-to-employee",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.bulkTransferCommissionToEmployeeController
+  employeeController.bulkTransferCommissionToEmployeeController,
 );
 
 /**
@@ -1136,7 +1136,7 @@ router.use(protect);
 router.get(
   "/profile/",
   auth.restrictTo("admin", "salesRep"),
-  adminController.getAdmin
+  adminController.getAdmin,
 );
 
 /**
@@ -1169,7 +1169,7 @@ router.get(
 router.patch(
   "/profile-update/:id",
   auth.restrictTo("admin", "salesRep"),
-  adminController.updateAdmin
+  adminController.updateAdmin,
 );
 // router.get('/profile/', adminController.getAdmin);
 
@@ -1267,7 +1267,7 @@ const uploadSalesRepImage = multer({
 router.post(
   "/product",
   uploadProductImage.single("image"),
-  productController.addProduct
+  productController.addProduct,
 );
 
 // Category by ID routes
@@ -1389,7 +1389,7 @@ router
 router.post(
   "/sales-rep-product-price",
   protect,
-  salesRepProductPriceController.createSalesRepProductPrices
+  salesRepProductPriceController.createSalesRepProductPrices,
 );
 
 /**
@@ -1431,7 +1431,7 @@ router.post(
 router.patch(
   "/sales-rep-product-price",
   protect,
-  salesRepProductPriceController.updateSalesRepProductPrices
+  salesRepProductPriceController.updateSalesRepProductPrices,
 );
 
 /**
@@ -1480,14 +1480,14 @@ router.patch(
 router.get(
   "/products/sales-rep",
   protect,
-  salesRepProductPriceController.getAllSalesRepProductPrices
+  salesRepProductPriceController.getAllSalesRepProductPrices,
 );
 
 router.get(
-    "/products/sales-rep/import",
-    protect,
-    salesRepProductPriceController.productsFromAdminForSalesRep
-  );
+  "/products/sales-rep/import",
+  protect,
+  salesRepProductPriceController.productsFromAdminForSalesRep,
+);
 
 /**
  * @swagger
@@ -1513,7 +1513,7 @@ router.get(
 router.get(
   "/sales-rep-product-price/:id",
   protect,
-  salesRepProductPriceController.getSalesRepProductPrice
+  salesRepProductPriceController.getSalesRepProductPrice,
 );
 
 /**
@@ -1540,7 +1540,7 @@ router.get(
 router.delete(
   "/sales-rep-product-price/:id",
   protect,
-  salesRepProductPriceController.deleteSalesRepProductPrice
+  salesRepProductPriceController.deleteSalesRepProductPrice,
 );
 
 /**
@@ -1584,7 +1584,7 @@ router.delete(
 router.delete(
   "/sales-rep-product-price",
   protect,
-  salesRepProductPriceController.deleteSalesRepProductPrices
+  salesRepProductPriceController.deleteSalesRepProductPrices,
 );
 
 //! Category Management
@@ -1728,7 +1728,7 @@ router.get("/orders", manageOrderController.allOrder);
  */
 router.get(
   "/quickbooks-customer-order-management/:qbo",
-  manageOrderController.allOrder
+  manageOrderController.allOrder,
 );
 
 /**
@@ -1754,7 +1754,7 @@ router.get(
  */
 router.post(
   "/order-management/send-invoice/:orderId",
-  manageOrderController.sendInvoice
+  manageOrderController.sendInvoice,
 );
 
 /**
@@ -1785,7 +1785,7 @@ router.post(
  */
 router.post(
   "/order-management/send-invoice",
-  manageOrderController.sendInvoiceMultiple
+  manageOrderController.sendInvoiceMultiple,
 );
 
 /**
@@ -1817,7 +1817,7 @@ router.post(
  */
 router.patch(
   "/order-management/update-order/:orderId",
-  manageOrderController.updateOrder
+  manageOrderController.updateOrder,
 );
 
 /**
@@ -1843,7 +1843,7 @@ router.patch(
  */
 router.delete(
   "/order-management/delete-order/:orderId",
-  manageOrderController.deleteOrder
+  manageOrderController.deleteOrder,
 );
 
 /**
@@ -1915,7 +1915,7 @@ router.patch("/assign-supplier", manageOrderController.orderJourneryComplete);
  */
 router.patch(
   "/supplier-acknowledgement",
-  manageOrderController.orderJourneryComplete
+  manageOrderController.orderJourneryComplete,
 );
 
 /**
@@ -2081,7 +2081,7 @@ router.patch("/edit-cheque", manageOrderController.eidtCheque);
  */
 router.get(
   "/customer-management/payment-cards/:id",
-  customerController.fetchSavedCards
+  customerController.fetchSavedCards,
 );
 
 /**
@@ -2101,7 +2101,7 @@ router.get(
  */
 router.get(
   "/customer-management/dahboard-cards",
-  customerController.viewCustomersManagement
+  customerController.viewCustomersManagement,
 );
 
 /**
@@ -2156,7 +2156,7 @@ router.patch("/customer-update/:id", customerController.updateCutomer);
  */
 router.get(
   "/customer-management/customer-list/:sr",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -2182,7 +2182,7 @@ router.get(
  */
 router.get(
   "/qbo-customer-management/customer-list/:condition",
-  customerController.customersListByQboStatus
+  customerController.customersListByQboStatus,
 );
 
 /**
@@ -2208,7 +2208,7 @@ router.get(
  */
 router.get(
   "/customer-management/customer-list/sale-rep/:sr",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -2234,7 +2234,7 @@ router.get(
  */
 router.get(
   "/customer-management/customer-list/sale-rep-id/:srId",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -2260,7 +2260,7 @@ router.get(
  */
 router.get(
   "/customer-management/customer-list/employee-id/:empId",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -2295,7 +2295,7 @@ router.get(
  */
 router.patch(
   "/customer-management/assign-sale-rep/:id",
-  customerController.assignSalesRep
+  customerController.assignSalesRep,
 );
 
 /**
@@ -2315,7 +2315,7 @@ router.patch(
  */
 router.get(
   "/customer-management/invoice-customers-balance",
-  customerController.InvoiceCustomers
+  customerController.InvoiceCustomers,
 );
 
 /**
@@ -2341,40 +2341,40 @@ router.get(
  */
 router.get(
   "/customer-management/invoice-customers-balance/sales-rep/:srId",
-  customerController.InvoiceCustomers
+  customerController.InvoiceCustomers,
 );
 
 router.get(
   "/order-frequency/upcomming-orders",
-  orderFrequencyController.orderAccordingToFrequency
+  orderFrequencyController.orderAccordingToFrequency,
 );
 
 router.get(
   "/order-frequency/upcomming-orders/sale-rep/:srId",
-  orderFrequencyController.orderAccordingToFrequency
+  orderFrequencyController.orderAccordingToFrequency,
 );
 
 router.post(
   "/order-frequency/book-orders",
-  orderFrequencyController.bookOrderAccordingToFrequency
+  orderFrequencyController.bookOrderAccordingToFrequency,
 );
 
 router.post(
   "/order-frequency/book-orders/sale-rep/:srId",
-  orderFrequencyController.bookOrderAccordingToFrequency
+  orderFrequencyController.bookOrderAccordingToFrequency,
 );
 
 router.post("/send-quotation", salesRepController.sendQuotation);
 router.post(
   "/send-quotation/sales-rep/:srId",
-  salesRepController.sendQuotation
+  salesRepController.sendQuotation,
 );
 
 router.post("/book-new-order", orderFrequencyController.bookNewOrder);
 
 router.post(
   "/sales-rep/book-new-order/:srId",
-  orderFrequencyController.bookNewOrder
+  orderFrequencyController.bookNewOrder,
 );
 
 router.post("/add-customer/sales-rep/:srId", salesRepController.addCustomer);
@@ -2382,34 +2382,34 @@ router.post("/add-customer", salesRepController.addCustomer);
 
 router.post(
   "/create-bank-setup-intent/sales-rep/:srId",
-  salesRepController.createFinancialConnectionsSession
+  salesRepController.createFinancialConnectionsSession,
 );
 
 router.post(
   "/attach-bank-account-setup/sales-rep/:srId",
-  salesRepController.attachBankAccount
+  salesRepController.attachBankAccount,
 );
 
 router.get("/sales-rep/sales/:srId", salesRepController.salersMoney);
 
 router.post(
   "/create-stripe-connect-account/:srId",
-  salesRepController.stripeConnectAccount
+  salesRepController.stripeConnectAccount,
 );
 
 router.post(
   "/stripe-connect-account-url/:srId",
-  salesRepController.stripeConnectAccountLink
+  salesRepController.stripeConnectAccountLink,
 );
 
 router.get(
   "/stripe-connect-account-dashboard/:srId",
-  salesRepController.stripeConnectAccountDashboard
+  salesRepController.stripeConnectAccountDashboard,
 );
 
 router.get(
   "/stripe-connect-account-retrieve/:srId",
-  salesRepController.stripeConnectAccountRetrive
+  salesRepController.stripeConnectAccountRetrive,
 );
 
 //! Supplier Management
@@ -2428,17 +2428,17 @@ router
 
 router.patch(
   "/sales-rep/address-update/:srId",
-  salesRepController.updateAddresses
+  salesRepController.updateAddresses,
 );
 
 router.get(
   "/sales-rep/for-order-creation",
-  salesRepController.getSalesRepForOrderCreation
+  salesRepController.getSalesRepForOrderCreation,
 );
 
 router.get(
   "/sales-rep/for-order-creation/:srId",
-  salesRepController.getSalesRepForOrderCreation
+  salesRepController.getSalesRepForOrderCreation,
 );
 
 router
@@ -2457,12 +2457,12 @@ router
 
 router.patch(
   "/address-management/update-address/:id",
-  addressController.updateAddress
+  addressController.updateAddress,
 );
 
 router.patch(
   "/address-management/update-billing-address/:id",
-  addressController.updateBillingAddress
+  addressController.updateBillingAddress,
 );
 
 //! Country Management
@@ -2503,95 +2503,95 @@ router
 
 router.patch(
   "/address-management/add-cities-in-territory/:t_id",
-  addressController.addCitiesInTerritory
+  addressController.addCitiesInTerritory,
 );
 
 router.get(
   "/admin-reports/partner-commission",
-  adminReportsController.partnerCommissionReport
+  adminReportsController.partnerCommissionReport,
 );
 
 router.get(
   "/admin-reports/customer-report",
-  adminReportsController.customerReport
+  adminReportsController.customerReport,
 );
 
 router.get(
   "/admin-reports/product-sales",
-  adminReportsController.productSalesReport
+  adminReportsController.productSalesReport,
 );
 
 router.get(
   "/admin-reports/partner-commission",
-  adminReportsController.partnerCommissionReport
+  adminReportsController.partnerCommissionReport,
 );
 
 router.get(
   "/admin-reports/partner-creadit-limit",
-  adminReportsController.partnerCreaditLimit
+  adminReportsController.partnerCreaditLimit,
 );
 
 router.get(
   "/admin-reports/unpaid-partner-balance",
-  adminReportsController.unpaidPartnerbalanceReport
+  adminReportsController.unpaidPartnerbalanceReport,
 );
 
 router.get(
   "/admin-reports/direct-partner-summary",
-  adminReportsController.directPartnerReportSummary
+  adminReportsController.directPartnerReportSummary,
 );
 
 router.get(
   "/admin-reports/customer-sales-report",
-  adminReportsController.customerSalesSummary
+  adminReportsController.customerSalesSummary,
 );
 
 router.get(
   "/admin-reports/customer-detail-report/:userId",
-  adminReportsController.customerDetailsSummary
+  adminReportsController.customerDetailsSummary,
 );
 
 router.get(
   "/admin-reports/category-wise-product-sales-report",
-  adminReportsController.categoryWiseProductSalesSummary
+  adminReportsController.categoryWiseProductSalesSummary,
 );
 //! SUPPLIER REPORTS SECTION
 
 router.get(
   "/supplier-reports/assigned-orders-report/:supId",
-  supplierReportsController.assignedOrdersReport
+  supplierReportsController.assignedOrdersReport,
 );
 
 router.get(
   "/supplier-reports/top-products-ordered-report/:supId",
-  supplierReportsController.topProductsOrderedReport
+  supplierReportsController.topProductsOrderedReport,
 );
 
 router.get(
   "/supplier-reports/top-products-ordered-report/:supId",
-  supplierReportsController.topProductsOrderedReport
+  supplierReportsController.topProductsOrderedReport,
 );
 
 //! SALESREP REPORTS SECTION
 
 router.get(
   "/sales-rep-reports/orders-placed-report/:srId",
-  salesRepReportsController.ordersPlacedReport
+  salesRepReportsController.ordersPlacedReport,
 );
 
 router.get(
   "/sales-rep-reports/commission-summary-report/:srId",
-  salesRepReportsController.commissionSummaryReport
+  salesRepReportsController.commissionSummaryReport,
 );
 
 router.get(
   "/sales-rep-reports/customer-report/:srId",
-  salesRepReportsController.customerReport
+  salesRepReportsController.customerReport,
 );
 
 router.get(
   "/sales-rep-reports/partner-creadit-limit/:srId",
-  salesRepReportsController.partnerCreaditLimit
+  salesRepReportsController.partnerCreaditLimit,
 );
 
 //! DashBoard SECTION
@@ -2600,17 +2600,17 @@ router.get("/dashboard", dashboardsController.adminDashboard);
 
 router.get(
   "/sales-rep-dashboard/:srId",
-  dashboardsController.salesRepDashboard
+  dashboardsController.salesRepDashboard,
 );
 
 router.get(
   "/dashboard/local-partner-employee",
-  dashboardsController.employeeDashboardlocalPartner
+  dashboardsController.employeeDashboardlocalPartner,
 );
 
 router.get(
   "/dashboard/admin-employee",
-  dashboardsController.employeeDashboardAdmin
+  dashboardsController.employeeDashboardAdmin,
 );
 router.get("/supplier-dashboard/:id", dashboardsController.supplierDashboard);
 
@@ -2618,57 +2618,57 @@ router.get("/dashboard/sales", dashboardsController.getSalesDashboard);
 
 router.get(
   "/dashboard/franchisee-sales",
-  dashboardsController.getFranchiseeSalesDashboard
+  dashboardsController.getFranchiseeSalesDashboard,
 );
 
 router.get(
   "/dashboard/local-partner-sales/:srId",
-  dashboardsController.getLocalPartnerSalesDashboard
+  dashboardsController.getLocalPartnerSalesDashboard,
 );
 
 router.get(
   "/orders-pending-pullouts/:srId",
-  manageOrderController.ordersPendingPullouts
+  manageOrderController.ordersPendingPullouts,
 );
 
 router.post(
   "/pull-payments-from-patners-banka-account/:srId",
-  pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts
+  pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts,
 );
 
 router.post(
   "/shipping-charges-on-weight",
-  manageOrderController.findShippingCompanyForWeight
+  manageOrderController.findShippingCompanyForWeight,
 );
 
 router.post(
   "/shipping-charges-on-weight/customer/:id",
-  manageOrderController.findShippingCompanyForWeight
+  manageOrderController.findShippingCompanyForWeight,
 );
 
 router.get(
   "/shipping-charges-list",
-  shippingCompanyController.getAllShippingCompany
+  shippingCompanyController.getAllShippingCompany,
 );
 
 router.patch(
   "/shipping-charges-update",
-  shippingCompanyController.updateShippingCompany
+  shippingCompanyController.updateShippingCompany,
 );
 
 router.get(
   "/order-navigation-counts",
-  manageOrderController.orderNavigationCounts
+  manageOrderController.orderNavigationCounts,
 );
 
 router.get(
   "/order-navigation-counts/sales-rep/:srId",
-  manageOrderController.orderNavigationCountsLocalPatner
+  manageOrderController.orderNavigationCountsLocalPatner,
 );
 
 router.get(
   "/order-navigation-counts/supplier/:id",
-  manageOrderController.orderNavigationCountsSupplier
+  manageOrderController.orderNavigationCountsSupplier,
 );
 
 router.get("/view-customer-detail/:id", customerController.customerDetail);
@@ -2679,48 +2679,48 @@ router.delete("/customer-discounts/:userId", customerController.dicounts);
 
 router.post(
   "/partner-order/book-new-order",
-  patnerOrderController.bookNewPartnerOrder
+  patnerOrderController.bookNewPartnerOrder,
 );
 
 router.get("/partner-order/orders-list", patnerOrderController.allPartnerOrder);
 router.get(
   "/quickbooks-partner-order-management/:qbo",
-  patnerOrderController.allPartnerOrder
+  patnerOrderController.allPartnerOrder,
 );
 
 router.get(
   "/partner-order/order-details/:id",
-  patnerOrderController.partnerOrderDetails
+  patnerOrderController.partnerOrderDetails,
 );
 
 router.patch(
   "/partner-order/update-order/:orderId",
-  patnerOrderController.updatePartnerOrder
+  patnerOrderController.updatePartnerOrder,
 );
 
 router.get(
   "/local-partner/payment-methods/:id",
-  patnerOrderController.fetchSavedPaymentMethods
+  patnerOrderController.fetchSavedPaymentMethods,
 );
 
 router.get(
   "/partner-order-navigation-counts",
-  patnerOrderController.partnerOrderNavigationCounts
+  patnerOrderController.partnerOrderNavigationCounts,
 );
 
 router.get(
   "/partner-order-navigation-counts/sales-rep/:srId",
-  patnerOrderController.partnerOrderNavigationCountsLocalPatner
+  patnerOrderController.partnerOrderNavigationCountsLocalPatner,
 );
 
 router.get(
   "/partner-order-navigation-counts/supplier/:id",
-  patnerOrderController.partnerOrderNavigationCountsSupplier
+  patnerOrderController.partnerOrderNavigationCountsSupplier,
 );
 
 router.post(
   "/partner-order/pull-payment-from-bank/:partnerOrderId",
-  patnerOrderController.pullPartnerOrderPayment
+  patnerOrderController.pullPartnerOrderPayment,
 );
 
 router.get("/coffee-machine/requests", machineController.coffeeMachineQuries);
@@ -2739,7 +2739,7 @@ router
 
 router.post(
   "/order-management/create-payment-intent-for-user",
-  manageOrderController.createPaymentIntentForUser
+  manageOrderController.createPaymentIntentForUser,
 );
 
 module.exports = router;

@@ -79,7 +79,7 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
     return next(new AppError("Order not found", 404));
   } else if (orderData.type == "direct-invoice") {
     return next(
-      new AppError("This is a direct invoice and email cannot be sent.", 400)
+      new AppError("This is a direct invoice and email cannot be sent.", 400),
     );
   }
 
@@ -124,8 +124,8 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "As the payment for the order has already been made, we are unable to send an invoice at this point.",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -191,7 +191,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
 
   const { details, email } = await dataForEmailAndNotifications(
     req.params.orderId,
-    orderType
+    orderType,
   );
 
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
@@ -212,7 +212,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
     if (session == "paid") {
       await order.update(
         { paymentMethod: "card", paymentStatus: "done" },
-        { where: { id: req.params.orderId } }
+        { where: { id: req.params.orderId } },
       );
 
       return res.status(200).json({
@@ -244,7 +244,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
   if (!checkSession) await order.update(invoice, { where: { id: details.id } });
   console.log(
     "🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:",
-    checkSession
+    checkSession,
   );
 
   // sentPaymentInvoiceEvent({email:to,data:details,invoice})
@@ -310,7 +310,7 @@ exports.createPaymentIntentForUser = catchAsync(async (req, res, next) => {
   } catch (error) {
     console.error("❌ Payment Intent creation failed:", error);
     return next(
-      new AppError(error?.message || "Payment Intent creation failed", 400)
+      new AppError(error?.message || "Payment Intent creation failed", 400),
     );
   }
 });
@@ -388,7 +388,7 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
       // Log error but don't fail the payment confirmation
       console.error(
         "❌ Error processing employee commission in confirmPaymentForInvoiceIntent:",
-        error.message
+        error.message,
       );
     }
   }
@@ -513,13 +513,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
         "id",
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "product",
         ],
         [
           literal(
-            `(SELECT products.image FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.image FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "image",
         ],
@@ -552,19 +552,19 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     "type",
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
       ),
       "customerName",
     ],
     [
       literal(
-        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
       ),
       "companyName",
     ],
     [
       literal(
-        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
       ),
       "orderCurrentStatus",
     ],
@@ -601,13 +601,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+        `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
       ),
       "salesRepName",
     ],
     [
       literal(
-        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`,
       ),
       "deliveredOn",
     ],
@@ -643,7 +643,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     "pulloutDate",
     [
       literal(
-        `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`
+        `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
       ),
       "overdueInvoice",
     ],
@@ -698,7 +698,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "product",
           ],
@@ -715,19 +715,19 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       "id",
       [
         literal(
-          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "customerName",
       ],
       [
         literal(
-          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "companyName",
       ],
       [
         literal(
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         "orderCurrentStatus",
       ],
@@ -764,7 +764,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
@@ -798,7 +798,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       "pulloutDate",
       [
         literal(
-          `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`
+          `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
         ),
         "overdueInvoice",
       ],
@@ -894,26 +894,26 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "product",
           ],
           [
             literal(
-              `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "singleUnitWeight",
           ],
           ["weight", "itemWeights"],
           [
             literal(
-              `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "productCode",
           ],
           [
             literal(
-              `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "grind",
           ],
@@ -943,13 +943,13 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+              `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`,
             ),
             "orderStatus",
           ],
           [
             literal(
-              `(SELECT statuses.discription FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+              `(SELECT statuses.discription FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`,
             ),
             "discription",
           ],
@@ -963,19 +963,19 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       "type",
       [
         literal(
-          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "customerName",
       ],
       [
         literal(
-          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "companyName",
       ],
       [
         literal(
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         "orderCurrentStatus",
       ],
@@ -1009,7 +1009,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
@@ -1104,25 +1104,25 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       "paymentStatus",
       [
         literal(
-          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "stripeCustomerId",
       ],
       [
         literal(
-          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "defaultBankAccount",
       ],
       [
         literal(
-          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "srName",
       ],
       [
         literal(
-          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "territoryName",
       ],
@@ -1153,8 +1153,8 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
-          404
-        )
+          404,
+        ),
       );
     }
     const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
@@ -1174,8 +1174,8 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
-          404
-        )
+          404,
+        ),
       );
     }
     req.body.orderData.adminReceivableStatus = true;
@@ -1188,7 +1188,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       { paymentStatus: "done" },
       {
         where: { id: orderId || partnerOrderId },
-      }
+      },
     );
     if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
       syncPaymentToQuickBooks({
@@ -1222,13 +1222,13 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
         console.log(
           "🚀 ~ doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId:",
-          doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId
+          doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId,
         );
         await Model.update(
           { paymentStatus: "done" },
           {
             where: { id: orderId || partnerOrderId },
-          }
+          },
         );
         // syncPaymentToQuickBooks({
         //   orderId: orderId || partnerOrderId,
@@ -1248,13 +1248,16 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     }
 
     if (!isPartnerOrder && orderId && doc?.paymentStatus != "done") {
-        console.log("🚀 ~ exports.orderJourneryComplete ~ doc?.paymentStatus:", doc?.paymentStatus);
- 
-       await calculateAndSaveEmployeeCommission({ orderId: orderId });
-    //    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-    //         orderId: orderId || partnerOrderId,
-    //         orderType: isPartnerOrder ? "local-partner" : "customer",
-    //    });
+      console.log(
+        "🚀 ~ exports.orderJourneryComplete ~ doc?.paymentStatus:",
+        doc?.paymentStatus,
+      );
+
+      await calculateAndSaveEmployeeCommission({ orderId: orderId });
+      //    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      //         orderId: orderId || partnerOrderId,
+      //         orderType: isPartnerOrder ? "local-partner" : "customer",
+      //    });
     }
 
     await Model.update(req.body?.orderData, {
@@ -1269,7 +1272,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
   console.log(
     "🚀 ~ exports.orderJourneryComplete ~ req.body?.orderData?.statusId :",
-    req.body?.orderData?.statusId
+    req.body?.orderData?.statusId,
   );
 
   if (req.body?.orderData?.statusId) {
@@ -1304,13 +1307,13 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
         if (session == "paid") {
           await Model.update(
             { paymentMethod: "card", paymentStatus: "done" },
-            { where: { id: doc.id } }
+            { where: { id: doc.id } },
           );
           return next(
             new AppError(
               "As the payment for the order has already been made, we are unable to cancel.",
-              404
-            )
+              404,
+            ),
           );
         } else if (session == "open") {
           checkSession = true;
@@ -1323,7 +1326,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       const pdfPath = path.join(
         __dirname,
         "../../public/invoicePDFs",
-        pdfFilename
+        pdfFilename,
       );
 
       // Check if file exists, then delete
@@ -1333,7 +1336,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
             if (unlinkErr) {
               console.error(
                 `❌ Failed to delete invoice PDF for order ${order.id}:`,
-                unlinkErr
+                unlinkErr,
               );
             } else {
               console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
@@ -1341,7 +1344,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
           });
         } else {
           console.warn(
-            `⚠️ No invoice PDF found for order ${order.id} at ${pdfPath}`
+            `⚠️ No invoice PDF found for order ${order.id} at ${pdfPath}`,
           );
         }
       });
@@ -1400,7 +1403,7 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
   const weight = req.body?.weight || 0; // Weight from req.body
   console.log(
     "🚀 ~ exports.findShippingCompanyForWeight=catchAsync ~ weight:",
-    weight
+    weight,
   );
   const customer = req.params?.id
     ? await userDiscount.findAll({
@@ -1436,8 +1439,8 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        200
-      )
+        200,
+      ),
     );
   }
 
@@ -1470,19 +1473,19 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       "quickBooksInvoiceId",
       [
         literal(
-          `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "stripeCustomerId",
       ],
       [
         literal(
-          `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+          `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
         ),
         "connectAccountId",
       ],
       [
         literal(
-          `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+          `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
         ),
         "partnerType",
       ],
@@ -1497,8 +1500,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "The order payment has already been made. You may proceed with the update.",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -1510,21 +1513,21 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   if (placedOrder?.invoiceId) {
     const session = await Stripe.checkCheckoutSessionStatus(
-      placedOrder?.invoiceId
+      placedOrder?.invoiceId,
     );
     console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session);
 
     if (session == "paid") {
       await order.update(
         { paymentMethod: "card", paymentStatus: "done" },
-        { where: { id: placedOrder.id } }
+        { where: { id: placedOrder.id } },
       );
 
       return next(
         new AppError(
           "As the payment for the order has already been made, we are unable to update an invoice at this point.",
-          404
-        )
+          404,
+        ),
       );
     } else if (session == "open") {
       checkSession = true;
@@ -1548,36 +1551,60 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   let discountOnItemsPrice = 0;
   let totalLocalPatnerCommission = 0;
 
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  const productAttributes = [
+    `id`,
+    `name`,
+    `quantity`,
+    `categoryId`,
+    `wholesalePrice`,
+    `weight`,
+    `sku`,
+    `grind`,
+    `productCode`,
+    [
+      literal(`
+          (SELECT percentage
+          FROM userDiscounts
+          WHERE userDiscounts.categoryId = product.categoryId
+            AND userDiscounts.userId = ${placedOrder?.userId}
+          LIMIT 1)
+        `),
+      "discountPercentage",
+    ],
+  ];
+  if (placedOrder?.salesRepId) {
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVERTORY PRICE APPLIED:",
+      placedOrder?.salesRepId,
+    );
+    productAttributes.push([
+      literal(
+        `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${placedOrder?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+      ),
+      "price",
+    ]);
+  } else {
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVERTORY PRICE APPLIED:",
+      placedOrder?.salesRepId,
+    );
+    productAttributes.push(`price`);
+  }
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      [
-        literal(`
-            (SELECT percentage
-            FROM userDiscounts
-            WHERE userDiscounts.categoryId = product.categoryId
-              AND userDiscounts.userId = ${placedOrder?.userId}
-            LIMIT 1)
-          `),
-        "discountPercentage",
-      ],
-    ],
+    attributes: productAttributes,
+    raw: true,
   });
+
+  console.log(
+    "🚀 ~ exports.bookOrder=catchAsync ~ products:",
+    products?.length,
+  );
 
   // let percentageDiscount = input?.order?.discountPercentage
   //   ? input.order?.discountPercentage
@@ -1585,15 +1612,13 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length
+    products?.length,
   );
 
   const finalItems = products.map((obj) => {
     const element = {};
-    const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
-    );
-    element.productId = obj.id;
+    const percentageDiscount = parseFloat(obj?.discountPercentage || 0);
+    element.productId = obj?.id;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
@@ -1650,7 +1675,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   if (req.body?.typeCharges?.length > 0) {
     console.log(
       "🚀 ~ req.body?.typeCharges?.length:",
-      req.body?.typeCharges?.length
+      req.body?.typeCharges?.length,
     );
     req.body?.typeCharges.forEach((obj) => {
       const element = {};
@@ -1699,8 +1724,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "Not dealing in such weights. Contact customer support for this order.",
-          400
-        )
+          400,
+        ),
       );
     }
   }
@@ -1738,7 +1763,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
         if (unlinkErr) {
           console.error(
             `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
-            unlinkErr
+            unlinkErr,
           );
         } else {
           console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
@@ -1746,7 +1771,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       });
     } else {
       console.warn(
-        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`
+        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
       );
     }
   });
@@ -1771,16 +1796,18 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       await order.update(payment?.data, { where: { id: placedOrder?.id } });
       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
         orderId: placedOrder?.id,
-      });  
+      });
       // Only process employee commission if order has no local partner (salesRepId)
       if (!placedOrder?.salesRepId) {
         try {
-          await calculateAndSaveEmployeeCommission({ orderId: placedOrder?.id });
+          await calculateAndSaveEmployeeCommission({
+            orderId: placedOrder?.id,
+          });
         } catch (error) {
           // Log error but don't disrupt the overall API flow
           console.error(
             "❌ Error processing employee commission in payment capture:",
-            error.message
+            error.message,
           );
         }
       }
@@ -1832,7 +1859,7 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
            AND orders.type = 'regular-order'
-           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
       ],
@@ -1917,7 +1944,7 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
             `(SELECT COUNT(orders.id) 
              FROM orders 
              WHERE orders.statusId = statuses.id 
-             ${employeeFilterLiteral})`
+             ${employeeFilterLiteral})`,
           ),
           "count",
         ],
@@ -1960,7 +1987,7 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
       status: "success",
       data: output,
     });
-  }
+  },
 );
 
 exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
@@ -1970,7 +1997,7 @@ exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
       "orderStatus",
       [
         literal(
-          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id})`
+          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id})`,
         ),
         "count",
       ],
@@ -2008,15 +2035,15 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "This order has already been paid for and cannot be deleted.",
-        400
-      )
+        400,
+      ),
     );
   } else if (placedOrder.statusId >= 4 && placedOrder.statusId <= 5) {
     return next(
       new AppError(
         "This order has already been dispatched and cannot be deleted.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -2039,7 +2066,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
         if (unlinkErr) {
           console.error(
             `❌ ~ Failed to delete invoice PDF for order ${placedOrder.id}:`,
-            unlinkErr
+            unlinkErr,
           );
         } else {
           console.log(`🗑️ ~ Deleted invoice PDF: ${pdfFilename}`);
@@ -2047,7 +2074,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
       });
     } else {
       console.warn(
-        `⚠️ ~ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`
+        `⚠️ ~ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
       );
     }
   });

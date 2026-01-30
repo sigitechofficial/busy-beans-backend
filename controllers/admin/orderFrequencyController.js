@@ -47,11 +47,11 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
     const frequency = await orderFrequency.create(input);
     order.update(
       { orderFrequencyId: frequency?.id },
-      { where: { id: orderData?.id } }
+      { where: { id: orderData?.id } },
     );
     item.update(
       { orderFrequencyId: frequency?.id },
-      { where: { orderId: orderData?.id } }
+      { where: { orderId: orderData?.id } },
     );
 
     return true;
@@ -73,13 +73,13 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       attributes: [
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "product",
         ],
         [
           literal(
-            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "price",
         ],
@@ -181,13 +181,13 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     "id",
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "customerName",
     ],
     [
       literal(
-        `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "companyName",
     ],
@@ -200,7 +200,7 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "email",
     ],
@@ -241,7 +241,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
     "🚀 ~ exports.bookNewOrder=catchAsync ~ input:",
-    input?.order?.userId
+    input?.order?.userId,
   );
   // if (input?.items?.length < 1) {
   //   throw new AppError('Cart is empty add products to place order', 404);
@@ -255,13 +255,13 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       "defaultDiscount",
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
       [
         literal(
-          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "partnerType",
       ],
@@ -277,8 +277,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -308,17 +308,17 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       (credit?.dataValues?.creditUsed / credit?.creditLimit) * 100;
     console.log(
       "---------------------------------creaditUed",
-      credit?.dataValues?.creditUsed
+      credit?.dataValues?.creditUsed,
     );
     console.log(
       "---------------------------------creditLimit",
-      credit?.creditLimit
+      credit?.creditLimit,
     );
 
     if (percentage >= 80) {
       throw new AppError(
         `You've used over 80% of your credit limit. Please clear your balance before placing further orders.`,
-        404
+        404,
       );
     }
   }
@@ -351,17 +351,23 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         `),
       "discountPercentage",
     ],
-  ]
+  ];
   if (customer?.salesRepId) {
-    console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVERTORY PRICE APPLIED:", customer?.salesRepId);
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVERTORY PRICE APPLIED:",
+      customer?.salesRepId,
+    );
     productAttributes.push([
-        literal(
-          `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`
-        ),
-        "price",
-      ],);
-  }else{
-    console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVERTORY PRICE APPLIED:", customer?.salesRepId);
+      literal(
+        `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+      ),
+      "price",
+    ]);
+  } else {
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVERTORY PRICE APPLIED:",
+      customer?.salesRepId,
+    );
     productAttributes.push(`price`);
   }
 
@@ -377,7 +383,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length
+    products?.length,
   );
 
   // let percentageDiscount = input?.order?.discountPercentage
@@ -386,9 +392,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   const finalItems = products.map((obj) => {
     const element = {};
-    const percentageDiscount = parseFloat(
-      obj?.discountPercentage || 0
-    );
+    const percentageDiscount = parseFloat(obj?.discountPercentage || 0);
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
@@ -438,7 +442,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   if (input?.typeCharges?.length > 0) {
     console.log(
       "🚀 ~ req.body?.typeCharges?.length:",
-      input?.typeCharges?.length
+      input?.typeCharges?.length,
     );
     input?.typeCharges.forEach((obj) => {
       const element = {};
@@ -483,8 +487,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -992,25 +996,25 @@ const frequencyBookOrder = async ({ id }) => {
           attributes: [
             [
               literal(
-                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "product",
             ],
             [
               literal(
-                `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "price",
             ],
             [
               literal(
-                `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "wholesalePrice",
             ],
             [
               literal(
-                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "weight",
             ],
@@ -1019,7 +1023,7 @@ const frequencyBookOrder = async ({ id }) => {
             "categoryId",
             [
               literal(
-                `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`
+                `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`,
               ),
               "percentageDiscount",
             ],
@@ -1034,37 +1038,37 @@ const frequencyBookOrder = async ({ id }) => {
         ["id", "orderFrequencyId"],
         [
           literal(
-            `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
+            `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
           ),
           "addressId",
         ],
         [
           literal(
-            `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
+            `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
           ),
           "orderFrequencyId",
         ],
         [
           literal(
-            `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
+            `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
           ),
           "paymentMethodId",
         ],
         [
           literal(
-            `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
+            `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
           ),
           "paymentMethod",
         ],
         [
           literal(
-            `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
+            `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
           ),
           "on",
         ],
         [
           literal(
-            `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
+            `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`,
           ),
           "vat",
         ],
@@ -1085,13 +1089,13 @@ const frequencyBookOrder = async ({ id }) => {
         "defaultDiscount",
         [
           literal(
-            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "salesRepName",
         ],
         [
           literal(
-            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "partnerType",
         ],
@@ -1101,7 +1105,7 @@ const frequencyBookOrder = async ({ id }) => {
     if (!customer) {
       await orderFrequency.update(
         { status: 0 },
-        { where: { id: result.orderFrequencyId } }
+        { where: { id: result.orderFrequencyId } },
       );
       return false;
     }
@@ -1134,7 +1138,7 @@ const frequencyBookOrder = async ({ id }) => {
       if (result?.salesRepId) {
         console.log(
           "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
-          item?.price
+          item?.price,
         );
 
         const currentPrice = item?.price
@@ -1211,7 +1215,7 @@ const frequencyBookOrder = async ({ id }) => {
     console.log(
       "🚀 ~ frequencyBookOrder ~ nextOrderDate, visibilityDate:",
       nextOrderDate,
-      visibilityDate
+      visibilityDate,
     );
 
     const updateFrequencyData = {
@@ -1276,12 +1280,12 @@ exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
     for (const order of pendingOrders) {
       console.log("🔁~processing order", order?.id);
       await frequencyBookOrder({ id: order?.id });
-    }
+    }   
 
     return res.status(200).json({
       status: "success",
       message: "Orders booked according to frequency successfully.",
       processed: pendingOrders.length,
     });
-  }
+  },
 );

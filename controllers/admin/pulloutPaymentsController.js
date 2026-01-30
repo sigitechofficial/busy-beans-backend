@@ -21,10 +21,10 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
     const patner = await salesRep.findOne({ where: { id: req.params.srId } });
     // console.log('🚀 ~ patner:', patner);
 
-    const { amount, orderList ,dateAndTime} = req.body;
+    const { amount, orderList, dateAndTime } = req.body;
     console.log(
       "🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ orderList:",
-      req.body
+      req.body,
     );
 
     const orderIds = orderList.map((order) => order.id);
@@ -35,8 +35,8 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
       return next(
         new AppError(
           "Payments can’t be pulled because the partner has no default bank account attached.",
-          400
-        )
+          400,
+        ),
       );
     }
 
@@ -51,13 +51,13 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
 
     console.log(
       "🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:",
-      pullouts
+      pullouts,
     );
 
     if (pullouts) {
       console.log(
         "🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:",
-        pullouts
+        pullouts,
       );
       order.update(
         {
@@ -65,7 +65,7 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
           pulloutDate: Date.now(),
           pulloutIntentId: pullouts.paymentIntentId,
         },
-        { where: { id: orderIds } }
+        { where: { id: orderIds } },
       );
       for (const ele of orderList) {
         await order.update(
@@ -73,10 +73,10 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
             adminReceivableAmount: ele.adminReceivableAmount,
             localPatnerCommission: ele.localPatnerCommission,
           },
-          { where: { id: ele.id } }
+          { where: { id: ele.id } },
         );
       }
-      
+
       // Send email notification to partner about payment pullout
       if (patner?.email) {
         try {
@@ -87,7 +87,10 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
             orderList: orderList,
             dateAndTime,
           });
-          console.log("✅ Payment pullout notification email sent to:", patner.email);
+          console.log(
+            "✅ Payment pullout notification email sent to:",
+            patner.email,
+          );
         } catch (emailError) {
           console.error("❌ Failed to send pullout email:", emailError);
           // Don't fail the whole operation if email fails
@@ -95,7 +98,7 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
       }
     } else {
       return next(
-        new AppError("Unable to process payment pullout at this time.", 400)
+        new AppError("Unable to process payment pullout at this time.", 400),
       );
     }
 
@@ -103,7 +106,7 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
       status: "success",
       data: {},
     });
-  }
+  },
 );
 
 const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
@@ -116,7 +119,7 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
     if (!patner?.defaultBankAccount) {
       throw new AppError(
         "Payments can’t be pulled because the partner has no default bank account attached.",
-        400
+        400,
       );
     }
 
@@ -134,7 +137,7 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
     if (pullouts) {
       // Generate dateAndTime for email (YYYY-MM-DD format to avoid timezone issues)
       const pulloutDateTime = new Date().toISOString().split("T")[0];
-      
+
       // Set adminReceivableStatus true for all involved orders
       await order.update(
         {
@@ -142,7 +145,7 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
           pulloutDate: Date.now(),
           pulloutIntentId: pullouts.paymentIntentId,
         },
-        { where: { id: orderIds } }
+        { where: { id: orderIds } },
       );
 
       // Update adminReceivableAmount and localPatnerCommission per order
@@ -154,10 +157,10 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
             proportionalStripeFee: 0,
             grossPartnerAmount: ele.localPatnerCommission,
           },
-          { where: { id: ele.id } }
+          { where: { id: ele.id } },
         );
       }
-      
+
       // Send email notification to partner about payment pullout
       if (patner?.email) {
         try {
@@ -168,9 +171,15 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
             orderList: orderList,
             dateAndTime: pulloutDateTime,
           });
-          console.log("✅ Automated pullout notification email sent to:", patner.email);
+          console.log(
+            "✅ Automated pullout notification email sent to:",
+            patner.email,
+          );
         } catch (emailError) {
-          console.error("❌ Failed to send automated pullout email:", emailError);
+          console.error(
+            "❌ Failed to send automated pullout email:",
+            emailError,
+          );
           // Don't fail the whole operation if email fails
         }
       }
@@ -190,7 +199,7 @@ async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
 
     console.log(
       "🚀 ~ getOrdersForLocalPartnerAndPullRequestLamda ~ twoMonthAgo:",
-      twoMonthAgo
+      twoMonthAgo,
     );
 
     const condition = {
@@ -210,7 +219,7 @@ async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
 
     console.log(
       "🚀 ~ getOrdersForLocalPartnerAndPullRequestLamda ~ condition:",
-      condition
+      condition,
     );
 
     const doc = await order.findAll({
@@ -222,7 +231,7 @@ async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
             "id",
             [
               literal(
-                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "product",
             ],
@@ -270,12 +279,12 @@ async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
     if (!doc || doc.length < 1) {
       console.log(
         `🚀❌ ~ NO ORDER ARE TEHRE TO PULL OUT MONEY FROM: localPatner ${localPatner.id}`,
-        false
+        false,
       );
       return false;
     } else {
       console.log(
-        `🔄 ~ (${doc?.length}) ORDER ARE TEHRE TO PULL OUT MONEY FROM: localPatner ${localPatner.id}`
+        `🔄 ~ (${doc?.length}) ORDER ARE TEHRE TO PULL OUT MONEY FROM: localPatner ${localPatner.id}`,
       );
     }
 
@@ -297,7 +306,7 @@ async function getOrdersForLocalPartnerAndPullRequestLamda({ localPatner }) {
   } catch (error) {
     console.error(
       "❌ Error in getOrdersForLocalPartnerAndPullRequestLamda:",
-      error
+      error,
     );
     throw new AppError(error.message, 500);
   }
@@ -315,14 +324,14 @@ exports.processAllLocalPartnersForPaymentPullouts = catchAsync(
     // Step 2: Loop through each partner and process their orders
     for (const ele of patners) {
       console.log(
-        `🔄 Processing orders for local partner ${ele.id} : ${ele?.srName || ele.id}`
+        `🔄 Processing orders for local partner ${ele.id} : ${ele?.srName || ele.id}`,
       );
       if (ele?.defaultBankAccount) {
         getOrdersForLocalPartnerAndPullRequestLamda({ localPatner: ele });
       } else {
         console.log(
           "🚀 ~  Payments can’t be pulled because the partner has no default bank account attached.",
-          ele?.srName
+          ele?.srName,
         );
       }
     }
@@ -331,5 +340,5 @@ exports.processAllLocalPartnersForPaymentPullouts = catchAsync(
       message: "Payments pullout request success",
       data: { forNumberOfPatner: patners?.length },
     });
-  }
+  },
 );

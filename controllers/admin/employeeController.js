@@ -58,7 +58,7 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
             .map(([key]) => ({
               key: `${f.feature}_${key}`,
               employeeId: newEmployee?.id,
-            }))
+            })),
         )
       : [];
 
@@ -110,7 +110,10 @@ exports.updateEmployee = async (req, res, next) => {
   if (exist) {
     return next(new AppError("User with this email already exists.", 404));
   }
-  await employee.update(req.body, { where: { id: employeeId } });
+  await employee.update(req.body, {
+    where: { id: employeeId },
+    individualHooks: true,
+  });
 
   const { features } = req.body;
   const permissions =
@@ -121,7 +124,7 @@ exports.updateEmployee = async (req, res, next) => {
             .map(([key]) => ({
               key: `${f.feature}_${key}`,
               employeeId: employeeId,
-            }))
+            })),
         )
       : [];
 
@@ -184,7 +187,7 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
 
   if (!emp) {
     return next(
-      new AppError("Employee not found or not an admin employee!", 404)
+      new AppError("Employee not found or not an admin employee!", 404),
     );
   }
 
@@ -211,7 +214,7 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
       // Account exists but not active - need to complete onboarding
       console.log(
         "🚀 ~ Account exists but not active, getting onboarding link:",
-        error.message
+        error.message,
       );
 
       try {
@@ -234,7 +237,7 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
         // If getting link fails, create new account
         console.log(
           "🚀 ~ Error getting link, creating new account:",
-          linkError.message
+          linkError.message,
         );
       }
     }
@@ -272,7 +275,7 @@ exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
 
   if (!emp) {
     return next(
-      new AppError("Employee not found or Stripe account not created!", 404)
+      new AppError("Employee not found or Stripe account not created!", 404),
     );
   }
 
@@ -302,7 +305,7 @@ exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
 
   if (!emp) {
     return next(
-      new AppError("Employee not found or Stripe account not created!", 404)
+      new AppError("Employee not found or Stripe account not created!", 404),
     );
   }
 
@@ -327,7 +330,7 @@ exports.updateCommission = catchAsync(async (req, res, next) => {
   if (commissionPercentage !== undefined) {
     if (commissionPercentage < 0 || commissionPercentage > 100) {
       return next(
-        new AppError("Commission percentage must be between 0 and 100", 400)
+        new AppError("Commission percentage must be between 0 and 100", 400),
       );
     }
   }
@@ -339,7 +342,7 @@ exports.updateCommission = catchAsync(async (req, res, next) => {
 
   await employee.update(
     { commissionPercentage },
-    { where: { id: employeeId } }
+    { where: { id: employeeId } },
   );
 
   res.status(200).json({
@@ -357,8 +360,8 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Only admin and admin employees can access this endpoint",
-        403
-      )
+        403,
+      ),
     );
   }
   const { status } = req.params; // "transferred" or "not-transferred"
@@ -367,8 +370,8 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Status parameter is required and must be 'transferred' or 'not-transferred'",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -419,19 +422,19 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
     // Add employee name and user company name via Sequelize literal
     [
       literal(
-        `(SELECT employees.name FROM employees WHERE employees.id = order.employeeId LIMIT 1)`
+        `(SELECT employees.name FROM employees WHERE employees.id = order.employeeId LIMIT 1)`,
       ),
       "employeeName",
     ],
     [
       literal(
-        `(SELECT employees.stripeConnectAccountId FROM employees WHERE employees.id = order.employeeId LIMIT 1)`
+        `(SELECT employees.stripeConnectAccountId FROM employees WHERE employees.id = order.employeeId LIMIT 1)`,
       ),
       "stripeConnectAccountId",
     ],
     [
       literal(
-        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
       ),
       "companyName",
     ],
@@ -475,8 +478,8 @@ exports.transferCommissionToEmployeeController = catchAsync(
       return next(
         new AppError(
           "Only admin and admin employees can access this endpoint",
-          403
-        )
+          403,
+        ),
       );
     }
 
@@ -485,25 +488,25 @@ exports.transferCommissionToEmployeeController = catchAsync(
     // Validate input
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return next(
-        new AppError("orderIds is required and must be a non-empty array", 400)
+        new AppError("orderIds is required and must be a non-empty array", 400),
       );
     }
 
     // Validate all IDs are numbers
     const invalidIds = orderIds.filter(
-      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id))
+      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id)),
     );
     if (invalidIds.length > 0) {
       return next(
         new AppError(
           `Invalid order IDs: ${invalidIds.join(", ")}. All IDs must be numbers.`,
-          400
-        )
+          400,
+        ),
       );
     }
 
     console.log(
-      `🚀 ~ transferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`
+      `🚀 ~ transferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`,
     );
 
     // Process transfers for each order
@@ -544,7 +547,7 @@ exports.transferCommissionToEmployeeController = catchAsync(
       } catch (error) {
         console.error(
           `❌ Error transferring commission for order ${orderId}:`,
-          error.message
+          error.message,
         );
         failed.push({
           orderId: Number(orderId),
@@ -559,7 +562,7 @@ exports.transferCommissionToEmployeeController = catchAsync(
     }
 
     console.log(
-      `✅ Transfer summary: ${successful.length} successful, ${failed.length} failed`
+      `✅ Transfer summary: ${successful.length} successful, ${failed.length} failed`,
     );
 
     res.status(200).json({
@@ -575,7 +578,7 @@ exports.transferCommissionToEmployeeController = catchAsync(
         },
       },
     });
-  }
+  },
 );
 
 // Bulk transfer commission to employees - sums all commissions per employee and transfers once
@@ -586,8 +589,8 @@ exports.bulkTransferCommissionToEmployeeController = catchAsync(
       return next(
         new AppError(
           "Only admin and admin employees can access this endpoint",
-          403
-        )
+          403,
+        ),
       );
     }
 
@@ -596,25 +599,25 @@ exports.bulkTransferCommissionToEmployeeController = catchAsync(
     // Validate input
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return next(
-        new AppError("orderIds is required and must be a non-empty array", 400)
+        new AppError("orderIds is required and must be a non-empty array", 400),
       );
     }
 
     // Validate all IDs are numbers
     const invalidIds = orderIds.filter(
-      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id))
+      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id)),
     );
     if (invalidIds.length > 0) {
       return next(
         new AppError(
           `Invalid order IDs: ${invalidIds.join(", ")}. All IDs must be numbers.`,
-          400
-        )
+          400,
+        ),
       );
     }
 
     console.log(
-      `🚀 ~ bulkTransferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`
+      `🚀 ~ bulkTransferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`,
     );
 
     // Call bulk transfer function
@@ -622,7 +625,7 @@ exports.bulkTransferCommissionToEmployeeController = catchAsync(
 
     if (!result) {
       return next(
-        new AppError("Bulk transfer failed. Check logs for details.", 500)
+        new AppError("Bulk transfer failed. Check logs for details.", 500),
       );
     }
 
@@ -630,5 +633,5 @@ exports.bulkTransferCommissionToEmployeeController = catchAsync(
       status: "success",
       data: result,
     });
-  }
+  },
 );

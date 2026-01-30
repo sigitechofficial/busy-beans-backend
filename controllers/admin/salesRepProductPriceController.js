@@ -1,8 +1,4 @@
-const {
-  salesRepProductPrice,
-  product,
-  salesRep,
-} = require("../../models");
+const { salesRepProductPrice, product, salesRep } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
@@ -18,7 +14,8 @@ const { Op, literal } = require("sequelize");
  */
 exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
   const isLocalPartnerOrEmployee =
-    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+    req.user?.entity === "localPartner" ||
+    req.user?.entity === "partnerEmployee";
   const isAdminOrEmployee =
     req.user?.entity === "admin" || req.user?.entity === "adminEmployee";
 
@@ -29,7 +26,7 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     // Local partner or partner employee: use their own localPartnerId
     if (!req.user?.localPartnerId) {
       return next(
-        new AppError("Local partner ID not found in user data.", 403)
+        new AppError("Local partner ID not found in user data.", 403),
       );
     }
     salesRepId = req.user.localPartnerId;
@@ -37,14 +34,17 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     // Admin or admin employee: use salesRepId from query
     if (!req.query.salesRepId) {
       return next(
-        new AppError("salesRepId query parameter is required for admin users.", 400)
+        new AppError(
+          "salesRepId query parameter is required for admin users.",
+          400,
+        ),
       );
     }
     salesRepId = req.query.salesRepId;
   } else {
     // Not authorized
     return next(
-      new AppError("This route is only accessible to authorized users.", 403)
+      new AppError("This route is only accessible to authorized users.", 403),
     );
   }
   const searchableFields = ["id", "name", "sku", "productCode", "desc"];
@@ -68,7 +68,7 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     deleted: false,
     id: {
       [Op.in]: literal(
-        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`
+        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`,
       ),
     },
   };
@@ -84,25 +84,25 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     "weight",
     "quantity",
     "wholesalePrice",
-    "unit",  
-    "categoryId",  
+    "unit",
+    "categoryId",
     "createdAt",
     "updatedAt",
     [
       literal(
-        `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
+        `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
       ),
       "price",
     ],
     [
-        literal(
-          `(SELECT srpp.id FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
-        ),
-        "pid",
-     ],
+      literal(
+        `(SELECT srpp.id FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+      ),
+      "pid",
+    ],
     [
       literal(
-        `(SELECT srpp.status FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
+        `(SELECT srpp.status FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
       ),
       "status",
     ],
@@ -112,7 +112,7 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     deleted: false,
     id: {
       [Op.in]: literal(
-        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`
+        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`,
       ),
     },
   };
@@ -132,18 +132,20 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
   });
 });
 
-
-
 /**
  * Get all products that are NOT yet added (no custom price) by the logged-in sales rep / partner employee.
  * Used so they can pick products to add with a price.
  */
 exports.productsFromAdminForSalesRep = catchAsync(async (req, res, next) => {
   const isLocalPartnerOrEmployee =
-    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+    req.user?.entity === "localPartner" ||
+    req.user?.entity === "partnerEmployee";
   if (!isLocalPartnerOrEmployee || !req.user?.localPartnerId) {
     return next(
-      new AppError("This route is only for local partner or partner employee.", 403)
+      new AppError(
+        "This route is only for local partner or partner employee.",
+        403,
+      ),
     );
   }
 
@@ -169,7 +171,7 @@ exports.productsFromAdminForSalesRep = catchAsync(async (req, res, next) => {
     deleted: false,
     id: {
       [Op.notIn]: literal(
-        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`
+        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`,
       ),
     },
   };
@@ -190,7 +192,7 @@ exports.productsFromAdminForSalesRep = catchAsync(async (req, res, next) => {
     deleted: false,
     id: {
       [Op.notIn]: literal(
-        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`
+        `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`,
       ),
     },
   };
@@ -236,9 +238,7 @@ exports.getSalesRepProductPrice = catchAsync(async (req, res, next) => {
   });
 
   if (!price) {
-    return next(
-      new AppError(`No pricing entry found with ID ${id}`, 404)
-    );
+    return next(new AppError(`No pricing entry found with ID ${id}`, 404));
   }
 
   res.status(200).json({
@@ -260,14 +260,12 @@ exports.createSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // Validate that body is an array
   if (!Array.isArray(pricesData)) {
     return next(
-      new AppError("Request body must be an array of pricing entries", 400)
+      new AppError("Request body must be an array of pricing entries", 400),
     );
   }
 
   if (pricesData.length === 0) {
-    return next(
-      new AppError("Pricing array cannot be empty", 400)
-    );
+    return next(new AppError("Pricing array cannot be empty", 400));
   }
 
   // Remove duplicate combinations (productId + salesRepId) - keep first occurrence
@@ -284,18 +282,25 @@ exports.createSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // If all entries were duplicates, return error
   if (pricesData.length === 0) {
     return next(
-      new AppError("All entries were duplicates. No unique entries to process.", 400)
+      new AppError(
+        "All entries were duplicates. No unique entries to process.",
+        400,
+      ),
     );
   }
 
   // Validate required fields for each entry
   for (const priceEntry of pricesData) {
-    if (!priceEntry.productId || !priceEntry.salesRepId || priceEntry.price === undefined) {
+    if (
+      !priceEntry.productId ||
+      !priceEntry.salesRepId ||
+      priceEntry.price === undefined
+    ) {
       return next(
         new AppError(
           "Each pricing entry must have 'productId', 'salesRepId', and 'price' fields",
-          400
-        )
+          400,
+        ),
       );
     }
 
@@ -304,12 +309,11 @@ exports.createSalesRepProductPrices = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           `Price must be a positive number for productId: ${priceEntry.productId}, salesRepId: ${priceEntry.salesRepId}`,
-          400
-        )
+          400,
+        ),
       );
     }
   }
- 
 
   // Check for existing pricing entries in database (productId + salesRepId combinations)
   const existingPrices = await salesRepProductPrice.findAll({
@@ -325,13 +329,13 @@ exports.createSalesRepProductPrices = catchAsync(async (req, res, next) => {
 
   if (existingPrices.length > 0) {
     const existingCombinations = existingPrices.map(
-      (p) => `productId: ${p.productId}, salesRepId: ${p.salesRepId}`
+      (p) => `productId: ${p.productId}, salesRepId: ${p.salesRepId}`,
     );
     return next(
       new AppError(
         `Pricing entry already exists for: ${existingCombinations.join("; ")}. Use update endpoint instead.`,
-        409
-      )
+        409,
+      ),
     );
   }
 
@@ -350,31 +354,30 @@ exports.createSalesRepProductPrices = catchAsync(async (req, res, next) => {
   });
 
   // Fetch created entries with associations for response
-//   const createdIds = createdPrices.map((p) => p.id);
-//   const createdWithAssociations = await salesRepProductPrice.findAll({
-//     where: {
-//       id: {
-//         [Op.in]: createdIds,
-//       },
-//     },
-//     include: [
-//       {
-//         model: product,
-//         as: "product",
-//         attributes: ["id", "name", "sku", "productCode", "price"],
-//       },
-//       {
-//         model: salesRep,
-//         as: "salesRep",
-//         attributes: ["id", "srName", "email", "territoryName"],
-//       },
-//     ],
-//   });
+  //   const createdIds = createdPrices.map((p) => p.id);
+  //   const createdWithAssociations = await salesRepProductPrice.findAll({
+  //     where: {
+  //       id: {
+  //         [Op.in]: createdIds,
+  //       },
+  //     },
+  //     include: [
+  //       {
+  //         model: product,
+  //         as: "product",
+  //         attributes: ["id", "name", "sku", "productCode", "price"],
+  //       },
+  //       {
+  //         model: salesRep,
+  //         as: "salesRep",
+  //         attributes: ["id", "srName", "email", "territoryName"],
+  //       },
+  //     ],
+  //   });
 
   res.status(201).json({
     status: "success",
-    data: {
-    },
+    data: {},
   });
 });
 
@@ -389,14 +392,12 @@ exports.updateSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // Validate that body is an array
   if (!Array.isArray(pricesData)) {
     return next(
-      new AppError("Request body must be an array of pricing entries", 400)
+      new AppError("Request body must be an array of pricing entries", 400),
     );
   }
 
   if (pricesData.length === 0) {
-    return next(
-      new AppError("Pricing array cannot be empty", 400)
-    );
+    return next(new AppError("Pricing array cannot be empty", 400));
   }
 
   // Remove duplicate combinations (productId + salesRepId) - keep first occurrence
@@ -413,7 +414,10 @@ exports.updateSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // If all entries were duplicates, return error
   if (pricesData.length === 0) {
     return next(
-      new AppError("All entries were duplicates. No unique entries to process.", 400)
+      new AppError(
+        "All entries were duplicates. No unique entries to process.",
+        400,
+      ),
     );
   }
 
@@ -423,8 +427,8 @@ exports.updateSalesRepProductPrices = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "Each pricing entry must have 'productId' and 'salesRepId' fields",
-          400
-        )
+          400,
+        ),
       );
     }
 
@@ -433,8 +437,8 @@ exports.updateSalesRepProductPrices = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           `Price must be a positive number for productId: ${priceEntry.productId}, salesRepId: ${priceEntry.salesRepId}`,
-          400
-        )
+          400,
+        ),
       );
     }
   }
@@ -454,8 +458,8 @@ exports.updateSalesRepProductPrices = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "No existing pricing entries found to update. Use create endpoint instead.",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -488,35 +492,37 @@ exports.updateSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // If some entries don't exist, inform user but continue with updates
   if (missingEntries.length > 0 && entriesToUpdate.length === 0) {
     const missingCombinations = missingEntries.map(
-      (e) => `productId: ${e.productId}, salesRepId: ${e.salesRepId}`
+      (e) => `productId: ${e.productId}, salesRepId: ${e.salesRepId}`,
     );
     return next(
       new AppError(
         `No existing pricing entries found for: ${missingCombinations.join("; ")}. Use create endpoint instead.`,
-        404
-      )
+        404,
+      ),
     );
   }
 
   // Update existing entries
-  const updatePromises = entriesToUpdate.map(async ({ existingPrice, updateData }) => {
-    const updateFields = {};
-    
-    if (updateData.price !== undefined) {
-      updateFields.price = Number(updateData.price);
-    }
-    
-    if (updateData.status !== undefined) {
-      updateFields.status = updateData.status;
-    }
+  const updatePromises = entriesToUpdate.map(
+    async ({ existingPrice, updateData }) => {
+      const updateFields = {};
 
-    // Only update if there are fields to update
-    if (Object.keys(updateFields).length > 0) {
-      await existingPrice.update(updateFields);
-    }
+      if (updateData.price !== undefined) {
+        updateFields.price = Number(updateData.price);
+      }
 
-    return existingPrice;
-  });
+      if (updateData.status !== undefined) {
+        updateFields.status = updateData.status;
+      }
+
+      // Only update if there are fields to update
+      if (Object.keys(updateFields).length > 0) {
+        await existingPrice.update(updateFields);
+      }
+
+      return existingPrice;
+    },
+  );
 
   const updatedPrices = await Promise.all(updatePromises);
 
@@ -564,24 +570,22 @@ exports.deleteSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // Validate that body is an array
   if (!Array.isArray(deleteData)) {
     return next(
-      new AppError("Request body must be an array of entries to delete", 400)
+      new AppError("Request body must be an array of entries to delete", 400),
     );
   }
 
   if (deleteData.length === 0) {
-    return next(
-      new AppError("Delete array cannot be empty", 400)
-    );
+    return next(new AppError("Delete array cannot be empty", 400));
   }
 
   // Remove duplicate entries - keep first occurrence
   const seenEntries = new Set();
   deleteData = deleteData.filter((entry) => {
     // Support both id-based and productId+salesRepId-based deletion
-    const key = entry.id 
-      ? `id_${entry.id}` 
+    const key = entry.id
+      ? `id_${entry.id}`
       : `product_${entry.productId}_salesrep_${entry.salesRepId}`;
-    
+
     if (seenEntries.has(key)) {
       return false; // Skip duplicate
     }
@@ -592,7 +596,10 @@ exports.deleteSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // If all entries were duplicates, return error
   if (deleteData.length === 0) {
     return next(
-      new AppError("All entries were duplicates. No unique entries to process.", 400)
+      new AppError(
+        "All entries were duplicates. No unique entries to process.",
+        400,
+      ),
     );
   }
 
@@ -602,8 +609,8 @@ exports.deleteSalesRepProductPrices = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "Each entry must have either 'id' or both 'productId' and 'salesRepId' fields",
-          400
-        )
+          400,
+        ),
       );
     }
   }
@@ -629,10 +636,7 @@ exports.deleteSalesRepProductPrices = catchAsync(async (req, res, next) => {
 
   if (existingPrices.length === 0) {
     return next(
-      new AppError(
-        "No existing pricing entries found to delete.",
-        404
-      )
+      new AppError("No existing pricing entries found to delete.", 404),
     );
   }
 
@@ -651,14 +655,16 @@ exports.deleteSalesRepProductPrices = catchAsync(async (req, res, next) => {
   // Check if some entries were not found
   const foundIds = new Set(existingPrices.map((p) => p.id));
   const foundProductSalesRep = new Set(
-    existingPrices.map((p) => `${p.productId}_${p.salesRepId}`)
+    existingPrices.map((p) => `${p.productId}_${p.salesRepId}`),
   );
 
   const missingEntries = deleteData.filter((entry) => {
     if (entry.id) {
       return !foundIds.has(entry.id);
     } else {
-      return !foundProductSalesRep.has(`${entry.productId}_${entry.salesRepId}`);
+      return !foundProductSalesRep.has(
+        `${entry.productId}_${entry.salesRepId}`,
+      );
     }
   });
 
