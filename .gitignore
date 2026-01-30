@@ -60,4 +60,5 @@ Thumbs.db
 *.flv
 *.mov
 *.wmv
+.sql
 
