@@ -5,7 +5,7 @@ const server = require("./app");
 
 const serverPort = process.env.PORT || 8011;
 
-const serverHost = process.env.HOST || "127.0.0.1"; // Accept connections from anywhere
+const serverHost = process.env.HOST || "127.0.0.1";     // Accept connections from anywhere
 
 // const serverHost = "192.168.18.21";
 
@@ -16,7 +16,8 @@ if (syncDb) {
     .sync({ alter: true })
     .then(() => console.log("✅ Database synchronized successfully."))
     .catch((err) => console.error("❌ Error synchronizing database:", err));
-}
+}200412596
+
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
