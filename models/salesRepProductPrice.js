@@ -9,6 +9,11 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: 0,
       },
+      wholesalePrice: {
+        type: DataTypes.DECIMAL(20, 2),
+        allowNull: true,
+        defaultValue: 0,
+      },
       status: {
         type: DataTypes.BOOLEAN,
         allowNull: true,
@@ -40,7 +45,6 @@ module.exports = (sequelize) => {
       ],
     }
   );
-
 
   return salesRepProductPrice;
 };

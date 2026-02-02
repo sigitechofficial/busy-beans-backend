@@ -27,7 +27,7 @@ async function testPasswordUpdate() {
       {
         where: { id: createdEmp.id },
         individualHooks: true,
-      },
+      }
     );
     console.log("Performed update operation");
 
@@ -46,7 +46,7 @@ async function testPasswordUpdate() {
       console.log("✅ SUCCESS: New password was correctly hashed.");
     } else {
       console.error(
-        "❌ FAILURE: Password does not match hash (unknown error).",
+        "❌ FAILURE: Password does not match hash (unknown error)."
       );
       console.log("Stored:", updatedEmp.password);
       process.exit(1);
