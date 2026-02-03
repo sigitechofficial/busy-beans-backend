@@ -1230,34 +1230,35 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
             where: { id: orderId || partnerOrderId },
           }
         );
-        // syncPaymentToQuickBooks({
-        //   orderId: orderId || partnerOrderId,
-        //   orderType: isPartnerOrder ? "local-partner" : "customer",
-        // });
+        syncPaymentToQuickBooks({
+          orderId: orderId || partnerOrderId,
+          orderType: isPartnerOrder ? "local-partner" : "customer",
+        });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
       } else if (!doc.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
-        // syncInvoiceOnQuikBooks({
-        //   orderId: orderId || partnerOrderId,
-        //   orderType: isPartnerOrder ? "local-partner" : "customer",
-        // });
+        syncInvoiceOnQuikBooks({
+          orderId: orderId || partnerOrderId,
+          orderType: isPartnerOrder ? "local-partner" : "customer",
+        });
       }
       req.body.orderData.invoicePaidDate = new Date();
       req.body.orderData.paymentMethod = "Bank Check";
       manualPaymentEmail = true;
     }
 
-    if (!isPartnerOrder && orderId && doc?.paymentStatus != "done") {
+    //this is for employee commission and paid invoice event
+    if (!isPartnerOrder && orderId && doc?.paymentStatus == "done") {
       console.log(
         "🚀 ~ exports.orderJourneryComplete ~ doc?.paymentStatus:",
         doc?.paymentStatus
       );
 
       await calculateAndSaveEmployeeCommission({ orderId: orderId });
-      //    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-      //         orderId: orderId || partnerOrderId,
-      //         orderType: isPartnerOrder ? "local-partner" : "customer",
-      //    });
+         paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+              orderId: orderId || partnerOrderId,
+              orderType: isPartnerOrder ? "local-partner" : "customer",
+         });
     }
 
     await Model.update(req.body?.orderData, {

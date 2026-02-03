@@ -78,10 +78,11 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
         new AppError(
           "salesRepId (in body order or query) is required for admin users.",
           400
-        )
+        )  
       );
     }
     salesRepId = fromBody;
+    
   } else {
     return next(
       new AppError("This route is only accessible to authorized users.", 403)
@@ -120,15 +121,17 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   ];
   productAttributes.push([
     literal(
-      `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) 
-       FROM salesRepProductPrices srpp 
-       WHERE srpp.productId = product.id 
-         AND srpp.salesRepId = ${salesRepId} 
-         AND srpp.deleted = 0 
-       LIMIT 1)`
+      `(SELECT COALESCE(
+        (SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp 
+         WHERE srpp.productId = product.id 
+           AND srpp.salesRepId = ${salesRepId} 
+           AND srpp.deleted = 0 
+         LIMIT 1),
+        product.wholesalePrice
+      ))`
     ),
     "wholesalePrice",
-  ]);
+  ],);
 
   const products = await product.findAll({
     where: {
@@ -855,15 +858,17 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
   ];
   productAttributes.push([
     literal(
-      `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) 
-       FROM salesRepProductPrices srpp 
-       WHERE srpp.productId = product.id 
-         AND srpp.salesRepId = ${placedOrder.salesRepId} 
-         AND srpp.deleted = 0 
-       LIMIT 1)`
+      `(SELECT COALESCE(
+        (SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp 
+         WHERE srpp.productId = product.id 
+           AND srpp.salesRepId = ${placedOrder.salesRepId} 
+           AND srpp.deleted = 0 
+         LIMIT 1),
+        product.wholesalePrice
+      ))`
     ),
     "wholesalePrice",
-  ]);
+  ],);
 
   const products = await product.findAll({
     where: {

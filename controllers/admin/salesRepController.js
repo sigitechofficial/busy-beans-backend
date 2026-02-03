@@ -410,7 +410,9 @@ exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
 });
 
 exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
+
   const sr = await salesRep.findOne({ where: { id: req.params.srId } });
+  
   if (!sr) {
     return next(new AppError("Data not Found!", 404));
   }

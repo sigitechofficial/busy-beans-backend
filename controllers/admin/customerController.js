@@ -20,17 +20,20 @@ const Stripe = require("../stripe");
 const APIFeatures = require("../../utils/apiFeatures");
 
 exports.customersList = catchAsync(async (req, res, next) => {
-  // Build manual filter conditions (preserve existing logic)
-  const filters = { deleted: 0 };
-  if (req.params?.sr == "not-assign") filters.salesRepId = null;
-  else if (req.params?.sr == "assign") filters.salesRepId = { [Op.ne]: null };
-  else if (req.params?.sr == "assigned-employee")
-    filters.employeeId = { [Op.ne]: null };
-  else if (req.params?.sr == "not-assigned-employee")
-    filters.employeeId = { [Op.eq]: null };
-  console.log("🚀 ~ filters:", filters);
+  // sr can come from :sr or :srId (e.g. .../sale-rep-id/not-assigned)
+  const sr = (req.params?.sr ?? req.params?.srId ?? "").toLowerCase();
 
- 
+  // Build manual filter conditions (accept both "not-assign" and "not-assigned", etc.)
+  const filters = { deleted: 0 };
+  if (sr === "not-assign" || sr === "not-assigned")
+    filters.salesRepId = { [Op.is]: null };
+  else if (sr === "assign" || sr === "assigned")
+    filters.salesRepId = { [Op.ne]: null };
+  else if (sr === "assigned-employee")
+    filters.employeeId = { [Op.ne]: null };
+  else if (sr === "not-assigned-employee")
+    filters.employeeId = { [Op.eq]: null };
+
   if (req.params?.empId) filters.employeeId = req.params?.empId;
   //   if (req.params?.condition) {
   //     if (req.user.localPartnerId) filters.salesRepId = req.user.localPartnerId;
@@ -45,7 +48,6 @@ exports.customersList = catchAsync(async (req, res, next) => {
   if (req.user?.employeeOf == "Local Partner") {
     filters.salesRepId = req.user?.salesRepId;
   }
-  console.log("🚀 ~ filters:", filters);
 
   // Define searchable columns for customers
   const searchableFields = [
@@ -58,11 +60,19 @@ exports.customersList = catchAsync(async (req, res, next) => {
     "emailToSendInvoices",
   ];
 
-  // Build API features (filter, search, sort, fields, pagination)
-  if (req.params?.srId) filters.salesRepId = req.params?.srId;
-  console.log("req.params?.srId >>>>>>>>>>>>>",req.params?.srId);
-  console.log("filters >>>>>>>>>>>>>",filters);
-  
+  // Only override salesRepId with srId when it's a numeric ID (not "not-assign" / "not-assigned" / "assign" / "assigned")
+  const srIdRaw = req.params?.srId;
+  const isSrFilterLiteral =
+    srIdRaw === "not-assign" ||
+    srIdRaw === "not-assigned" ||
+    srIdRaw === "assign" ||
+    srIdRaw === "assigned";
+  if (srIdRaw != null && !isSrFilterLiteral) filters.salesRepId = srIdRaw;
+
+  if (process.env.NODE_ENV === "development") {
+    console.debug("[customersList] sr=%s filters=%j", sr || "(none)", filters);
+  }
+
   const features = new APIFeatures(user, req.query)
     .filter()
     .search(searchableFields) // Add search functionality

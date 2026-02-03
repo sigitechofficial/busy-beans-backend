@@ -782,30 +782,33 @@ exports.getProductsForPartnerOrder = catchAsync(async (req, res, next) => {
     "categoryId",
   ];
 
-  // Add custom wholesalePrice using COALESCE
-  // If custom price exists in salesRepProductPrices, use it
-  // Otherwise, fall back to product.wholesalePrice
+  // Add custom wholesalePrice/price: use salesRepProductPrices when present, else product column
+  // Subquery returns NULL when no srpp row exists, so outer COALESCE falls back to product.*
   productAttributes.push(
     [
       literal(
-        `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) 
-       FROM salesRepProductPrices srpp 
-       WHERE srpp.productId = product.id 
-         AND srpp.salesRepId = ${salesRepId} 
-         AND srpp.deleted = 0 
-       LIMIT 1)`
+        `(SELECT COALESCE(
+          (SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp 
+           WHERE srpp.productId = product.id 
+             AND srpp.salesRepId = ${salesRepId} 
+             AND srpp.deleted = 0 
+           LIMIT 1),
+          product.wholesalePrice
+        ))`
       ),
       "wholesalePrice",
     ],
     [
       literal(
-        `(SELECT COALESCE(srpp.price, product.price) 
-           FROM salesRepProductPrices srpp 
+        `(SELECT COALESCE(
+          (SELECT srpp.price FROM salesRepProductPrices srpp 
            WHERE srpp.productId = product.id 
              AND srpp.salesRepId = ${salesRepId} 
              AND srpp.deleted = 0 
-           LIMIT 1)`
-      ),
+           LIMIT 1),
+          product.price
+        ))`
+         ),
       "price",
     ]
   );
