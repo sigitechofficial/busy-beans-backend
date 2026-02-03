@@ -111,6 +111,7 @@ jobs:
 
       - name: 📂 Sync files to development
         uses: SamKirkland/FTP-Deploy-Action@v4.2.0
+        continue-on-error: true
         with:
           server: ${{ secrets.STAGE_FTP_HOST }}
           username: ${{ secrets.STAGE_FTP_USERNAME }}
@@ -130,8 +131,3 @@ jobs:
           curl -X GET "https://testingbb.trimworldwide.com/trigger.php"
         env:
           HOME: /home/trimworldwide
-
-
-
-
-
