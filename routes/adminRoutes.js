@@ -22,6 +22,7 @@ const machineController = require("../controllers/admin/machineController");
 const patnerOrderController = require("../controllers/admin/partnerOrderController");
 
 const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsController");
+const emailLogController = require("../controllers/admin/emailLogController");
 
 const multer = require("multer");
 const path = require("path");
@@ -71,6 +72,69 @@ router.post(
 router.post(
   "/order-management/email-helper",
   manageOrderController.emailHelper
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/email-log:
+ *   get:
+ *     summary: List successfully sent email log (protected)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: emailType
+ *         schema: { type: string }
+ *         description: invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order
+ *       - in: query
+ *         name: orderId
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date }
+ *         description: Start date YYYY-MM-DD
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date }
+ *         description: End date YYYY-MM-DD
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: List of email log entries
+ */
+router.get(
+  "/order-management/email-log",
+  protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  emailLogController.getEmailLog
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/email-log/{id}:
+ *   get:
+ *     summary: Get single email log entry by id (protected)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Email log entry
+ *       404:
+ *         description: Not found
+ */
+router.get(
+  "/order-management/email-log/:id",
+  protect,
+  auth.restrictTo("admin", "adminEmployee"),
+  emailLogController.getEmailLogById
 );
 
 /**

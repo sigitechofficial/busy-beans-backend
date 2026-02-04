@@ -6,7 +6,7 @@ dotenv.config({ path: '../.env' });
 console.log('🚀 ~ process.env.EMAIL_HOST:', process.env.EMAIL_HOST);
 // console.log('🚀 ~ process.env.EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD)
 console.log('🚀 ~ process.env.EMAIL_USERNAME:', process.env.EMAIL_USERNAME);
-exports.transporter = nodemailer.createTransport({
+const transporterInstance = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: process.env.EMAIL_PORT,
   // secure: true, // use TLS
@@ -19,3 +19,20 @@ exports.transporter = nodemailer.createTransport({
   //   rejectUnauthorized: false, // Ignore self-signed certificate error
   // },
 });
+
+exports.transporter = transporterInstance;
+
+/**
+ * Promise wrapper for sendMail - resolve with info on success, reject with error on failure
+ */
+exports.sendMailPromise = (mailOptions) => {
+  return new Promise((resolve, reject) => {
+    transporterInstance.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(info);
+      }
+    });
+  });
+};

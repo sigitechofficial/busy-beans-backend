@@ -36,7 +36,7 @@ exports.sentPaymentInvoiceEvent = async ({
 
     to = [...new Set(to)];
     console.log("🚀 ~ to:", JSON.stringify(to));
-    sentInvoiceEmail({ email: to, data: details });
+    await sentInvoiceEmail({ email: to, data: details });
     console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
     return true;
   } catch (error) {

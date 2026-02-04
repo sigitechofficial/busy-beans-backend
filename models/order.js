@@ -276,6 +276,9 @@ module.exports = (sequelize) => {
     order.hasOne(models.transfersToSalesRep);
     models.transfersToSalesRep.belongsTo(order);
 
+    order.hasMany(models.emailLog);
+    models.emailLog.belongsTo(order);
+
     order.belongsTo(models.employee, {
       foreignKey: "employeeId",
     });

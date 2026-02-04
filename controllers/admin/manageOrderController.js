@@ -16,6 +16,7 @@ const {
   partnerOrder,
   account,
   employee,
+  emailLog,
 } = require("../../models");
 
 const fs = require("fs");
@@ -828,6 +829,12 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
         model: address,
         attributes: {
           exclude: ["createdAt", "updatedAt", "userId", "deleted", "deletedAt"],
+        },
+      },
+      {
+        model: emailLog,
+        attributes: {
+          exclude: [ "updatedAt", "deletedAt"],
         },
       },
       {

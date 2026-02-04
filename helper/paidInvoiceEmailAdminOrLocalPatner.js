@@ -4,8 +4,9 @@ const dotenv = require("dotenv");
 dotenv.config({ path: "../.env" });
 
 const { attachments } = require("./attactments");
-const { transporter } = require("./transpoter");
+const { sendMailPromise } = require("./transpoter");
 const Footer = require("./footer");
+const { logEmailSuccess } = require("../utils/emailLogOnSuccess");
 const { header } = require("./header");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 const GenerateInvoicePdf = require("../utils/generateInvoicePdf");
@@ -69,15 +70,14 @@ module.exports = async function ({ email, data, invoice }) {
   });
 
   items = items.join("");
-  transporter.sendMail(
-    {
-      from: process.env.EMAIL_USERNAME, // sender address
-      to: [email], // main recipient(s)
-      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
-      subject: `Busy Bean Coffee Invoice #${data?.invoiceNumber || ""} Payment Completed`, // Subject line
-      replyTo: data.email,
-      attachments: emailAttachments,
-      html: `<!DOCTYPE html>
+  const mailOptions = {
+    from: process.env.EMAIL_USERNAME, // sender address
+    to: [email], // main recipient(s)
+    bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
+    subject: `Busy Bean Coffee Invoice #${data?.invoiceNumber || ""} Payment Completed`, // Subject line
+    replyTo: data.email,
+    attachments: emailAttachments,
+    html: `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -211,13 +211,17 @@ module.exports = async function ({ email, data, invoice }) {
       </tr>
        ${footer}
       `,
-    },
-    function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(info);
-      }
-    }
-  );
+  };
+  try {
+    await sendMailPromise(mailOptions);
+    await logEmailSuccess({
+      emailType: "paid_receipt_admin",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+    });
+  } catch (error) {
+    console.log(error);
+  }
 };

@@ -21,7 +21,7 @@ exports.supplierNewOrderEvent = async ({ orderId, orderType = "customer" }) => {
     const { details } = orderData;
     console.log("🚀 ~ details:", details);
 
-    supplierNewOrder({
+    await supplierNewOrder({
       email: details?.supplierEmail,
       data: details,
       stage: "Confirmed",
@@ -34,7 +34,7 @@ exports.supplierNewOrderEvent = async ({ orderId, orderType = "customer" }) => {
 
     const adminNotification = {
       title: `Order Assigned to Supplier`,
-      body: `Order #${details?.id} has been dispatched to Supplier ${data?.supplierName}.`,
+      body: `Order #${details?.id} has been dispatched to Supplier ${details?.supplierName}.`,
     };
 
     ThrowNotification(orderData.adminTokens, adminNotification, {

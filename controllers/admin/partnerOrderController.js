@@ -17,6 +17,7 @@ const {
   statuses,
   orderFrequency,
   account,
+  emailLog,
 } = require("../../models");
 
 const fs = require("fs");
@@ -76,7 +77,7 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     if (!fromBody) {
       return next(
         new AppError(
-          "salesRepId (in body order or query) is required for admin users.",
+          "salesRepId (in body order or query) is required for admin users.",     
           400
         )  
       );
@@ -534,6 +535,12 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
         model: address,
         attributes: {
           exclude: ["createdAt", "updatedAt", "userId", "deleted", "deletedAt"],
+        },
+      },
+      {
+        model: emailLog,
+        attributes: {
+          exclude: [ "updatedAt", "deletedAt"],
         },
       },
       {

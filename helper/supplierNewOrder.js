@@ -3,8 +3,9 @@ dotenv.config({ path: "../.env" });
 
 const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require("./transpoter");
+const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
+const { logEmailSuccess } = require("../utils/emailLogOnSuccess");
 const generateFooterHtml = require("./footerLocalpatner");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 
@@ -75,10 +76,9 @@ module.exports = async function ({ email, data }) {
   ${on ? `<span style="margin-top: 20px; color:black;">Dispatched on ${on}</span>` : ""}
 `;
 
-  transporter.sendMail(
-    {
-      from: process.env.EMAIL_USERNAME, // sender address
-      to: [email], // main recipient(s)
+  const mailOptions = {
+    from: process.env.EMAIL_USERNAME, // sender address
+    to: [email], // main recipient(s)
       bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `${hiSupplierName}, You’ve Received a New Order #${data.id} to Fulfill`, // Subject line
       attachments: attachment.footer,
@@ -215,13 +215,17 @@ module.exports = async function ({ email, data }) {
       </tr>
        ${footer}
       `,
-    },
-    function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(info);
-      }
-    }
-  );
+  };
+  try {
+    await sendMailPromise(mailOptions);
+    await logEmailSuccess({
+      emailType: "supplier_new_order",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      metadata: { subject: mailOptions.subject },
+    });
+  } catch (error) {
+    console.log(error);
+  }
 };

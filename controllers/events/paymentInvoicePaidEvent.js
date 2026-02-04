@@ -10,7 +10,7 @@ exports.paidInvoiceEmailEvent = async ({ orderId }) => {
     const orderData = await dataForEmailAndNotifications(orderId);
     if (!orderData) return false;
     const { details, email } = orderData;
-    paidInvoiceEmail({ email: email, data: details, invoice: null });
+    await paidInvoiceEmail({ email: email, data: details, invoice: null });
     console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
     return true;
   } catch (error) {
@@ -23,7 +23,7 @@ exports.paidInvoiceAdminOrLocalPatnerEvent = async ({ orderId }) => {
     const orderData = await dataForEmailAndNotifications(orderId);
     if (!orderData) return false;
     const { details, email } = orderData;
-    paidInvoiceEmailAdminOrLocalPatner({
+    await paidInvoiceEmailAdminOrLocalPatner({
       email: details?.patnerEmail || "info@busybeancoffee.com",
       data: details,
       invoice: null,
@@ -63,12 +63,12 @@ exports.paidInvoiceAdminOrLocalPatnerEventAndCustomer = async ({
     const orderData = await dataForEmailAndNotifications(orderId, orderType);
     if (!orderData) return false;
     const { details, email } = orderData;
-    paidInvoiceEmailAdminOrLocalPatner({
+    await paidInvoiceEmailAdminOrLocalPatner({
       email: details?.patnerEmail || "info@busybeancoffee.com",
       data: details,
       invoice: null,
     });
-    paidInvoiceEmail({ email: email, data: details, invoice: null });
+    await paidInvoiceEmail({ email: email, data: details, invoice: null });
     console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
     return true;
   } catch (error) {
