@@ -6,7 +6,7 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
-const { logEmailSuccess } = require("../utils/emailLogOnSuccess");
+const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
 
 const generateFooterHtml = require("./footerLocalpatner");
 const { header } = require("./header");
@@ -324,5 +324,14 @@ Need help or want a custom order? Just reply to this email or call us!`
     });
   } catch (error) {
     console.log(error);
+    await logEmailOutcome({
+      emailType: data?.invoiceReminder ? "invoice_reminder" : "invoice_sent",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      emailSent: "Failed",
+      errorMessage: error?.message || String(error),
+      metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+    });
   }
 };

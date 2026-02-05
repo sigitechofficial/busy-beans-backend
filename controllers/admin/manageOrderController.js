@@ -832,12 +832,6 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
         },
       },
       {
-        model: emailLog,
-        attributes: {
-          exclude: [ "updatedAt", "deletedAt"],
-        },
-      },
-      {
         model: supplier,
         attributes: {
           exclude: [

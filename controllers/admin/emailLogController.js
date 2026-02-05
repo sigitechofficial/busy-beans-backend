@@ -6,11 +6,11 @@ const { response } = require("../../utils/response");
 
 /**
  * GET /api/v1/admin/order-management/email-log
- * List successfully sent emails with optional filters.
- * Query: emailType, orderId, from (date YYYY-MM-DD), to (date YYYY-MM-DD), page, limit
+ * List email log (success and/or failed) with optional filters.
+ * Query: emailType, orderId, emailSent (Success|Failed), from (date YYYY-MM-DD), to (date YYYY-MM-DD), page, limit
  */
 exports.getEmailLog = catchAsync(async (req, res, next) => {
-  const { emailType, orderId, from, to, page = 1, limit = 20 } = req.query;
+  const { emailType, orderId, emailSent, from, to, page = 1, limit = 20 } = req.query;
 
   const where = {};
 
@@ -19,6 +19,9 @@ exports.getEmailLog = catchAsync(async (req, res, next) => {
   }
   if (orderId) {
     where.orderId = Number(orderId);
+  }
+  if (emailSent) {
+    where.emailSent = emailSent;
   }
   if (from || to) {
     where.sentAt = {};

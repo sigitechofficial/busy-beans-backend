@@ -78,7 +78,7 @@ router.post(
  * @swagger
  * /api/v1/admin/order-management/email-log:
  *   get:
- *     summary: List successfully sent email log (protected)
+ *     summary: List email log (success and failed) with filters (protected)
  *     tags: [Admin]
  *     parameters:
  *       - in: query
@@ -88,6 +88,10 @@ router.post(
  *       - in: query
  *         name: orderId
  *         schema: { type: integer }
+ *       - in: query
+ *         name: emailSent
+ *         schema: { type: string }
+ *         description: Success | Failed
  *       - in: query
  *         name: from
  *         schema: { type: string, format: date }

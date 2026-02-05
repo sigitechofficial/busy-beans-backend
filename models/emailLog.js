@@ -15,6 +15,21 @@ module.exports = (sequelize) => {
         comment:
           "invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order",
       },
+      orderId: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      emailSent: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: "Success",
+        comment: "Success | Failed",
+      },
+      errorMessage: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: "Error details when emailSent is Failed",
+      },
       orderType: {
         type: DataTypes.STRING(20),
         allowNull: true,
@@ -37,9 +52,7 @@ module.exports = (sequelize) => {
         comment: "Optional JSON: subject, invoiceNumber, etc.",
       },
     },
-    {
-      timestamps: true, 
-    }
+     
   );
   return emailLog;
 };

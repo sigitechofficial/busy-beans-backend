@@ -6,7 +6,7 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
-const { logEmailSuccess } = require("../utils/emailLogOnSuccess");
+const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
 const generateFooterHtml = require("./footerLocalpatner");
 
 const { header } = require("./header");
@@ -234,5 +234,14 @@ module.exports = async function ({ email, data, invoice }) {
     });
   } catch (error) {
     console.log(error);
+    await logEmailOutcome({
+      emailType: "paid_receipt",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      emailSent: "Failed",
+      errorMessage: error?.message || String(error),
+      metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+    });
   }
 };

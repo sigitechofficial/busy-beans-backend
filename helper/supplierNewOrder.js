@@ -5,7 +5,7 @@ const { attachments } = require("./attactments");
 const attachment = attachments();
 const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
-const { logEmailSuccess } = require("../utils/emailLogOnSuccess");
+const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
 const generateFooterHtml = require("./footerLocalpatner");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 
@@ -227,5 +227,14 @@ module.exports = async function ({ email, data }) {
     });
   } catch (error) {
     console.log(error);
+    await logEmailOutcome({
+      emailType: "supplier_new_order",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      emailSent: "Failed",
+      errorMessage: error?.message || String(error),
+      metadata: { subject: mailOptions.subject },
+    });
   }
 };
