@@ -39,6 +39,25 @@ exports.paidInvoiceAdminOrLocalPatnerEventAndCustomer = async ({
   orderId,
   orderType = "customer",
 }) => {
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+  console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
+
   const pdfFilename = `invoice-00${orderId}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
   const pdfPath = path.join(__dirname, "../../public/invoicePDFs", pdfFilename);
   fs.access(pdfPath, fs.constants.F_OK, (err) => {
@@ -47,7 +66,7 @@ exports.paidInvoiceAdminOrLocalPatnerEventAndCustomer = async ({
         if (unlinkErr) {
           console.error(
             `❌ ~ Failed to delete invoice PDF for order ${orderId}:`,
-            unlinkErr
+            unlinkErr,
           );
         } else {
           console.log(`🗑️ ~ Deleted invoice PDF: ${pdfFilename}`);
@@ -55,7 +74,7 @@ exports.paidInvoiceAdminOrLocalPatnerEventAndCustomer = async ({
       });
     } else {
       console.warn(
-        `⚠️ ~ No invoice PDF found for order ${orderId} at ${pdfPath}`
+        `⚠️ ~ No invoice PDF found for order ${orderId} at ${pdfPath}`,
       );
     }
   });
