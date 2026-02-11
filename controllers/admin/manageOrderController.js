@@ -1618,6 +1618,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       "invoiceNumber",
       "userId",
       "quickBooksInvoiceId",
+      "shippingCharges",
       [
         literal(
           `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
@@ -1893,7 +1894,10 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
   input.order.invoicePdf = 1;
   input.order.shippingCharges =
-    req.body?.order?.shippingCharges || shippingCompany?.charges;
+    placedOrder?.partnerType == "direct-partner"
+      ? req.body?.order?.shippingCharges || placedOrder?.shippingCharges
+      : req.body?.order?.shippingCharges || shippingCompany?.charges;
+
   input.order.subTotal = itemsPrice + parseFloat(input?.order?.vat || 0);
   input.order.totalBill =
     itemsPrice +

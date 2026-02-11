@@ -155,7 +155,11 @@ exports.createSubscription = async (req, res) => {
       }
     }
 
-    // 6. Create dynamic Stripe price
+    // 6. Create dynamic Stripe price (one cycle = subscriptionDays, e.g. 60 days = one charge every 60 days)
+    const cycleDays = Math.max(
+      1,
+      Math.min(365, parseInt(subscriptionDays, 10) || 30)
+    );
     const productDescription =
       products.length > 0 ? `${products.length} product(s)` : "no products";
     const addonDescription =
@@ -165,7 +169,8 @@ exports.createSubscription = async (req, res) => {
       unit_amount: totalInCents,
       currency: "usd",
       recurring: {
-        interval: "month",
+        interval: "day",
+        interval_count: cycleDays,
       },
       product_data: {
         name: `Subscription for ${machine.name}`,

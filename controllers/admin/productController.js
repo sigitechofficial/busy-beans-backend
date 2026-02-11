@@ -110,7 +110,7 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
       ...queryOptions.where,
       id: {
         [Op.in]: literal(
-          `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`
+          `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`,
         ),
       },
     };
@@ -126,20 +126,21 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
       "unit",
       "categoryId",
       "status",
+      "grind",
     ];
     productAttributes.push(
       [
         literal(
-          `(SELECT COALESCE(srpp.price, product.price) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
+          `(SELECT COALESCE(srpp.price, product.price) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
         ),
         "price",
       ],
       [
         literal(
-          `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`
+          `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
         ),
         "wholesalePrice",
-      ]
+      ],
     );
     queryOptions.attributes = productAttributes;
   } else {
