@@ -172,18 +172,18 @@ exports.ensurePendingInvoicePdfs = catchAsync(async (req, res, next) => {
 
 /**
  * List orders that are candidates for pending PDFs:
- * paymentStatus pending, invoiceDate not null and older than 7 days.
+ * paymentStatus pending, invoiceDate between 2025-01-20 and 2026-02-09.
  * Excludes orders that already have an invoice PDF on disk.
  */
 exports.listPendingPdfs = catchAsync(async (req, res, next) => {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 30);
+  const invoiceDateFrom = new Date("2025-01-20");
+  const invoiceDateTo = new Date("2026-02-09T23:59:59.999Z");
 
   const all = await order.findAll({
     where: {
       paymentStatus: "pending",
       invoiceDate: {
-        [Op.and]: [{ [Op.ne]: null }, { [Op.lt]: sevenDaysAgo }],
+        [Op.between]: [invoiceDateFrom, invoiceDateTo],
       },
       deleted: 0,
     },

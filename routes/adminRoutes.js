@@ -143,7 +143,7 @@ router.get(
 router.get(
   "/order-management/email-log",
   protect,
-  auth.restrictTo("admin", "adminEmployee"),
+  //   auth.restrictTo("admin", "adminEmployee"),
   emailLogController.getEmailLog,
 );
 
@@ -167,7 +167,7 @@ router.get(
 router.get(
   "/order-management/email-log/:id",
   protect,
-  auth.restrictTo("admin", "adminEmployee"),
+  //   auth.restrictTo("admin", "adminEmployee"),
   emailLogController.getEmailLogById,
 );
 
@@ -1082,7 +1082,7 @@ router.get(
 router.patch(
   "/employee/:employeeId/commission",
   auth.protect,
-  auth.restrictTo("admin"),
+  auth.restrictTo("admin", "localPartner"),
   employeeController.updateCommission,
 );
 
