@@ -12,7 +12,7 @@ const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
 const { response } = require("../../utils/response");
 const APIFeatures = require("../../utils/apiFeatures");
-const { literal } = require("sequelize");
+const { literal, Op } = require("sequelize");
 
 exports.addProduct = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -101,11 +101,19 @@ exports.getAllProductsUser = catchAsync(async (req, res, next) => {
     status: 1,
   };
 
-  // Customer linked to a sales rep (user.salesRepId) → that partner's inventory (price & wholesale from salesRepProductPrices)
-  // Otherwise → admin inventory (regular product price, no wholesalePrice)
+  // Sales rep's customer (user.salesRepId) → only products added by that sales rep, with their price/wholesale
+  // Admin's customer (no salesRepId) → admin inventory (all products, regular price)
   const salesRepId = req.user?.salesRepId || null;
 
   if (salesRepId) {
+    queryOptions.where = {
+      ...queryOptions.where,
+      id: {
+        [Op.in]: literal(
+          `(SELECT productId FROM salesRepProductPrices WHERE salesRepId = ${salesRepId} AND deleted = 0)`
+        ),
+      },
+    };
     const productAttributes = [
       "id",
       "name",

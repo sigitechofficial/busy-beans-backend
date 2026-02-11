@@ -114,7 +114,7 @@ router.get(
  *       - in: query
  *         name: emailType
  *         schema: { type: string }
- *         description: invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order
+ *         description: invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order | order_shipped
  *       - in: query
  *         name: orderId
  *         schema: { type: integer }

@@ -4,7 +4,7 @@ const { emailLog } = require("../models");
  * Log an email send attempt to email_logs (success or failure).
  * Does not throw - if DB insert fails, only logs to console so email flow is not broken.
  * @param {Object} params
- * @param {string} params.emailType - invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order
+ * @param {string} params.emailType - invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order | order_shipped
  * @param {number} params.orderId
  * @param {string} [params.orderType] - customer | local-partner (default: customer)
  * @param {string|string[]} params.recipients - email(s)

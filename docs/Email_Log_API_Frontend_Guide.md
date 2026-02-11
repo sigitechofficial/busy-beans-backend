@@ -22,7 +22,7 @@ Backend records **every email attempt** (success and failed). Each row has an **
 
 | Parameter   | Type   | Description |
 |-------------|--------|-------------|
-| `emailType` | string | Filter by type. One of: `invoice_sent`, `invoice_reminder`, `paid_receipt`, `paid_receipt_admin`, `supplier_new_order` |
+| `emailType` | string | Filter by type. One of: `invoice_sent`, `invoice_reminder`, `paid_receipt`, `paid_receipt_admin`, `supplier_new_order`, `order_shipped` |
 | `orderId`   | number | Filter by order/partner order ID |
 | `emailSent` | string | Filter by outcome: `Success` or `Failed` |
 | `from`      | string | Start date, format **YYYY-MM-DD** (e.g. `2025-02-01`) |
