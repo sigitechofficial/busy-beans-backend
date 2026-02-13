@@ -6,7 +6,10 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const { sendMailPromise } = require("./transpoter");
 const Footer = require("./footer");
-const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
+const {
+  logEmailSuccess,
+  logEmailOutcome,
+} = require("../utils/emailLogOnSuccess");
 const { header } = require("./header");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 const GenerateInvoicePdf = require("../utils/generateInvoicePdf");
@@ -219,7 +222,10 @@ module.exports = async function ({ email, data, invoice }) {
       orderId: data?.id,
       orderType: data?.orderOf || "customer",
       recipients: email,
-      metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+      metadata: {
+        subject: mailOptions.subject,
+        invoiceNumber: data?.invoiceNumber,
+      },
     });
   } catch (error) {
     console.log(error);
@@ -230,7 +236,10 @@ module.exports = async function ({ email, data, invoice }) {
       recipients: email,
       emailSent: "Failed",
       errorMessage: error?.message || String(error),
-      metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+      metadata: {
+        subject: mailOptions.subject,
+        invoiceNumber: data?.invoiceNumber,
+      },
     });
   }
 };

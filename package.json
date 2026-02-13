@@ -15,7 +15,8 @@
     "ngrok": "ngrok http 8011",
     "dev:ngrok": "concurrently \"nodemon bb.js\" \"ngrok http 8011\"",
     "migrate": "node migrations/migrate.js",
-    "migrate:single": "node migrations/run-migration.js"
+    "migrate:single": "node migrations/run-migration.js",
+    "postinstall": "patch-package"
   },
   "author": "Arbab Hassan",
   "license": "ISC",
@@ -72,6 +73,7 @@
     "eslint-plugin-prettier": "^3.4.1",
     "eslint-plugin-react": "^7.35.0",
     "nodemon": "^3.1.4",
+    "patch-package": "^8.0.1",
     "prettier": "^3.3.3"
   }
 }

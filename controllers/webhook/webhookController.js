@@ -39,20 +39,33 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
 
   let event;
   console.log(
-    "ЁЯЪА ~~~~~~~~~~~ exportts.sripeSubscriptionWebhookEventHandler= ~ event:"
+    "ЁЯЪА ~~~~~~~~~~~ exportts.sripeSubscriptionWebhookEventHandler= ~ event:",
   );
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
     console.log(
       "ЁЯЪА ~~~~~~~~~~~ exports.stripeSubscriptionWebhookEventHandler= ~ event:",
-      JSON.stringify(event)
+      JSON.stringify(event),
     );
   } catch (err) {
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        "whsec_vRdjANXLfDuijIllCevBlJJ2OorLO4Sq",
+      );
+    } catch (err) {
+      console.error(
+        "тЪая╕ПтЪая╕ПтЪая╕П Webhook signature verification failed.",
+        err.message,
+      );
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
     console.error(
       "тЪая╕ПтЪая╕ПтЪая╕П Webhook signature verification failed.",
-      err.message
+      err.message,
     );
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    // return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   console.log("ЁЯЪАЁЯЪАЁЯЪА ~~~~~~~~~~ >  EVENT TYPE }:", event.type);
@@ -95,7 +108,7 @@ const invoicePaid = async (event) => {
           pulloutDate: Date.now(),
           paymentIntentId: invoice.payment_intent,
         },
-        { where: { id: orderId } }
+        { where: { id: orderId } },
       );
 
       const orderPlaced = await order.findOne({
@@ -180,17 +193,19 @@ const invoicePaid = async (event) => {
       };
 
       // Process employee commission using utility function
-      const commissionResult = await calculateAndTransferEmployeeCommissionWithData({
-        orderData: result,
-        invoiceId: invoice.id,
-        paymentIntentId: invoice.payment_intent,
-      });
+      const commissionResult =
+        await calculateAndTransferEmployeeCommissionWithData({
+          orderData: result,
+          invoiceId: invoice.id,
+          paymentIntentId: invoice.payment_intent,
+        });
 
       // If commission was processed, update employeeCommissionData
       if (commissionResult && commissionResult.success) {
         employeeCommissionData = {
           employeeId: commissionResult.employeeId,
-          AppliedEmployeeCommisionPercentage: commissionResult.commissionPercentage,
+          AppliedEmployeeCommisionPercentage:
+            commissionResult.commissionPercentage,
           employeeCommisionAmount: commissionResult.employeeCommissionAmount,
           employeeTransferId: commissionResult.transferId || null,
         };
@@ -209,7 +224,7 @@ const invoicePaid = async (event) => {
           paymentIntentId: invoice.payment_intent,
           ...employeeCommissionData,
         },
-        { where: { id: orderPlaced?.id } }
+        { where: { id: orderPlaced?.id } },
       );
 
       if (
@@ -358,7 +373,7 @@ const invoicePaid = async (event) => {
             platform_fee_currency: (feeCurrency || "").toUpperCase(),
           },
         },
-        { stripeAccount: connectedAccountId } // apply update on connected account
+        { stripeAccount: connectedAccountId }, // apply update on connected account
       );
     }
 
@@ -371,103 +386,103 @@ const invoicePaid = async (event) => {
 // assuming: const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const onPaymentIntentSucceeded = async (event) => {
-    const pi = event.data.object;
-  
-    if (pi.invoice) {
-        try {
-          const invoice = await stripe.invoices.retrieve(pi.invoice);
-          if (invoice.subscription) {
-            console.log(
-              "ℹ️ Payment intent is for a subscription invoice, skipping order webhook handler..."
-            );
-            return;
-          }
-        } catch (error) {
-          console.error(
-            "❌ Error checking invoice for subscription:",
-            error.message
-          );
-          // Continue processing if we can't verify (fail-safe)
-        }
+  const pi = event.data.object;
+
+  if (pi.invoice) {
+    try {
+      const invoice = await stripe.invoices.retrieve(pi.invoice);
+      if (invoice.subscription) {
+        console.log(
+          "ℹ️ Payment intent is for a subscription invoice, skipping order webhook handler...",
+        );
+        return;
       }
-      
-    // grab the platform charge id
-    const platformChargeId = pi.latest_charge || pi.charges?.data?.[0]?.id;
-    if (!platformChargeId) return;
-  
-    // retrieve platform charge with transfer + balance_transaction expanded
-    const platformCharge = await stripe.charges.retrieve(platformChargeId, {
-      expand: ["transfer", "balance_transaction"],
-    });
-  
-    const transferId =
-      typeof platformCharge.transfer === "string"
-        ? platformCharge.transfer
-        : platformCharge.transfer?.id;
-  
-    if (!transferId) return;
-  
-    // pull fee (in the platform's currency) from the balance transaction
-    // fee is an integer in the smallest currency unit (e.g., cents)
-    const bt = platformCharge.balance_transaction;
-    const feeAmountMinor = typeof bt === "object" ? bt.fee : null; // e.g., 460 = $4.60
-    const feeCurrency =
-      typeof bt === "object" ? bt.currency : pi.currency || "usd";
-  
-    // simple currency formatter for the description
-    const formatAmount = (minor, currency = "usd") => {
-      if (typeof minor !== "number") return "";
-      // assumes 2dp currencies (USD/EUR/etc.). For zero-decimal currencies you could branch on currency.
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: (currency || "usd").toUpperCase(),
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(minor / 100);
-    };
-  
-    const feeText =
-      feeAmountMinor != null
-        ? `, stripe fee ${formatAmount(feeAmountMinor, feeCurrency)}`
-        : "";
-  
-    // get transfer to find connected account + destination payment
-    const transfer = await stripe.transfers.retrieve(transferId);
-    const connectedAccountId = transfer?.destination; // acct_xxx
-    const destinationPaymentId = transfer?.destination_payment; // ch_xxx (usually)
-  
-    if (connectedAccountId && destinationPaymentId) {
-      const invoiceNumber = pi.metadata?.invoiceNumber || "";
-      const baseDesc = `Payment for invoice ${invoiceNumber}${feeText} — Busy Bean Coffee Inc.`;
-  
-      await stripe.charges.update(
-        destinationPaymentId,
-        {
-          description: baseDesc,
-          metadata: {
-            orderId: pi.metadata?.orderId || "",
-            invoiceNumber,
-            partnerId: pi.metadata?.partnerId || "",
-            salesRepId: pi.metadata?.salesRepId || "",
-            type: pi.metadata?.type || "checkout-session",
-            platform: pi.metadata?.platform || "Busy Bean Coffee Inc.",
-            platform_charge_id: platformChargeId,
-            platform_fee_minor: feeAmountMinor ?? "",
-            platform_fee_currency: (feeCurrency || "").toUpperCase(),
-          },
-        },
-        { stripeAccount: connectedAccountId } // apply update on the connected account
+    } catch (error) {
+      console.error(
+        "❌ Error checking invoice for subscription:",
+        error.message,
       );
+      // Continue processing if we can't verify (fail-safe)
     }
+  }
+
+  // grab the platform charge id
+  const platformChargeId = pi.latest_charge || pi.charges?.data?.[0]?.id;
+  if (!platformChargeId) return;
+
+  // retrieve platform charge with transfer + balance_transaction expanded
+  const platformCharge = await stripe.charges.retrieve(platformChargeId, {
+    expand: ["transfer", "balance_transaction"],
+  });
+
+  const transferId =
+    typeof platformCharge.transfer === "string"
+      ? platformCharge.transfer
+      : platformCharge.transfer?.id;
+
+  if (!transferId) return;
+
+  // pull fee (in the platform's currency) from the balance transaction
+  // fee is an integer in the smallest currency unit (e.g., cents)
+  const bt = platformCharge.balance_transaction;
+  const feeAmountMinor = typeof bt === "object" ? bt.fee : null; // e.g., 460 = $4.60
+  const feeCurrency =
+    typeof bt === "object" ? bt.currency : pi.currency || "usd";
+
+  // simple currency formatter for the description
+  const formatAmount = (minor, currency = "usd") => {
+    if (typeof minor !== "number") return "";
+    // assumes 2dp currencies (USD/EUR/etc.). For zero-decimal currencies you could branch on currency.
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: (currency || "usd").toUpperCase(),
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(minor / 100);
   };
-  
+
+  const feeText =
+    feeAmountMinor != null
+      ? `, stripe fee ${formatAmount(feeAmountMinor, feeCurrency)}`
+      : "";
+
+  // get transfer to find connected account + destination payment
+  const transfer = await stripe.transfers.retrieve(transferId);
+  const connectedAccountId = transfer?.destination; // acct_xxx
+  const destinationPaymentId = transfer?.destination_payment; // ch_xxx (usually)
+
+  if (connectedAccountId && destinationPaymentId) {
+    const invoiceNumber = pi.metadata?.invoiceNumber || "";
+    const baseDesc = `Payment for invoice ${invoiceNumber}${feeText} — Busy Bean Coffee Inc.`;
+
+    await stripe.charges.update(
+      destinationPaymentId,
+      {
+        description: baseDesc,
+        metadata: {
+          orderId: pi.metadata?.orderId || "",
+          invoiceNumber,
+          partnerId: pi.metadata?.partnerId || "",
+          salesRepId: pi.metadata?.salesRepId || "",
+          type: pi.metadata?.type || "checkout-session",
+          platform: pi.metadata?.platform || "Busy Bean Coffee Inc.",
+          platform_charge_id: platformChargeId,
+          platform_fee_minor: feeAmountMinor ?? "",
+          platform_fee_currency: (feeCurrency || "").toUpperCase(),
+        },
+      },
+      { stripeAccount: connectedAccountId }, // apply update on the connected account
+    );
+  }
+};
+
 const paymentMethodAttch = async (event) => {
   try {
     const paymentMethod = event.data.object;
     const customerId = paymentMethod.customer;
     await user.update(
       { defaultPaymentMethod: paymentMethod?.id },
-      { stripeCustomerId: customerId }
+      { stripeCustomerId: customerId },
     );
     return true;
   } catch (error) {

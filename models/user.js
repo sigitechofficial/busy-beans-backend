@@ -124,6 +124,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(32), // QBO Customer Id for Local Partners
         allowNull: true,
       },
+      stripeCustomerIdForPartner: {
+        type: DataTypes.STRING(255), // Stripe Customer Id on connected account (direct-partner)
+        allowNull: true,
+      },
       qboSyncToken: {
         type: DataTypes.STRING(16), // needed for UPDATEs
         allowNull: true,
@@ -154,7 +158,7 @@ module.exports = (sequelize) => {
           name: "email_index",
         },
       ],
-    }
+    },
   );
   // Hide fields in queries
   user.addHook("beforeFind", (options) => {
@@ -163,7 +167,7 @@ module.exports = (sequelize) => {
       ? options.attributes.exclude
       : [];
     options.attributes.exclude = Array.from(
-      new Set([...existing, "deletedAt", "updatedAt"])
+      new Set([...existing, "deletedAt", "updatedAt"]),
     );
   });
 

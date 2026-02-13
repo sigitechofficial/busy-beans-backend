@@ -145,8 +145,8 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   const nextOrderDateCondition = {
     nextOrderDate: {
       [Op.notIn]: literal(`
-        (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
-      `),
+          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
+        `),
     },
   };
 
@@ -210,9 +210,9 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
     ],
     [
       literal(`COALESCE(
-       (SELECT SUM(qty)
-        FROM items
-        WHERE items.orderId = orderFrequency.orderId ), 0)`),
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = orderFrequency.orderId ), 0)`),
       "totalQuantity",
     ],
     [
@@ -308,14 +308,14 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         "creditLimit",
         [
           literal(`
-              (
-                SELECT SUM(items.price)
-                FROM orders
-                JOIN items ON items.orderId = orders.id
-                WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
-              )
-            `),
+                (
+                  SELECT SUM(items.price)
+                  FROM orders
+                  JOIN items ON items.orderId = orders.id
+                  WHERE orders.salesRepId = salesRep.id
+                    AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+                )
+              `),
           "creditUsed",
         ],
       ],
@@ -359,12 +359,12 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     `productCode`,
     [
       literal(`
-          (SELECT percentage
-          FROM userDiscounts
-          WHERE userDiscounts.categoryId = product.categoryId
-            AND userDiscounts.userId = ${customer.id}
-          LIMIT 1)
-        `),
+            (SELECT percentage
+            FROM userDiscounts
+            WHERE userDiscounts.categoryId = product.categoryId
+              AND userDiscounts.userId = ${customer.id}
+            LIMIT 1)
+          `),
       "discountPercentage",
     ],
   ];
@@ -531,7 +531,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.totalBill =
     parseFloat(itemsPrice) +
     parseFloat(input?.order?.vat || 0) +
-    parseFloat(shippingCompany?.charges || 0);
+    parseFloat(input.order.shippingCharges || 0);
 
   if (
     input?.orderType == "direct-invoice" &&

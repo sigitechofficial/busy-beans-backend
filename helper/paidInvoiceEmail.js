@@ -6,7 +6,10 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
-const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
+const {
+  logEmailSuccess,
+  logEmailOutcome,
+} = require("../utils/emailLogOnSuccess");
 const generateFooterHtml = require("./footerLocalpatner");
 
 const { header } = require("./header");
@@ -18,6 +21,7 @@ const GenerateInvoicePdf = require("../utils/generateInvoicePdf");
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
+  console.log("[PAID-INVOICE] Customer email helper START → to:", email);
   // console.log('ðŸš€ ~ data:', data);
   let footer = await Footer();
 
@@ -78,14 +82,34 @@ module.exports = async function ({ email, data, invoice }) {
   });
 
   items = items.join("");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+
   const mailOptions = {
     from: process.env.EMAIL_USERNAME, // sender address
-      to: [email], // main recipient(s)
-      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
-      subject: `We’ve Received Your Payment for Invoice #${data?.invoiceNumber || ""} – Thank You!`, // Subject line
-      replyTo: data?.patnerEmail || "info@busybeancoffee.com",
-      attachments: emailAttachments,
-      html: `<!DOCTYPE html>
+    to: [email], // main recipient(s)
+    bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
+    subject: `We’ve Received Your Payment for Invoice #${data?.invoiceNumber || ""} – Thank You!`, // Subject line
+    replyTo: data?.patnerEmail || "info@busybeancoffee.com",
+    attachments: emailAttachments,
+    html: `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -230,7 +254,10 @@ module.exports = async function ({ email, data, invoice }) {
       orderId: data?.id,
       orderType: data?.orderOf || "customer",
       recipients: email,
-      metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+      metadata: {
+        subject: mailOptions.subject,
+        invoiceNumber: data?.invoiceNumber,
+      },
     });
   } catch (error) {
     console.log(error);
@@ -241,7 +268,10 @@ module.exports = async function ({ email, data, invoice }) {
       recipients: email,
       emailSent: "Failed",
       errorMessage: error?.message || String(error),
-      metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+      metadata: {
+        subject: mailOptions.subject,
+        invoiceNumber: data?.invoiceNumber,
+      },
     });
   }
 };

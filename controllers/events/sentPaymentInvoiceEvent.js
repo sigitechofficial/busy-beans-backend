@@ -12,12 +12,12 @@ exports.sentPaymentInvoiceEvent = async ({
   try {
     const { details, email } = await dataForEmailAndNotifications(
       orderId,
-      orderType
+      orderType,
     );
 
     console.log(
       "🚀 ~ details?.emailToSendInvoices: before",
-      details?.emailToSendInvoices
+      details?.emailToSendInvoices,
     );
     let to = [];
     to.push(email);

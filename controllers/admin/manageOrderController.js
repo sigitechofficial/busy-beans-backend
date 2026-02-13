@@ -596,6 +596,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     condition.userId = req.user.id;
   }
   console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
 
   // Define searchable columns for orders
   const searchableFields = [
@@ -1270,6 +1276,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   }
   const statusId = Number(req.body?.orderData?.statusId);
   const userId = Number(doc?.userId || 0);
+  let paidInvoiceEventFired = false;
 
   //because customers and localpart6ner already have order invoice in
   //main issue status alreqady 4 hoga jin order ka 5 py unki payment ho jaye gi or f
@@ -1342,6 +1349,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       orderId: orderId || partnerOrderId,
       orderType: isPartnerOrder ? "local-partner" : "customer",
     });
+    paidInvoiceEventFired = true;
   }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
@@ -1382,34 +1390,30 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       manualPaymentEmail = true;
     }
 
-    //this is for employee commission and paid invoice event
-    if (
-      !isPartnerOrder &&
-      orderId &&
-      req.body?.orderData?.paymentStatus == "done"
-    ) {
-      console.log(
-        "🚀 ~ exports.orderJourneryComplete ~ doc?.paymentStatus:",
-        doc?.paymentStatus,
-      );
+    await Model.update(req.body?.orderData, {
+      where: { id: orderId || partnerOrderId },
+    });
 
+    // Paid invoice event after order update so email sees updated paymentStatus
+    if (
+      req.body?.orderData?.paymentStatus == "done" &&
+      !paidInvoiceEventFired
+    ) {
       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
         orderId: orderId || partnerOrderId,
         orderType: isPartnerOrder ? "local-partner" : "customer",
       });
-      try {
-        await calculateAndSaveEmployeeCommission({ orderId: orderId });
-      } catch (error) {
-        console.error(
-          "❌ Error processing employee commission in orderJourneryComplete:",
-          error?.message || error,
-        );
+      if (!isPartnerOrder && orderId) {
+        try {
+          await calculateAndSaveEmployeeCommission({ orderId: orderId });
+        } catch (error) {
+          console.error(
+            "❌ Error processing employee commission in orderJourneryComplete:",
+            error?.message || error,
+          );
+        }
       }
     }
-
-    await Model.update(req.body?.orderData, {
-      where: { id: orderId || partnerOrderId },
-    });
   }
   if (req.body?.cheque) {
     req.body.cheque.orderId = orderId;
@@ -1552,24 +1556,50 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     "🚀 ~ exports.findShippingCompanyForWeight=catchAsync ~ weight:",
     weight,
   );
-  const customer = req.params?.id
-    ? await userDiscount.findAll({
-        where: { userId: req.params?.id },
-        attributes: [
-          "categoryId",
-          "percentage",
-          // [
-          //   literal(
-          //     `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`,
-          //   ),
-          //   'categoryName',
-          // ],
+
+  let customerInfo, customer;
+  if (req.body?.userType != "local-partner") {
+    customerInfo = await user.findOne({
+      where: { id: req.params?.id || req.user?.id },
+      attributes: [
+        "id",
+        "salesRepId",
+        "defaultDiscount",
+        [
+          literal(
+            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+          ),
+          "salesRepName",
         ],
-      })
-    : [];
-  console.log("🚀 ~ customer:", customer);
-  console.log("🚀 ~ req.params?.id:", req.params?.id);
-  // Find the shipping company where the weight is between weightFrom and weightTo
+        [
+          literal(
+            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+          ),
+          "partnerType",
+        ],
+      ],
+      raw: true,
+    });
+
+    customer = customerInfo?.id
+      ? await userDiscount.findAll({
+          where: { userId: customerInfo?.id },
+          attributes: [
+            "categoryId",
+            "percentage",
+            // [
+            //   literal(
+            //     `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`,
+            //   ),
+            //   'categoryName',
+            // ],
+          ],
+        })
+      : [];
+    console.log("🚀 ~ customerInfo:", customerInfo);
+    console.log("🚀 ~ req.params?.id:", req.user?.id);
+    // Find the shipping company where the weight is between weightFrom and weightTo
+  }
   const shippingCompany = await shippingCompanies.findOne({
     where: {
       weightFrom: {
@@ -1582,7 +1612,7 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     attributes: ["charges"],
   });
 
-  if (!shippingCompany) {
+  if (!shippingCompany && customerInfo?.partnerType != "direct-partner") {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
@@ -1594,7 +1624,10 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: "success",
     data: {
-      charges: shippingCompany?.charges,
+      charges:
+        customerInfo?.partnerType != "direct-partner"
+          ? shippingCompany?.charges
+          : 0,
       discountPercentage: customer || [],
     },
   });
@@ -1875,7 +1908,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       },
       attributes: ["charges"],
     });
-    if (!shippingCompany) {
+    if (!shippingCompany && placedOrder?.partnerType != "direct-partner") {
       return next(
         new AppError(
           "Not dealing in such weights. Contact customer support for this order.",
