@@ -196,6 +196,7 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   // Custom attributes with literal fields
   queryOptions.attributes = [
     "id",
+    "salesRepId",
     [
       literal(
         `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,

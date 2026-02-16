@@ -848,7 +848,10 @@ exports.fetchSavedCards = catchAsync(async (req, res, next) => {
       return res.status(200).json(output);
     } catch (error) {
       if (error.message && error.message.includes("No such customer")) {
-        await customer.update({ stripeCustomerIdForPartner: null });
+        await user.update(
+          { stripeCustomerIdForPartner: null },
+          { where: { id: userId } },
+        );
         const output = response({
           message: "All cards",
           data: { cards: [] },
@@ -883,7 +886,7 @@ exports.fetchSavedCards = catchAsync(async (req, res, next) => {
     return res.status(200).json(output);
   } catch (error) {
     if (error.message && error.message.includes("No such customer")) {
-      await customer.update({ stripeCustomerId: null });
+      await user.update({ stripeCustomerId: null }, { where: { id: userId } });
       const output = response({ message: "All cards", data: { cards: [] } });
       return res.status(200).json(output);
     }
