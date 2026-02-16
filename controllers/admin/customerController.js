@@ -29,8 +29,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
     filters.salesRepId = { [Op.is]: null };
   else if (sr === "assign" || sr === "assigned")
     filters.salesRepId = { [Op.ne]: null };
-  else if (sr === "assigned-employee")
-    filters.employeeId = { [Op.ne]: null };
+  else if (sr === "assigned-employee") filters.employeeId = { [Op.ne]: null };
   else if (sr === "not-assigned-employee")
     filters.employeeId = { [Op.eq]: null };
 
@@ -111,31 +110,31 @@ exports.customersList = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)"
+        "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)",
       ),
       "totalOrderAmount",
     ],
     [
       literal(
-        `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
       ),
       "salesRepName",
     ],
     [
       literal(
-        `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
       ),
       "salesRepState",
     ],
     [
       literal(
-        `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`
+        `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`,
       ),
       "preferredPaymentMethod",
     ],
     [
       literal(
-        `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
+        `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`,
       ),
       "employee",
     ],
@@ -184,8 +183,8 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid condition. Use 'qbo-registered' or 'qbo-not-registered'.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -237,7 +236,10 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
     // Admin can see all customers, so no salesRepId filter
   } else {
     return next(
-      new AppError("Access denied. Admin ID or Local Partner ID required.", 403)
+      new AppError(
+        "Access denied. Admin ID or Local Partner ID required.",
+        403,
+      ),
     );
   }
 
@@ -258,8 +260,8 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Unable to build QBO map condition. Missing accountId or salesRepId.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -271,7 +273,7 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
       FROM qboCustomerMaps
       WHERE qboCustomerMaps.userId = user.id AND qboCustomerMaps.qboCustomerId IS NOT NULL
         AND ${qboMapCondition} 
-    )`
+    )`,
   );
 
   // Add condition based on qbo-registered or qbo-not-registered
@@ -289,7 +291,7 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
           WHERE qboCustomerMaps.userId = user.id
             AND ${qboMapCondition}
            
-        )`
+        )`,
       ),
     ];
     console.log("🔵 STEP 1: Set filters[Op.and] = NOT EXISTS subquery");
@@ -345,7 +347,7 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
     filterOpAndArray.push(...filters[Op.and]);
     console.log(
       "🔵 STEP 2: Extracted Op.and array, filterOpAndArray length:",
-      filterOpAndArray.length
+      filterOpAndArray.length,
     );
   }
 
@@ -356,12 +358,12 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
 
   console.log(
     "🔵 STEP 2: filterOpAndArray length after extraction:",
-    filterOpAndArray.length
+    filterOpAndArray.length,
   );
   console.log("🔵 STEP 2: filterProps:", filterProps);
   console.log(
     "🔵 STEP 2: queryOptions.where before merge:",
-    queryOptions.where ? "exists" : "null"
+    queryOptions.where ? "exists" : "null",
   );
 
   // Build final where clause
@@ -399,11 +401,11 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
 
   console.log(
     "🔵 STEP 2: Final queryOptions.where structure:",
-    queryOptions.where ? "exists" : "null"
+    queryOptions.where ? "exists" : "null",
   );
   console.log(
     "🔵 STEP 2: queryOptions.where[Op.and] length:",
-    queryOptions.where?.[Op.and]?.length
+    queryOptions.where?.[Op.and]?.length,
   );
   console.log("🔵 STEP 2: condition param:", condition);
 
@@ -418,7 +420,7 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
   console.log("🔵 STEP 3: About to count. condition:", condition);
   console.log(
     "🔵 STEP 3: countOptions.where[Op.and] length:",
-    countOptions.where?.[Op.and]?.length
+    countOptions.where?.[Op.and]?.length,
   );
 
   const totalItems = await user.count(countOptions);
@@ -437,31 +439,31 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)"
+        "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)",
       ),
       "totalOrderAmount",
     ],
     [
       literal(
-        `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
       ),
       "salesRepName",
     ],
     [
       literal(
-        `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+        `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
       ),
       "salesRepState",
     ],
     [
       literal(
-        `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`
+        `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`,
       ),
       "preferredPaymentMethod",
     ],
     [
       literal(
-        `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
+        `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`,
       ),
       "employee",
     ],
@@ -637,37 +639,37 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)"
+          "(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id)",
         ),
         "totalOrderAmount",
       ],
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
       [
         literal(
-          `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
+          `(SELECT employees.name FROM employees WHERE user.employeeId = employees.id LIMIT 1)`,
         ),
         "employee",
       ],
       [
         literal(
-          `(SELECT employeeOf FROM employees WHERE user.employeeId = employees.id LIMIT 1)`
+          `(SELECT employeeOf FROM employees WHERE user.employeeId = employees.id LIMIT 1)`,
         ),
         "employeeOf",
       ],
       [
         literal(
-          `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.state FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepState",
       ],
       [
         literal(
-          `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`
+          `(SELECT paymentMethod FROM orders WHERE user.id = orders.userId LIMIT 1)`,
         ),
         "preferredPaymentMethod",
       ],
@@ -706,7 +708,7 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
           "percentage",
           [
             literal(
-              `(SELECT categories.name FROM categories WHERE userDiscounts.categoryId= categories.id LIMIT 1)`
+              `(SELECT categories.name FROM categories WHERE userDiscounts.categoryId= categories.id LIMIT 1)`,
             ),
             "categoryName",
           ],
@@ -776,7 +778,7 @@ exports.deleteCustomer = catchAsync(async (req, res, next) => {
     { deleted: 1 },
     {
       where: { id: req.params.id },
-    }
+    },
   );
 
   res.status(200).json({
@@ -787,15 +789,77 @@ exports.deleteCustomer = catchAsync(async (req, res, next) => {
 
 exports.fetchSavedCards = catchAsync(async (req, res, next) => {
   const userId = req.params.id;
-  console.log("🚀 ~ ~ userId:", userId);
   const customer = await user.findByPk(userId, {
-    attributes: ["email", "stripeCustomerId"],
+    attributes: [
+      "email",
+      "stripeCustomerId",
+      "stripeCustomerIdForPartner",
+      "salesRepId",
+    ],
+    include: [
+      {
+        model: salesRep,
+        as: "salesRep",
+        required: false,
+        attributes: ["partnerType", "connectAccountId"],
+      },
+    ],
   });
 
   if (!customer) {
     return next(new AppError("Customer not found", 404));
   }
 
+  const isDirectPartner =
+    customer.salesRepId &&
+    customer.salesRep?.partnerType === "direct-partner" &&
+    customer.salesRep?.connectAccountId;
+
+  // Direct partner: use customer on connected account
+  if (isDirectPartner) {
+    const partnerCustomerId = customer.stripeCustomerIdForPartner;
+    if (
+      partnerCustomerId === null ||
+      partnerCustomerId === "" ||
+      !partnerCustomerId
+    ) {
+      const output = response({ message: "All cards", data: { cards: [] } });
+      return res.status(200).json(output);
+    }
+
+    const connectAccountId = customer.salesRep.connectAccountId;
+
+    try {
+      const allCards = await Stripe.cardsOnConnectedAccount(
+        partnerCustomerId,
+        connectAccountId,
+      );
+      const stripeCards = allCards.data.map((obj) => ({
+        id: obj.id,
+        name: obj.billing_details.name,
+        brand: obj.card.brand,
+        expMonth: obj.card.exp_month,
+        expYear: obj.card.exp_year,
+        last4: obj.card.last4,
+        funding: obj.card.funding,
+        stripeCustomerId: customer.stripeCustomerIdForPartner,
+      }));
+      const output = response({ data: { cards: stripeCards } });
+      return res.status(200).json(output);
+    } catch (error) {
+      if (error.message && error.message.includes("No such customer")) {
+        await customer.update({ stripeCustomerIdForPartner: null });
+        const output = response({
+          message: "All cards",
+          data: { cards: [] },
+        });
+        return res.status(200).json(output);
+      }
+      throw error;
+    }
+  }
+
+  // Platform (no direct partner): use main Stripe customer
   if (customer.stripeCustomerId === null || customer.stripeCustomerId === "") {
     const output = response({ message: "All cards", data: { cards: [] } });
     return res.status(200).json(output);
@@ -805,8 +869,6 @@ exports.fetchSavedCards = catchAsync(async (req, res, next) => {
 
   try {
     const allCards = await Stripe.cards(customerId);
-    console.log("🚀 ~ ~ customerId:", customerId);
-
     const stripeCards = allCards.data.map((obj) => ({
       id: obj.id,
       name: obj.billing_details.name,
@@ -815,25 +877,16 @@ exports.fetchSavedCards = catchAsync(async (req, res, next) => {
       expYear: obj.card.exp_year,
       last4: obj.card.last4,
       funding: obj.card.funding,
-      stripeCustomerId: customer?.stripeCustomerId,
+      stripeCustomerId: customer.stripeCustomerId,
     }));
-
-    console.log("🚀 ~ stripeCards ~ stripeCards:", stripeCards);
-
     const output = response({ data: { cards: stripeCards } });
     return res.status(200).json(output);
   } catch (error) {
-    // If customer doesn't exist in Stripe, return empty cards array
     if (error.message && error.message.includes("No such customer")) {
-      console.log(
-        `⚠️ Stripe customer ${customerId} not found, returning empty cards`
-      );
-      // Optionally, clear the invalid stripeCustomerId from database
       await customer.update({ stripeCustomerId: null });
       const output = response({ message: "All cards", data: { cards: [] } });
       return res.status(200).json(output);
     }
-    // Re-throw other errors to be handled by error handler
     throw error;
   }
 });
@@ -847,7 +900,7 @@ exports.dicounts = catchAsync(async (req, res, next) => {
       "percentage",
       [
         literal(
-          `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`
+          `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`,
         ),
         "categoryName",
       ],

@@ -22,6 +22,7 @@ const {
   transferEmployeeCommission,
   bulkTransferEmployeeCommission,
 } = require("../../utils/employeeCommissionUtils");
+const bcrypt = require("bcryptjs");
 
 console.log("🚀 ~ literal:", process.env.BASE_URL);
 
@@ -110,7 +111,13 @@ exports.updateEmployee = async (req, res, next) => {
   if (exist) {
     return next(new AppError("User with this email already exists.", 404));
   }
-  await employee.update(req.body, {
+
+  const updateData = { ...req.body };
+  if (updateData.password) {
+    updateData.password = bcrypt.hashSync(updateData.password, 12);
+  }
+
+  await employee.update(updateData, {
     where: { id: employeeId },
     individualHooks: true,
   });

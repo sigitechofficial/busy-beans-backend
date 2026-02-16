@@ -20,11 +20,12 @@ Backend records **every email attempt** (success and failed). Each row has an **
 
 **Query parameters (all optional):**
 
-| Parameter   | Type   | Description |
-|-------------|--------|-------------|
-| `emailType` | string | Filter by type. One of: `invoice_sent`, `invoice_reminder`, `paid_receipt`, `paid_receipt_admin`, `supplier_new_order`, `order_shipped` |
-| `orderId`   | number | Filter by order/partner order ID |
-| `emailSent` | string | Filter by outcome: `Success` or `Failed` |
+| Parameter        | Type   | Description |
+|------------------|--------|-------------|
+| `emailType`      | string | Filter by type. One of: `invoice_sent`, `invoice_reminder`, `paid_receipt`, `paid_receipt_admin`, `supplier_new_order`, `order_shipped` |
+| `orderId`        | number | Filter by **customer** order ID (logs where orderType is customer) |
+| `partnerOrderId` | number | Filter by **local-partner** order ID (logs where orderType is local-partner) |
+| `emailSent`      | string | Filter by outcome: `Success` or `Failed` |
 | `from`      | string | Start date, format **YYYY-MM-DD** (e.g. `2025-02-01`) |
 | `to`        | string | End date, format **YYYY-MM-DD** (e.g. `2025-02-04`) |
 | `page`      | number | Page number, default `1` |
@@ -34,7 +35,8 @@ Backend records **every email attempt** (success and failed). Each row has an **
 
 - Last 20: `GET .../email-log`
 - By type: `GET .../email-log?emailType=invoice_sent`
-- By order: `GET .../email-log?orderId=123`
+- By customer order: `GET .../email-log?orderId=123`
+- By partner order: `GET .../email-log?partnerOrderId=456`
 - By outcome: `GET .../email-log?emailSent=Failed` or `?emailSent=Success`
 - By date range: `GET .../email-log?from=2025-02-01&to=2025-02-04`
 - Pagination: `GET .../email-log?page=2&limit=10`
@@ -52,6 +54,7 @@ Backend records **every email attempt** (success and failed). Each row has an **
         "id": 1,
         "emailType": "invoice_sent",
         "orderId": 123,
+        "partnerOrderId": null,
         "orderType": "customer",
         "recipients": "customer@example.com",
         "emailSent": "Success",
@@ -81,6 +84,7 @@ Backend records **every email attempt** (success and failed). Each row has an **
 - `recipients` can be a single email or comma-separated list (e.g. for invoice sent).
 - **`emailSent`** is `"Success"` or `"Failed"`. Use it for badges, filters, and "Failed emails" views.
 - **`errorMessage`** is set when `emailSent === "Failed"`; show it in the UI for debugging/resend.
+- **`orderId`** is set for customer orders; **`partnerOrderId`** is set for local-partner orders. The other will be null. Use with **`orderType`** to show "Order #123" vs "Partner order #456".
 
 ---
 
@@ -106,6 +110,7 @@ Backend records **every email attempt** (success and failed). Each row has an **
     "id": 1,
     "emailType": "invoice_sent",
     "orderId": 123,
+    "partnerOrderId": null,
     "orderType": "customer",
     "recipients": "customer@example.com",
     "emailSent": "Success",

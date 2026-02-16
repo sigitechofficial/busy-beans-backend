@@ -25,9 +25,11 @@ async function logEmailOutcome({
     const recipientsStr = Array.isArray(recipients)
       ? recipients.join(", ")
       : String(recipients || "");
+    const isLocalPartner = orderType === "local-partner";
     await emailLog.create({
       emailType,
-      orderId,
+      orderId: isLocalPartner ? null : orderId,
+      partnerOrderId: isLocalPartner ? orderId : null,
       orderType,
       recipients: recipientsStr,
       emailSent,

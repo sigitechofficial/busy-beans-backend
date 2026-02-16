@@ -283,7 +283,10 @@ exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
     console.log("🚀 ~ sendInvoiceMultiple ~ listOrder:", listOrder);
     for (const ele of listOrder) {
       console.log("🚀 ~ sendInvoiceMultiple ~ orderId:", ele);
-      sentPaymentInvoiceEvent({ orderId: ele.orderId });
+      sentPaymentInvoiceEvent({
+        orderId: ele.orderId,
+        orderType: ele.orderType || "customer",
+      });
 
       await order.update(ele, { where: { id: ele.orderId } });
     }
@@ -1987,6 +1990,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       await order.update(payment?.data, { where: { id: placedOrder?.id } });
       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
         orderId: placedOrder?.id,
+        orderType: "customer",
       });
       // Only process employee commission if order has no local partner (salesRepId)
       if (!placedOrder?.salesRepId) {
@@ -2020,7 +2024,10 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     input?.order?.emailInvoiceToCustomer &&
     !input?.order?.attemptImmediatePayment
   ) {
-    sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
+    sentPaymentInvoiceEvent({
+      orderId: placedOrder?.id,
+      orderType: "customer",
+    });
   }
 
   syncInvoiceOnQuikBooks({ orderId: placedOrder.id, updateRequest: true });

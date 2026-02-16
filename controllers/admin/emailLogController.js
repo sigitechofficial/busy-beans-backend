@@ -10,7 +10,16 @@ const { response } = require("../../utils/response");
  * Query: emailType, orderId, emailSent (Success|Failed), from (date YYYY-MM-DD), to (date YYYY-MM-DD), page, limit
  */
 exports.getEmailLog = catchAsync(async (req, res, next) => {
-  const { emailType, orderId, emailSent, from, to, page = 1, limit = 20 } = req.query;
+  const {
+    emailType,
+    orderId,
+    partnerOrderId,
+    emailSent,
+    from,
+    to,
+    page = 1,
+    limit = 20,
+  } = req.query;
 
   const where = {};
 
@@ -19,6 +28,9 @@ exports.getEmailLog = catchAsync(async (req, res, next) => {
   }
   if (orderId) {
     where.orderId = Number(orderId);
+  }
+  if (partnerOrderId) {
+    where.partnerOrderId = Number(partnerOrderId);
   }
   if (emailSent) {
     where.emailSent = emailSent;

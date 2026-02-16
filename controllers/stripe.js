@@ -1375,6 +1375,25 @@ async function cards(customerId) {
   }
 }
 
+/**
+ * List card payment methods for a customer on a Stripe connected account (e.g. direct-partner).
+ * @param {string} customerId - Stripe customer ID on the connected account
+ * @param {string} connectAccountId - Stripe Connect account ID (acct_xxx)
+ * @returns {Promise<Stripe.ApiList<Stripe.PaymentMethod>>}
+ */
+async function cardsOnConnectedAccount(customerId, connectAccountId) {
+  try {
+    const paymentMethods = await stripe.customers.listPaymentMethods(
+      customerId,
+      { type: "card" },
+      { stripeAccount: connectAccountId },
+    );
+    return paymentMethods;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
 async function deleteConnectAccount(connectAccountId) {
   try {
     const account = await stripe.accounts.del(connectAccountId);
@@ -1387,6 +1406,7 @@ module.exports = {
   deleteConnectAccount,
   blockCheckoutSession,
   cards,
+  cardsOnConnectedAccount,
   checkCheckoutSessionStatus,
   pullAmountPaymentIntentFromBankAccount,
   attachBankAccountPaymentMethod,

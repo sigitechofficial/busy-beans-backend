@@ -89,7 +89,7 @@ module.exports = (sequelize) => {
         "just-onces",
         "weekly",
         "every-two-weeks",
-        "every-four-weeks"
+        "every-four-weeks",
       ),
       allowNull: true,
       defaultValue: "just-onces",
@@ -241,8 +241,8 @@ module.exports = (sequelize) => {
     partnerOrder.hasOne(models.chequeDetail);
     models.chequeDetail.belongsTo(partnerOrder);
 
-    partnerOrder.hasMany(models.emailLog);
-    models.emailLog.belongsTo(partnerOrder);    
+    partnerOrder.hasMany(models.emailLog, { foreignKey: "partnerOrderId" });
+    models.emailLog.belongsTo(partnerOrder, { foreignKey: "partnerOrderId" });
   };
 
   return partnerOrder;
