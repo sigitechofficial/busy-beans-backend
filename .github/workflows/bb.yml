@@ -98,7 +98,7 @@ jobs:
     env:
       AWS_REGION: us-east-1
       ECR_REPOSITORY: busybeans
-      ECS_CLUSTER: busybeans-cluster
+      ECS_CLUSTER: busybeancoffee
       ECS_SERVICE: busybeans-backend
       TASK_DEFINITION: task-definition-busybeans
       CONTAINER_NAME: busybeans-backend

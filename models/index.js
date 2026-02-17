@@ -12,14 +12,14 @@ const basename = path.basename(__filename);
 const db = {};
 
 // ---------------------------------------------
-// MySQL config from ENV
+// MySQL config from ENV (Standard Names)
 // ---------------------------------------------
 const {
   DB_NAME,
   DB_USER,
   DB_PASSWORD,
   DB_HOST,
-  DB_PORT = 3306,
+  DB_PORT,
 } = process.env;
 
 // ---------------------------------------------
@@ -27,10 +27,10 @@ const {
 // ---------------------------------------------
 const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
   host: DB_HOST,
-  port: DB_PORT,
+  port: DB_PORT || 3306, // Default to 3306 if not provided
   dialect: 'mysql',
 
-  logging: false, // set true if you want SQL logs
+  logging: false, // Set to true if you want to see SQL queries in logs
 
   pool: {
     max: 10,
