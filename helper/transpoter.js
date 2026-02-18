@@ -1,37 +1,52 @@
-const nodemailer = require('nodemailer');
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
-//Defining the account for sending email
-// console.log('🚀 ~ process.env.EMAIL_PORT:', process.env.EMAIL_PORT)
-console.log('🚀 ~ process.env.EMAIL_HOST:', process.env.EMAIL_HOST);
-// console.log('🚀 ~ process.env.EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD)
-console.log('🚀 ~ process.env.EMAIL_USERNAME:', process.env.EMAIL_USERNAME);
-const transporterInstance = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
-  // secure: true, // use TLS
-  auth: {
-    user: process.env.EMAIL_USERNAME,
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-    pass: process.env.EMAIL_PASSWORD,
+const { sendMail } = require("./sendmail");
+
+/**
+ * Convert Nodemailer-style mailOptions to sendmail (ZeptoMail API) options.
+ * Keeps the same contract so all existing helpers work without change.
+ */
+function mailOptionsToSendmail(mailOptions) {
+  const opts = {
+    to: mailOptions.to,
+    subject: mailOptions.subject,
+    from: mailOptions.from,
+    bcc: mailOptions.bcc,
+    cc: mailOptions.cc,
+    replyTo: mailOptions.replyTo,
+    html: mailOptions.html,
+    text: mailOptions.text,
+    attachments: mailOptions.attachments || [],
+  };
+  return opts;
+}
+
+/**
+ * Fake transporter object so existing transporter.sendMail(mailOptions, callback) still works.
+ * All sending goes through sendmail.js (ZeptoMail API).
+ */
+const transporterInstance = {
+  sendMail(mailOptions, callback) {
+    const opts = mailOptionsToSendmail(mailOptions);
+    sendMail(opts, callback);
   },
-  // tls: {
-  //   rejectUnauthorized: false, // Ignore self-signed certificate error
-  // },
-});
+};
 
 exports.transporter = transporterInstance;
 
 /**
- * Promise wrapper for sendMail - resolve with info on success, reject with error on failure
+ * Promise wrapper - same API as before. Resolve with info-like object, reject on error.
+ * Email logs (logEmailSuccess / logEmailOutcome) are unchanged; they run after this in each helper.
  */
 exports.sendMailPromise = (mailOptions) => {
   return new Promise((resolve, reject) => {
-    transporterInstance.sendMail(mailOptions, (error, info) => {
+    const opts = mailOptionsToSendmail(mailOptions);
+    sendMail(opts, (error, info) => {
       if (error) {
         reject(error);
       } else {
-        resolve(info);
+        resolve(info || { messageId: "zeptomail" });
       }
     });
   });

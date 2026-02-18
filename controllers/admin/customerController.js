@@ -67,7 +67,19 @@ exports.customersList = catchAsync(async (req, res, next) => {
     srIdRaw === "assign" ||
     srIdRaw === "assigned";
   if (srIdRaw != null && !isSrFilterLiteral) filters.salesRepId = srIdRaw;
-
+  // If entity is admin employee or local partner employee, only customers assigned to this employee
+  if (
+    req.user?.entity === "adminEmployee" ||
+    req.user?.entity === "partnerEmployee"
+  ) {
+    if (req.query.cus == "all") {
+      filters.employeeId = req.user.employeeId ?? req.user.id;
+    }
+    if (req.user?.entity === "partnerEmployee") {
+      filters.salesRepId = req.user.localPartnerId;
+    }
+    console, console.log("🚀 ~ filters:", filters);
+  }
   if (process.env.NODE_ENV === "development") {
     console.debug("[customersList] sr=%s filters=%j", sr || "(none)", filters);
   }
@@ -157,6 +169,11 @@ exports.customersList = catchAsync(async (req, res, next) => {
   });
 
   // Execute the query
+  console, console.log("🚀 ~ queryOptions.where:", queryOptions.where);
+  console, console.log("🚀 ~ queryOptions.where:", queryOptions.where);
+  console, console.log("🚀 ~ queryOptions.where:", queryOptions.where);
+  console, console.log("🚀 ~ queryOptions.where:", queryOptions.where);
+
   const data = await user.findAll(queryOptions);
 
   // Return response

@@ -205,13 +205,14 @@ module.exports = async function ({ email, data, invoice }) {
   };
 
   try {
-    await sendMailPromise(mailOptions);
+    const info = await sendMailPromise(mailOptions);
     await logEmailSuccess({
       emailType: "order_shipped",
       orderId: data?.id,
       orderType: data?.orderOf || "customer",
       recipients: email,
       metadata: { subject: mailOptions.subject },
+      zeptoRequestId: info?.request_id,
     });
   } catch (error) {
     console.error("orderShipped email error:", error);

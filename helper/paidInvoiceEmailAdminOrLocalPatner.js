@@ -216,7 +216,7 @@ module.exports = async function ({ email, data, invoice }) {
       `,
   };
   try {
-    await sendMailPromise(mailOptions);
+    const info = await sendMailPromise(mailOptions);
     await logEmailSuccess({
       emailType: "paid_receipt_admin",
       orderId: data?.id,
@@ -226,6 +226,7 @@ module.exports = async function ({ email, data, invoice }) {
         subject: mailOptions.subject,
         invoiceNumber: data?.invoiceNumber,
       },
+      zeptoRequestId: info?.request_id,
     });
   } catch (error) {
     console.log(error);

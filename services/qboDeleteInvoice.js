@@ -1,59 +1,129 @@
-// services/qboOrderService.js
-const { order, item, address, user } = require("../models");
+// services/qboDeleteInvoice.js — delete QBO invoice(s) only; order stays in DB (admin + partner)
+// orderType: "local-partner" → only delete partner invoice (do not touch admin). Otherwise delete both when present.
+const { order, account } = require("../models");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const axios = require("axios");
 const { QBO, MINOR, headers } = require("./qboHelpers");
 
-async function quickBooksInvocieDelete({ orderId }) {
+async function deleteInvoiceInRealm(accessToken, realmId, invoiceId) {
+  const deleteUrl = `${QBO(realmId)}/invoice?operation=delete&minorversion=${MINOR}`;
+  const payload = { Id: String(invoiceId), SyncToken: "0" };
+  await axios.post(deleteUrl, payload, {
+    headers: {
+      ...headers(accessToken),
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+async function quickBooksInvocieDelete({ orderId, orderType }) {
   if (!orderId) throw new Error("Missing orderId");
 
-  // 🔹 Fetch the order first
+  // Only columns used: id, quickBooksInvoiceId (admin), quickBooksInvoiceIdPartner, partnerRealmId, salesRepId (partner token)
   const ord = await order.findOne({
     where: { id: orderId },
-    include: [{ model: user }, { model: address }, { model: item }],
+    attributes: [
+      "id",
+      "quickBooksInvoiceId",
+      "quickBooksInvoiceIdPartner",
+      "partnerRealmId",
+      "salesRepId",
+    ],
   });
 
   if (!ord) throw new Error(`Order ${orderId} not found`);
 
-  // 🔹 If it was synced with QuickBooks, delete invoice from QBO first
-  if (ord.quickBooksInvoiceId) {
-    try {
-      const { accessToken, realmId } = await refreshAccessTokenIfNeeded();
+  const isLocalPartner = orderType === "local-partner";
+  const hasAdmin = !isLocalPartner && !!ord.quickBooksInvoiceId;
+  const hasPartner = !!ord.quickBooksInvoiceIdPartner && !!ord.partnerRealmId;
+
+  if (!hasAdmin && !hasPartner) {
+    return {
+      status: "success",
+      message: `Order ${orderId} has no QuickBooks invoice to delete.`,
+      quickBooksInvoiceId: null,
+      quickBooksInvoiceIdPartner: null,
+    };
+  }
+
+  const updatePayload = {};
+  const deleted = { admin: null, partner: null };
+
+  try {
+    // ——— Admin (main) QBO invoice ——— (skipped for local-partner; admin has nothing to do with that order)
+    if (hasAdmin) {
+      const ADMIN = await account.findOne({});
+      if (!ADMIN?.currentRealmId || !ADMIN?.id)
+        throw new Error("Admin QBO not connected (missing realm or account).");
+
+      const adminQboCondition = {
+        realmId: ADMIN.currentRealmId,
+        accountId: ADMIN.id,
+      };
+      const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
+        condition: adminQboCondition,
+      });
 
       if (!accessToken || !realmId)
         throw new Error("QBO credentials missing or disconnected");
 
-      const deleteUrl = `${QBO(realmId)}/invoice?operation=delete&minorversion=${MINOR}`;
-      const payload = { Id: String(ord.quickBooksInvoiceId), SyncToken: "0" };
+      await deleteInvoiceInRealm(accessToken, realmId, ord.quickBooksInvoiceId);
+      console.log(
+        `[QBO][DeleteInvoice] Deleted admin invoice ${ord.quickBooksInvoiceId} for order ${orderId}`,
+      );
+      deleted.admin = ord.quickBooksInvoiceId;
+      updatePayload.quickBooksInvoiceId = null;
+      updatePayload.qboLastSync = null;
+    }
 
-      await axios.post(deleteUrl, payload, {
-        headers: {
-          ...headers(accessToken),
-          "Content-Type": "application/json",
-        },
+    // ——— Partner QBO invoice ———
+    if (hasPartner) {
+      const partnerCondition = {
+        realmId: ord.partnerRealmId,
+        salesRepId: ord.salesRepId,
+      };
+      const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
+        condition: partnerCondition,
       });
 
+      if (!accessToken || !realmId)
+        throw new Error("Partner QBO credentials missing or disconnected");
+
+      await deleteInvoiceInRealm(
+        accessToken,
+        realmId,
+        ord.quickBooksInvoiceIdPartner,
+      );
       console.log(
-        `[QBO][DeleteOrder] Deleted invoice ${ord.quickBooksInvoiceId}`
+        `[QBO][DeleteInvoice] Deleted partner invoice ${ord.quickBooksInvoiceIdPartner} for order ${orderId}`,
       );
-    } catch (err) {
-      console.error(
-        `[QBO][DeleteOrder] Failed to delete invoice ${ord.quickBooksInvoiceId}:`,
-        err.response?.data || err.message
-      );
+      deleted.partner = ord.quickBooksInvoiceIdPartner;
+      updatePayload.quickBooksInvoiceIdPartner = null;
+      updatePayload.partnerRealmId = null;
+      updatePayload.quickBooksPaymentIdPartner = null;
     }
+
+    if (Object.keys(updatePayload).length) {
+      await order.update(updatePayload, { where: { id: ord.id } });
+    }
+
+    const parts = [];
+    if (deleted.admin) parts.push("admin");
+    if (deleted.partner) parts.push("partner");
+
+    return {
+      status: "success",
+      message: `QuickBooks invoice(s) deleted for order ${orderId} (${parts.join(" + ")}). Order kept in database.`,
+      quickBooksInvoiceId: deleted.admin,
+      quickBooksInvoiceIdPartner: deleted.partner,
+    };
+  } catch (err) {
+    console.error(
+      `[QBO][DeleteInvoice] Failed for order ${orderId}:`,
+      err.response?.data || err.message,
+    );
+    throw err;
   }
-
-  // 🔹 Delete items, address (if needed), and order locally
-  await item.destroy({ where: { orderId: ord.id } });
-  await order.destroy({ where: { id: ord.id } });
-
-  console.log(`[OrderService] Local order ${orderId} deleted.`);
-  return {
-    status: "success",
-    message: `Order ${orderId} deleted successfully.`,
-    quickBooksInvoiceId: ord.quickBooksInvoiceId || null,
-  };
 }
 
 module.exports = { quickBooksInvocieDelete };

@@ -55,6 +55,43 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: "Optional JSON: subject, invoiceNumber, etc.",
     },
+    zeptoRequestId: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: "ZeptoMail request_id from send response; used for webhooks (opened, clicked, etc.)",
+    },
+    firstOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "First time email was opened (from Zepto webhook)",
+    },
+    lastOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "Most recent open time (from Zepto webhook)",
+    },
+    openCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "Number of times email was opened",
+    },
+    clickCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "Number of times links were clicked",
+    },
+    softBouncedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When soft bounce was reported (from Zepto webhook)",
+    },
+    softBounceReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: "Soft bounce reason/diagnostic (from Zepto webhook)",
+    },
   });
   return emailLog;
 };

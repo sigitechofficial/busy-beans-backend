@@ -46,6 +46,7 @@ const {
   syncInvoiceOnQuikBooks,
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
+const { quickBooksInvocieDelete } = require("../../services/qboDeleteInvoice");
 
 const {
   syncPaymentToQuickBooks,
@@ -2036,6 +2037,113 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     status: "success",
     message: "success",
     data: { id: req.params.orderId },
+  });
+});
+
+/**
+ * Delete invoice: set invoice date/reminder to null, clear checkout session if not paid, delete PDF.
+ * Body: { orderType: "order" | "partnerOrder", id: number }
+ * - If invoiceId is a Stripe checkout session: check status; if paid → error; if open → expire session.
+ * - Then set invoiceDate, invoiceReminder, invoiceId, hostedInvoiceUrl, invoicePdf to null and delete PDF file.
+ */
+exports.deleteInvoice = catchAsync(async (req, res, next) => {
+  const { orderType, id } = req.body;
+
+  if (!id) {
+    throw new AppError("Order id is required in body.", 400);
+  }
+
+  const model =
+    orderType === "partnerOrder" || orderType === "local-partner"
+      ? partnerOrder
+      : order;
+
+  const placedOrder = await model.findOne({
+    where: { id },
+    attributes: [
+      "id",
+      "invoiceId",
+      "invoiceDate",
+      "invoiceReminder",
+      "invoicePdf",
+      "paymentStatus",
+    ],
+  });
+
+  if (!placedOrder) {
+    throw new AppError(
+      `Order with id ${id} not found for type ${orderType || "order"}.`,
+      404,
+    );
+  }
+  console.log("🚀 ~ placedOrder?.paymentStatus:", placedOrder?.paymentStatus);
+  if (placedOrder?.paymentStatus === "done") {
+    throw new AppError("Invoice is already paid. Cannot delete invoice.", 400);
+  }
+  const invoiceId = placedOrder.invoiceId;
+
+  if (invoiceId && invoiceId.startsWith("cs_")) {
+    const sessionStatus = await Stripe.checkCheckoutSessionStatus(invoiceId);
+
+    if (sessionStatus === "paid") {
+      throw new AppError(
+        "Invoice is already paid. Cannot delete invoice.",
+        400,
+      );
+    }
+
+    if (sessionStatus === "open") {
+      await Stripe.blockCheckoutSession(invoiceId);
+    }
+  }
+
+  // Delete QuickBooks invoice(s) for admin orders (service updates quickBooksInvoiceId etc. on order)
+  if (model === order) {
+    try {
+      await quickBooksInvocieDelete({ orderId: id, orderType });
+    } catch (err) {
+      const msg =
+        err.response?.data?.Fault?.Error?.[0]?.Message ||
+        err.response?.data?.message ||
+        err.message;
+      throw new AppError(
+        `QuickBooks invoice delete failed: ${msg}`,
+        err.response?.status || 500,
+      );
+    }
+  }
+
+  await model.update(
+    {
+      invoiceDate: null,
+      invoiceReminder: null,
+      invoiceId: null,
+      hostedInvoiceUrl: null,
+      invoicePdf: null,
+    },
+    { where: { id } },
+  );
+
+  const pdfFilename = `invoice-00${placedOrder.id}.pdf`;
+  const pdfPath = path.join(__dirname, "../../public/invoicePDFs", pdfFilename);
+
+  try {
+    await fs.promises.access(pdfPath, fs.constants.F_OK);
+    await fs.promises.unlink(pdfPath);
+    console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error(
+        `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
+        err.message,
+      );
+    }
+  }
+
+  return res.status(200).json({
+    status: "success",
+    message: "Invoice deleted successfully.",
+    data: { id: placedOrder.id },
   });
 });
 

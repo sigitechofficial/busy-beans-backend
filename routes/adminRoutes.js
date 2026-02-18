@@ -1993,6 +1993,45 @@ router.delete(
 
 /**
  * @swagger
+ * /api/v1/admin/order-management/delete-invoice:
+ *   post:
+ *     summary: Delete invoice for an order (clear issue date, reminder, expire checkout session if not paid, delete PDF)
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderType, id]
+ *             properties:
+ *               orderType:
+ *                 type: string
+ *                 enum: [order, partnerOrder]
+ *                 description: Order type - "order" for admin orders, "partnerOrder" for local partner orders
+ *               id:
+ *                 type: integer
+ *                 description: Order id
+ *     responses:
+ *       200:
+ *         description: Invoice deleted successfully
+ *       400:
+ *         description: Invoice is paid or validation error
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Order not found
+ */
+router.post(
+  "/order-management/delete-invoice",
+  manageOrderController.deleteInvoice,
+);
+
+/**
+ * @swagger
  * /api/v1/admin/order-details/{id}:
  *   get:
  *     summary: Get order details by ID

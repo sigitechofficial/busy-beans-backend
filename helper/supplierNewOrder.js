@@ -217,13 +217,14 @@ module.exports = async function ({ email, data }) {
       `,
   };
   try {
-    await sendMailPromise(mailOptions);
+    const info = await sendMailPromise(mailOptions);
     await logEmailSuccess({
       emailType: "supplier_new_order",
       orderId: data?.id,
       orderType: data?.orderOf || "customer",
       recipients: email,
       metadata: { subject: mailOptions.subject },
+      zeptoRequestId: info?.request_id,
     });
   } catch (error) {
     console.log(error);

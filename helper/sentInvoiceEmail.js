@@ -314,13 +314,14 @@ Need help or want a custom order? Just reply to this email or call us!`
       `,
   };
   try {
-    await sendMailPromise(mailOptions);
+    const info = await sendMailPromise(mailOptions);
     await logEmailSuccess({
       emailType: data?.invoiceReminder ? "invoice_reminder" : "invoice_sent",
       orderId: data?.id,
       orderType: data?.orderOf || "customer",
       recipients: email,
       metadata: { subject: mailOptions.subject, invoiceNumber: data?.invoiceNumber },
+      zeptoRequestId: info?.request_id,
     });
   } catch (error) {
     console.log(error);

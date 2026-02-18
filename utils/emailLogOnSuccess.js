@@ -11,6 +11,7 @@ const { emailLog } = require("../models");
  * @param {string} [params.emailSent] - "Success" | "Failed" (default: "Success")
  * @param {string} [params.errorMessage] - error details when emailSent is "Failed"
  * @param {Object} [params.metadata] - optional { subject, invoiceNumber, etc. }
+ * @param {string} [params.zeptoRequestId] - ZeptoMail request_id from send response (for webhooks)
  */
 async function logEmailOutcome({
   emailType,
@@ -20,6 +21,7 @@ async function logEmailOutcome({
   emailSent = "Success",
   errorMessage = null,
   metadata = null,
+  zeptoRequestId = null,
 }) {
   try {
     const recipientsStr = Array.isArray(recipients)
@@ -35,6 +37,7 @@ async function logEmailOutcome({
       emailSent,
       errorMessage: errorMessage || null,
       metadata: metadata ? JSON.stringify(metadata) : null,
+      zeptoRequestId: zeptoRequestId || null,
     });
   } catch (err) {
     console.error("[emailLogOutcome] Failed to log email:", err.message);
