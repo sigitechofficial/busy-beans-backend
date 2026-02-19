@@ -6,6 +6,7 @@ const server = require("./app");
 const serverPort = process.env.PORT || 8011;
 // FIX: Bind to 0.0.0.0 for ECS/Docker to allow external connections
 const serverHost = "0.0.0.0";// const serverHost = "192.168.18.21";
+
 //
 const syncDb = 0;
 

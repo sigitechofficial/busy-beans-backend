@@ -40,7 +40,7 @@ app.use("/view", viewRoute);
 app.use(
   "/webhook/busy-beans-coffee",
   bodyParser.raw({ type: "application/json" }),
-  webhookRoute
+  webhookRoute,
 );
 
 // Meta webhook routes use JSON parser
@@ -66,7 +66,7 @@ app.use(
       return callback(null, true); // reflect the requested origin
     },
     credentials: true, // <-- REQUIRED to allow cookies
-  })
+  }),
 );
 app.use(cookieParser());
 // // Access-Control-Allow-Origin *
@@ -114,7 +114,7 @@ app.use(
   swaggerUi.setup(swaggerSpec, {
     customCss: ".swagger-ui .topbar { display: none }",
     customSiteTitle: "Busy Beans Coffee API Documentation",
-  })
+  }),
 );
 
 // Test middleware

@@ -16,6 +16,7 @@ const {
   partnerOrder,
   account,
   employee,
+  emailLog,
 } = require("../../models");
 
 const fs = require("fs");
@@ -36,6 +37,7 @@ const {
 const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
+const generateInvoicePdf = require("../../utils/generateInvoicePdf");
 
 const {
   importCustomersToQuickBooks,
@@ -44,6 +46,7 @@ const {
   syncInvoiceOnQuikBooks,
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
+const { quickBooksInvocieDelete } = require("../../services/qboDeleteInvoice");
 
 const {
   syncPaymentToQuickBooks,
@@ -54,6 +57,7 @@ const {
 const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmailAdminOrLocalPatner");
 const {
   paidInvoiceAdminOrLocalPatnerEventAndCustomer,
+  paidInvoiceAdminOrLocalPatnerEvent,
 } = require("../events/paymentInvoicePaidEvent");
 const { supplierNewOrderEvent } = require("../events/orderToSupplierEvents");
 const {
@@ -79,7 +83,7 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
     return next(new AppError("Order not found", 404));
   } else if (orderData.type == "direct-invoice") {
     return next(
-      new AppError("This is a direct invoice and email cannot be sent.", 400)
+      new AppError("This is a direct invoice and email cannot be sent.", 400),
     );
   }
 
@@ -107,6 +111,112 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
   });
 });
 
+/**
+ * Ensure invoice PDFs exist for orders with paymentStatus pending and invoiceDate set.
+ * Finds such orders, and creates the PDF if the file is not found on disk.
+ */
+exports.ensurePendingInvoicePdfs = catchAsync(async (req, res, next) => {
+  const pendingWithInvoice = await order.findAll({
+    where: {
+      paymentStatus: "pending",
+      invoiceDate: { [Op.ne]: null },
+      deleted: 0,
+    },
+    attributes: ["id"],
+    raw: true,
+  });
+
+  const pdfDir = path.join(__dirname, "../../public/invoicePDFs");
+  const created = [];
+  const skipped = [];
+  const errors = [];
+
+  for (const row of pendingWithInvoice) {
+    const orderId = row.id;
+    const pdfFilename = `invoice-00${orderId}.pdf`;
+    const pdfPath = path.join(pdfDir, pdfFilename);
+
+    if (fs.existsSync(pdfPath)) {
+      skipped.push(orderId);
+      continue;
+    }
+
+    try {
+      const { details } = await dataForEmailAndNotifications(
+        orderId,
+        "customer",
+      );
+      if (!details) {
+        errors.push({ orderId, message: "Order data not found" });
+        continue;
+      }
+      await generateInvoicePdf(details, orderId);
+      created.push(orderId);
+    } catch (err) {
+      errors.push({
+        orderId,
+        message: err?.message || String(err),
+      });
+    }
+  }
+
+  return res.status(200).json({
+    status: "success",
+    data: {
+      total: pendingWithInvoice.length,
+      created,
+      skipped,
+      errors,
+    },
+  });
+});
+
+/**
+ * List orders that are candidates for pending PDFs:
+ * paymentStatus pending, invoiceDate between 2025-01-20 and 2026-02-09.
+ * Excludes orders that already have an invoice PDF on disk.
+ */
+exports.listPendingPdfs = catchAsync(async (req, res, next) => {
+  const invoiceDateFrom = new Date("2025-01-20");
+  const invoiceDateTo = new Date("2026-02-09T23:59:59.999Z");
+
+  const all = await order.findAll({
+    where: {
+      paymentStatus: "pending",
+      invoiceDate: {
+        [Op.between]: [invoiceDateFrom, invoiceDateTo],
+      },
+      deleted: 0,
+    },
+    attributes: [
+      "id",
+      "invoiceNumber",
+      "poNumber",
+      "totalBill",
+      "invoiceDate",
+      "updatedAt",
+      "userId",
+    ],
+    order: [["invoiceDate", "ASC"]],
+    raw: true,
+  });
+
+  const pdfDir = path.join(__dirname, "../../public/invoicePDFs");
+  const list = all.filter((row) => {
+    const pdfPath = path.join(pdfDir, `invoice-00${row.id}.pdf`);
+    return !fs.existsSync(pdfPath);
+  });
+
+  return res.status(200).json({
+    status: "success",
+    data: {
+      checkorders: all.length,
+      total: list.length,
+      list,
+    },
+  });
+});
+
 exports.sendInvoice = catchAsync(async (req, res, next) => {
   const model = req.body?.order?.partnerOrderId ? partnerOrder : order;
   const orderType = req.body?.order?.partnerOrderId
@@ -124,8 +234,8 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "As the payment for the order has already been made, we are unable to send an invoice at this point.",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -174,7 +284,10 @@ exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
     console.log("🚀 ~ sendInvoiceMultiple ~ listOrder:", listOrder);
     for (const ele of listOrder) {
       console.log("🚀 ~ sendInvoiceMultiple ~ orderId:", ele);
-      sentPaymentInvoiceEvent({ orderId: ele.orderId });
+      sentPaymentInvoiceEvent({
+        orderId: ele.orderId,
+        orderType: ele.orderType || "customer",
+      });
 
       await order.update(ele, { where: { id: ele.orderId } });
     }
@@ -191,7 +304,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
 
   const { details, email } = await dataForEmailAndNotifications(
     req.params.orderId,
-    orderType
+    orderType,
   );
 
   if (details?.paymentIntentId || details?.paymentStatus == "done") {
@@ -212,7 +325,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
     if (session == "paid") {
       await order.update(
         { paymentMethod: "card", paymentStatus: "done" },
-        { where: { id: req.params.orderId } }
+        { where: { id: req.params.orderId } },
       );
 
       return res.status(200).json({
@@ -244,7 +357,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
   if (!checkSession) await order.update(invoice, { where: { id: details.id } });
   console.log(
     "🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:",
-    checkSession
+    checkSession,
   );
 
   // sentPaymentInvoiceEvent({email:to,data:details,invoice})
@@ -310,7 +423,7 @@ exports.createPaymentIntentForUser = catchAsync(async (req, res, next) => {
   } catch (error) {
     console.error("❌ Payment Intent creation failed:", error);
     return next(
-      new AppError(error?.message || "Payment Intent creation failed", 400)
+      new AppError(error?.message || "Payment Intent creation failed", 400),
     );
   }
 });
@@ -388,9 +501,35 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
       // Log error but don't fail the payment confirmation
       console.error(
         "❌ Error processing employee commission in confirmPaymentForInvoiceIntent:",
-        error.message
+        error.message,
       );
     }
+  }
+
+  // Invoice paid email (from events)
+  try {
+    await paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+      orderId,
+      orderType: "customer",
+    });
+  } catch (error) {
+    console.error(
+      "❌ Error sending invoice paid email in confirmPaymentForInvoiceIntent:",
+      error.message,
+    );
+  }
+
+  // QBO invoice payment sync
+  try {
+    await syncPaymentToQuickBooks({
+      orderId,
+      orderType: orderType || "customer",
+    });
+  } catch (error) {
+    console.error(
+      "❌ Error syncing payment to QBO in confirmPaymentForInvoiceIntent:",
+      error.message,
+    );
   }
 
   return res.status(200).json({
@@ -461,6 +600,12 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     condition.userId = req.user.id;
   }
   console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
+  console.log("🚀 ~ condition----:", condition);
 
   // Define searchable columns for orders
   const searchableFields = [
@@ -513,13 +658,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
         "id",
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "product",
         ],
         [
           literal(
-            `(SELECT products.image FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.image FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "image",
         ],
@@ -552,19 +697,19 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     "type",
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
       ),
       "customerName",
     ],
     [
       literal(
-        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
       ),
       "companyName",
     ],
     [
       literal(
-        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
       ),
       "orderCurrentStatus",
     ],
@@ -601,13 +746,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+        `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
       ),
       "salesRepName",
     ],
     [
       literal(
-        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`,
       ),
       "deliveredOn",
     ],
@@ -643,7 +788,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     "pulloutDate",
     [
       literal(
-        `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`
+        `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
       ),
       "overdueInvoice",
     ],
@@ -698,7 +843,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "product",
           ],
@@ -715,19 +860,19 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       "id",
       [
         literal(
-          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "customerName",
       ],
       [
         literal(
-          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "companyName",
       ],
       [
         literal(
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         "orderCurrentStatus",
       ],
@@ -764,7 +909,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
@@ -798,7 +943,7 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       "pulloutDate",
       [
         literal(
-          `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`
+          `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
         ),
         "overdueInvoice",
       ],
@@ -894,26 +1039,26 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "product",
           ],
           [
             literal(
-              `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "singleUnitWeight",
           ],
           ["weight", "itemWeights"],
           [
             literal(
-              `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.productCode FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "productCode",
           ],
           [
             literal(
-              `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`
+              `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`,
             ),
             "grind",
           ],
@@ -943,13 +1088,13 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+              `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`,
             ),
             "orderStatus",
           ],
           [
             literal(
-              `(SELECT statuses.discription FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+              `(SELECT statuses.discription FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`,
             ),
             "discription",
           ],
@@ -963,19 +1108,19 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       "type",
       [
         literal(
-          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "customerName",
       ],
       [
         literal(
-          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "companyName",
       ],
       [
         literal(
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
         ),
         "orderCurrentStatus",
       ],
@@ -1009,7 +1154,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
@@ -1104,25 +1249,25 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       "paymentStatus",
       [
         literal(
-          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "stripeCustomerId",
       ],
       [
         literal(
-          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "defaultBankAccount",
       ],
       [
         literal(
-          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "srName",
       ],
       [
         literal(
-          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "territoryName",
       ],
@@ -1135,6 +1280,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
   }
   const statusId = Number(req.body?.orderData?.statusId);
   const userId = Number(doc?.userId || 0);
+  let paidInvoiceEventFired = false;
 
   //because customers and localpart6ner already have order invoice in
   //main issue status alreqady 4 hoga jin order ka 5 py unki payment ho jaye gi or f
@@ -1153,8 +1299,8 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
-          404
-        )
+          404,
+        ),
       );
     }
     const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
@@ -1174,8 +1320,8 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "Invalid Bank Account! Order has been shipped but cannot collect payment. ",
-          404
-        )
+          404,
+        ),
       );
     }
     req.body.orderData.adminReceivableStatus = true;
@@ -1188,7 +1334,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       { paymentStatus: "done" },
       {
         where: { id: orderId || partnerOrderId },
-      }
+      },
     );
     if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
       syncPaymentToQuickBooks({
@@ -1207,6 +1353,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       orderId: orderId || partnerOrderId,
       orderType: isPartnerOrder ? "local-partner" : "customer",
     });
+    paidInvoiceEventFired = true;
   }
   if (req.body?.orderData) {
     req.body.orderData.shippingCompany = "UPS";
@@ -1222,44 +1369,55 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
         console.log(
           "🚀 ~ doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId:",
-          doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId
+          doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId,
         );
         await Model.update(
           { paymentStatus: "done" },
           {
             where: { id: orderId || partnerOrderId },
-          }
+          },
         );
-        // syncPaymentToQuickBooks({
-        //   orderId: orderId || partnerOrderId,
-        //   orderType: isPartnerOrder ? "local-partner" : "customer",
-        // });
+        syncPaymentToQuickBooks({
+          orderId: orderId || partnerOrderId,
+          orderType: isPartnerOrder ? "local-partner" : "customer",
+        });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
       } else if (!doc.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
-        // syncInvoiceOnQuikBooks({
-        //   orderId: orderId || partnerOrderId,
-        //   orderType: isPartnerOrder ? "local-partner" : "customer",
-        // });
+        syncInvoiceOnQuikBooks({
+          orderId: orderId || partnerOrderId,
+          orderType: isPartnerOrder ? "local-partner" : "customer",
+        });
       }
       req.body.orderData.invoicePaidDate = new Date();
       req.body.orderData.paymentMethod = "Bank Check";
       manualPaymentEmail = true;
     }
 
-    if (!isPartnerOrder && orderId && doc?.paymentStatus != "done") {
-        console.log("🚀 ~ exports.orderJourneryComplete ~ doc?.paymentStatus:", doc?.paymentStatus);
- 
-       await calculateAndSaveEmployeeCommission({ orderId: orderId });
-    //    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-    //         orderId: orderId || partnerOrderId,
-    //         orderType: isPartnerOrder ? "local-partner" : "customer",
-    //    });
-    }
-
     await Model.update(req.body?.orderData, {
       where: { id: orderId || partnerOrderId },
     });
+
+    // Paid invoice event after order update so email sees updated paymentStatus
+    if (
+      req.body?.orderData?.paymentStatus == "done" &&
+      !paidInvoiceEventFired
+    ) {
+      paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+        orderId: orderId || partnerOrderId,
+        orderType: isPartnerOrder ? "local-partner" : "customer",
+      });
+      if (!isPartnerOrder && orderId) {
+        try {
+          await calculateAndSaveEmployeeCommission({ orderId: orderId });
+        } catch (error) {
+          console.error(
+            "❌ Error processing employee commission in orderJourneryComplete:",
+            error?.message || error,
+          );
+        }
+      }
+    }
   }
   if (req.body?.cheque) {
     req.body.cheque.orderId = orderId;
@@ -1269,7 +1427,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
 
   console.log(
     "🚀 ~ exports.orderJourneryComplete ~ req.body?.orderData?.statusId :",
-    req.body?.orderData?.statusId
+    req.body?.orderData?.statusId,
   );
 
   if (req.body?.orderData?.statusId) {
@@ -1304,13 +1462,13 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
         if (session == "paid") {
           await Model.update(
             { paymentMethod: "card", paymentStatus: "done" },
-            { where: { id: doc.id } }
+            { where: { id: doc.id } },
           );
           return next(
             new AppError(
               "As the payment for the order has already been made, we are unable to cancel.",
-              404
-            )
+              404,
+            ),
           );
         } else if (session == "open") {
           checkSession = true;
@@ -1323,7 +1481,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       const pdfPath = path.join(
         __dirname,
         "../../public/invoicePDFs",
-        pdfFilename
+        pdfFilename,
       );
 
       // Check if file exists, then delete
@@ -1333,7 +1491,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
             if (unlinkErr) {
               console.error(
                 `❌ Failed to delete invoice PDF for order ${order.id}:`,
-                unlinkErr
+                unlinkErr,
               );
             } else {
               console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
@@ -1341,7 +1499,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
           });
         } else {
           console.warn(
-            `⚠️ No invoice PDF found for order ${order.id} at ${pdfPath}`
+            `⚠️ No invoice PDF found for order ${order.id} at ${pdfPath}`,
           );
         }
       });
@@ -1400,26 +1558,52 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
   const weight = req.body?.weight || 0; // Weight from req.body
   console.log(
     "🚀 ~ exports.findShippingCompanyForWeight=catchAsync ~ weight:",
-    weight
+    weight,
   );
-  const customer = req.params?.id
-    ? await userDiscount.findAll({
-        where: { userId: req.params?.id },
-        attributes: [
-          "categoryId",
-          "percentage",
-          // [
-          //   literal(
-          //     `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`,
-          //   ),
-          //   'categoryName',
-          // ],
+
+  let customerInfo, customer;
+  if (req.body?.userType != "local-partner") {
+    customerInfo = await user.findOne({
+      where: { id: req.params?.id || req.user?.id },
+      attributes: [
+        "id",
+        "salesRepId",
+        "defaultDiscount",
+        [
+          literal(
+            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+          ),
+          "salesRepName",
         ],
-      })
-    : [];
-  console.log("🚀 ~ customer:", customer);
-  console.log("🚀 ~ req.params?.id:", req.params?.id);
-  // Find the shipping company where the weight is between weightFrom and weightTo
+        [
+          literal(
+            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
+          ),
+          "partnerType",
+        ],
+      ],
+      raw: true,
+    });
+
+    customer = customerInfo?.id
+      ? await userDiscount.findAll({
+          where: { userId: customerInfo?.id },
+          attributes: [
+            "categoryId",
+            "percentage",
+            // [
+            //   literal(
+            //     `(SELECT categories.name FROM categories WHERE userDiscount.categoryId= categories.id LIMIT 1)`,
+            //   ),
+            //   'categoryName',
+            // ],
+          ],
+        })
+      : [];
+    console.log("🚀 ~ customerInfo:", customerInfo);
+    console.log("🚀 ~ req.params?.id:", req.user?.id);
+    // Find the shipping company where the weight is between weightFrom and weightTo
+  }
   const shippingCompany = await shippingCompanies.findOne({
     where: {
       weightFrom: {
@@ -1432,19 +1616,22 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
     attributes: ["charges"],
   });
 
-  if (!shippingCompany) {
+  if (!shippingCompany && customerInfo?.partnerType != "direct-partner") {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        200
-      )
+        200,
+      ),
     );
   }
 
   return res.status(200).json({
     status: "success",
     data: {
-      charges: shippingCompany?.charges,
+      charges:
+        customerInfo?.partnerType != "direct-partner"
+          ? shippingCompany?.charges
+          : 0,
       discountPercentage: customer || [],
     },
   });
@@ -1468,21 +1655,22 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       "invoiceNumber",
       "userId",
       "quickBooksInvoiceId",
+      "shippingCharges",
       [
         literal(
-          `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+          `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "stripeCustomerId",
       ],
       [
         literal(
-          `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+          `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
         ),
         "connectAccountId",
       ],
       [
         literal(
-          `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+          `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
         ),
         "partnerType",
       ],
@@ -1497,8 +1685,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "The order payment has already been made. You may proceed with the update.",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -1510,21 +1698,21 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   if (placedOrder?.invoiceId) {
     const session = await Stripe.checkCheckoutSessionStatus(
-      placedOrder?.invoiceId
+      placedOrder?.invoiceId,
     );
     console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session);
 
     if (session == "paid") {
       await order.update(
         { paymentMethod: "card", paymentStatus: "done" },
-        { where: { id: placedOrder.id } }
+        { where: { id: placedOrder.id } },
       );
 
       return next(
         new AppError(
           "As the payment for the order has already been made, we are unable to update an invoice at this point.",
-          404
-        )
+          404,
+        ),
       );
     } else if (session == "open") {
       checkSession = true;
@@ -1548,36 +1736,67 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   let discountOnItemsPrice = 0;
   let totalLocalPatnerCommission = 0;
 
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  const productAttributes = [
+    `id`,
+    `name`,
+    `quantity`,
+    `categoryId`,
+    `weight`,
+    `sku`,
+    `grind`,
+    `productCode`,
+    [
+      literal(`
+          (SELECT percentage
+          FROM userDiscounts
+          WHERE userDiscounts.categoryId = product.categoryId
+            AND userDiscounts.userId = ${placedOrder?.userId}
+          LIMIT 1)
+        `),
+      "discountPercentage",
+    ],
+  ];
+  if (placedOrder?.salesRepId) {
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVENTORY PRICE & WHOLESALE APPLIED:",
+      placedOrder?.salesRepId,
+    );
+    productAttributes.push(
+      [
+        literal(
+          `(SELECT COALESCE(srpp.price, product.price) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${placedOrder?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "price",
+      ],
+      [
+        literal(
+          `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${placedOrder?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "wholesalePrice",
+      ],
+    );
+  } else {
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVENTORY PRICE APPLIED:",
+      placedOrder?.salesRepId,
+    );
+    productAttributes.push(`price`, `wholesalePrice`);
+  }
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      [
-        literal(`
-            (SELECT percentage
-            FROM userDiscounts
-            WHERE userDiscounts.categoryId = product.categoryId
-              AND userDiscounts.userId = ${placedOrder?.userId}
-            LIMIT 1)
-          `),
-        "discountPercentage",
-      ],
-    ],
+    attributes: productAttributes,
+    raw: true,
   });
+
+  console.log(
+    "🚀 ~ exports.bookOrder=catchAsync ~ products:",
+    products?.length,
+  );
 
   // let percentageDiscount = input?.order?.discountPercentage
   //   ? input.order?.discountPercentage
@@ -1585,15 +1804,13 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length
+    products?.length,
   );
 
   const finalItems = products.map((obj) => {
     const element = {};
-    const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
-    );
-    element.productId = obj.id;
+    const percentageDiscount = parseFloat(obj?.discountPercentage || 0);
+    element.productId = obj?.id;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
@@ -1650,7 +1867,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   if (req.body?.typeCharges?.length > 0) {
     console.log(
       "🚀 ~ req.body?.typeCharges?.length:",
-      req.body?.typeCharges?.length
+      req.body?.typeCharges?.length,
     );
     req.body?.typeCharges.forEach((obj) => {
       const element = {};
@@ -1695,12 +1912,12 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       },
       attributes: ["charges"],
     });
-    if (!shippingCompany) {
+    if (!shippingCompany && placedOrder?.partnerType != "direct-partner") {
       return next(
         new AppError(
           "Not dealing in such weights. Contact customer support for this order.",
-          400
-        )
+          400,
+        ),
       );
     }
   }
@@ -1714,7 +1931,10 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
   input.order.invoicePdf = 1;
   input.order.shippingCharges =
-    req.body?.order?.shippingCharges || shippingCompany?.charges;
+    placedOrder?.partnerType == "direct-partner"
+      ? req.body?.order?.shippingCharges || placedOrder?.shippingCharges
+      : req.body?.order?.shippingCharges || shippingCompany?.charges;
+
   input.order.subTotal = itemsPrice + parseFloat(input?.order?.vat || 0);
   input.order.totalBill =
     itemsPrice +
@@ -1738,7 +1958,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
         if (unlinkErr) {
           console.error(
             `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
-            unlinkErr
+            unlinkErr,
           );
         } else {
           console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
@@ -1746,7 +1966,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       });
     } else {
       console.warn(
-        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`
+        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
       );
     }
   });
@@ -1771,16 +1991,19 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       await order.update(payment?.data, { where: { id: placedOrder?.id } });
       paidInvoiceAdminOrLocalPatnerEventAndCustomer({
         orderId: placedOrder?.id,
+        orderType: "customer",
       });
       // Only process employee commission if order has no local partner (salesRepId)
       if (!placedOrder?.salesRepId) {
         try {
-          await calculateAndSaveEmployeeCommission({ orderId: placedOrder?.id });
+          await calculateAndSaveEmployeeCommission({
+            orderId: placedOrder?.id,
+          });
         } catch (error) {
           // Log error but don't disrupt the overall API flow
           console.error(
             "❌ Error processing employee commission in payment capture:",
-            error.message
+            error.message,
           );
         }
       }
@@ -1802,7 +2025,10 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     input?.order?.emailInvoiceToCustomer &&
     !input?.order?.attemptImmediatePayment
   ) {
-    sentPaymentInvoiceEvent({ orderId: placedOrder?.id });
+    sentPaymentInvoiceEvent({
+      orderId: placedOrder?.id,
+      orderType: "customer",
+    });
   }
 
   syncInvoiceOnQuikBooks({ orderId: placedOrder.id, updateRequest: true });
@@ -1811,6 +2037,113 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
     status: "success",
     message: "success",
     data: { id: req.params.orderId },
+  });
+});
+
+/**
+ * Delete invoice: set invoice date/reminder to null, clear checkout session if not paid, delete PDF.
+ * Body: { orderType: "order" | "partnerOrder", id: number }
+ * - If invoiceId is a Stripe checkout session: check status; if paid → error; if open → expire session.
+ * - Then set invoiceDate, invoiceReminder, invoiceId, hostedInvoiceUrl, invoicePdf to null and delete PDF file.
+ */
+exports.deleteInvoice = catchAsync(async (req, res, next) => {
+  const { orderType, id } = req.body;
+
+  if (!id) {
+    throw new AppError("Order id is required in body.", 400);
+  }
+
+  const model =
+    orderType === "partnerOrder" || orderType === "local-partner"
+      ? partnerOrder
+      : order;
+
+  const placedOrder = await model.findOne({
+    where: { id },
+    attributes: [
+      "id",
+      "invoiceId",
+      "invoiceDate",
+      "invoiceReminder",
+      "invoicePdf",
+      "paymentStatus",
+    ],
+  });
+
+  if (!placedOrder) {
+    throw new AppError(
+      `Order with id ${id} not found for type ${orderType || "order"}.`,
+      404,
+    );
+  }
+  console.log("🚀 ~ placedOrder?.paymentStatus:", placedOrder?.paymentStatus);
+  if (placedOrder?.paymentStatus === "done") {
+    throw new AppError("Invoice is already paid. Cannot delete invoice.", 400);
+  }
+  const invoiceId = placedOrder.invoiceId;
+
+  if (invoiceId && invoiceId.startsWith("cs_")) {
+    const sessionStatus = await Stripe.checkCheckoutSessionStatus(invoiceId);
+
+    if (sessionStatus === "paid") {
+      throw new AppError(
+        "Invoice is already paid. Cannot delete invoice.",
+        400,
+      );
+    }
+
+    if (sessionStatus === "open") {
+      await Stripe.blockCheckoutSession(invoiceId);
+    }
+  }
+
+  // Delete QuickBooks invoice(s) for admin orders (service updates quickBooksInvoiceId etc. on order)
+  if (model === order) {
+    try {
+      await quickBooksInvocieDelete({ orderId: id, orderType });
+    } catch (err) {
+      const msg =
+        err.response?.data?.Fault?.Error?.[0]?.Message ||
+        err.response?.data?.message ||
+        err.message;
+      throw new AppError(
+        `QuickBooks invoice delete failed: ${msg}`,
+        err.response?.status || 500,
+      );
+    }
+  }
+
+  await model.update(
+    {
+      invoiceDate: null,
+      invoiceReminder: null,
+      invoiceId: null,
+      hostedInvoiceUrl: null,
+      invoicePdf: null,
+    },
+    { where: { id } },
+  );
+
+  const pdfFilename = `invoice-00${placedOrder.id}.pdf`;
+  const pdfPath = path.join(__dirname, "../../public/invoicePDFs", pdfFilename);
+
+  try {
+    await fs.promises.access(pdfPath, fs.constants.F_OK);
+    await fs.promises.unlink(pdfPath);
+    console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error(
+        `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
+        err.message,
+      );
+    }
+  }
+
+  return res.status(200).json({
+    status: "success",
+    message: "Invoice deleted successfully.",
+    data: { id: placedOrder.id },
   });
 });
 
@@ -1832,7 +2165,7 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
            AND orders.type = 'regular-order'
-           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
       ],
@@ -1917,7 +2250,7 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
             `(SELECT COUNT(orders.id) 
              FROM orders 
              WHERE orders.statusId = statuses.id 
-             ${employeeFilterLiteral})`
+             ${employeeFilterLiteral})`,
           ),
           "count",
         ],
@@ -1960,7 +2293,7 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
       status: "success",
       data: output,
     });
-  }
+  },
 );
 
 exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
@@ -1970,7 +2303,7 @@ exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
       "orderStatus",
       [
         literal(
-          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id})`
+          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id})`,
         ),
         "count",
       ],
@@ -2008,15 +2341,15 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "This order has already been paid for and cannot be deleted.",
-        400
-      )
+        400,
+      ),
     );
   } else if (placedOrder.statusId >= 4 && placedOrder.statusId <= 5) {
     return next(
       new AppError(
         "This order has already been dispatched and cannot be deleted.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -2039,7 +2372,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
         if (unlinkErr) {
           console.error(
             `❌ ~ Failed to delete invoice PDF for order ${placedOrder.id}:`,
-            unlinkErr
+            unlinkErr,
           );
         } else {
           console.log(`🗑️ ~ Deleted invoice PDF: ${pdfFilename}`);
@@ -2047,7 +2380,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
       });
     } else {
       console.warn(
-        `⚠️ ~ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`
+        `⚠️ ~ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
       );
     }
   });

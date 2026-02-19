@@ -1,54 +1,51 @@
-exports.emailDateFormate = (dateString, timeString) => {
-  console.log("ðŸš€ ~ dateString, timeString:", dateString, timeString);
-  // Convert the date and time strings to Date objects
-  const [customYear, customMonth, customDay] = dateString
-    .split("-")
-    .map(Number);
+/**
+ * Parses various date formats into a Date object.
+ * Supports: ISO (2026-02-12T13:20:30.000Z), YYYY-MM-DD, DD/MM/YYYY, or Date object.
+ */
+function parseToDate(input) {
+  if (!input) return null;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
 
-  // Create a new date object using the components
-  const date = new Date(customYear, customMonth - 1, customDay);
-  const time = new Date(`1970-01-01T${timeString}`);
+  const str = String(input).trim();
+  if (!str) return null;
 
-  // Get the day of the week and month names
-  const daysOfWeek = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
+  // ISO or YYYY-MM-DD (with optional time)
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // DD/MM/YYYY or D/M/YYYY
+  const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, day, month, year] = slashMatch.map(Number);
+    const d = new Date(year, month - 1, day);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Fallback: let Date parse it
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+exports.emailDateFormate = (dateInput, timeString) => {
+  let date = parseToDate(dateInput);
+  if (!date) return "";
+
+  // Legacy: if timeString provided (e.g. "13:20"), set time on the date
+  if (timeString != null && String(timeString).trim()) {
+    const [h, m, s] = String(timeString).trim().split(/[:\s]/).map(Number);
+    if (!isNaN(h)) date.setHours(h, m || 0, s || 0, 0);
+  }
+
   const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
   ];
 
-  // Get the day of the week, month, and year
-  const dayOfWeek = daysOfWeek[date.getDay()];
   const month = months[date.getMonth()];
+  const dayOfMonth = date.getDate();
   const year = date.getFullYear();
 
-  // Get the day of the month, hour, and minute
-  const dayOfMonth = date.getDate();
-  const hour = time.getHours() % 12 || 12; // Convert 0 to 12 for AM/PM format
-  const minute = time.getMinutes();
-
-  // Determine AM or PM
-  const ampm = time.getHours() < 12 ? "am" : "pm";
-
-  // Construct the formatted string
-  const formattedString = `${month} ${dayOfMonth}, ${year}`;
-
-  return formattedString;
+  return `${month} ${dayOfMonth}, ${year}`;
 };

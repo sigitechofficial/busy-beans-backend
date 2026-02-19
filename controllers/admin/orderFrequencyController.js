@@ -47,11 +47,11 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
     const frequency = await orderFrequency.create(input);
     order.update(
       { orderFrequencyId: frequency?.id },
-      { where: { id: orderData?.id } }
+      { where: { id: orderData?.id } },
     );
     item.update(
       { orderFrequencyId: frequency?.id },
-      { where: { orderId: orderData?.id } }
+      { where: { orderId: orderData?.id } },
     );
 
     return true;
@@ -73,17 +73,34 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       attributes: [
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "product",
         ],
         [
           literal(
-            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "price",
         ],
-
+        [
+          literal(
+            `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
+          ),
+          "wholesalePrice",
+        ],
+        [
+          literal(
+            `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = orderFrequency.salesRepId AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "customPrice",
+        ],
+        [
+          literal(
+            `(SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = orderFrequency.salesRepId AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "customWholesalePrice",
+        ],
         "qty",
         "productId",
       ],
@@ -128,8 +145,8 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   const nextOrderDateCondition = {
     nextOrderDate: {
       [Op.notIn]: literal(`
-        (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
-      `),
+          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
+        `),
     },
   };
 
@@ -179,28 +196,29 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   // Custom attributes with literal fields
   queryOptions.attributes = [
     "id",
+    "salesRepId",
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "customerName",
     ],
     [
       literal(
-        `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "companyName",
     ],
     [
       literal(`COALESCE(
-       (SELECT SUM(qty)
-        FROM items
-        WHERE items.orderId = orderFrequency.orderId ), 0)`),
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = orderFrequency.orderId ), 0)`),
       "totalQuantity",
     ],
     [
       literal(
-        `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "email",
     ],
@@ -241,7 +259,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
     "🚀 ~ exports.bookNewOrder=catchAsync ~ input:",
-    input?.order?.userId
+    input?.order?.userId,
   );
   // if (input?.items?.length < 1) {
   //   throw new AppError('Cart is empty add products to place order', 404);
@@ -255,13 +273,13 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       "defaultDiscount",
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
       [
         literal(
-          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "partnerType",
       ],
@@ -277,8 +295,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -291,14 +309,14 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         "creditLimit",
         [
           literal(`
-              (
-                SELECT SUM(items.price)
-                FROM orders
-                JOIN items ON items.orderId = orders.id
-                WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
-              )
-            `),
+                (
+                  SELECT SUM(items.price)
+                  FROM orders
+                  JOIN items ON items.orderId = orders.id
+                  WHERE orders.salesRepId = salesRep.id
+                    AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+                )
+              `),
           "creditUsed",
         ],
       ],
@@ -308,17 +326,17 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       (credit?.dataValues?.creditUsed / credit?.creditLimit) * 100;
     console.log(
       "---------------------------------creaditUed",
-      credit?.dataValues?.creditUsed
+      credit?.dataValues?.creditUsed,
     );
     console.log(
       "---------------------------------creditLimit",
-      credit?.creditLimit
+      credit?.creditLimit,
     );
 
     if (percentage >= 80) {
       throw new AppError(
         `You've used over 80% of your credit limit. Please clear your balance before placing further orders.`,
-        404
+        404,
       );
     }
   }
@@ -331,39 +349,66 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
-  const products = await product.findAll({
-    where: {
-      id: {
-        [Op.in]: productIds,
-      },
-    },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      [
-        literal(`
+  const productAttributes = [
+    `id`,
+    `name`,
+    `quantity`,
+    `categoryId`,
+    `weight`,
+    `sku`,
+    `grind`,
+    `productCode`,
+    [
+      literal(`
             (SELECT percentage
             FROM userDiscounts
             WHERE userDiscounts.categoryId = product.categoryId
               AND userDiscounts.userId = ${customer.id}
             LIMIT 1)
           `),
-        "discountPercentage",
-      ],
+      "discountPercentage",
     ],
+  ];
+  if (customer?.salesRepId) {
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVENTORY PRICE & WHOLESALE APPLIED:",
+      customer?.salesRepId,
+    );
+    productAttributes.push(
+      [
+        literal(
+          `(SELECT COALESCE(srpp.price, product.price) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "price",
+      ],
+      [
+        literal(
+          `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "wholesalePrice",
+      ],
+    );
+  } else {
+    console.log(
+      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVENTORY PRICE APPLIED:",
+      customer?.salesRepId,
+    );
+    productAttributes.push(`price`, `wholesalePrice`);
+  }
+
+  const products = await product.findAll({
+    where: {
+      id: {
+        [Op.in]: productIds,
+      },
+    },
+    attributes: productAttributes,
+    raw: true,
   });
 
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length
+    products?.length,
   );
 
   // let percentageDiscount = input?.order?.discountPercentage
@@ -372,9 +417,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 
   const finalItems = products.map((obj) => {
     const element = {};
-    const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
-    );
+    const percentageDiscount = parseFloat(obj?.discountPercentage || 0);
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
     // console.log("🚀 ~ finalItems ~ obj:", obj)
@@ -424,7 +467,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   if (input?.typeCharges?.length > 0) {
     console.log(
       "🚀 ~ req.body?.typeCharges?.length:",
-      input?.typeCharges?.length
+      input?.typeCharges?.length,
     );
     input?.typeCharges.forEach((obj) => {
       const element = {};
@@ -465,12 +508,12 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         attributes: ["charges"],
       });
 
-  if (!shippingCompany) {
+  if (!shippingCompany && customer?.partnerType != "direct-partner") {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -480,7 +523,8 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
   input.order.discountPrice = discountOnItemsPrice;
   // input.order.discountPercentage = percentageDiscount;
-  input.order.shippingCharges = shippingCompany?.charges;
+  input.order.shippingCharges =
+    customer?.partnerType == "direct-partner" ? 0 : shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight || 0);
   input.order.shippingCompany =
     input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
@@ -488,7 +532,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.totalBill =
     parseFloat(itemsPrice) +
     parseFloat(input?.order?.vat || 0) +
-    parseFloat(shippingCompany?.charges || 0);
+    parseFloat(input.order.shippingCharges || 0);
 
   if (
     input?.orderType == "direct-invoice" &&
@@ -970,114 +1014,141 @@ const frequencyBookOrder = async ({ id }) => {
   //orderData is
   // let productsPrice = 0;
   try {
-    const doc = await orderFrequency.findByPk(id, {
-      include: [
-        {
-          model: item,
-          // where: { productId: { [Op.ne]: null } },
-          attributes: [
-            [
-              literal(
-                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "product",
-            ],
-            [
-              literal(
-                `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "price",
-            ],
-            [
-              literal(
-                `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "wholesalePrice",
-            ],
-            [
-              literal(
-                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "weight",
-            ],
-            "qty",
-            "productId",
-            "categoryId",
-            [
-              literal(
-                `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`
-              ),
-              "percentageDiscount",
-            ],
-            ["price", "servicePrice"],
-            "productName",
-            "type",
-          ],
-          raw: true,
-        },
-      ],
+    // STEP 1: First fetch orderFrequency to get salesRepId and orderId
+    const orderFreqData = await orderFrequency.findByPk(id, {
       attributes: [
         ["id", "orderFrequencyId"],
-        [
-          literal(
-            `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "addressId",
-        ],
-        [
-          literal(
-            `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "orderFrequencyId",
-        ],
-        [
-          literal(
-            `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "paymentMethodId",
-        ],
-        [
-          literal(
-            `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "paymentMethod",
-        ],
-        [
-          literal(
-            `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "on",
-        ],
-        [
-          literal(
-            `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "vat",
-        ],
-        ["nextOrderDate", "on"],
+        "orderId",
         "frequency",
         "userId",
         "salesRepId",
+        "nextOrderDate",
       ],
+      raw: true,
     });
 
-    const result = JSON.parse(JSON.stringify(doc));
+    if (!orderFreqData) {
+      return false;
+    }
+
+    const salesRepId = orderFreqData.salesRepId;
+    const userId = orderFreqData.userId;
+
+    // STEP 2: Build dynamic item attributes based on salesRepId (like bookNewOrder)
+    const itemAttributes = [
+      [
+        literal(
+          `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+        ),
+        "product",
+      ],
+      [
+        literal(
+          `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
+        ),
+        "weight",
+      ],
+      [
+        literal(
+          `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = ${userId} LIMIT 1)`,
+        ),
+        "percentageDiscount",
+      ],
+      "qty",
+      "productId",
+      "categoryId",
+      ["price", "servicePrice"],
+      "productName",
+      "type",
+    ];
+
+    // Conditional price & wholesalePrice based on salesRepId (SAME LOGIC AS bookNewOrder)
+    if (salesRepId) {
+      console.log(
+        "🚀 ~ frequencyBookOrder ~ CASE LOCALPARTNER INVENTORY PRICE & WHOLESALE APPLIED:",
+        salesRepId,
+      );
+      itemAttributes.push(
+        [
+          literal(
+            `(SELECT COALESCE(srpp.price, products.price) FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "price",
+        ],
+        [
+          literal(
+            `(SELECT COALESCE(srpp.wholesalePrice, products.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "wholesalePrice",
+        ],
+      );
+    } else {
+      console.log(
+        "🚀 ~ frequencyBookOrder ~ CASE ADMIN INVENTORY PRICE APPLIED",
+      );
+      itemAttributes.push(
+        [
+          literal(
+            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
+          ),
+          "price",
+        ],
+        [
+          literal(
+            `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
+          ),
+          "wholesalePrice",
+        ],
+      );
+    }
+
+    // STEP 3: Fetch items with dynamic attributes
+    const items = await item.findAll({
+      where: {
+        orderId: orderFreqData.orderId,
+      },
+      attributes: itemAttributes,
+      raw: true,
+    });
+
+    // STEP 4: Fetch additional order details from original order
+    const orderDetails = await order.findOne({
+      where: { id: orderFreqData.orderId },
+      attributes: [
+        "addressId",
+        "orderFrequencyId",
+        "paymentMethodId",
+        "paymentMethod",
+        "on",
+        "vat",
+      ],
+      raw: true,
+    });
+
+    // STEP 5: Combine into result object (maintain existing structure)
+    const result = {
+      ...orderFreqData,
+      ...orderDetails,
+      on: orderFreqData.nextOrderDate, // Use nextOrderDate as 'on' for new order
+      items: items,
+    };
+
     // console.log('🚀 ~ frequencyBookOrder ~ result:', result);
     const customer = await user.findOne({
-      where: { id: input?.order?.userId },
+      where: { id: result.userId },
       attributes: [
         "id",
         "salesRepId",
         "defaultDiscount",
         [
           literal(
-            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "salesRepName",
         ],
         [
           literal(
-            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "partnerType",
         ],
@@ -1087,7 +1158,7 @@ const frequencyBookOrder = async ({ id }) => {
     if (!customer) {
       await orderFrequency.update(
         { status: 0 },
-        { where: { id: result.orderFrequencyId } }
+        { where: { id: result.orderFrequencyId } },
       );
       return false;
     }
@@ -1120,7 +1191,7 @@ const frequencyBookOrder = async ({ id }) => {
       if (result?.salesRepId) {
         console.log(
           "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
-          item?.price
+          item?.price,
         );
 
         const currentPrice = item?.price
@@ -1197,7 +1268,7 @@ const frequencyBookOrder = async ({ id }) => {
     console.log(
       "🚀 ~ frequencyBookOrder ~ nextOrderDate, visibilityDate:",
       nextOrderDate,
-      visibilityDate
+      visibilityDate,
     );
 
     const updateFrequencyData = {
@@ -1269,5 +1340,5 @@ exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
       message: "Orders booked according to frequency successfully.",
       processed: pendingOrders.length,
     });
-  }
+  },
 );

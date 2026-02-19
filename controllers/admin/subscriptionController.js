@@ -16,6 +16,7 @@ const {
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const sendSubscriptionInvitationEmail = require("../../helper/subscriptionInvitation");
+const { subscriptionCancellationEmailEvent } = require("../events/subscriptionCancellationEvent");
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -368,12 +369,17 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
     },
   });
 
-  // 6. Create dynamic Stripe price
+  // 6. Create dynamic Stripe price (one cycle = subscriptionDays, e.g. 60 days = one charge every 60 days)
+  const cycleDays = Math.max(
+    1,
+    Math.min(365, parseInt(subscriptionDays, 10) || 30)
+  );
   const stripePrice = await stripe.prices.create({
     unit_amount: totalInCents,
     currency: "usd",
     recurring: {
-      interval: "month",
+      interval: "day",
+      interval_count: cycleDays,
     },
     product_data: {
       name: `Subscription for ${machine.name}`,
@@ -782,11 +788,15 @@ exports.completeSubscriptionPayment = catchAsync(async (req, res, next) => {
     invoice_settings: { default_payment_method: paymentMethodId },
   });
 
-  // 3. Create Price
+  // 3. Create Price (one cycle = subscriptionDays)
+  const cycleDays = Math.max(
+    1,
+    Math.min(365, parseInt(subscriptionRecord.subscriptionDays, 10) || 30)
+  );
   const stripePrice = await stripe.prices.create({
     unit_amount: totalInCents,
     currency: "usd",
-    recurring: { interval: "month" },
+    recurring: { interval: "day", interval_count: cycleDays },
     product_data: {
       name: `Subscription for ${machine.name}`,
       description: `Pending Subscription Payment`, // Simplified description
@@ -1144,12 +1154,17 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
       // Convert total price to cents
       const totalInCents = toCents(parseFloat(subscriptionRecord.totalPrice));
 
-      // Create Stripe price
+      // Create Stripe price (one cycle = subscriptionDays)
+      const cycleDays = Math.max(
+        1,
+        Math.min(365, parseInt(subscriptionRecord.subscriptionDays, 10) || 30)
+      );
       const stripePrice = await stripe.prices.create({
         unit_amount: totalInCents,
         currency: "usd",
         recurring: {
-          interval: "month",
+          interval: "day",
+          interval_count: cycleDays,
         },
         product_data: {
           name: `Subscription for ${subscriptionRecord.machine.name}`,
@@ -1426,6 +1441,14 @@ exports.cancelSubscription = catchAsync(async (req, res, next) => {
     status: "canceled",
     canceledAt: new Date(),
   });
+
+  // Send cancellation email (non-blocking)
+  subscriptionCancellationEmailEvent({
+    customerEmail: subscriptionRecord.customerEmail,
+    userName: subscriptionRecord.userName,
+    periodEnd: new Date(stripeSubscription.current_period_end * 1000),
+    cancelAtPeriodEnd: true,
+  }).catch((err) => console.error("❌ Cancellation email failed:", err.message));
 
   console.log("✅ Subscription canceled:", id);
 

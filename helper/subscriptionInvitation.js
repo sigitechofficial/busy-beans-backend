@@ -50,7 +50,7 @@ module.exports = async function ({ data }) {
             <span>${p.sku} (x${p.quantity})</span>
             <span>${formatCurrency(p.totalPrice)}</span>
           </div>
-        `
+        `,
           )
           .join("")}
       </div>
@@ -70,7 +70,7 @@ module.exports = async function ({ data }) {
             <span>${a.name || (a.addon ? a.addon.name : "Custom Addon")} (x${a.quantity})</span>
             <span>${formatCurrency(a.totalPrice)}</span>
           </div>
-        `
+        `,
           )
           .join("")}
       </div>
@@ -181,7 +181,7 @@ module.exports = async function ({ data }) {
                 <div style="text-align: center; margin: 35px 0;">
                   <a href="${frontendPaymentUrl}" 
                      style="background-color: #d4a017; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;">
-                    ${requires3DSecure ? "Complete 3D Secure Authentication" : "Buy Subscription"}
+                    ${requires3DSecure ? "Complete 3D Secure Authentication" : "Attach Payment Method"}
                   </a>
                   <p style="margin-top: 15px; font-size: 12px; color: #888;">
                     Or copy this link: <a href="${frontendPaymentUrl}" style="color: #666;">${frontendPaymentUrl}</a>
@@ -214,7 +214,7 @@ module.exports = async function ({ data }) {
         } else {
           console.log("Email sent:", info.response);
         }
-      }
+      },
     );
   } catch (err) {
     console.log("Email sending error:", err);

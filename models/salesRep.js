@@ -215,6 +215,9 @@ module.exports = (sequelize) => {
 
     salesRep.hasMany(models.qboCustomerMap);
     models.qboCustomerMap.belongsTo(salesRep);
+
+    salesRep.hasMany(models.salesRepProductPrice);
+    models.salesRepProductPrice.belongsTo(salesRep);
   };
 
   return salesRep;

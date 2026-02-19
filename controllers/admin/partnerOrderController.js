@@ -16,7 +16,7 @@ const {
   chequeDetail,
   statuses,
   orderFrequency,
-  account,
+  account, 
 } = require("../../models");
 
 const fs = require("fs");
@@ -56,13 +56,41 @@ const {
 exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ input:", input);
-  // if (input?.items?.length < 1) {
-  //   throw new AppError('Cart is empty add products to place order', 404);
-  // }
-  //   console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
-  //   if (!customer) {
-  //     return next(new AppError("Customer not found.", 404));
-  //   }
+
+  const isLocalPartnerOrEmployee =
+    req.user?.entity === "localPartner" ||
+    req.user?.entity === "partnerEmployee";
+  const isAdminOrEmployee =
+    req.user?.entity === "admin" || req.user?.entity === "adminEmployee";
+
+  let salesRepId;
+  if (isLocalPartnerOrEmployee) {
+    if (!req.user?.localPartnerId) {
+      return next(
+        new AppError("Local partner ID not found in user data.", 403)
+      );
+    }
+    salesRepId = req.user.localPartnerId;
+  } else if (isAdminOrEmployee) {
+    const fromBody = req.body?.order?.salesRepId ?? req.query?.salesRepId;
+    if (!fromBody) {
+      return next(
+        new AppError(
+          "salesRepId (in body order or query) is required for admin users.",     
+          400
+        )  
+      );
+    }
+    salesRepId = fromBody;
+    
+  } else {
+    return next(
+      new AppError("This route is only accessible to authorized users.", 403)
+    );
+  }
+
+  if (!input?.order) input.order = {};
+  input.order.salesRepId = salesRepId;
 
   if (!input?.order?.shippingCharges) {
     return next(
@@ -80,40 +108,39 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  const productAttributes = [
+    "id",
+    "name",
+    "quantity",
+    "price",
+    "categoryId",
+    "weight",
+    "sku",
+    "grind",
+    "productCode",
+  ];
+  productAttributes.push([
+    literal(
+      `(SELECT COALESCE(
+        (SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp 
+         WHERE srpp.productId = product.id 
+           AND srpp.salesRepId = ${salesRepId} 
+           AND srpp.deleted = 0 
+         LIMIT 1),
+        product.wholesalePrice
+      ))`
+    ),
+    "wholesalePrice",
+  ],);
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      //   [
-      //     literal(`
-      //          (SELECT percentage
-      //          FROM userDiscounts
-      //          WHERE userDiscounts.categoryId = product.categoryId
-      //            AND userDiscounts.userId = ${customer.id}
-      //          LIMIT 1)
-      //        `),
-      //     "discountPercentage",
-      //   ],
-    ],
+    attributes: productAttributes,
   });
-  // return res.json(products)
-
-  // let percentageDiscount = input?.order?.discountPercentage
-  //   ? parseFloat(input?.order?.discountPercentage)
-  //   : parseFloat(customer?.defaultDiscount);
 
   const finalItems = products.map((obj) => {
     const element = {};
@@ -122,7 +149,6 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     );
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
-    // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
     let prod = input?.items.find((item) => item.productId == obj.id);
@@ -131,7 +157,8 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     let qty = prod ? parseInt(prod.qty) : 1;
     console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
-    element.price = obj.wholesalePrice * qty;
+    const wholesalePrice = parseFloat(obj.wholesalePrice ?? 0);
+    element.price = wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.categoryId = obj.categoryId;
     element.discount = 0;
@@ -405,16 +432,6 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
       ],
     },
   ];
-  if (
-    req.user.entity == "adminEmployee" ||
-    req.user.entity == "partnerEmployee"
-  ) {
-    queryOptions.include.push({
-      model: user,
-      where: { employeeId: req.user?.id },
-      attributes: [],
-    });
-  }
   // Custom attributes with literal fields
 
   queryOptions.attributes = [
@@ -519,6 +536,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
           exclude: ["createdAt", "updatedAt", "userId", "deleted", "deletedAt"],
         },
       },
+       
       {
         model: supplier,
         attributes: {
@@ -828,39 +846,39 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
   let totalLocalPatnerCommission = 0;
 
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  const productAttributes = [
+    "id",
+    "name",
+    "quantity",
+    "price",
+    "categoryId",
+    "weight",
+    "sku",
+    "grind",
+    "productCode",
+  ];
+  productAttributes.push([
+    literal(
+      `(SELECT COALESCE(
+        (SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp 
+         WHERE srpp.productId = product.id 
+           AND srpp.salesRepId = ${placedOrder.salesRepId} 
+           AND srpp.deleted = 0 
+         LIMIT 1),
+        product.wholesalePrice
+      ))`
+    ),
+    "wholesalePrice",
+  ],);
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      //   [
-      //     literal(`
-      //         (SELECT percentage
-      //         FROM userDiscounts
-      //         WHERE userDiscounts.categoryId = product.categoryId
-      //           AND userDiscounts.userId = ${placedOrder?.userId}
-      //         LIMIT 1)
-      //       `),
-      //     "discountPercentage",
-      //   ],
-    ],
+    attributes: productAttributes,
   });
-
-  // let percentageDiscount = input?.order?.discountPercentage
-  //   ? input.order?.discountPercentage
-  //   : 0;
 
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
@@ -874,7 +892,6 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     );
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
-    // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
     let prod = input?.items.find((item) => item.productId == obj.id);
@@ -884,7 +901,8 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
     element.partnerOrderId = placedOrder?.id;
-    element.price = obj.wholesalePrice * qty;
+    const wholesalePrice = parseFloat(obj.wholesalePrice ?? 0);
+    element.price = wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.categoryId = obj.categoryId;
     element.discount = 0;

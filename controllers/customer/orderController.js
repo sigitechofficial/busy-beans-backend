@@ -59,13 +59,13 @@ async function bulkCreateUsersBackground(input, counter) {
 
       const batchDuration = Date.now() - batchStartTime;
       console.log(
-        `✅ Batch ${Math.floor(offset / BATCH_SIZE) + 1} completed: ${batchSize} users in ${batchDuration}ms (${(batchSize / (batchDuration / 1000)).toFixed(2)} users/sec)`
+        `✅ Batch ${Math.floor(offset / BATCH_SIZE) + 1} completed: ${batchSize} users in ${batchDuration}ms (${(batchSize / (batchDuration / 1000)).toFixed(2)} users/sec)`,
       );
     }
 
     const totalDuration = Date.now() - startTime;
     console.log(
-      `🎉 Bulk creation completed: ${counter} users in ${totalDuration}ms (${(counter / (totalDuration / 1000)).toFixed(2)} users/sec)`
+      `🎉 Bulk creation completed: ${counter} users in ${totalDuration}ms (${(counter / (totalDuration / 1000)).toFixed(2)} users/sec)`,
     );
   } catch (err) {
     console.error("❌ Error in bulkCreateUsersBackground:", err);
@@ -90,7 +90,7 @@ async function processBatch(input, batchSize, offset, sequelize) {
       const SALT_ROUNDS = 12;
       hashedPassword = bcrypt.hashSync(baseUserInfo.password, SALT_ROUNDS);
       console.log(
-        `🔐 Pre-hashed password once for batch (saved ${batchSize} hash operations)`
+        `🔐 Pre-hashed password once for batch (saved ${batchSize} hash operations)`,
       );
     }
 
@@ -335,20 +335,20 @@ exports.createOrderDirect = catchAsync(async (req, res, next) => {
       input,
       batchSize,
       offset,
-      sequelize
+      sequelize,
     );
 
     createdOrders.push(...batchOrders);
 
     const batchDuration = Date.now() - batchStartTime;
     console.log(
-      `✅ Batch ${Math.floor(offset / BATCH_SIZE) + 1} completed: ${batchSize} orders in ${batchDuration}ms (${(batchSize / (batchDuration / 1000)).toFixed(2)} orders/sec)`
+      `✅ Batch ${Math.floor(offset / BATCH_SIZE) + 1} completed: ${batchSize} orders in ${batchDuration}ms (${(batchSize / (batchDuration / 1000)).toFixed(2)} orders/sec)`,
     );
   }
 
   const totalDuration = Date.now() - startTime;
   console.log(
-    `🎉 Bulk order creation completed: ${counter} orders in ${totalDuration}ms (${(counter / (totalDuration / 1000)).toFixed(2)} orders/sec)`
+    `🎉 Bulk order creation completed: ${counter} orders in ${totalDuration}ms (${(counter / (totalDuration / 1000)).toFixed(2)} orders/sec)`,
   );
 
   return res.status(200).json({
@@ -389,7 +389,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
     "🚀 ~ exports.bookOrderbookOrderbookOrderbookOrderbookOrderbookOrder=catchAsync ~ input:",
-    input
+    input,
   );
   if (input?.items?.length < 1) {
     throw new AppError("Cart is empty add products to place order", 404);
@@ -402,19 +402,20 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
       "defaultDiscount",
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
       [
         literal(
-          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "partnerType",
       ],
     ],
     raw: true,
   });
+
   input.order.statusId = 1;
   input.order.salesRepId = customer?.salesRepId;
   let itemsPrice = 0;
@@ -422,81 +423,80 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+
+  const productAttributes = [
+    "id",
+    "name",
+    "quantity",
+    "categoryId",
+    "weight",
+    "sku",
+    "grind",
+    "productCode",
+    [
+      literal(`
+          (SELECT percentage
+          FROM userDiscounts
+          WHERE userDiscounts.categoryId = product.categoryId
+            AND userDiscounts.userId = ${customer.id}
+          LIMIT 1)
+        `),
+      "discountPercentage",
+    ],
+  ];
+  if (customer?.salesRepId) {
+    productAttributes.push(
+      [
+        literal(
+          `(SELECT COALESCE(srpp.price, product.price) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "price",
+      ],
+      [
+        literal(
+          `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "wholesalePrice",
+      ],
+    );
+  } else {
+    productAttributes.push("price", "wholesalePrice");
+  }
+
   const products = await product.findAll({
     where: {
-      id: {
-        [Op.in]: productIds,
-      },
+      id: { [Op.in]: productIds },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      [
-        literal(`
-            (SELECT percentage
-            FROM userDiscounts
-            WHERE userDiscounts.categoryId = product.categoryId
-              AND userDiscounts.userId = ${customer.id}
-            LIMIT 1)
-          `),
-        "discountPercentage",
-      ],
-    ],
+    attributes: productAttributes,
+    raw: true,
   });
-  // return res.json(products)
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ products:", products);
-
-  // let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
+  console.log(
+    "🚀 ~ exports.bookOrder=catchAsync ~ products:",
+    products?.length,
+  );
 
   const finalItems = products.map((obj) => {
     const element = {};
-    const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
-    );
-    console.log(
-      "🚀 ~ obj.dataValues?.percentageDiscount:",
-      obj.dataValues?.percentageDiscount
-    );
-    console.log("🚀 ~ percentageDiscount:", percentageDiscount);
-    console.log("🚀 ~ percentageDiscount:", percentageDiscount);
+    const percentageDiscount = parseFloat(obj?.discountPercentage || 0);
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
-    // console.log("🚀 ~ finalItems ~ obj:", obj)
 
-    // Find the matching product in input.items based on productId
     let prod = input?.items.find((item) => item.productId == obj.id);
-
-    // Set the qty from input.items or default to 1 if not found
     let qty = prod ? parseInt(prod.qty) : 1;
-    console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
-    // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.discount = 0;
     if (percentageDiscount > 0) {
-      // Calculate discount amount
       const discountAmount = (element.price * percentageDiscount) / 100;
-      // Calculate final price after discount
       const discountedPrice = element.price - discountAmount;
-
       element.price = discountedPrice;
-      element.discount = parseFloat(discountAmount);
+      element.discount = discountAmount;
     }
-    // Accumulate the total weight and price
     discountOnItemsPrice += element.discount;
     itemsPrice += element.price;
     totalWeight += element.weight;
-    // Handle salesRep commission if applicable
     if (customer?.salesRepId) {
       if (customer.partnerType == "direct-partner") {
         element.salerCommission = parseFloat(element.price);
@@ -508,34 +508,30 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     } else {
       element.wholesalePrice = 0;
     }
-    return element; // Return the transformed element
+    return element;
   });
 
   const shippingCompany = await shippingCompanies.findOne({
     where: {
-      weightFrom: {
-        [Op.lte]: totalWeight, // Less than or equal to the weight
-      },
-      weightTo: {
-        [Op.gte]: totalWeight, // Greater than or equal to the weight
-      },
+      weightFrom: { [Op.lte]: totalWeight },
+      weightTo: { [Op.gte]: totalWeight },
     },
     attributes: ["charges"],
   });
 
-  if (!shippingCompany) {
+  if (!shippingCompany && customer?.partnerType != "direct-partner") {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
   input.order.itemsPrice = itemsPrice;
   input.order.discountPrice = discountOnItemsPrice;
-  // input.order.discountPercentage = percentageDiscount;//!Later
-  input.order.shippingCharges = shippingCompany?.charges;
+  input.order.shippingCharges =
+    customer?.partnerType != "direct-partner" ? shippingCompany?.charges : 0;
   input.order.totalWeight = parseFloat(totalWeight);
   input.order.shippingCompany =
     input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
@@ -543,7 +539,7 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
   input.order.totalBill =
     parseFloat(itemsPrice) +
     parseFloat(input?.order?.vat || 0) +
-    parseFloat(shippingCompany?.charges || 0);
+    parseFloat(input.order.shippingCharges || 0);
 
   const newOrder = await order.create(input?.order);
   newOrder.invoiceNumber = `INV00${newOrder?.id}`;
@@ -580,7 +576,7 @@ exports.SheetUplod = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log(
     "🚀 ~ exports.bookOrderbookOrderbookOrderbookOrderbookOrderbookOrder=catchAsync ~ input:",
-    input
+    input,
   );
   if (input?.items?.length < 1) {
     throw new AppError("Cart is empty add products to place order", 404);
@@ -699,7 +695,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
       "salesRepId",
       [
         literal(
-          `(SELECT salesReps.connectAccountId FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.connectAccountId FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "connectAccountId",
       ],
@@ -757,7 +753,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
 
   console.log(
     "🚀 ~ exports.paymentIntent=catchAsync ~ totalWeight:",
-    totalWeight
+    totalWeight,
   );
   const shippingCompany = await shippingCompanies.findOne({
     where: {
@@ -774,8 +770,8 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
   input.order.itemsPrice = itemsPrice;
@@ -787,7 +783,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
     parseFloat(shippingCompany?.charges || 0);
   console.log(
     "🚀 ~ exports.paymentIntent=catchAsync ~ shippingCompany?.charges:",
-    shippingCompany?.charges
+    shippingCompany?.charges,
   );
 
   let adminReceivableAmount = input.order.totalBill;
@@ -798,7 +794,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
   let localPartnerAccountId = customer.dataValues.connectAccountId;
   console.log(
     "🚀 ~ exports.paymentIntent=catchAsync ~ localPartnerAccountId:",
-    localPartnerAccountId
+    localPartnerAccountId,
   );
 
   if (hasLocalPatner && localPatnerCommission > 0) {
@@ -813,7 +809,7 @@ exports.paymentIntent = catchAsync(async (req, res, next) => {
       hasLocalPatner,
       localPartnerAccountId,
       localPatnerCommission,
-    }
+    },
   );
   const output = await createPaymentIntent({
     adminReceivableAmount,
@@ -846,7 +842,7 @@ async function syncStripeCustomers({ usersWithoutCustomerId }) {
         if (customer) {
           await user.update(
             { stripeCustomerId: customer },
-            { where: { id: item.id } }
+            { where: { id: item.id } },
           );
           console.log(`✅ Stripe customer created for ${item.email}`);
         } else {
@@ -855,7 +851,7 @@ async function syncStripeCustomers({ usersWithoutCustomerId }) {
       } catch (innerErr) {
         console.error(
           `❌ Error creating Stripe customer for ${item.email}:`,
-          innerErr.message
+          innerErr.message,
         );
       }
     }

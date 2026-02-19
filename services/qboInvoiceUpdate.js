@@ -15,6 +15,70 @@ const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 const MINOR = 70;
 
 /**
+ * Query QBO for Sales Rep custom field DefinitionId
+ * Uses GraphQL API to find custom field by name
+ */
+async function getSalesRepCustomFieldDefinitionId({ accessToken, realmId }) {
+  try {
+    // GraphQL endpoint for custom field definitions
+    const graphqlUrl = "https://qb.api.intuit.com/graphql";
+    
+    const query = `
+      query {
+        appFoundationsCustomFieldDefinitions {
+          id
+          name
+          type
+          legacyIdV2
+        }
+      }
+    `;
+
+    const response = await axios.post(
+      graphqlUrl,
+      { query },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        validateStatus: () => true, // Don't throw on error
+      }
+    );
+
+    if (response?.data?.data?.appFoundationsCustomFieldDefinitions) {
+      const customFields = response.data.data.appFoundationsCustomFieldDefinitions;
+      
+      // Look for "Sales Rep" field (case-insensitive)
+      const salesRepField = customFields.find(
+        (field) =>
+          field.name &&
+          (field.name.toLowerCase() === "sales rep" ||
+            field.name.toLowerCase() === "salesrep" ||
+            field.name.toLowerCase() === "local partner")
+      );
+
+      if (salesRepField?.legacyIdV2) {
+        console.log(
+          `✅ [QBO] Found Sales Rep custom field: ${salesRepField.name} (DefinitionId: ${salesRepField.legacyIdV2})`
+        );
+        return salesRepField.legacyIdV2;
+      }
+    }
+
+    console.log("⚠️ [QBO] Sales Rep custom field not found via GraphQL query");
+    return null;
+  } catch (err) {
+    console.warn(
+      "⚠️ [QBO] Error querying custom field definitions:",
+      err.message
+    );
+    // GraphQL might not be available or scopes missing - that's okay, we'll use fallback
+    return null;
+  }
+}
+
+/**
  * Build QBO Invoice Payload (Lines + Shipping + Sparse Payload)
  * Does NOT send to QBO — only PREPARES the payload.
  */
@@ -113,7 +177,38 @@ function buildQboInvoiceUpdatePayload({
   }
 
   /* -------------------------------------------------------
-      5. Build sparse payload
+      5. Build Local Partner info as separate field
+  --------------------------------------------------------*/
+  // Try to use existing "Sales Rep" custom field, or add as custom field
+  let localPartnerValue = null;
+  if (order.userId && order.salesRepId) {
+    const salesRepName = order.salesRepName || "";
+    const territoryName = order.territoryName || "";
+    localPartnerValue = `${salesRepName}${territoryName ? ` (${territoryName})` : ""}`;
+  }
+
+  // Note: For updates, we don't query GraphQL here to avoid extra API calls
+  // Use env var or pass DefinitionId if needed
+  let salesRepDefinitionId = null;
+  
+  // Check environment variable (fastest, recommended)
+  salesRepDefinitionId = process.env.QBO_SALES_REP_CUSTOM_FIELD_ID || 
+                          process.env.QBO_LOCAL_PARTNER_CUSTOM_FIELD_ID || 
+                          null;
+  
+  let customFields = [];
+  if (localPartnerValue && salesRepDefinitionId) {
+    customFields.push({
+      DefinitionId: salesRepDefinitionId,
+      StringValue: localPartnerValue,
+    });
+    console.log(`✅ [QBO] Adding Local Partner to Sales Rep CustomField: ${localPartnerValue}`);
+  } else if (localPartnerValue) {
+    console.log(`⚠️ [QBO] Sales Rep CustomField DefinitionId not configured. Using fallback...`);
+  }
+
+  /* -------------------------------------------------------
+      6. Build sparse payload
   --------------------------------------------------------*/
   return {
     Id: String(qboInvoiceId),
@@ -145,6 +240,14 @@ function buildQboInvoiceUpdatePayload({
           Country: order.address.country,
         }
       : undefined,
+
+    // Add CustomField for Sales Rep if DefinitionId is configured
+    ...(customFields.length > 0 ? { CustomField: customFields } : {}),
+    // Fallback: Add Local Partner as PONumber field if CustomField not configured
+    // This appears as separate column in QBO and doesn't require setup
+    ...(localPartnerValue && !salesRepDefinitionId
+      ? { PONumber: `Local Partner: ${localPartnerValue}` }
+      : {}),
   };
 }
 

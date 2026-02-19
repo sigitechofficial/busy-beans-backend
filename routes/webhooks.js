@@ -3,6 +3,10 @@ const router = express.Router();
 const Controller = require("../controllers/webhook/webhookController");
 const SubscriptionWebhookController = require("../controllers/webhook/subscriptionWebhookController");
 const MetaController = require("../controllers/webhook/metaWebhookController");
+<<<<<<< HEAD
+=======
+const EmailLogsWebhookController = require("../controllers/webhook/emailLogsWebhookController");
+>>>>>>> origin/testing
 
 const catchAsync = require("../utils/catchAsync");
 // Stripe webhook (needs raw body - handled in app.js)
@@ -25,5 +29,8 @@ router.get("/meta-leads", MetaController.verifyMetaWebhook);
 
 // POST endpoint for receiving lead data (uses JSON body parser from app.js)
 router.post("/meta-leads", catchAsync(MetaController.handleMetaLeadWebhook));
+
+// ZeptoMail email logs webhook (opened, clicked, etc.)
+router.post("/email-logs", catchAsync(EmailLogsWebhookController.handleEmailLogsWebhook));
 
 module.exports = router;

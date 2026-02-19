@@ -4,8 +4,12 @@ const dotenv = require("dotenv");
 dotenv.config({ path: "../.env" });
 
 const { attachments } = require("./attactments");
-const { transporter } = require("./transpoter");
+const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
+const {
+  logEmailSuccess,
+  logEmailOutcome,
+} = require("../utils/emailLogOnSuccess");
 const generateFooterHtml = require("./footerLocalpatner");
 
 const { header } = require("./header");
@@ -17,6 +21,7 @@ const GenerateInvoicePdf = require("../utils/generateInvoicePdf");
 //   fs.writeFileSync(outputPath, response.data);
 // }
 module.exports = async function ({ email, data, invoice }) {
+  console.log("[PAID-INVOICE] Customer email helper START → to:", email);
   // console.log('ðŸš€ ~ data:', data);
   let footer = await Footer();
 
@@ -77,15 +82,34 @@ module.exports = async function ({ email, data, invoice }) {
   });
 
   items = items.join("");
-  transporter.sendMail(
-    {
-      from: process.env.EMAIL_USERNAME, // sender address
-      to: [email], // main recipient(s)
-      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
-      subject: `We’ve Received Your Payment for Invoice #${data?.invoiceNumber || ""} – Thank You!`, // Subject line
-      replyTo: data?.patnerEmail || "info@busybeancoffee.com",
-      attachments: emailAttachments,
-      html: `<!DOCTYPE html>
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+  console.log("📁 'public/paidInvoiceEmail.js' folder created for customer.");
+
+  const mailOptions = {
+    from: process.env.EMAIL_USERNAME, // sender address
+    to: [email], // main recipient(s)
+    bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
+    subject: `We’ve Received Your Payment for Invoice #${data?.invoiceNumber || ""} – Thank You!`, // Subject line
+    replyTo: data?.patnerEmail || "info@busybeancoffee.com",
+    attachments: emailAttachments,
+    html: `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -222,13 +246,33 @@ module.exports = async function ({ email, data, invoice }) {
       </tr>
        ${footer}
       `,
-    },
-    function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(info);
-      }
-    }
-  );
+  };
+  try {
+    const info = await sendMailPromise(mailOptions);
+    await logEmailSuccess({
+      emailType: "paid_receipt",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      metadata: {
+        subject: mailOptions.subject,
+        invoiceNumber: data?.invoiceNumber,
+      },
+      zeptoRequestId: info?.request_id,
+    });
+  } catch (error) {
+    console.log(error);
+    await logEmailOutcome({
+      emailType: "paid_receipt",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      emailSent: "Failed",
+      errorMessage: error?.message || String(error),
+      metadata: {
+        subject: mailOptions.subject,
+        invoiceNumber: data?.invoiceNumber,
+      },
+    });
+  }
 };

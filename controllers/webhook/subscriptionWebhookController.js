@@ -2,6 +2,7 @@ const { STRIPE_SECRET_KEY, STRIPE_SUBSCRIPTION_WEBHOOK_SECERET } = process.env;
 const stripe = require("stripe")(STRIPE_SECRET_KEY);
 const { subscription, user, coffeeMachine } = require("../../models");
 const { Op } = require("sequelize");
+const { subscriptionCancellationEmailEvent } = require("../events/subscriptionCancellationEvent");
 
 const endpointSecret = `${STRIPE_SUBSCRIPTION_WEBHOOK_SECERET}`;
 
@@ -231,6 +232,17 @@ const handleSubscriptionDeleted = async (event) => {
     status: "canceled",
     canceledAt: new Date(),
   });
+
+  // Send cancellation email (subscription already ended - no period end access)
+  const periodEnd = stripeSubscription.current_period_end
+    ? new Date(stripeSubscription.current_period_end * 1000)
+    : null;
+  subscriptionCancellationEmailEvent({
+    customerEmail: subscriptionRecord.customerEmail,
+    userName: subscriptionRecord.userName,
+    periodEnd,
+    cancelAtPeriodEnd: false,
+  }).catch((err) => console.error("❌ Cancellation email failed:", err.message));
 
   console.log(
     `✅ Subscription ${subscriptionRecord.id} marked as canceled from subscription.deleted event`
