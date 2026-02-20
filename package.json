@@ -4,10 +4,10 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "start": "node bb.js",
-    "dev": "nodemon bb.js",
+    "start": "node testbb.js",
+    "dev": "nodemon testbb.js",
     "test": "nodemon testbb.js",
-    "start:prod": "NODE_ENV=production nodemon bb.js",
+    "start:prod": "NODE_ENV=production nodemon testbb.js",
     "debug": "ndb bb.js",
     "watch:js": "parcel watch ./public/js/index.js --out-dir ./public/js --out-file bundle.js",
     "build:js": "parcel build ./public/js/index.js --out-dir ./public/js --out-file bundle.js",
