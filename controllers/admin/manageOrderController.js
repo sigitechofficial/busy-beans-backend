@@ -551,7 +551,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 
   if (req.params.id) condition.id = req.params.id;
 
-  console.log("🚀 ~ condition:", condition);
+  console.log("🚀 ~ condition:", req.query);
 
   if (req?.params?.qbo == "not-synced") {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
@@ -599,6 +599,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   if (req.user?.entity === "user") {
     condition.userId = req.user.id;
   }
+
   console.log("🚀 ~ condition----:", condition);
   console.log("🚀 ~ condition----:", condition);
   console.log("🚀 ~ condition----:", condition);
@@ -616,6 +617,10 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     "paymentMethod",
     "shippingCompany",
   ];
+
+  // Extract and remove employee filter so it's not applied as Order column (handled via include below)
+  const employeeFilter = req.query?.employee;
+  if (req.query?.employee !== undefined) delete req.query.employee;
 
   const features = new APIFeatures(order, req.query)
     .filter()
@@ -678,6 +683,21 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     },
   ];
 
+  if (employeeFilter) {
+    let empCondition = {};
+    if (employeeFilter == "assigned") {
+      empCondition.employeeId = { [Op.ne]: null };
+    } else if (employeeFilter == "not-assigned") {
+      empCondition.employeeId = { [Op.is]: null };
+    } else {
+      empCondition.employeeId = employeeFilter;
+    }
+    queryOptions.include.push({
+      model: user,
+      where: empCondition,
+      attributes: [],
+    });
+  }
   console.log("🚀 ~ req.user.entity:", req.user.entity);
 
   if (

@@ -71,8 +71,10 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
 
 exports.getAllEmployee = async (req, res, next) => {
   const condition = {};
-  if (req.user.entity == "admin") {
+  if (req.user.entity == "admin" && !req.query.salesRepId) {
     condition.accountId = req.user?.id;
+  } else if (req.user.entity == "admin" && req.query.salesRepId) {
+    condition.salesRepId = req.query.salesRepId;
   }
   if (req.user.entity == "localPartner") {
     condition.salesRepId = req.user.id;

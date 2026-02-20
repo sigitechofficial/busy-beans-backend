@@ -40,7 +40,7 @@ const signToken = (data) =>
     process.env.JWT_SECRET, // Hardcoded JWT Secret
     {
       expiresIn: "7d",
-    }
+    },
   );
 
 const createSendToken = (input, statusCode, req, res, tokenId, entity) => {
@@ -282,7 +282,7 @@ const otpVerification = (Model, entity) =>
             message: "Success",
             data: { id: id },
           },
-        })
+        }),
       );
     }
 

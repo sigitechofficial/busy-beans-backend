@@ -72,14 +72,26 @@ exports.customersList = catchAsync(async (req, res, next) => {
     req.user?.entity === "adminEmployee" ||
     req.user?.entity === "partnerEmployee"
   ) {
-    if (req.query.cus == "all") {
-      filters.employeeId = req.user.employeeId ?? req.user.id;
-    }
     if (req.user?.entity === "partnerEmployee") {
       filters.salesRepId = req.user.localPartnerId;
     }
+    filters.employeeId = req.user.id;
+
+    if (req.query.cus == "all") {
+      delete filters.employeeId;
+      if (req.user?.entity === "partnerEmployee") {
+      } else if (req.user?.entity === "adminEmployee") {
+        filters.salesRepId = null;
+      }
+    }
+
+    delete req.query.cus;
+    // if (req.query.cus == "all") {
+
+    // }
     console, console.log("🚀 ~ filters:", filters);
   }
+
   if (process.env.NODE_ENV === "development") {
     console.debug("[customersList] sr=%s filters=%j", sr || "(none)", filters);
   }

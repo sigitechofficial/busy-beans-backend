@@ -20,6 +20,7 @@ const BASE =
 const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 
 const MINOR = 70;
+const MINOR_CUSTOM_FIELDS = 75;
 
 // ---- Generic helpers ----
 const headers = (token) => ({
@@ -879,11 +880,13 @@ async function createQboInvoice({ order, accessToken, realmId }) {
 
     console.log("⚡ [QBO] Invoice Payload:", payload);
 
-    const invRes = await axios.post(
-      `${QBO(realmId)}/invoice?minorversion=${MINOR}`,
-      payload,
-      { headers: headers(accessToken) },
-    );
+    const hasCustomFields = customFields.length > 0;
+    const invoiceUrl = hasCustomFields
+      ? `${QBO(realmId)}/invoice?minorversion=${MINOR_CUSTOM_FIELDS}&include=enhancedAllCustomFields`
+      : `${QBO(realmId)}/invoice?minorversion=${MINOR}`;
+    const invRes = await axios.post(invoiceUrl, payload, {
+      headers: headers(accessToken),
+    });
     console.log("🚀 ~ createQboInvoice ~ invRes:", true);
 
     const invoiceId = invRes?.data?.Invoice?.Id;

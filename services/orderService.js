@@ -329,6 +329,12 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         ],
         [
           literal(
+            `(SELECT salesReps.territoryName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+          ),
+          "territoryName",
+        ],
+        [
+          literal(
             `(SELECT salesReps.currentRealmId FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
           ),
           "partnerCurrentRealmId",

@@ -77,7 +77,9 @@ class APIFeatures {
   _castValue(value) {
     if (value === "true") return true;
     if (value === "false") return false;
-    if (!isNaN(value) && value.trim() !== "") return Number(value);
+    if (value === "null") return null;
+    if (typeof value === "string" && value.trim() !== "" && !isNaN(value))
+      return Number(value);
     if (typeof value === "string" && value.includes(",")) {
       return value.split(",").map((v) => this._castValue(v));
     }

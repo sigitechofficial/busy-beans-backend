@@ -16,6 +16,7 @@
     "dev:ngrok": "concurrently \"nodemon bb.js\" \"ngrok http 8011\"",
     "migrate": "node migrations/migrate.js",
     "migrate:single": "node migrations/run-migration.js",
+    "qbo:sales-rep-id": "node scripts/fetchQboSalesRepDefinitionIdAndUpdateEnv.js",
     "postinstall": "patch-package"
   },
   "author": "Arbab Hassan",
