@@ -71,6 +71,7 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
     order: ord,
     realmId: ord.adminRealmId,
     qboCustomerId: qboCustomer.qboCustomerId,
+    subtractLocalPartnerCommission: orderType === "customer",
   });
 
 
@@ -87,6 +88,7 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
       order: ord,
       realmId: ord.adminRealmId,
       qboCustomerId: qboCustomer.qboCustomerId,
+      subtractLocalPartnerCommission: orderType === "customer",
       force: true,
     });
   }
@@ -164,6 +166,7 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
     order: ord,
     realmId: ord.partnerRealmId,
     qboCustomerId: qboCustomer.qboCustomerId,
+    subtractLocalPartnerCommission: false,
   });
 
 
@@ -179,6 +182,7 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
       order: ord,
       realmId: ord.partnerRealmId,
       qboCustomerId: qboCustomer.qboCustomerId,
+      subtractLocalPartnerCommission: false,
       force: true,
     });
   }

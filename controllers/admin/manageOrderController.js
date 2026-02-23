@@ -301,6 +301,7 @@ exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
 
 exports.fetchInvoice = catchAsync(async (req, res, next) => {
   const orderType = req.body?.orderType || "customer";
+  const model = orderType === "local-partner" ? partnerOrder : order;
 
   const { details, email } = await dataForEmailAndNotifications(
     req.params.orderId,
@@ -323,7 +324,7 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
     console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session);
 
     if (session == "paid") {
-      await order.update(
+      await model.update(
         { paymentMethod: "card", paymentStatus: "done" },
         { where: { id: req.params.orderId } },
       );
@@ -354,7 +355,24 @@ exports.fetchInvoice = catchAsync(async (req, res, next) => {
 
   console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:", invoice);
 
-  if (!checkSession) await order.update(invoice, { where: { id: details.id } });
+  if (!checkSession) await model.update(invoice, { where: { id: details.id } });
+
+  // Payment link tracking: count and first/last opened at (when pay-online URL is requested)
+  // Use DB-level increment so count is correct even when details omits these columns
+  await model.increment(
+    { paymentLinkOpenCount: 1 },
+    { where: { id: details.id } },
+  );
+  await model.update(
+    {
+      paymentLinkFirstOpenedAt: literal(
+        "COALESCE(paymentLinkFirstOpenedAt, NOW())",
+      ),
+      paymentLinkLastOpenedAt: new Date(),
+    },
+    { where: { id: details.id } },
+  );
+
   console.log(
     "🚀 ~ exports.fetchInvoice=catchAsync ~ checkSession:",
     checkSession,
@@ -1197,6 +1215,9 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       "localPatnerCommission",
       "invoicePdf",
       "invoiceId",
+      "paymentLinkOpenCount",
+      "paymentLinkFirstOpenedAt",
+      "paymentLinkLastOpenedAt",
       "createdBy",
       "on",
       "createdAt",

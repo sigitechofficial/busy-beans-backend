@@ -11,6 +11,8 @@ const { order, partnerOrder, account, qboCustomerMap } = require("../models");
 const { handleQboError } = require("./qboErrorHandler");
 const { qboQuery } = require("./qboHelpers");
 
+console.log("🚀 ~ qboInvoice.js ~ process.env.QBO_ENV:", Number(19.8));
+
 const Order = order;
 const PartnerOrder = partnerOrder;
 const BASE =
@@ -614,16 +616,25 @@ async function createQboPayment({
   accessToken,
   realmId,
   qboCustomerId = null,
+  subtractLocalPartnerCommission = false,
 }) {
   try {
     console.log("⚡ [QBO] Creating Payment for invoice:", invoiceId);
+
+    // For admin + customer only: payment amount = totalBill - localPatnerCommission
+    const rawTotal = Number(order.totalBill) || 0;
+    const commission = Number(order.localPatnerCommission) || 0;
+    const amount =
+      subtractLocalPartnerCommission && commission > 0
+        ? Math.max(0, rawTotal - commission)
+        : rawTotal;
 
     const paymentRes = await createPaymentForInvoice({
       accessToken,
       realmId,
       invoiceId,
       customerId: qboCustomerId || order.qboCustomerId,
-      amount: order.totalBill,
+      amount,
       paymentMethodName: order.paymentMethod,
       refNumber: order.paymentIntentId || order.invoiceId,
       paidDate: order.invoicePaidDate,
@@ -664,7 +675,12 @@ async function createQboPayment({
   }
 }
 
-async function createQboInvoice({ order, accessToken, realmId }) {
+async function createQboInvoice({
+  order,
+  accessToken,
+  realmId,
+  subtractSalerCommission = false,
+}) {
   // Define payload outside try block so it's accessible in catch block
   let payload = null;
 
@@ -694,7 +710,12 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       let unitPrice;
 
       // Get the line total from DB (this is the actual charged amount after discounts)
-      const totalNum = Number(it.total || it.price || 0);
+      let totalNum = Number(it.total || it.price || 0);
+      const salerCommission = Number(it.salerCommission || 0);
+      // Only subtract saler commission for admin sync when orderType is customer (not for local partner sync)
+      if (subtractSalerCommission && salerCommission > 0) {
+        totalNum = totalNum - salerCommission;
+      }
 
       // CRITICAL: Always prioritize DB total (it.total or it.price) as it's the actual charged amount
       // Use wholesalePrice only if DB total is not available
@@ -1092,6 +1113,7 @@ async function handleAdminQboSync({
         order,
         accessToken,
         realmId,
+        subtractSalerCommission: orderType === "customer",
       });
 
       updateOrderRecord({
@@ -1110,6 +1132,7 @@ async function handleAdminQboSync({
           accessToken,
           realmId,
           qboCustomerId: qboCustomerOnAdmin?.qboCustomerId,
+          subtractLocalPartnerCommission: orderType === "customer",
         });
 
         updateOrderRecord({
@@ -1123,12 +1146,13 @@ async function handleAdminQboSync({
     if (accessToken && realmId && order?.quickBooksInvoiceId && updateRequest) {
       console.log("🚀 ~ ADMIN QBO UPDATE ORDER", orderId);
 
-      updateInvoiceInQuickBooks({
+      await updateInvoiceInQuickBooks({
         accessToken,
         realmId,
         order,
         qboInvoiceId: order?.quickBooksInvoiceId,
         MODEL: DBMODEL,
+        subtractSalerCommission: orderType === "customer",
       });
       return { saved: true, reason: "admin_invoice_updated" };
     }
@@ -1225,6 +1249,7 @@ async function handlePartnerQboSync({
         order,
         accessToken,
         realmId,
+        subtractSalerCommission: false,
       });
 
       updateOrderRecord({
@@ -1243,6 +1268,7 @@ async function handlePartnerQboSync({
           accessToken,
           realmId,
           qboCustomerId: qboCustomerOnPartner?.qboCustomerId,
+          subtractLocalPartnerCommission: false,
         });
 
         updateOrderRecord({
@@ -1257,12 +1283,13 @@ async function handlePartnerQboSync({
     }
     if (accessToken && realmId && quickBooksInvoiceIdPartner && updateRequest) {
       console.log("🚀 ~ LOCAL PARTNER QBO UPDATE ORDER", orderId);
-      updateInvoiceInQuickBooks({
+      await updateInvoiceInQuickBooks({
         accessToken,
         realmId,
         order,
         qboInvoiceId: quickBooksInvoiceIdPartner,
         MODEL: DBMODEL,
+        subtractSalerCommission: false,
       });
       return { saved: true, reason: "partner_invoice_updated" };
     }

@@ -20,6 +20,10 @@ const {
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
 const {
+  getUnappliedPayments,
+  deletePaymentsByIds,
+} = require("../../services/qboPaymentService");
+const {
   qboToken,
   qboCredientials,
   order,
@@ -32,7 +36,7 @@ function httpError(
   res,
   status = 500,
   message = "Unexpected error",
-  detail = null
+  detail = null,
 ) {
   return res.status(status).json({ status: "error", message, detail });
 }
@@ -217,7 +221,7 @@ exports.createInvoiceForOrder = async (req, res) => {
     return httpSuccess(
       res,
       result,
-      `Invoice created successfully for order ${orderId}.`
+      `Invoice created successfully for order ${orderId}.`,
     );
   } catch (err) {
     console.error("[QBO][createInvoiceFromOrder] Error:", err);
@@ -250,7 +254,7 @@ exports.createMultipleInvoicesForOrders = async (req, res) => {
     return httpSuccess(
       res,
       result,
-      `Bulk invoice creation completed: ${result.successCount} succeeded, ${result.failureCount} failed out of ${result.total} total orders`
+      `Bulk invoice creation completed: ${result.successCount} succeeded, ${result.failureCount} failed out of ${result.total} total orders`,
     );
   } catch (err) {
     console.error("[QBO][createMultipleInvoicesForOrders] Error:", err);
@@ -272,7 +276,7 @@ exports.updateInvoiceForOrder = async (req, res) => {
     return httpSuccess(
       res,
       result,
-      `Invoice updated successfully for order ${orderId}.`
+      `Invoice updated successfully for order ${orderId}.`,
     );
   } catch (err) {
     console.error("[QBO][updateInvoiceForOrder] Error:", err.message);
@@ -292,7 +296,7 @@ exports.syncOrderPayment = async (req, res) => {
     return httpSuccess(
       res,
       result,
-      `Payment synced successfully for order ${orderId}.`
+      `Payment synced successfully for order ${orderId}.`,
     );
   } catch (err) {
     console.error("[QBO][syncOrderPayment] Error:", err.message);
@@ -320,10 +324,106 @@ exports.syncMultipleOrderPayments = async (req, res) => {
     return httpSuccess(
       res,
       result,
-      `Bulk payment sync completed: ${result.successCount} succeeded, ${result.failureCount} failed out of ${result.total} total orders`
+      `Bulk payment sync completed: ${result.successCount} succeeded, ${result.failureCount} failed out of ${result.total} total orders`,
     );
   } catch (err) {
     console.error("[QBO][syncMultipleOrderPayments] Error:", err);
+    return httpError(res, 500, err.message);
+  }
+};
+
+/**
+ * GET /qbo/payments/unapplied
+ * Returns all unapplied payments from the connected QuickBooks account.
+ * Uses admin or partner QBO connection based on req.user entity.
+ */
+exports.getUnappliedPayments = async (req, res) => {
+  try {
+    let condition = null;
+    const ADMIN = await account.findOne({});
+    if (ADMIN) {
+      if (
+        req?.user?.entity === "localPartner" ||
+        req?.user?.entity === "partnerEmployee"
+      ) {
+        const localPartner = await salesRep.findOne({
+          where: { id: req?.user?.localPartnerId },
+        });
+        if (localPartner?.currentRealmId) {
+          condition = {
+            realmId: localPartner.currentRealmId,
+            salesRepId: localPartner.id,
+          };
+        }
+      }
+      if (!condition) {
+        condition = {
+          realmId: ADMIN.currentRealmId,
+          accountId: ADMIN.id,
+        };
+      }
+    }
+    const date = req.query.date || null;
+    const result = await getUnappliedPayments({ condition, date });
+    return httpSuccess(
+      res,
+      result,
+      `Found ${result.totalCount} unapplied payment(s).`,
+    );
+  } catch (err) {
+    console.error("[QBO][getUnappliedPayments] Error:", err.message);
+    return httpError(res, 500, err.message);
+  }
+};
+
+/**
+ * POST /qbo/payments/delete
+ * Delete QBO payments by IDs (e.g. ids from getUnappliedPayments). Body: { ids: ["229", "238"] }
+ */
+exports.deletePaymentsByIds = async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return httpError(
+        res,
+        400,
+        "ids must be a non-empty array of payment IDs.",
+      );
+    }
+
+    let condition = null;
+    const ADMIN = await account.findOne({});
+    if (ADMIN) {
+      if (
+        req?.user?.entity === "localPartner" ||
+        req?.user?.entity === "partnerEmployee"
+      ) {
+        const localPartner = await salesRep.findOne({
+          where: { id: req?.user?.localPartnerId },
+        });
+        if (localPartner?.currentRealmId) {
+          condition = {
+            realmId: localPartner.currentRealmId,
+            salesRepId: localPartner.id,
+          };
+        }
+      }
+      if (!condition) {
+        condition = {
+          realmId: ADMIN.currentRealmId,
+          accountId: ADMIN.id,
+        };
+      }
+    }
+
+    const result = await deletePaymentsByIds({ condition, ids });
+    const message =
+      result.errors.length === 0
+        ? `Deleted ${result.deletedIds.length} payment(s).`
+        : `Deleted ${result.deletedIds.length} payment(s); ${result.failedIds.length} failed.`;
+    return httpSuccess(res, result, message);
+  } catch (err) {
+    console.error("[QBO][deletePaymentsByIds] Error:", err.message);
     return httpError(res, 500, err.message);
   }
 };
@@ -341,7 +441,7 @@ exports.ordersPayment = async (req, res) => {
     return httpSuccess(
       res,
       result,
-      `Payment synced successfully for order ${orderId}.`
+      `Payment synced successfully for order ${orderId}.`,
     );
   } catch (err) {
     console.error("[QBO][syncOrderPayment] Error:", err.message);

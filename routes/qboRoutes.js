@@ -99,6 +99,59 @@ r.post("/auth/exchange", ctrl.authExchange);
  */
 r.get("/ping", ctrl.ping);
 
+/**
+ * @swagger
+ * /qbo/payments/unapplied:
+ *   get:
+ *     summary: Get all unapplied payments from QuickBooks
+ *     tags: [QuickBooks]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema: { type: string, example: "2026-02-17" }
+ *         description: Optional. Filter by transaction date (YYYY-MM-DD). e.g. 17 Feb = 2026-02-17
+ *     responses:
+ *       200:
+ *         description: List of unapplied payments and total count
+ *       401:
+ *         description: Unauthorized
+ */
+r.get("/payments/unapplied", ctrl.getUnappliedPayments);
+
+/**
+ * @swagger
+ * /qbo/payments/delete:
+ *   post:
+ *     summary: Delete QBO payments by IDs (e.g. from unapplied list)
+ *     tags: [QuickBooks]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ids]
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items: { type: string }
+ *                 example: ["229", "238"]
+ *     responses:
+ *       200:
+ *         description: Deletion result (deletedIds, failedIds, errors)
+ *       400:
+ *         description: ids must be a non-empty array
+ *       401:
+ *         description: Unauthorized
+ */
+r.post("/payments/delete", ctrl.deletePaymentsByIds);
+
 // 👥 CUSTOMERS
 
 /**

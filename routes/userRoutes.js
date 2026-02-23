@@ -137,7 +137,7 @@ router.get("/subscription/:id", subscriptionController.getSubscription);
  */
 router.get(
   "/subscription/:id/create-payment-intent/:userId",
-  subscriptionController.createPaymentIntent
+  subscriptionController.createPaymentIntent,
 );
 
 /**
@@ -165,7 +165,7 @@ router.get(
  */
 router.post(
   "/subscription/:id/create-payment-intent/:userId",
-  subscriptionController.createPaymentIntent
+  subscriptionController.createPaymentIntent,
 );
 
 /**
@@ -196,7 +196,7 @@ router.post(
  */
 router.post(
   "/subscription/:id/confirm-payment",
-  subscriptionController.confirmSubscriptionPayment
+  subscriptionController.confirmSubscriptionPayment,
 );
 /**
  * @swagger
@@ -312,7 +312,6 @@ router.post("/otp/verfication", authController.otpVerification);
  *         description: Password reset email sent
  */
 router.post("/forgot-password", authController.forgotPassword);
- 
 
 /**
  * @swagger
@@ -391,7 +390,7 @@ router.post("/resend-otp/:type", authController.resendOtp);
  */
 router.post(
   "/financial-connections-session/:id",
-  authController.stripeAchPayment
+  authController.stripeAchPayment,
 );
 
 /**
@@ -451,7 +450,6 @@ router.post("/sheet-upload", orderController.SheetUplod);
  *         description: List of all products
  */
 
-
 /**
  * @swagger
  * /api/v1/users/coffee-machine/contact:
@@ -477,7 +475,7 @@ router.post("/sheet-upload", orderController.SheetUplod);
  */
 router.post(
   "/coffee-machine/contact",
-  machineSubController.coffeeMachineContact
+  machineSubController.coffeeMachineContact,
 );
 
 /**
@@ -886,7 +884,7 @@ router.get("/view-customer-detail/:id", customerController.customerDetail);
  */
 router.post(
   "/invoices/:orderId/create-payment-intent",
-  manageOrderController.createPaymentIntentForUser
+  manageOrderController.createPaymentIntentForUser,
 );
 
 /**
@@ -921,7 +919,7 @@ router.post(
  */
 router.post(
   "/invoices/:orderId/confirm-payment",
-  manageOrderController.confirmPaymentForInvoiceIntent
+  manageOrderController.confirmPaymentForInvoiceIntent,
 );
 
 /**
@@ -964,7 +962,7 @@ router.get("/subscriptions", subscriptionController.listSubscriptions);
  */
 router.post(
   "/subscriptions/:id/cancel",
-  subscriptionController.cancelSubscription
+  subscriptionController.cancelSubscription,
 );
 
 /**
@@ -990,7 +988,7 @@ router.post(
  */
 router.post(
   "/subscriptions/:id/reactivate",
-  subscriptionController.reactivateSubscription
+  subscriptionController.reactivateSubscription,
 );
 
 module.exports = router;

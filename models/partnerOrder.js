@@ -116,6 +116,20 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Payment link (checkout session) tracking – when customer requests "pay online" URL
+    paymentLinkOpenCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    paymentLinkFirstOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    paymentLinkLastOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     localPatnerCommission: {
       type: DataTypes.DECIMAL(20, 2),
       allowNull: true,

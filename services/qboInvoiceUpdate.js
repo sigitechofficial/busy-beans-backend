@@ -89,6 +89,7 @@ function buildQboInvoiceUpdatePayload({
   productItemId,
   serviceItemId,
   shippingItemId,
+  subtractSalerCommission = false,
 }) {
   /* -------------------------------------------------------
       3. Build line items
@@ -105,7 +106,12 @@ function buildQboInvoiceUpdatePayload({
     let unitPrice;
 
     // Get the line total from DB (this is the actual charged amount after discounts)
-    const totalNum = Number(it.total || it.price || 0);
+    let totalNum = Number(it.total || it.price || 0);
+    const salerCommission = Number(it.salerCommission || 0);
+    // Only subtract saler commission for admin update when orderType is customer (not for partner update)
+    if (subtractSalerCommission && salerCommission > 0) {
+      totalNum = totalNum - salerCommission;
+    }
 
     if (it.wholesalePrice && qty > 0) {
       // If wholesalePrice exists, use it as unit price (most reliable)
@@ -262,6 +268,7 @@ async function updateInvoiceInQuickBooks({
   order,
   qboInvoiceId,
   MODEL = Order,
+  subtractSalerCommission = false,
 }) {
   try {
     console.log("🚀 updateInvoiceInQuickBooks:", { orderId: order?.id });
@@ -316,6 +323,7 @@ async function updateInvoiceInQuickBooks({
       productItemId,
       serviceItemId,
       shippingItemId,
+      subtractSalerCommission,
     });
     console.log("🚀 ~ updateInvoiceInQuickBooks ~ payload:", payload);
 

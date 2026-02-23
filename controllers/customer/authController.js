@@ -29,7 +29,7 @@ const signToken = (data) =>
     process.env.JWT_SECRET, // Hardcoded JWT Secret
     {
       expiresIn: "7d",
-    }
+    },
   );
 
 const createSendToken = (input, statusCode, req, res, tokenId = "") => {
@@ -93,7 +93,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   billingAddress.create(req.body?.billingAddress);
   console.log(
     "ðŸš€ ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:",
-    defaultAddress
+    defaultAddress,
   );
 
   const stripeCustomerId = await Stripe.addCustomer({
@@ -121,7 +121,7 @@ exports.signup = catchAsync(async (req, res, next) => {
             email: newUser?.password,
           },
         },
-      })
+      }),
     );
   }
 
@@ -149,13 +149,13 @@ exports.login = catchAsync(async (req, res, next) => {
   console.log("Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ password:", password);
   console.log(
     "Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ customer?.password:",
-    customer?.password
+    customer?.password,
   );
   //   const isMatch = password == customer?.password;
   const isMatch = await bcrypt.compare(password, customer?.password); // password == customer?.password;
   console.log(
     "Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ isMatch?.isMatch:",
-    isMatch
+    isMatch,
   );
   if (!user || !isMatch) {
     return next(new AppError("Incorrect email or password", 401));
@@ -183,7 +183,7 @@ exports.login = catchAsync(async (req, res, next) => {
           id: customer?.id,
           email: customer?.email,
         },
-      })
+      }),
     );
   }
 
@@ -218,7 +218,7 @@ exports.stripeAchPayment = catchAsync(async (req, res, next) => {
         message: "Success",
         data: data,
       },
-    })
+    }),
   );
 });
 
@@ -264,7 +264,7 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
           message: "Success",
           data: { userId: id },
         },
-      })
+      }),
     );
   }
 
@@ -286,7 +286,7 @@ exports.isLoggedIn = async (req, res, next) => {
       // 1) verify token
       const decoded = await promisify(jwt.verify)(
         req.cookies.jwt,
-        process.env.JWT_SECRET
+        process.env.JWT_SECRET,
       );
 
       // 2) Check if user still exists
@@ -316,7 +316,7 @@ exports.restrictTo =
     // roles ['admin', 'lead-guide']. role='user'
     if (!roles.includes(req.user.role)) {
       return next(
-        new AppError("You do not have permission to perform this action", 403)
+        new AppError("You do not have permission to perform this action", 403),
       );
     }
     next();
@@ -460,6 +460,6 @@ exports.logout = catchAsync(async (req, res, next) => {
         message: "Logout",
         data: {},
       },
-    })
+    }),
   );
 });
