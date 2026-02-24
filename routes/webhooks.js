@@ -3,10 +3,8 @@ const router = express.Router();
 const Controller = require("../controllers/webhook/webhookController");
 const SubscriptionWebhookController = require("../controllers/webhook/subscriptionWebhookController");
 const MetaController = require("../controllers/webhook/metaWebhookController");
-<<<<<<< HEAD
-=======
 const EmailLogsWebhookController = require("../controllers/webhook/emailLogsWebhookController");
->>>>>>> origin/testing
+
 
 const catchAsync = require("../utils/catchAsync");
 // Stripe webhook (needs raw body - handled in app.js)
