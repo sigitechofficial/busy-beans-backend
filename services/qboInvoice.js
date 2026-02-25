@@ -709,7 +709,7 @@ async function createQboInvoice({
       let amount;
       let unitPrice;
 
-      // Get the line total from DB (this is the actual charged amount after discounts)
+      // Get the line total from DB (this is the actual charged amount after discounts). Use it.total (line total) first, not it.price (often unit price).
       let totalNum = Number(it.total || it.price || 0);
       const salerCommission = Number(it.salerCommission || 0);
       // Only subtract saler commission for admin sync when orderType is customer (not for local partner sync)
@@ -749,12 +749,10 @@ async function createQboInvoice({
             note: "Using calculated amount to satisfy QBO validation (Amount = UnitPrice * Qty)",
           });
         }
-      } else if (it.wholesalePrice && qty > 0) {
-        // Fallback: If DB total not available, use wholesalePrice as unit price
+      } else if (it.wholesalePrice && qty > 0 && !subtractSalerCommission) {
+        // Fallback: use wholesalePrice only when NOT subtracting commission (otherwise we'd send retail as unit price)
         unitPrice = Number(it.wholesalePrice);
-        // Calculate amount from unitPrice to ensure exact match
         amount = Math.round(unitPrice * qty * 100) / 100;
-        // Round unitPrice to 8 decimal places
         unitPrice = Math.round(unitPrice * 100000000) / 100000000;
       } else {
         amount = 0;
@@ -1058,6 +1056,17 @@ async function handleAdminQboSync({
       DBMODEL,
       updateRequest,
     });
+    // Skip admin QBO sync when orderType is customer and order belongs to a direct local-partner
+    if (
+      orderType === "customer" &&
+      order?.salesRepId &&
+      order?.partnerType === "direct-partner"
+    ) {
+      console.log(
+        "[QBO] Skipping admin sync — order belongs to direct local-partner",
+      );
+      return { saved: true, reason: "skipped_admin_sync_direct_partner_order" };
+    }
     if (!ADMIN?.currentRealmId) {
       console.log(
         "🚀 ~ handlePartnerQboSync ~ LOCAL ADMIN NOT CONNECTED OR  ORDER ALREADY ON QUICK BOOKS:",
@@ -1113,7 +1122,8 @@ async function handleAdminQboSync({
         order,
         accessToken,
         realmId,
-        subtractSalerCommission: orderType === "customer",
+        subtractSalerCommission:
+          orderType === "customer" && !!order?.salesRepId,
       });
 
       updateOrderRecord({
@@ -1132,7 +1142,8 @@ async function handleAdminQboSync({
           accessToken,
           realmId,
           qboCustomerId: qboCustomerOnAdmin?.qboCustomerId,
-          subtractLocalPartnerCommission: orderType === "customer",
+          subtractLocalPartnerCommission:
+            orderType === "customer" && !!order?.salesRepId,
         });
 
         updateOrderRecord({
@@ -1152,7 +1163,8 @@ async function handleAdminQboSync({
         order,
         qboInvoiceId: order?.quickBooksInvoiceId,
         MODEL: DBMODEL,
-        subtractSalerCommission: orderType === "customer",
+        subtractSalerCommission:
+          orderType === "customer" && !!order?.salesRepId,
       });
       return { saved: true, reason: "admin_invoice_updated" };
     }

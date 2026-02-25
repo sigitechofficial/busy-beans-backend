@@ -44,11 +44,11 @@ class APIFeatures {
             const isSymbolUsed = keys.some((k) => typeof k === "symbol");
             if (!isSymbolUsed) {
               console.warn(
-                `❌ Sequelize operator [${op}] not applied as symbol for ${key}`
+                `❌ Sequelize operator [${op}] not applied as symbol for ${key}`,
               );
             } else {
               console.log(
-                `✅ Sequelize operator [${op}] correctly applied as symbol for ${key}`
+                `✅ Sequelize operator [${op}] correctly applied as symbol for ${key}`,
               );
               console.log(`→ Field keys:`, keys);
             }

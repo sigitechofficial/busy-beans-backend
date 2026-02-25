@@ -24,7 +24,18 @@ const subscriptionRouter = require("./routes/subscriptionRoutes");
 
 app.use((req, res, next) => {
   console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
-  console.log(`📥 Incoming Header: ${req.headers}`);
+  const safeHeaders = {
+    "content-type": req.headers["content-type"],
+    "user-agent": req.headers["user-agent"],
+    host: req.headers.host,
+    authorization: req.headers.authorization
+      ? `${req.headers.authorization.slice(0, 24)}...`
+      : undefined,
+    "x-zepto-webhook-secret": req.headers["x-zepto-webhook-secret"]
+      ? `${String(req.headers["x-zepto-webhook-secret"]).slice(0, 12)}...`
+      : undefined,
+  };
+  console.log(`📥 Incoming Header: ${JSON.stringify(safeHeaders)}`);
   next();
 });
 

@@ -5,9 +5,13 @@
  * Payload shape: { event_name: ["opened"|"clicked"|"softbounce"], event_message: [ { request_id, email_info, event_data } ] }
  * Updates emailLog by zeptoRequestId = request_id from event_message.
  *
+ * Verification: Set X_ZEPTO_WEBHOOK_SECRET in .env to the same value as in Zepto "Authorization headers" value.
+ * Optional: X_ZEPTO_WEBHOOK_HEADER = header name Zepto sends (default: x-zepto-webhook-secret).
+ *
  * Route: POST /webhook/email-logs
  */
 
+const { Op } = require("sequelize");
 const { emailLog } = require("../../models");
 
 /**
@@ -21,12 +25,34 @@ function getEventTime(msg) {
   return new Date();
 }
 
+function normalizeEventName(eventName) {
+  return String(eventName || "").toLowerCase().trim();
+}
+
+function buildRequestIdCandidates(msg) {
+  const rawRequestId = msg?.request_id;
+  const emailReference = msg?.email_info?.email_reference;
+  const candidates = [];
+  const push = (val) => {
+    if (!val || typeof val !== "string") return;
+    const v = val.trim();
+    if (!v) return;
+    if (!candidates.includes(v)) candidates.push(v);
+    const beforeAt = v.split("@")[0]?.trim();
+    if (beforeAt && !candidates.includes(beforeAt)) candidates.push(beforeAt);
+  };
+  push(rawRequestId);
+  push(emailReference);
+  return candidates;
+}
+
 /**
  * Handle ZeptoMail webhook (opened, clicked, softbounce, etc.)
  * Responds 200 quickly so Zepto doesn't retry.
  */
 exports.handleEmailLogsWebhook = async (req, res) => {
   try {
+    const traceId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const payload = req.body || {};
     const eventNames = Array.isArray(payload.event_name)
       ? payload.event_name
@@ -36,53 +62,113 @@ exports.handleEmailLogsWebhook = async (req, res) => {
       : [];
     const eventName = eventNames[0];
 
+    // Zepto "Verify" can hit this endpoint with an empty/test payload.
+    // Acknowledge immediately with 200 so verification does not hang.
+    const isVerificationPing =
+      eventNames.length === 0 && eventMessages.length === 0;
+
     if (process.env.NODE_ENV !== "production") {
       console.log(
-        "[emailLogsWebhook] event_name:",
-        eventName,
-        "event_message count:",
-        eventMessages.length,
+        `[emailLogsWebhook][${traceId}] Incoming meta:`,
+        JSON.stringify(
+          {
+            method: req.method,
+            url: req.originalUrl,
+            contentType: req.get("content-type"),
+            payloadKeys: Object.keys(payload || {}),
+            eventNames,
+            eventMessageCount: eventMessages.length,
+          },
+          null,
+          2,
+        ),
       );
     }
 
-    for (const msg of eventMessages) {
-      const requestId = msg.request_id || msg.email_info?.email_reference;
-      if (!requestId) continue;
+    if (isVerificationPing) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[emailLogsWebhook][${traceId}] Verification ping received`);
+      }
+      return res.status(200).type("text/plain").send("OK");
+    }
+
+    let matchedCount = 0;
+    let updatedOpen = 0;
+    let updatedClick = 0;
+    let updatedSoftBounce = 0;
+    let skippedNoRequestId = 0;
+    let skippedNoMatch = 0;
+
+    const normalizedEvent = normalizeEventName(eventName);
+
+    for (let i = 0; i < eventMessages.length; i += 1) {
+      const msg = eventMessages[i];
+      const requestIdCandidates = buildRequestIdCandidates(msg);
+      if (requestIdCandidates.length === 0) {
+        skippedNoRequestId += 1;
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[emailLogsWebhook][${traceId}] msg#${i + 1}: skipped (no request_id/email_reference in payload)`,
+          );
+        }
+        continue;
+      }
 
       const log = await emailLog.findOne({
-        where: { zeptoRequestId: requestId },
+        where: { zeptoRequestId: { [Op.in]: requestIdCandidates } },
       });
-      if (!log) continue;
+      if (!log) {
+        skippedNoMatch += 1;
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[emailLogsWebhook][${traceId}] msg#${i + 1}: no emailLog match for candidates=${JSON.stringify(requestIdCandidates)}`,
+          );
+        }
+        continue;
+      }
+      matchedCount += 1;
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `[emailLogsWebhook][${traceId}] msg#${i + 1}: matched emailLog id=${log.id}, zeptoRequestId=${log.zeptoRequestId}`,
+        );
+      }
 
       const eventTime = getEventTime(msg);
-
-      if (eventName === "opened") {
+      if (normalizedEvent === "opened" || normalizedEvent === "email_open") {
+        const nextOpenCount = (log.openCount || 0) + 1;
         await emailLog.update(
           {
             lastOpenedAt: eventTime,
-            openCount: (log.openCount || 0) + 1,
+            openCount: nextOpenCount,
             ...(log.firstOpenedAt == null ? { firstOpenedAt: eventTime } : {}),
           },
           { where: { id: log.id } },
         );
         if (process.env.NODE_ENV !== "production") {
           console.log(
-            "[emailLogsWebhook] Updated open for emailLog id:",
-            log.id,
+            `[emailLogsWebhook][${traceId}] msg#${i + 1}: OPEN updated id=${log.id} openCount ${log.openCount || 0} -> ${nextOpenCount}, firstOpenedAt=${log.firstOpenedAt || "set-now"}, lastOpenedAt=${eventTime.toISOString()}`,
           );
         }
-      } else if (eventName === "clicked") {
+        updatedOpen += 1;
+      } else if (
+        normalizedEvent === "clicked" ||
+        normalizedEvent === "email_click"
+      ) {
+        const nextClickCount = (log.clickCount || 0) + 1;
         await emailLog.update(
-          { clickCount: (log.clickCount || 0) + 1 },
+          { clickCount: nextClickCount },
           { where: { id: log.id } },
         );
         if (process.env.NODE_ENV !== "production") {
           console.log(
-            "[emailLogsWebhook] Updated click for emailLog id:",
-            log.id,
+            `[emailLogsWebhook][${traceId}] msg#${i + 1}: CLICK updated id=${log.id} clickCount ${log.clickCount || 0} -> ${nextClickCount}`,
           );
         }
-      } else if (eventName === "softbounce") {
+        updatedClick += 1;
+      } else if (
+        normalizedEvent === "softbounce" ||
+        normalizedEvent === "soft_bounce"
+      ) {
         const details = msg?.event_data?.[0]?.details?.[0];
         const reason = details
           ? [
@@ -102,16 +188,40 @@ exports.handleEmailLogsWebhook = async (req, res) => {
         );
         if (process.env.NODE_ENV !== "production") {
           console.log(
-            "[emailLogsWebhook] Updated softbounce for emailLog id:",
-            log.id,
+            `[emailLogsWebhook][${traceId}] msg#${i + 1}: SOFTBOUNCE updated id=${log.id} at=${eventTime.toISOString()} reason=${reason || "(unchanged)"}`,
           );
         }
+        updatedSoftBounce += 1;
+      } else if (process.env.NODE_ENV !== "production") {
+        console.log(
+          `[emailLogsWebhook][${traceId}] msg#${i + 1}: event '${normalizedEvent}' not handled; no DB update`,
+        );
       }
     }
 
-    res.status(200).json({ received: true });
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[emailLogsWebhook][${traceId}] Summary:`,
+        JSON.stringify(
+          {
+            eventName: normalizedEvent,
+            received: eventMessages.length,
+            matched: matchedCount,
+            updatedOpen,
+            updatedClick,
+            updatedSoftBounce,
+            skippedNoRequestId,
+            skippedNoMatch,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+
+    res.status(200).type("text/plain").send("OK");
   } catch (err) {
     console.error("[emailLogsWebhook] Error:", err.message);
-    res.status(200).json({ received: true });
+    res.status(200).type("text/plain").send("OK");
   }
 };

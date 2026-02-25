@@ -574,6 +574,11 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   if (req?.params?.qbo == "not-synced") {
     if (["admin", "adminEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
+      condition[Op.and] = [
+        literal(
+          `(order.salesRepId IS NULL OR (SELECT partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1) != 'direct-partner')`,
+        ),
+      ];
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceIdPartner = { [Op.or]: [null, ""] };
     }
@@ -618,12 +623,6 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     condition.userId = req.user.id;
   }
 
-  console.log("🚀 ~ condition----:", condition);
-  console.log("🚀 ~ condition----:", condition);
-  console.log("🚀 ~ condition----:", condition);
-  console.log("🚀 ~ condition----:", condition);
-  console.log("🚀 ~ condition----:", condition);
-  console.log("🚀 ~ condition----:", condition);
   console.log("🚀 ~ condition----:", condition);
 
   // Define searchable columns for orders

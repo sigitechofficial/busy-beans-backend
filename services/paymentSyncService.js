@@ -71,7 +71,7 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
     order: ord,
     realmId: ord.adminRealmId,
     qboCustomerId: qboCustomer.qboCustomerId,
-    subtractLocalPartnerCommission: orderType === "customer",
+    subtractLocalPartnerCommission: orderType === "customer" && !!ord?.salesRepId,
   });
 
 
@@ -88,7 +88,7 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
       order: ord,
       realmId: ord.adminRealmId,
       qboCustomerId: qboCustomer.qboCustomerId,
-      subtractLocalPartnerCommission: orderType === "customer",
+      subtractLocalPartnerCommission: orderType === "customer" && !!ord?.salesRepId,
       force: true,
     });
   }

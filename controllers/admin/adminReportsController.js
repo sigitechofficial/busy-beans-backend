@@ -25,8 +25,8 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -49,9 +49,9 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
         fn(
           "FORMAT",
           literal(
-            `(SELECT SUM(orders.totalBill) FROM orders WHERE orders.salesRepId = salesRep.id  AND orders.statusId != 6 ${dateFilter})`
+            `(SELECT SUM(orders.totalBill) FROM orders WHERE orders.salesRepId = salesRep.id  AND orders.statusId != 6 ${dateFilter})`,
           ),
-          2
+          2,
         ),
         "totalSales",
       ],
@@ -68,7 +68,7 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
               ${dateFilter}
             )
           `),
-          2
+          2,
         ),
         "wholesalePriceCost",
       ],
@@ -85,13 +85,13 @@ exports.partnerCommissionReport = catchAsync(async (req, res, next) => {
               ${dateFilter}
             )
           `),
-          2
+          2,
         ),
         "totalCommission",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.statusId != 6 ${dateFilter})`
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.statusId != 6 ${dateFilter})`,
         ),
         "ordersPlaced",
       ],
@@ -123,7 +123,7 @@ exports.partnerCreaditLimit = catchAsync(async (req, res, next) => {
                     AND orders.paymentStatus = 'pending'
               )
             `),
-          1
+          1,
         ),
         "creditUsed",
       ],
@@ -149,8 +149,8 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -190,19 +190,19 @@ exports.unpaidPartnerbalanceReport = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.adminReceivableStatus = false ${orderDateFilter})`
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id AND orders.adminReceivableStatus = false ${orderDateFilter})`,
         ),
         "ordersOnCredit",
       ],
       [
         literal(
-          `(SELECT SUM(partnerOrders.totalBill) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id AND partnerOrders.paymentStatus = 'pending' ${partnerOrderDateFilter})`
+          `(SELECT SUM(partnerOrders.totalBill) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id AND partnerOrders.paymentStatus = 'pending' ${partnerOrderDateFilter})`,
         ),
         "selfOrdersOutstandingBalance",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id AND partnerOrders.paymentStatus = 'pending' ${partnerOrderDateFilter})`
+          `(SELECT COUNT(*) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id AND partnerOrders.paymentStatus = 'pending' ${partnerOrderDateFilter})`,
         ),
         "selfOrdersOnCredit",
       ],
@@ -228,8 +228,8 @@ exports.directPartnerReportSummary = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -255,13 +255,13 @@ exports.directPartnerReportSummary = catchAsync(async (req, res, next) => {
       "territoryName",
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id ${orderDateFilter})`
+          `(SELECT COUNT(*) FROM orders WHERE orders.salesRepId = salesRep.id ${orderDateFilter})`,
         ),
         "clientOrdersCount",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id ${partnerOrderDateFilter})`
+          `(SELECT COUNT(*) FROM partnerOrders WHERE partnerOrders.salesRepId = salesRep.id ${partnerOrderDateFilter})`,
         ),
         "selfOrdersCount",
       ],
@@ -286,8 +286,8 @@ exports.customerReport = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -324,13 +324,13 @@ exports.customerReport = catchAsync(async (req, res, next) => {
                 ${dateFilter}
               )
             `),
-          1
+          1,
         ),
         "totatSpent",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id ${dateFilter})`
+          `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id ${dateFilter})`,
         ),
         "numberOfOrders",
       ],
@@ -344,7 +344,7 @@ exports.customerReport = catchAsync(async (req, res, next) => {
                 ${dateFilter}
               )
             `),
-          1
+          1,
         ),
         "avgSpent",
       ],
@@ -363,7 +363,7 @@ exports.customerReport = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending' ${dateFilter})`
+          `(SELECT SUM(totalBill) FROM orders WHERE orders.userId = user.id AND orders.paymentStatus = 'pending' ${dateFilter})`,
         ),
         "outstandingBalance",
       ],
@@ -389,8 +389,8 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -607,8 +607,9 @@ exports.productSalesReport = catchAsync(async (req, res, next) => {
 // ],
 
 exports.customerSalesSummary = catchAsync(async (req, res, next) => {
-  const { startDate, endDate, salesRepId, userType } = req.query;
+  const { startDate, endDate, salesRepId, userType, employeeId } = req.query;
   const salesRepNe = req.query["salesRep[ne]"];
+  const employeeIdNe = req.query["employeeId[ne]"];
 
   console.log("🚀 ~ customerSalesSummary ~ req.query:", req.query);
   console.log("🚀 ~ customerSalesSummary ~ startDate:", startDate);
@@ -616,6 +617,8 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
   console.log("🚀 ~ customerSalesSummary ~ salesRepId:", salesRepId);
   console.log("🚀 ~ customerSalesSummary ~ userType:", userType);
   console.log("🚀 ~ customerSalesSummary ~ salesRepNe:", salesRepNe);
+  console.log("🚀 ~ customerSalesSummary ~ employeeId:", employeeId);
+  console.log("🚀 ~ customerSalesSummary ~ employeeIdNe:", employeeIdNe);
   console.log("🚀 ~ customerSalesSummary ~ req.user.entity:", req.user?.entity);
 
   if (!startDate || !endDate) {
@@ -628,8 +631,8 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -644,15 +647,13 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
   const isAdmin = req.user?.entity === "admin";
   const isAdminEmployee = req.user?.entity === "adminEmployee";
   const isLocalPartner =
-    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+    req.user?.entity === "localPartner" ||
+    req.user?.entity === "partnerEmployee";
 
   // Validate: Only admin can use salesRepId query parameter to view specific local partner
   if (salesRepId && !isAdmin) {
     return next(
-      new AppError(
-        "Only admin users can filter by specific salesRepId",
-        403
-      )
+      new AppError("Only admin users can filter by specific salesRepId", 403),
     );
   }
 
@@ -661,10 +662,11 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
     ? Array.isArray(salesRepId)
       ? salesRepId[0]
       : typeof salesRepId === "string" && salesRepId.includes(",")
-      ? null
-      : parseInt(salesRepId)
+        ? null
+        : parseInt(salesRepId)
     : null;
-  const isAdminViewingLocalPartner = isAdmin && requestedSalesRepId && !userType;
+  const isAdminViewingLocalPartner =
+    isAdmin && requestedSalesRepId && !userType;
 
   // Check if admin wants to see only direct admin orders (salesRepId IS NULL)
   const isAdminOnlyCondition = isAdmin && userType === "admin";
@@ -678,11 +680,19 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
   // EXCEPTION: If userType=admin, admin will see only direct admin orders (salesRepId IS NULL) - takes highest precedence
   // EXCEPTION: If salesRepId is provided (and userType is not admin), admin will see data for that local partner only
   // Priority: userType=admin > entity-based filters > query parameter filters
+  // Only admin can use employeeId query parameter to filter by specific employee(s).
+  if (employeeId && !isAdmin) {
+    return next(
+      new AppError("Only admin users can filter by specific employeeId", 403),
+    );
+  }
 
   // Check userType=admin FIRST - takes highest precedence for admin users
   if (isAdminOnlyCondition) {
     salesRepFilter = "AND orders.salesRepId IS NULL";
-    console.log("🚀 ~ customerSalesSummary ~ Applied userType=admin filter (highest precedence)");
+    console.log(
+      "🚀 ~ customerSalesSummary ~ Applied userType=admin filter (highest precedence)",
+    );
   }
   // Apply entity-based filtering (only if userType=admin is not set)
   else if (!isAdmin || isAdminViewingLocalPartner) {
@@ -692,7 +702,7 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
       salesRepFilter = `AND orders.salesRepId = ${localPartnerSalesRepId}`;
       console.log(
         "🚀 ~ customerSalesSummary ~ Applied local partner salesRepId filter:",
-        localPartnerSalesRepId
+        localPartnerSalesRepId,
       );
     }
     // For admin viewing a specific local partner's data
@@ -700,7 +710,7 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
       salesRepFilter = `AND orders.salesRepId = ${requestedSalesRepId}`;
       console.log(
         "🚀 ~ customerSalesSummary ~ Admin viewing local partner, salesRepId filter:",
-        requestedSalesRepId
+        requestedSalesRepId,
       );
     }
     // For employees (adminEmployee or partnerEmployee): filter by employeeId
@@ -708,11 +718,11 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
       req.user?.entity === "adminEmployee" ||
       req.user?.entity === "partnerEmployee"
     ) {
-      const employeeId = req.user?.employeeId || req.user?.id;
-      employeeIdFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+      const currentUserEmployeeId = req.user?.employeeId || req.user?.id;
+      employeeIdFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${currentUserEmployeeId})`;
       console.log(
         "🚀 ~ customerSalesSummary ~ Applied employeeId filter:",
-        employeeId
+        currentUserEmployeeId,
       );
     }
   } else {
@@ -721,7 +731,7 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
     if (salesRepNe === "null" || salesRepNe === null) {
       salesRepFilter = "AND orders.salesRepId IS NOT NULL";
       console.log(
-        "🚀 ~ customerSalesSummary ~ Applied salesRep[ne]=null filter"
+        "🚀 ~ customerSalesSummary ~ Applied salesRep[ne]=null filter",
       );
     }
     // Handle salesRepId array [29,27] or comma-separated string
@@ -735,7 +745,7 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
           .filter((id) => !isNaN(id));
         console.log(
           "🚀 ~ customerSalesSummary ~ salesRepId is Array:",
-          salesRepIds
+          salesRepIds,
         );
       } else if (typeof salesRepId === "string") {
         // Handle string format like "[29,27]" or "29,27" or "[28]"
@@ -751,19 +761,19 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
           .filter((id) => !isNaN(id) && id > 0);
         console.log(
           "🚀 ~ customerSalesSummary ~ salesRepId is String, original:",
-          salesRepId
+          salesRepId,
         );
         console.log("🚀 ~ customerSalesSummary ~ salesRepId cleaned:", cleaned);
         console.log(
           "🚀 ~ customerSalesSummary ~ Parsed salesRepIds:",
-          salesRepIds
+          salesRepIds,
         );
       } else if (typeof salesRepId === "number") {
         // Handle single number
         salesRepIds = [parseInt(salesRepId)];
         console.log(
           "🚀 ~ customerSalesSummary ~ salesRepId is Number:",
-          salesRepIds
+          salesRepIds,
         );
       }
 
@@ -772,11 +782,66 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
         salesRepFilter = `AND orders.salesRepId IN (${placeholders})`;
         console.log(
           "🚀 ~ customerSalesSummary ~ Applied salesRepId IN filter:",
-          salesRepFilter
+          salesRepFilter,
         );
       } else {
         console.log(
-          "🚀 ~ customerSalesSummary ~ WARNING: salesRepIds array is empty after parsing!"
+          "🚀 ~ customerSalesSummary ~ WARNING: salesRepIds array is empty after parsing!",
+        );
+      }
+    }
+
+    // Handle employeeId[ne]=null (only orders where customer has employeeId IS NOT NULL)
+    if (employeeIdNe === "null" || employeeIdNe === null) {
+      employeeIdFilter =
+        "AND orders.userId IN (SELECT id FROM users WHERE users.employeeId IS NOT NULL)";
+      console.log(
+        "🚀 ~ customerSalesSummary ~ Applied employeeId[ne]=null filter",
+      );
+    }
+    // Handle employeeId: single value, array [1,2], or comma-separated "1,2"
+    else if (employeeId) {
+      let employeeIds = [];
+
+      if (Array.isArray(employeeId)) {
+        employeeIds = employeeId
+          .map((id) => parseInt(id))
+          .filter((id) => !isNaN(id));
+        console.log(
+          "🚀 ~ customerSalesSummary ~ employeeId is Array:",
+          employeeIds,
+        );
+      } else if (typeof employeeId === "string") {
+        let cleaned = employeeId.trim();
+        if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+          cleaned = cleaned.slice(1, -1);
+        }
+        const parts = cleaned.split(",");
+        employeeIds = parts
+          .map((id) => parseInt(id.trim()))
+          .filter((id) => !isNaN(id) && id > 0);
+        console.log(
+          "🚀 ~ customerSalesSummary ~ employeeId is String, parsed:",
+          employeeIds,
+        );
+      } else if (
+        typeof employeeId === "number" ||
+        (typeof employeeId === "string" && !employeeId.includes(","))
+      ) {
+        const id = parseInt(employeeId);
+        if (!isNaN(id) && id > 0) employeeIds = [id];
+      }
+
+      if (employeeIds.length > 0) {
+        const placeholders = employeeIds.map((id) => `${id}`).join(", ");
+        employeeIdFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId IN (${placeholders}))`;
+        console.log(
+          "🚀 ~ customerSalesSummary ~ Applied employeeId IN filter:",
+          employeeIdFilter,
+        );
+      } else {
+        console.log(
+          "🚀 ~ customerSalesSummary ~ WARNING: employeeIds array is empty after parsing!",
         );
       }
     }
@@ -818,7 +883,7 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
   const numberOfOrdersQuery = `(SELECT COUNT(*) FROM orders WHERE orders.userID = user.id ${dateFilter})`;
   console.log(
     "🚀 ~ customerSalesSummary ~ numberOfOrdersQuery:",
-    numberOfOrdersQuery
+    numberOfOrdersQuery,
   );
 
   // Build the avgSpent subquery with filter
@@ -871,8 +936,8 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -887,7 +952,8 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
   const isAdmin = req.user?.entity === "admin";
   const isAdminEmployee = req.user?.entity === "adminEmployee";
   const isLocalPartner =
-    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+    req.user?.entity === "localPartner" ||
+    req.user?.entity === "partnerEmployee";
 
   // Build entity-based access control filters
   let entityFilter = "";
@@ -895,7 +961,7 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
   // For local partners: verify customer belongs to them and filter orders
   if (isLocalPartner && req.user?.localPartnerId) {
     const localPartnerSalesRepId = req.user.localPartnerId;
-    
+
     // Verify that the requested userId has orders with this local partner
     const hasAccess = await order.findOne({
       where: {
@@ -909,15 +975,15 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "You do not have access to view this customer's details",
-          403
-        )
+          403,
+        ),
       );
     }
 
     entityFilter = `AND orders.salesRepId = ${localPartnerSalesRepId}`;
     console.log(
       "🚀 ~ customerDetailsSummary ~ Applied local partner filter:",
-      localPartnerSalesRepId
+      localPartnerSalesRepId,
     );
   }
   // For employees: verify customer is assigned to them and filter orders
@@ -926,7 +992,7 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
     req.user?.entity === "partnerEmployee"
   ) {
     const employeeId = req.user?.employeeId || req.user?.id;
-    
+
     // Verify that the requested userId is assigned to this employee
     const customerUser = await user.findOne({
       where: {
@@ -940,15 +1006,15 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           "You do not have access to view this customer's details",
-          403
-        )
+          403,
+        ),
       );
     }
 
     entityFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
     console.log(
       "🚀 ~ customerDetailsSummary ~ Applied employee filter:",
-      employeeId
+      employeeId,
     );
   }
 
@@ -1042,8 +1108,8 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -1058,15 +1124,13 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
   const isAdmin = req.user?.entity === "admin";
   const isAdminEmployee = req.user?.entity === "adminEmployee";
   const isLocalPartner =
-    req.user?.entity === "localPartner" || req.user?.entity === "partnerEmployee";
+    req.user?.entity === "localPartner" ||
+    req.user?.entity === "partnerEmployee";
 
   // Validate: Only admin can use salesRepId query parameter to view specific local partner
   if (salesRepId && !isAdmin) {
     return next(
-      new AppError(
-        "Only admin users can filter by specific salesRepId",
-        403
-      )
+      new AppError("Only admin users can filter by specific salesRepId", 403),
     );
   }
 
@@ -1075,10 +1139,11 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
     ? Array.isArray(salesRepId)
       ? salesRepId[0]
       : typeof salesRepId === "string" && salesRepId.includes(",")
-      ? null
-      : parseInt(salesRepId)
+        ? null
+        : parseInt(salesRepId)
     : null;
-  const isAdminViewingLocalPartner = isAdmin && requestedSalesRepId && !userType;
+  const isAdminViewingLocalPartner =
+    isAdmin && requestedSalesRepId && !userType;
 
   // Check if admin wants to see only direct admin orders (salesRepId IS NULL)
   const isAdminOnlyCondition = isAdmin && userType === "admin";
@@ -1120,7 +1185,9 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
   if (isAdminOnlyCondition) {
     orderSalesRepFilter = "AND orders.salesRepId IS NULL";
     partnerOrderSalesRepFilter = "AND partnerOrders.salesRepId IS NULL";
-    console.log("🚀 ~ categoryWiseProductSalesSummary ~ Applied userType=admin filter (highest precedence)");
+    console.log(
+      "🚀 ~ categoryWiseProductSalesSummary ~ Applied userType=admin filter (highest precedence)",
+    );
   }
   // Apply entity-based filtering (only if userType=admin is not set)
   else if (!isAdmin || isAdminViewingLocalPartner) {
@@ -1131,7 +1198,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       partnerOrderSalesRepFilter = `AND partnerOrders.salesRepId = ${localPartnerSalesRepId}`;
       console.log(
         "🚀 ~ categoryWiseProductSalesSummary ~ Applied local partner salesRepId filter:",
-        localPartnerSalesRepId
+        localPartnerSalesRepId,
       );
     }
     // For admin viewing a specific local partner's data
@@ -1140,7 +1207,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       partnerOrderSalesRepFilter = `AND partnerOrders.salesRepId = ${requestedSalesRepId}`;
       console.log(
         "🚀 ~ categoryWiseProductSalesSummary ~ Admin viewing local partner, salesRepId filter:",
-        requestedSalesRepId
+        requestedSalesRepId,
       );
     }
     // For employees (adminEmployee or partnerEmployee): filter by employeeId
@@ -1153,7 +1220,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       // Note: partnerOrders don't have employeeId filtering like customer orders
       console.log(
         "🚀 ~ categoryWiseProductSalesSummary ~ Applied employeeId filter:",
-        employeeId
+        employeeId,
       );
     }
   } else {
@@ -1163,7 +1230,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
       orderSalesRepFilter = "AND orders.salesRepId IS NOT NULL";
       partnerOrderSalesRepFilter = "AND partnerOrders.salesRepId IS NOT NULL";
       console.log(
-        "🚀 ~ categoryWiseProductSalesSummary ~ Applied salesRep[ne]=null filter"
+        "🚀 ~ categoryWiseProductSalesSummary ~ Applied salesRep[ne]=null filter",
       );
     }
     // Handle salesRepId array [29,27] or comma-separated string
@@ -1196,7 +1263,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
           replacements[`salesRepId${index}`] = id;
         });
         console.log(
-          "🚀 ~ categoryWiseProductSalesSummary ~ Applied salesRepId IN filter"
+          "🚀 ~ categoryWiseProductSalesSummary ~ Applied salesRepId IN filter",
         );
       }
     }
