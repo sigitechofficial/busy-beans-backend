@@ -22,6 +22,16 @@ const Email = require("../../utils/email");
 const otpGenerator = require("otp-generator");
 const EmailResetPasswordOtpToAll = require("../../helper/ResetPasswordOtpToAll");
 const Event = require("../events/userAccountRelatedEvents");
+const {
+  setTemporaryBlockAndSendOtp,
+  setForgotPasswordOtpAndReturnSuccess,
+  purgeSessionsAndDeviceTokens,
+  isTemporaryBlockActive,
+  returnTemporaryBlockResponse,
+  normalizeVerificationContext,
+  isValidTemporaryBlockOtp,
+  clearTemporaryBlock,
+} = require("../../middlewares/temporaryBlockFlow");
 
 const MODEL = {
   user: user,
@@ -106,104 +116,105 @@ exports.signup = catchAsync(async (req, res, next) => {
 
 const login = (Model) => {
   return catchAsync(async (req, res, next) => {
-    // console.log('🚀 ~ login ~ entity:BEFORE', entity);
     const { email, password } = req.body;
-    console.log("🚀 ~ login ~ req.params.entity:", req.params.entity);
-    entity = req.params.entity;
-    console.log("🚀 ~ login ~ entity:AFTER", entity);
-    console.log("🚀 ~ exports.login=catchAsync ~ req.body;:", req.body);
-    // 1) Check if email and password exist
+    let entity = req.params.entity;
+    const context = req.tempBlockContext || "login";
+
     if (!email || !password) {
       return next(new AppError("Please provide email and password!", 400));
     }
-    // 2) Check if user exists && password is correct
 
     let data = await Model.findOne({
       where: { email, deleted: 0 },
     });
 
-    console.log("🚀 ~ login ~ entityBBBB:", entity);
     if (!data) {
-      if (entity == "admin" || entity == "localPartner") {
+      if (entity === "admin" || entity === "localPartner") {
         const condition = { email, deleted: 0 };
-        if (entity == "admin") condition.salesRepId = { [Op.is]: null };
+        if (entity === "admin") condition.salesRepId = { [Op.is]: null };
         else condition.accountId = { [Op.is]: null };
-        console.log("🚀 ~ login ~ condition:EMPLOYEE", condition);
-
         data = await employee.findOne({
           where: condition,
           include: { model: permission, attributes: ["id", "key"] },
         });
-        // console.log('🚀 ~ login ~ data:', data);
         if (data) {
           entity = data.accountId ? "adminEmployee" : "partnerEmployee";
         }
       }
     }
-    console.log("🚀 ~ exports.login=catchAsync ~ data:", data);
-    if (!data || !(await bcrypt.compare(password, data?.password))) {
+
+    if (!data) {
       return next(new AppError("Incorrect email or password", 400));
     }
-    // if (!data || password != data.password) {
-    //   return next(new AppError('Incorrect email or password', 400));
-    // }
+
     if (!data?.status) {
       return next(new AppError("You are blocked by admin!", 400));
     }
+
+    if (isTemporaryBlockActive({ record: data, context })) {
+      return returnTemporaryBlockResponse({
+        record: data,
+        context,
+        entity,
+        res,
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, data?.password);
+    if (!isMatch) {
+      const failed = await REDIS.incrementLoginFailedAttempts(entity, data.id);
+      if (failed >= REDIS.LOGIN_FAILED_MAX_ATTEMPTS) {
+        return setTemporaryBlockAndSendOtp({
+          record: data,
+          context,
+          entity,
+          res,
+        });
+      }
+      return next(new AppError("Incorrect email or password", 400));
+    }
+
+    await REDIS.resetLoginFailedAttempts(entity, data.id);
+
     if (req.body?.tokenId) {
       const input = { tokenId: req.body?.tokenId };
-      if (entity == "localPartner") input.salesRepId = data?.id;
-      else if (entity == "supplier") input.supplierId = data?.id;
-      else if (entity == "admin") input.accountId = data?.id;
+      if (entity === "localPartner") input.salesRepId = data?.id;
+      else if (entity === "supplier") input.supplierId = data?.id;
+      else if (entity === "admin") input.accountId = data?.id;
       else input.employeeId = data?.id;
       deviceToken.create(input);
     }
-    // 3) If everything ok, send token to client
-    console.log("🚀 ~ login ~ createSendToken:", entity);
-    createSendToken(data, 200, req, res, req.body?.tokenId, entity);
+
+    return createSendToken(data, 200, req, res, req.body?.tokenId, entity);
   });
 };
 
 const forgotPassword = (Model, entity) =>
   catchAsync(async (req, res, next) => {
+    const context = req.tempBlockContext || "forgot_password";
     let data = await Model.findOne({
       where: { email: req.body.email, deleted: 0 },
       attributes: {
         exclude: ["updatedAt", "deleted", "deletedAt", "password"],
       },
     });
-    if (!data && (entity == "admin" || entity == "localPartner")) {
+    let resolvedEntity = entity;
+    if (!data && (entity === "admin" || entity === "localPartner")) {
       data = await employee.findOne({
         where: { email: req.body.email, deleted: 0 },
       });
-      console.log("🚀 ~ login ~ data:", data);
       if (data) {
-        entity = data.accountId ? "adminEmployee" : "partnerEmployee";
+        resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
       }
     }
     if (!data) {
       return next(new AppError("There is no user with email address.", 404));
     }
 
-    const OTP = otpGenerator.generate(4, {
-      lowerCaseAlphabets: false,
-      upperCaseAlphabets: false,
-      specialChars: false,
-    });
-
-    data.latestOtp = OTP;
-    await data.save();
-
-    Event.otpToUsersForgotPasswordEvent({
-      email: data?.email,
-      otp: OTP,
-      name: data?.name,
-    });
-
-    res.status(200).json({
-      status: "success",
-      data: { id: data.id, email: data.email },
-      message: "OTP sent to email!",
+    return setForgotPasswordOtpAndReturnSuccess({
+      record: data,
+      entity: resolvedEntity,
+      res,
     });
   });
 
@@ -252,22 +263,22 @@ const resendOtp = (Model, entity) =>
 const otpVerification = (Model, entity) =>
   catchAsync(async (req, res, next) => {
     const { otp, id, on } = req.body;
+    let resolvedEntity = entity;
 
-    // 2) Check if user exists && password is correct
-    const data = await Model.findOne({
+    let data = await Model.findOne({
       where: { id, deleted: 0 },
       attributes: {
         exclude: [`deleted`, `updatedAt`, `deletedAt`],
       },
     });
 
-    if (!data && (entity == "admin" || entity == "localPartner")) {
+    if (!data && (entity === "admin" || entity === "localPartner")) {
       data = await employee.findOne({
         where: { id, deleted: 0 },
+        include: { model: permission, attributes: ["id", "key"] },
       });
-      console.log("🚀 ~ login ~ data:", data);
       if (data) {
-        entity = data.accountId ? "adminEmployee" : "partnerEmployee";
+        resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
       }
     }
 
@@ -275,22 +286,52 @@ const otpVerification = (Model, entity) =>
       return next(new AppError("User not found", 200));
     }
 
-    if (data.latestOtp == otp) {
-      return res.status(200).json(
-        response({
-          data: {
-            message: "Success",
-            data: { id: id },
-          },
-        }),
+    const context = normalizeVerificationContext(
+      on || data?.verificationContext,
+    );
+    if (!isValidTemporaryBlockOtp({ record: data, otp, context })) {
+      return next(new AppError("Invalid OTP", 200));
+    }
+
+    await clearTemporaryBlock(data);
+
+    if (context === "login") {
+      await REDIS.resetLoginFailedAttempts(resolvedEntity, data.id);
+      await purgeSessionsAndDeviceTokens({
+        entity: resolvedEntity,
+        id: data.id,
+      });
+      if (req.body?.tokenId) {
+        const input = { tokenId: req.body?.tokenId };
+        if (resolvedEntity === "localPartner") input.salesRepId = data?.id;
+        else if (resolvedEntity === "supplier") input.supplierId = data?.id;
+        else if (resolvedEntity === "admin") input.accountId = data?.id;
+        else input.employeeId = data?.id;
+        deviceToken.create(input);
+      }
+      return createSendToken(
+        data,
+        200,
+        req,
+        res,
+        req.body?.tokenId,
+        resolvedEntity,
       );
     }
 
-    return next(new AppError("Invalid OTP", 200));
+    return res.status(200).json(
+      response({
+        data: {
+          message: "Success",
+          data: { id },
+        },
+      }),
+    );
   });
 
 const resetPassword = (Model, entity) =>
   catchAsync(async (req, res, next) => {
+    let resolvedEntity = entity;
     let data = await Model.findOne({
       where: { id: req.body?.id, deleted: 0 },
       attributes: {
@@ -303,7 +344,7 @@ const resetPassword = (Model, entity) =>
       });
       console.log("🚀 ~ login ~ data:", data);
       if (data) {
-        entity = data.accountId ? "adminEmployee" : "partnerEmployee";
+        resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
       }
     }
     // 2) If token has not expired, and there is user, set the new password
@@ -317,7 +358,16 @@ const resetPassword = (Model, entity) =>
     data.password = req.body.password;
     await data.save();
     data.password = undefined;
-    createSendToken(data, 200, req, res, req.params.tokenId, entity);
+    await purgeSessionsAndDeviceTokens({ entity: resolvedEntity, id: data.id });
+    if (req.body?.tokenId) {
+      const input = { tokenId: req.body?.tokenId };
+      if (resolvedEntity === "localPartner") input.salesRepId = data?.id;
+      else if (resolvedEntity === "supplier") input.supplierId = data?.id;
+      else if (resolvedEntity === "admin") input.accountId = data?.id;
+      else input.employeeId = data?.id;
+      deviceToken.create(input);
+    }
+    createSendToken(data, 200, req, res, req.body?.tokenId, resolvedEntity);
   });
 
 // exports.allLogin = login(account);

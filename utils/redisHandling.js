@@ -52,10 +52,41 @@ async function userAllTokens(userId) {
   return tokens;
 }
 
+// Login failed-attempt tracking per account identity (entity + id)
+const LOGIN_FAILED_WINDOW_SEC = 15 * 60;
+const LOGIN_FAILED_MAX_ATTEMPTS = 5;
+
+function loginFailedKey(entity, id) {
+  return `login_failed:${entity}:${id}`;
+}
+
+async function getLoginFailedAttempts(entity, id) {
+  const key = loginFailedKey(entity, id);
+  const val = await redisClient.get(key);
+  return val ? parseInt(val, 10) : 0;
+}
+
+async function incrementLoginFailedAttempts(entity, id) {
+  const key = loginFailedKey(entity, id);
+  const count = await redisClient.incr(key);
+  const ttl = await redisClient.ttl(key);
+  if (ttl === -1) await redisClient.expire(key, LOGIN_FAILED_WINDOW_SEC);
+  return count;
+}
+
+async function resetLoginFailedAttempts(entity, id) {
+  const key = loginFailedKey(entity, id);
+  await redisClient.del(key);
+}
+
 module.exports = {
   storeAccessToken,
   getUserIdFromToken,
   revokeSingleToken,
   revokeAllTokensForUser,
   userAllTokens,
+  getLoginFailedAttempts,
+  incrementLoginFailedAttempts,
+  resetLoginFailedAttempts,
+  LOGIN_FAILED_MAX_ATTEMPTS,
 };

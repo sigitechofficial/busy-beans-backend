@@ -11,6 +11,14 @@ const leadController = require("../controllers/admin/leadController");
 const subscriptionController = require("../controllers/admin/subscriptionController");
 const categoryController = require("../controllers/admin/categoriesController");
 const Authorization = require("../middlewares/protect");
+const {
+  signupRateLimiter,
+  loginRateLimiter,
+  forgotPasswordRateLimiter,
+} = require("../middlewares/loginRateLimit");
+const {
+  setTemporaryBlockContext,
+} = require("../middlewares/temporaryBlockFlow");
 const router = express.Router();
 
 /**
@@ -89,7 +97,7 @@ const router = express.Router();
  *       400:
  *         description: Bad request - validation error
  */
-router.post("/signup", authController.signup);
+router.post("/signup", signupRateLimiter, authController.signup);
 
 /**
  * @swagger
@@ -246,7 +254,12 @@ router.post(
  *       401:
  *         description: Invalid credentials
  */
-router.post("/login", authController.login);
+router.post(
+  "/login",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
+  authController.login,
+);
 
 /**
  * @swagger
@@ -311,7 +324,12 @@ router.post("/otp/verfication", authController.otpVerification);
  *       200:
  *         description: Password reset email sent
  */
-router.post("/forgot-password", authController.forgotPassword);
+router.post(
+  "/forgot-password",
+  forgotPasswordRateLimiter,
+  setTemporaryBlockContext("forgot_password"),
+  authController.forgotPassword,
+);
 
 /**
  * @swagger

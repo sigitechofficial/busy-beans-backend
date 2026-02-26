@@ -29,6 +29,10 @@ const path = require("path");
 const { createDestinationDirectory } = require("../utils/customFunctions");
 const auth = require("../middlewares/protect");
 const { protect } = auth;
+const { loginRateLimiter } = require("../middlewares/loginRateLimit");
+const {
+  setTemporaryBlockContext,
+} = require("../middlewares/temporaryBlockFlow");
 const router = express.Router();
 // LAMDA FUNCTION
 
@@ -201,6 +205,8 @@ router.get(
  */
 router.post(
   "/login",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
   (req, res, next) => {
     req.params.entity = "admin";
     next();
@@ -236,6 +242,8 @@ router.post(
  */
 router.post(
   "/login/sales-rep",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
   (req, res, next) => {
     req.params.entity = "localPartner";
     next();
@@ -271,6 +279,8 @@ router.post(
  */
 router.post(
   "/login/supplier",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
   (req, res, next) => {
     req.params.entity = "supplier";
     next();
@@ -300,7 +310,11 @@ router.post(
  *       200:
  *         description: Password reset email sent
  */
-router.post("/forgot-password", authController.adminForgotPassword);
+router.post(
+  "/forgot-password",
+  setTemporaryBlockContext("forgot_password"),
+  authController.adminForgotPassword,
+);
 
 /**
  * @swagger
@@ -326,6 +340,7 @@ router.post("/forgot-password", authController.adminForgotPassword);
  */
 router.post(
   "/forgot-password/sales-rep",
+  setTemporaryBlockContext("forgot_password"),
   authController.salesRepForgotPassword,
 );
 
@@ -351,7 +366,11 @@ router.post(
  *       200:
  *         description: Password reset email sent
  */
-router.post("/forgot-password/supplier", authController.supplierForgotPassword);
+router.post(
+  "/forgot-password/supplier",
+  setTemporaryBlockContext("forgot_password"),
+  authController.supplierForgotPassword,
+);
 
 /**
  * @swagger
@@ -564,7 +583,7 @@ router.post("/reset-password", authController.adminResetPassword);
  *       200:
  *         description: Password reset successful
  */
-router.post("/reset-password/sales-rep", authController.salesRepResendOtp);
+router.post("/reset-password/sales-rep", authController.salesRepResetPassword);
 
 /**
  * @swagger

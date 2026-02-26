@@ -22,6 +22,16 @@ const Event = require("../events/userAccountRelatedEvents");
 const { response } = require("../../utils/response");
 const bcrypt = require("bcryptjs");
 const Stripe = require("../stripe");
+const {
+  setTemporaryBlockAndSendOtp,
+  setForgotPasswordOtpAndReturnSuccess,
+  purgeSessionsAndDeviceTokens,
+  isTemporaryBlockActive,
+  returnTemporaryBlockResponse,
+  normalizeVerificationContext,
+  isValidTemporaryBlockOtp,
+  clearTemporaryBlock,
+} = require("../../middlewares/temporaryBlockFlow");
 
 const signToken = (data) =>
   jwt.sign(
@@ -131,6 +141,7 @@ exports.signup = catchAsync(async (req, res, next) => {
 
 exports.login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
+  const context = req.tempBlockContext || "login";
 
   // 1) Check if email and password exist
   if (!email || !password) {
@@ -140,24 +151,35 @@ exports.login = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({
     where: { email, deleted: 0 },
   });
-  //   console.log('Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ customer:', customer);
   if (!customer) {
-    return next(new AppError("User Not found!", 200));
+    return next(new AppError("Incorrect email or password", 401));
   } else if (!customer.status) {
     return next(new AppError("User Blocked by Administrator!", 200));
   }
-  console.log("Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ password:", password);
-  console.log(
-    "Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ customer?.password:",
-    customer?.password,
-  );
-  //   const isMatch = password == customer?.password;
-  const isMatch = await bcrypt.compare(password, customer?.password); // password == customer?.password;
-  console.log(
-    "Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ isMatch?.isMatch:",
-    isMatch,
-  );
-  if (!user || !isMatch) {
+
+  if (isTemporaryBlockActive({ record: customer, context })) {
+    return returnTemporaryBlockResponse({
+      record: customer,
+      context,
+      entity: "user",
+      res,
+    });
+  }
+
+  const isMatch = await bcrypt.compare(password, customer?.password);
+  if (!isMatch) {
+    const failed = await REDIS.incrementLoginFailedAttempts(
+      "user",
+      customer.id,
+    );
+    if (failed >= REDIS.LOGIN_FAILED_MAX_ATTEMPTS) {
+      return setTemporaryBlockAndSendOtp({
+        record: customer,
+        context,
+        entity: "user",
+        res,
+      });
+    }
     return next(new AppError("Incorrect email or password", 401));
   }
 
@@ -187,6 +209,7 @@ exports.login = catchAsync(async (req, res, next) => {
     );
   }
 
+  await REDIS.resetLoginFailedAttempts("user", customer.id);
   if (req.body?.tokenId)
     deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
   const customerAddress = await address.findOne({
@@ -195,12 +218,9 @@ exports.login = catchAsync(async (req, res, next) => {
       exclude: [`deleted`, `updatedAt`, `deletedAt`],
     },
   });
-
   const input = JSON.parse(JSON.stringify(customer));
   input.address = customerAddress;
-  // 3) If everything ok, send token to client
-
-  createSendToken(input, 200, req, res, req.body?.tokenId);
+  return createSendToken(input, 200, req, res, req.body?.tokenId);
 });
 
 exports.stripeAchPayment = catchAsync(async (req, res, next) => {
@@ -255,9 +275,35 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
       email: customer?.email,
       name: customer.name,
     });
-  } else if (customer.latestOtp == otp) {
-    customer.verifiedAt = Date.now(); //HAVE TO CHANGE
-    await customer.save();
+    return;
+  } else if (
+    on === "login" ||
+    on === "forgot_password" ||
+    customer?.verificationContext
+  ) {
+    const context = normalizeVerificationContext(
+      on || customer?.verificationContext,
+    );
+    if (!isValidTemporaryBlockOtp({ record: customer, otp, context })) {
+      return next(new AppError("Invalid OTP", 200));
+    }
+    await clearTemporaryBlock(customer);
+    if (context === "login") {
+      await REDIS.resetLoginFailedAttempts("user", customer.id);
+      await purgeSessionsAndDeviceTokens({ entity: "user", id: customer.id });
+      if (req.body?.tokenId) {
+        deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
+      }
+      const customerAddress = await address.findOne({
+        where: { userId: customer?.id },
+        attributes: {
+          exclude: [`deleted`, `updatedAt`, `deletedAt`],
+        },
+      });
+      const input = JSON.parse(JSON.stringify(customer));
+      input.address = customerAddress;
+      return createSendToken(input, 200, req, res, req.body?.tokenId);
+    }
     return res.status(200).json(
       response({
         data: {
@@ -323,6 +369,7 @@ exports.restrictTo =
   };
 
 exports.forgotPassword = catchAsync(async (req, res, next) => {
+  const context = req.tempBlockContext || "forgot_password";
   // 1) Get user based on POSTed email
   const customer = await user.findOne({
     where: { email: req.body.email },
@@ -333,26 +380,10 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   if (!customer) {
     return next(new AppError("There is no user with email address.", 404));
   }
-
-  const OTP = otpGenerator.generate(4, {
-    lowerCaseAlphabets: false,
-    upperCaseAlphabets: false,
-    specialChars: false,
-  });
-
-  customer.latestOtp = OTP;
-  await customer.save();
-
-  Event.otpToUsersForgotPasswordEvent({
-    email: customer?.email,
-    otp: OTP,
-    name: customer?.name,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: customer,
-    message: "OTP sent to email!",
+  return setForgotPasswordOtpAndReturnSuccess({
+    record: customer,
+    entity: "user",
+    res,
   });
 });
 
@@ -416,7 +447,11 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   await customer.save();
 
   customer.password = undefined;
-  createSendToken(customer, 200, req, res);
+  await purgeSessionsAndDeviceTokens({ entity: "user", id: customer.id });
+  if (req.body?.tokenId) {
+    deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
+  }
+  createSendToken(customer, 200, req, res, req.body?.tokenId);
 });
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
