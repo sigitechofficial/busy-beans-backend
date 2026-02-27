@@ -130,6 +130,11 @@ module.exports = (sequelize) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    invoiceEmailSentCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
     localPatnerCommission: {
       type: DataTypes.DECIMAL(20, 2),
       allowNull: true,

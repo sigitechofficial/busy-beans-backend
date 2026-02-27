@@ -220,43 +220,64 @@ const forgotPassword = (Model, entity) =>
 
 const resendOtp = (Model, entity) =>
   catchAsync(async (req, res, next) => {
-    const data = await Model.findOne({
+    let data = await Model.findOne({
       where: { email: req.body.email },
       attributes: {
         exclude: ["updatedAt", "deleted", "deletedAt", "password", "latestOtp"],
       },
     });
-    if (!data && (entity == "admin" || entity == "localPartner")) {
+    let resolvedEntity = entity;
+    if (!data && (entity === "admin" || entity === "localPartner")) {
       data = await employee.findOne({
         where: { email: req.body.email, deleted: 0 },
       });
-      console.log("🚀 ~ login ~ data:", data);
       if (data) {
-        entity = data.accountId ? "adminEmployee" : "partnerEmployee";
+        resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
       }
     }
     if (!data) {
       return next(new AppError("There is no user with email address.", 404));
     }
 
-    const OTP = otpGenerator.generate(4, {
-      lowerCaseAlphabets: false,
-      upperCaseAlphabets: false,
-      specialChars: false,
-    });
+    // Resend should refresh active verification OTP/expiry for current flow contexts.
+    const requestedContext = normalizeVerificationContext(
+      req.body?.on || req.params?.type || data?.verificationContext,
+    );
 
-    await Model.update({ latestOtp: OTP }, { where: { id: data?.id } });
+    if (requestedContext === "signup") {
+      const OTP = otpGenerator.generate(4, {
+        lowerCaseAlphabets: false,
+        upperCaseAlphabets: false,
+        specialChars: false,
+      });
 
-    Event.otpToUsersForgotPasswordEvent({
-      email: data?.email,
-      otp: OTP,
-      name: data?.name,
-    });
+      data.latestOtp = OTP;
+      await data.save();
+      Event.otpToUsersEvent({
+        email: data?.email,
+        name: data?.name || "",
+        otp: OTP,
+      });
+      return res.status(200).json({
+        status: "success",
+        data: { id: data?.id, email: data.email },
+        message: "OTP sent to email!",
+      });
+    }
 
-    res.status(200).json({
-      status: "success",
-      data: { id: data?.id, email: data.email },
-      message: "OTP sent to email!",
+    if (requestedContext === "login") {
+      return setTemporaryBlockAndSendOtp({
+        record: data,
+        context: "login",
+        entity: resolvedEntity,
+        res,
+      });
+    }
+
+    return setForgotPasswordOtpAndReturnSuccess({
+      record: data,
+      entity: resolvedEntity,
+      res,
     });
   });
 

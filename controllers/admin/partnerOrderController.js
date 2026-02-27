@@ -705,6 +705,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
       "paymentLinkOpenCount",
       "paymentLinkFirstOpenedAt",
       "paymentLinkLastOpenedAt",
+      "invoiceEmailSentCount",
     ],
   });
 

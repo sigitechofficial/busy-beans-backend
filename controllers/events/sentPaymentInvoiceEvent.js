@@ -2,6 +2,7 @@ const sentInvoiceEmail = require("../../helper/sentInvoiceEmail");
 const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
+const { order, partnerOrder } = require("../../models");
 
 exports.sentPaymentInvoiceEvent = async ({
   orderId,
@@ -37,6 +38,8 @@ exports.sentPaymentInvoiceEvent = async ({
     to = [...new Set(to)];
     console.log("🚀 ~ to:", JSON.stringify(to));
     await sentInvoiceEmail({ email: to, data: details });
+    const model = orderType === "local-partner" ? partnerOrder : order;
+    await model.increment({ invoiceEmailSentCount: 1 }, { where: { id: orderId } });
     console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
     return true;
   } catch (error) {

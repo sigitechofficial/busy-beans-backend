@@ -1217,6 +1217,7 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
       "paymentLinkOpenCount",
       "paymentLinkFirstOpenedAt",
       "paymentLinkLastOpenedAt",
+      "invoiceEmailSentCount",
       "createdBy",
       "on",
       "createdAt",

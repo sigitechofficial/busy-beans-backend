@@ -399,31 +399,43 @@ exports.resendOtp = catchAsync(async (req, res, next) => {
     return next(new AppError("There is no user with email address.", 404));
   }
 
-  const OTP = otpGenerator.generate(4, {
-    lowerCaseAlphabets: false,
-    upperCaseAlphabets: false,
-    specialChars: false,
-  });
+  const requestedContext = normalizeVerificationContext(
+    req.body?.on || req.params?.type || customer?.verificationContext,
+  );
 
-  await user.update({ latestOtp: OTP }, { where: { id: customer?.id } });
-
-  if (req.params.type == "signup") {
+  if (requestedContext === "signup") {
+    const OTP = otpGenerator.generate(4, {
+      lowerCaseAlphabets: false,
+      upperCaseAlphabets: false,
+      specialChars: false,
+    });
+    customer.latestOtp = OTP;
+    await customer.save();
     Event.otpToUsersEvent({
       email: customer?.email,
       name: customer.name,
       otp: OTP,
     });
-  } else {
-    Event.otpToUsersForgotPasswordEvent({
-      email: customer?.email,
-      otp: OTP,
-      name: customer?.name,
+    return res.status(200).json({
+      status: "success",
+      data: { id: customer?.id, email: customer.email },
+      message: "OTP sent to email!",
     });
   }
-  res.status(200).json({
-    status: "success",
-    data: { id: customer?.id, email: customer.email },
-    message: "OTP sent to email!",
+
+  if (requestedContext === "login") {
+    return setTemporaryBlockAndSendOtp({
+      record: customer,
+      context: "login",
+      entity: "user",
+      res,
+    });
+  }
+
+  return setForgotPasswordOtpAndReturnSuccess({
+    record: customer,
+    entity: "user",
+    res,
   });
 });
 
