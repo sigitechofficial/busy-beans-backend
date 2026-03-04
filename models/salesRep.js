@@ -166,7 +166,7 @@ module.exports = (sequelize) => {
           name: "email_index",
         },
       ],
-    }
+    },
   );
 
   const SALT_ROUNDS = 12;

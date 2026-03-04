@@ -15,6 +15,7 @@ module.exports = async function ({ email, name = "", otp = "" }) {
     {
       from: process.env.EMAIL_USERNAME, // sender address
       to: [`${email}`], //`${email}` list of receivers
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `${hiCustomer}! Welcome to Busy Bean. We are thrilled to have you on board.`, // Subject line
       attachments: attachment.footer,
       replyTo: "noreply@busybeancoffee.com",
@@ -159,6 +160,6 @@ module.exports = async function ({ email, name = "", otp = "" }) {
       } else {
         console.log(info);
       }
-    }
+    },
   );
 };

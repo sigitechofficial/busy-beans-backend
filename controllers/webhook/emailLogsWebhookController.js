@@ -14,19 +14,36 @@
 const { Op } = require("sequelize");
 const { emailLog } = require("../../models");
 
+function toValidDate(input) {
+  if (!input) return null;
+  const d = new Date(input);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /**
- * Parse event time from event_message item (e.g. email_info.processed_time or event_data.details[0].time)
+ * Prefer actual event timestamp for open/click/bounce and only fallback to processed_time.
  */
 function getEventTime(msg) {
-  if (msg?.email_info?.processed_time)
-    return new Date(msg.email_info.processed_time);
-  const details = msg?.event_data?.[0]?.details?.[0];
-  if (details?.time) return new Date(details.time);
+  const eventData = Array.isArray(msg?.event_data)
+    ? msg.event_data[0]
+    : msg?.event_data;
+  const details = Array.isArray(eventData?.details)
+    ? eventData.details[0]
+    : eventData?.details;
+
+  const detailTime = toValidDate(details?.time);
+  if (detailTime) return detailTime;
+
+  const processedTime = toValidDate(msg?.email_info?.processed_time);
+  if (processedTime) return processedTime;
+
   return new Date();
 }
 
 function normalizeEventName(eventName) {
-  return String(eventName || "").toLowerCase().trim();
+  return String(eventName || "")
+    .toLowerCase()
+    .trim();
 }
 
 function buildRequestIdCandidates(msg) {
@@ -87,7 +104,9 @@ exports.handleEmailLogsWebhook = async (req, res) => {
 
     if (isVerificationPing) {
       if (process.env.NODE_ENV !== "production") {
-        console.log(`[emailLogsWebhook][${traceId}] Verification ping received`);
+        console.log(
+          `[emailLogsWebhook][${traceId}] Verification ping received`,
+        );
       }
       return res.status(200).type("text/plain").send("OK");
     }
@@ -98,6 +117,7 @@ exports.handleEmailLogsWebhook = async (req, res) => {
     let updatedSoftBounce = 0;
     let skippedNoRequestId = 0;
     let skippedNoMatch = 0;
+    let skippedLikelyPrefetch = 0;
 
     const normalizedEvent = normalizeEventName(eventName);
 
@@ -134,7 +154,36 @@ exports.handleEmailLogsWebhook = async (req, res) => {
       }
 
       const eventTime = getEventTime(msg);
-      if (normalizedEvent === "opened" || normalizedEvent === "email_open") {
+      if (
+        normalizedEvent === "opened" ||
+        normalizedEvent === "open" ||
+        normalizedEvent === "email_open" ||
+        normalizedEvent === "email_opened"
+      ) {
+        // Count all opens. Skipping is disabled because supplier_new_order uses openCount=-1 offset.
+        // Keep env support; default 0 means no skip.
+        const prefetchWindowSec = Number(
+          process.env.EMAIL_OPEN_PREFETCH_WINDOW_SEC || 0,
+        );
+        const sentAtMs = log?.sentAt ? new Date(log.sentAt).getTime() : NaN;
+        const eventMs = eventTime.getTime();
+        const isLikelyPrefetch =
+          prefetchWindowSec > 0 &&
+          Number.isFinite(sentAtMs) &&
+          Number.isFinite(eventMs) &&
+          log.firstOpenedAt == null &&
+          eventMs >= sentAtMs &&
+          eventMs - sentAtMs <= prefetchWindowSec * 1000;
+        if (isLikelyPrefetch) {
+          skippedLikelyPrefetch += 1;
+          if (process.env.NODE_ENV !== "production") {
+            console.log(
+              `[emailLogsWebhook][${traceId}] msg#${i + 1}: OPEN skipped as likely prefetch (event ${Math.round((eventMs - sentAtMs) / 1000)}s after sentAt, window=${prefetchWindowSec}s)`,
+            );
+          }
+          continue;
+        }
+
         const nextOpenCount = (log.openCount || 0) + 1;
         await emailLog.update(
           {
@@ -152,7 +201,9 @@ exports.handleEmailLogsWebhook = async (req, res) => {
         updatedOpen += 1;
       } else if (
         normalizedEvent === "clicked" ||
-        normalizedEvent === "email_click"
+        normalizedEvent === "click" ||
+        normalizedEvent === "email_click" ||
+        normalizedEvent === "email_clicked"
       ) {
         const nextClickCount = (log.clickCount || 0) + 1;
         await emailLog.update(
@@ -212,6 +263,7 @@ exports.handleEmailLogsWebhook = async (req, res) => {
             updatedSoftBounce,
             skippedNoRequestId,
             skippedNoMatch,
+            skippedLikelyPrefetch,
           },
           null,
           2,

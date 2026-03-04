@@ -128,7 +128,6 @@ exports.signup = catchAsync(async (req, res, next) => {
           data: {
             id: input?.id,
             email: input?.email,
-            email: newUser?.password,
           },
         },
       }),

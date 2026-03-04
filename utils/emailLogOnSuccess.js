@@ -24,6 +24,7 @@ async function logEmailOutcome({
   zeptoRequestId = null,
 }) {
   try {
+    const initialOpenCount = emailType === "supplier_new_order" ? -1 : 0;
     const recipientsStr = Array.isArray(recipients)
       ? recipients.join(", ")
       : String(recipients || "");
@@ -38,6 +39,9 @@ async function logEmailOutcome({
       errorMessage: errorMessage || null,
       metadata: metadata ? JSON.stringify(metadata) : null,
       zeptoRequestId: zeptoRequestId || null,
+      // Supplier new-order is noisy due to scanner/prefetch opens; start from -1 to offset that.
+      openCount: initialOpenCount,
+      clickCount: 0,
     });
   } catch (err) {
     console.error("[emailLogOutcome] Failed to log email:", err.message);

@@ -8,6 +8,7 @@ let Footer = require("./footer");
 const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
 const generateFooterHtml = require("./footerLocalpatner");
 const { emailDateFormate } = require("../utils/emailDateFormate");
+const { header } = require("./header");
 
 module.exports = async function ({ email, data }) {
   let footer = await Footer();
@@ -114,13 +115,7 @@ module.exports = async function ({ email, data }) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-          <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
+          ${header}
         </td>
       </tr>
       <tr>
