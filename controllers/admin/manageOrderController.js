@@ -33,6 +33,9 @@ const { response } = require("../../utils/response");
 const {
   calculateAndSaveEmployeeCommission,
 } = require("../../utils/employeeCommissionUtils");
+const {
+  calculateAndPayoutDirectPartnerEmployeeCommission,
+} = require("../../utils/directPartnerEmployeePayoutUtils");
 
 const {
   dataForEmailAndNotifications,
@@ -510,15 +513,32 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
     where: { id: orderId },
   });
 
-  // Process employee commission if this is a customer order (not local-partner)
-  if (orderType !== "local-partner" && !orderData?.salesRepId) {
+  // Process employee payout branch if this is a customer order (not local-partner)
+  if (orderType !== "local-partner") {
     try {
-      // Process employee commission using utility function (same as orderJourneyComplete)
-      await calculateAndSaveEmployeeCommission({ orderId: orderId });
+      if (!orderData?.salesRepId) {
+        // Admin flow (existing)
+        await calculateAndSaveEmployeeCommission({
+          orderId: orderId,
+          employeeOf: "admin",
+        });
+      } else {
+        const partner = await salesRep.findOne({
+          where: { id: orderData.salesRepId },
+          attributes: ["id", "partnerType"],
+        });
+
+        if (partner?.partnerType === "direct-partner") {
+          await calculateAndPayoutDirectPartnerEmployeeCommission({
+            orderId: orderId,
+            triggerSource: "confirm-payment",
+          });
+        }
+      }
     } catch (error) {
       // Log error but don't fail the payment confirmation
       console.error(
-        "❌ Error processing employee commission in confirmPaymentForInvoiceIntent:",
+        "❌ Error processing employee payout in confirmPaymentForInvoiceIntent:",
         error.message,
       );
     }
@@ -1450,10 +1470,27 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       });
       if (!isPartnerOrder && orderId) {
         try {
-          await calculateAndSaveEmployeeCommission({ orderId: orderId });
+          if (!doc?.salesRepId) {
+            await calculateAndSaveEmployeeCommission({
+              orderId: orderId,
+              employeeOf: "admin",
+            });
+          } else {
+            const partner = await salesRep.findOne({
+              where: { id: doc.salesRepId },
+              attributes: ["id", "partnerType"],
+            });
+
+            if (partner?.partnerType === "direct-partner") {
+              await calculateAndPayoutDirectPartnerEmployeeCommission({
+                orderId: orderId,
+                triggerSource: "order-journey-complete",
+              });
+            }
+          }
         } catch (error) {
           console.error(
-            "❌ Error processing employee commission in orderJourneryComplete:",
+            "❌ Error processing employee payout in orderJourneryComplete:",
             error?.message || error,
           );
         }
@@ -1702,6 +1739,12 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
           `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
         ),
         "stripeCustomerId",
+      ],
+      [
+        literal(
+          `(SELECT users.stripeCustomerIdForPartner FROM users WHERE users.id = order.userId LIMIT 1)`,
+        ),
+        "stripeCustomerIdForPartner",
       ],
       [
         literal(
@@ -2020,6 +2063,8 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       localPatnerCommission: totalLocalPatnerCommission,
       paymentMethodId: input?.order?.paymentCardId,
       stripeCustomer: placedOrder?.stripeCustomerId,
+      connectedCustomerForPartner: placedOrder?.stripeCustomerIdForPartner,
+      partnerType: placedOrder?.partnerType,
       metadata: {
         orderId: placedOrder.id,
         invoiceNumber: placedOrder.invoiceNumber,
@@ -2034,19 +2079,26 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
         orderId: placedOrder?.id,
         orderType: "customer",
       });
-      // Only process employee commission if order has no local partner (salesRepId)
-      if (!placedOrder?.salesRepId) {
-        try {
+      try {
+        // Admin payout branch
+        if (!placedOrder?.salesRepId) {
           await calculateAndSaveEmployeeCommission({
             orderId: placedOrder?.id,
+            employeeOf: "admin",
           });
-        } catch (error) {
-          // Log error but don't disrupt the overall API flow
-          console.error(
-            "❌ Error processing employee commission in payment capture:",
-            error.message,
-          );
+        } else if (placedOrder?.partnerType === "direct-partner") {
+          // Direct-partner payout branch
+          await calculateAndPayoutDirectPartnerEmployeeCommission({
+            orderId: placedOrder?.id,
+            triggerSource: "order-update-payment-capture",
+          });
         }
+      } catch (error) {
+        // Log error but don't disrupt the overall API flow
+        console.error(
+          "❌ Error processing employee payout in payment capture:",
+          error.message,
+        );
       }
       return res.status(200).json({
         status: "success",

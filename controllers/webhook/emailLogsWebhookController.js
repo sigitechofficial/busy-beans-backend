@@ -203,7 +203,9 @@ exports.handleEmailLogsWebhook = async (req, res) => {
         normalizedEvent === "clicked" ||
         normalizedEvent === "click" ||
         normalizedEvent === "email_click" ||
-        normalizedEvent === "email_clicked"
+        normalizedEvent === "email_clicked" ||
+        normalizedEvent === "email_link_click" ||
+        normalizedEvent === "link_click"
       ) {
         const nextClickCount = (log.clickCount || 0) + 1;
         await emailLog.update(

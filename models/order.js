@@ -243,6 +243,10 @@ module.exports = (sequelize) => {
         key: "id",
       },
     },
+    employeeOf: {
+      type: DataTypes.ENUM("admin", "direct-partner"),
+      allowNull: true,
+    },
     AppliedEmployeeCommisionPercentage: {
       type: DataTypes.DECIMAL(5, 2),
       allowNull: true,
@@ -253,6 +257,49 @@ module.exports = (sequelize) => {
       defaultValue: 0,
     },
     employeeTransferId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutStatus: {
+      type: DataTypes.ENUM(
+        "pending",
+        "in_transit",
+        "paid",
+        "failed",
+        "canceled",
+      ),
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutFailureCode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutFailureMessage: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutCreatedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutPaidAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutAttemptCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    directPartnerEmployeePayoutLastAttemptAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutLastTriggerSource: {
       type: DataTypes.STRING,
       allowNull: true,
     },

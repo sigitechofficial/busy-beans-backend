@@ -1068,6 +1068,122 @@ router.get(
 
 /**
  * @swagger
+ * /api/v1/admin/employee/{employeeId}/direct-partner-bank-account:
+ *   post:
+ *     summary: Attach employee bank account to direct-partner connected account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               externalAccountToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Employee bank account attached
+ */
+router.post(
+  "/employee/:employeeId/direct-partner-bank-account",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.attachDirectPartnerEmployeeBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/direct-partner-bank-account:
+ *   get:
+ *     summary: Get employee bank account linked to direct-partner connected account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Employee bank account details
+ */
+router.get(
+  "/employee/:employeeId/direct-partner-bank-account",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.getDirectPartnerEmployeeBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/direct-partner-bank-account:
+ *   delete:
+ *     summary: Remove employee bank account from direct-partner connected account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Employee bank account removed
+ */
+router.delete(
+  "/employee/:employeeId/direct-partner-bank-account",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.deleteDirectPartnerEmployeeBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/direct-partner-employee-payout/retry/{orderId}:
+ *   post:
+ *     summary: Retry direct-partner employee payout for an order
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Retry payout created
+ */
+router.post(
+  "/direct-partner-employee-payout/retry/:orderId",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.retryDirectPartnerEmployeePayout,
+);
+
+router.get(
+  "/direct-partner-employee-payout/orders",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.getDirectPartnerEmployeePayoutOrders,
+);
+
+/**
+ * @swagger
  * /api/v1/admin/employee/{employeeId}/commission:
  *   patch:
  *     summary: Update employee commission percentage

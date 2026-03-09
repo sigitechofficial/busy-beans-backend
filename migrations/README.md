@@ -43,6 +43,11 @@ The migration system automatically:
 ## Migration Files
 
 - `001_add_employee_commission_fields.sql` - Adds employee commission fields to employees and orders tables
+- `002_add_employee_transfer_id.sql` - Adds employee transfer ID field to orders table
+- `003_direct_partner_employee_payout_phase1.sql` - Non-breaking phase 1 fields for direct-partner employee payout tracking
+- `004_add_order_employee_of.sql` - Adds employeeOf context field to orders (`admin` or `direct-partner`)
+- `005_direct_partner_employee_payout_retry_metadata.sql` - Adds payout attempt metadata for deterministic retries and auditability
+- `006_backfill_direct_partner_payout_columns.sql` - Backfills direct-partner payout columns/indexes when prior commented SQL files were marked run without applying ALTER statements
 
 ## Environment
 

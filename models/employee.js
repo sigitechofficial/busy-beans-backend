@@ -54,6 +54,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      directPartnerExternalAccountId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       status: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
@@ -97,7 +101,7 @@ module.exports = (sequelize) => {
       tableName: "employees",
       paranoid: true,
       timestamps: true,
-    }
+    },
   );
 
   const SALT_ROUNDS = 12;

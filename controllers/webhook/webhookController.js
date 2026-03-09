@@ -21,6 +21,9 @@ const { Op, literal } = require("sequelize");
 const {
   calculateAndTransferEmployeeCommissionWithData,
 } = require("../../utils/employeeCommissionUtils");
+const {
+  calculateAndPayoutDirectPartnerEmployeeCommission,
+} = require("../../utils/directPartnerEmployeePayoutUtils");
 
 const endpointSecret = `${STRIPE_WEBHOOK_SECERET}`;
 console.log("🚀 ~ endpointSecret:", endpointSecret);
@@ -78,6 +81,13 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
       break;
     case "payment_intent.succeeded": //not needed yet  "_" add underscore to prevent tranfers for now
       await onPaymentIntentSucceeded(event);
+      break;
+    case "payout.created":
+    case "payout.updated":
+    case "payout.paid":
+    case "payout.failed":
+    case "payout.canceled":
+      await handleDirectPartnerEmployeePayoutLifecycle(event);
       break;
     default:
       console.log(`Unhandled event type ${event.type}`);
@@ -156,6 +166,13 @@ const invoicePaid = async (event) => {
           "id",
           "subTotal",
           "invoiceNumber",
+          "salesRepId",
+          [
+            literal(
+              `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
+            ),
+            "partnerType",
+          ],
           "employeeTransferId",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
@@ -186,29 +203,46 @@ const invoicePaid = async (event) => {
       console.log("🚀 ~ invoicePaid ~ orderPlaced:", orderPlaced);
 
       // Initialize employee commission data
-      let employeeCommissionData = {
-        employeeId: null,
-        AppliedEmployeeCommisionPercentage: null,
-        employeeCommisionAmount: 0,
-      };
+      let employeeCommissionData = {};
 
-      // Process employee commission using utility function
-      const commissionResult =
-        await calculateAndTransferEmployeeCommissionWithData({
-          orderData: result,
-          invoiceId: invoice.id,
-          paymentIntentId: invoice.payment_intent,
-        });
+      // Process payout branch by order ownership context
+      const isDirectPartnerOrder =
+        !!orderPlaced?.salesRepId && orderPlaced?.partnerType === "direct-partner";
 
-      // If commission was processed, update employeeCommissionData
-      if (commissionResult && commissionResult.success) {
-        employeeCommissionData = {
-          employeeId: commissionResult.employeeId,
-          AppliedEmployeeCommisionPercentage:
-            commissionResult.commissionPercentage,
-          employeeCommisionAmount: commissionResult.employeeCommissionAmount,
-          employeeTransferId: commissionResult.transferId || null,
-        };
+      if (isDirectPartnerOrder) {
+        const payoutResult =
+          await calculateAndPayoutDirectPartnerEmployeeCommission({
+            orderId: orderPlaced?.id,
+            triggerSource: "webhook-invoice-paid",
+          });
+
+        if (payoutResult && payoutResult.success) {
+          employeeCommissionData = {
+            employeeId: payoutResult.employeeId,
+            employeeOf: "direct-partner",
+            AppliedEmployeeCommisionPercentage: payoutResult.commissionPercentage,
+            employeeCommisionAmount: payoutResult.commissionAmount,
+          };
+        }
+      } else {
+        const commissionResult =
+          await calculateAndTransferEmployeeCommissionWithData({
+            orderData: result,
+            invoiceId: invoice.id,
+            paymentIntentId: invoice.payment_intent,
+            employeeOf: "admin",
+          });
+
+        if (commissionResult && commissionResult.success) {
+          employeeCommissionData = {
+            employeeId: commissionResult.employeeId,
+            employeeOf: "admin",
+            AppliedEmployeeCommisionPercentage:
+              commissionResult.commissionPercentage,
+            employeeCommisionAmount: commissionResult.employeeCommissionAmount,
+            employeeTransferId: commissionResult.transferId || null,
+          };
+        }
       }
 
       // Update order with all data including employee commission
@@ -488,5 +522,85 @@ const paymentMethodAttch = async (event) => {
   } catch (error) {
     console.error("Error handling payment_method.attached:", error);
     return false;
+  }
+};
+
+const handleDirectPartnerEmployeePayoutLifecycle = async (event) => {
+  try {
+    const payout = event?.data?.object;
+    const payoutId = payout?.id;
+    const connectedAccountId = event?.account || null;
+
+    if (!payoutId) return;
+    if (!connectedAccountId) {
+      console.log(
+        "⚠️ Received payout webhook without connected account context. Check Stripe Connect webhook configuration.",
+      );
+      return;
+    }
+
+    const orderData = await order.findOne({
+      where: {
+        directPartnerEmployeePayoutId: payoutId,
+        employeeOf: "direct-partner",
+      },
+      attributes: ["id", "salesRepId", "directPartnerEmployeePayoutId"],
+    });
+
+    if (!orderData) return;
+
+    const orderRow = JSON.parse(JSON.stringify(orderData));
+
+    // Safety check: make sure webhook account matches order's direct partner account.
+    if (connectedAccountId && orderRow?.salesRepId) {
+      const partner = await salesRep.findOne({
+        where: { id: orderRow.salesRepId },
+        attributes: ["id", "connectAccountId", "partnerType"],
+      });
+
+      if (
+        !partner ||
+        partner.partnerType !== "direct-partner" ||
+        partner.connectAccountId !== connectedAccountId
+      ) {
+        console.log(
+          `⚠️ Payout webhook account mismatch for order ${orderRow.id}. Ignoring event.`,
+        );
+        return;
+      }
+    }
+
+    const statusMap = {
+      pending: "pending",
+      in_transit: "in_transit",
+      paid: "paid",
+      failed: "failed",
+      canceled: "canceled",
+    };
+
+    const normalizedStatus =
+      statusMap[payout?.status] || statusMap[payout?.destination_status] || null;
+
+    const updateData = {
+      directPartnerEmployeePayoutStatus: normalizedStatus,
+      directPartnerEmployeePayoutFailureCode: payout?.failure_code || null,
+      directPartnerEmployeePayoutFailureMessage: payout?.failure_message || null,
+      directPartnerEmployeePayoutCreatedAt: payout?.created
+        ? new Date(payout.created * 1000)
+        : null,
+      directPartnerEmployeePayoutPaidAt:
+        normalizedStatus === "paid" && payout?.arrival_date
+          ? new Date(payout.arrival_date * 1000)
+          : null,
+      directPartnerEmployeePayoutLastAttemptAt: new Date(),
+      directPartnerEmployeePayoutLastTriggerSource: "webhook",
+    };
+
+    await order.update(updateData, { where: { id: orderRow.id } });
+  } catch (error) {
+    console.error(
+      "❌ Error handling direct-partner payout lifecycle webhook:",
+      error?.message || error,
+    );
   }
 };

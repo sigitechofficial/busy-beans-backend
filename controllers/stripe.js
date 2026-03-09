@@ -170,6 +170,8 @@ async function createPaymentIntent({
   hasLocalPatner,
   paymentMethodId = null,
   stripeCustomer = null,
+  connectedCustomerForPartner = null,
+  partnerType = null,
   metadata = null,
 }) {
   try {
@@ -189,8 +191,76 @@ async function createPaymentIntent({
         hasLocalPatner,
         paymentMethodId,
         stripeCustomer,
+        connectedCustomerForPartner,
+        partnerType,
       },
     );
+
+    // Direct-partner saved-card flow:
+    // charge is created on connected account (not destination charge from platform).
+    if (paymentMethodId && partnerType === "direct-partner") {
+      if (!localPartnerAccountId) {
+        return {
+          status: false,
+          message:
+            "Connect account id is required for direct-partner payment capture.",
+        };
+      }
+
+      const customerOnConnectedAccount =
+        connectedCustomerForPartner || stripeCustomer;
+
+      if (!customerOnConnectedAccount) {
+        return {
+          status: false,
+          message:
+            "Connected account customer is required for direct-partner payment capture.",
+        };
+      }
+
+      const directInput = {
+        amount: convertToCents(adminReceivableAmount),
+        currency: "usd",
+        customer: customerOnConnectedAccount,
+        payment_method: paymentMethodId,
+        confirm: true,
+        off_session: true,
+        capture_method: "automatic",
+        description: `Payment captured for invoice ${metadata?.invoiceNumber || ""} using card on file.`,
+        metadata: {
+          platform: "Busy Beans Coffee inc.",
+          type: "saved-card-direct-partner",
+          ...metadata,
+        },
+      };
+
+      console.log("🚀 ~ createPaymentIntent ~ directInput:", directInput);
+
+      const directPaymentIntent = await stripe.paymentIntents.create(
+        directInput,
+        {
+          stripeAccount: localPartnerAccountId,
+        },
+      );
+
+      return {
+        status: true,
+        hasLocalPatner,
+        data: {
+          proportionalStripeFee: 0,
+          localPatnerCommission: localPatnerCommission || 0,
+          adminReceivableAmount: 0,
+          adminReceivableStatus: false,
+          paymentStatus: "done",
+          invoicePaidDate: new Date(),
+          pulloutDate: Date.now(),
+          paymentMethod: "card",
+          paymentMethodId: paymentMethodId,
+          paymentIntentId: directPaymentIntent?.id,
+        },
+      };
+    }
+
     const input = {
       amount: convertToCents(adminReceivableAmount),
       currency: "usd",
@@ -1402,12 +1472,142 @@ async function deleteConnectAccount(connectAccountId) {
     throw new AppError(`${error.message} `, 200);
   }
 }
+
+/**
+ * Attach an external bank account token to a connected account (for payouts).
+ */
+async function attachExternalBankAccountToConnectedAccount({
+  accountId,
+  externalAccountToken,
+}) {
+  try {
+    if (!accountId) throw new Error("Connected account id is required.");
+    if (!externalAccountToken)
+      throw new Error("External account token is required.");
+
+    const bankAccount = await stripe.accounts.createExternalAccount(accountId, {
+      external_account: externalAccountToken,
+    });
+
+    return bankAccount;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Retrieve a specific external bank account from a connected account.
+ */
+async function retrieveExternalBankAccountFromConnectedAccount({
+  accountId,
+  externalAccountId,
+}) {
+  try {
+    if (!accountId) throw new Error("Connected account id is required.");
+    if (!externalAccountId) throw new Error("External account id is required.");
+
+    const bankAccount = await stripe.accounts.retrieveExternalAccount(
+      accountId,
+      externalAccountId,
+    );
+    return bankAccount;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Delete an external bank account from a connected account.
+ */
+async function deleteExternalBankAccountFromConnectedAccount({
+  accountId,
+  externalAccountId,
+}) {
+  try {
+    if (!accountId) throw new Error("Connected account id is required.");
+    if (!externalAccountId) throw new Error("External account id is required.");
+
+    const deleted = await stripe.accounts.deleteExternalAccount(
+      accountId,
+      externalAccountId,
+    );
+    return deleted;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Create payout from connected account balance to an external account.
+ */
+async function createConnectedAccountPayout({
+  connectedAccountId,
+  amount,
+  destinationExternalAccountId,
+  currency = "usd",
+  metadata = {},
+  idempotencyKey = null,
+}) {
+  try {
+    if (!connectedAccountId)
+      throw new Error("Connected account id is required.");
+    if (!amount || Number(amount) <= 0)
+      throw new Error("Valid amount is required.");
+    if (!destinationExternalAccountId) {
+      throw new Error("Destination external account id is required.");
+    }
+
+    const requestOptions = { stripeAccount: connectedAccountId };
+    if (idempotencyKey) requestOptions.idempotencyKey = idempotencyKey;
+
+    const payout = await stripe.payouts.create(
+      {
+        amount: convertToCents(Number(amount)),
+        currency,
+        destination: destinationExternalAccountId,
+        metadata,
+      },
+      requestOptions,
+    );
+
+    return payout;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Retrieve payout details from a connected account.
+ */
+async function retrieveConnectedAccountPayout({
+  connectedAccountId,
+  payoutId,
+}) {
+  try {
+    if (!connectedAccountId)
+      throw new Error("Connected account id is required.");
+    if (!payoutId) throw new Error("Payout id is required.");
+
+    const payout = await stripe.payouts.retrieve(payoutId, {
+      stripeAccount: connectedAccountId,
+    });
+
+    return payout;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
 module.exports = {
   deleteConnectAccount,
+  deleteExternalBankAccountFromConnectedAccount,
   blockCheckoutSession,
   cards,
   cardsOnConnectedAccount,
+  createConnectedAccountPayout,
+  retrieveExternalBankAccountFromConnectedAccount,
+  retrieveConnectedAccountPayout,
   checkCheckoutSessionStatus,
+  attachExternalBankAccountToConnectedAccount,
   pullAmountPaymentIntentFromBankAccount,
   attachBankAccountPaymentMethod,
   createStripeLoginLink,
