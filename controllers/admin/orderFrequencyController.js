@@ -455,7 +455,10 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         element.wholesalePrice = 0;
       } else {
         element.salerCommission =
-          parseFloat(element.price) - parseFloat(element.wholesalePrice || 0);
+          input?.order?.type === "direct-invoice"
+            ? parseFloat(element.price)
+            : parseFloat(element.price) -
+              parseFloat(element.wholesalePrice || 0);
       }
     } else {
       element.wholesalePrice = 0;

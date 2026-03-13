@@ -596,7 +596,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
       condition[Op.and] = [
         literal(
-          `(order.salesRepId IS NULL OR (SELECT partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1) != 'direct-partner')`,
+          `(order.salesRepId IS NULL OR ((SELECT partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1) != 'direct-partner' AND NOT ((SELECT partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1) = 'dropship-partner' AND order.type = 'direct-invoice')))`,
         ),
       ];
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
@@ -1284,6 +1284,55 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.invoiceTracking = catchAsync(async (req, res, next) => {
+  const { orderId, orderType } = req.params;
+
+  if (!orderId) {
+    return next(new AppError("Order ID is required", 400));
+  }
+
+  const model =
+    orderType === "customer-order"
+      ? order
+      : orderType === "partner-order"
+        ? partnerOrder
+        : null;
+
+  if (!model) {
+    return next(
+      new AppError(
+        "Invalid orderType. Use 'customer-order' or 'partner-order'.",
+        400,
+      ),
+    );
+  }
+
+  const doc = await model.findOne({
+    where: { id: orderId },
+    attributes: [
+      "id",
+      "paymentLinkOpenCount",
+      "paymentLinkFirstOpenedAt",
+      "paymentLinkLastOpenedAt",
+      "invoiceEmailSentCount",
+      "invoiceDate",
+      "invoiceReminder",
+      "invoicePaidDate",
+    ],
+  });
+
+  if (!doc) {
+    return next(new AppError("Order not found", 404));
+  }
+
+  return res.status(200).json({
+    status: "success",
+    data: {
+      order: doc,
+    },
+  });
+});
+
 //*
 //! dont need this now
 // if(req.body?.orderData?.statusId == 4)processTransferToLocalPartner({orderId:orderId})
@@ -1302,6 +1351,7 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     qry.raw = true;
     qry.attributes = [
       "id",
+      "type",
       "totalBill",
       "invoiceNumber",
       "statusId",
@@ -1423,11 +1473,17 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       req.body.orderData.supplierId = 17;
     }
     let manualPaymentEmail = false;
-    if (!isPartnerOrder && req.body?.orderData?.paymentStatus == "done") {
+    if (req.body?.orderData?.paymentStatus == "done") {
       console.log("🚀 ~ doc.doc :", JSON.parse(JSON.stringify(doc)));
       console.log("🚀 ~ quickBookInvoiceId:", doc.quickBooksInvoiceId);
       console.log("🚀 ~ doc.quickBooksPaymentId:", doc.quickBooksPaymentId);
-      if (doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId) {
+      const shouldSyncPaidQbo =
+        !isPartnerOrder || doc?.type === "direct-invoice";
+      if (
+        shouldSyncPaidQbo &&
+        doc?.quickBooksInvoiceId &&
+        !doc?.quickBooksPaymentId
+      ) {
         console.log(
           "🚀 ~ doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId:",
           doc?.quickBooksInvoiceId && !doc?.quickBooksPaymentId,
@@ -1443,16 +1499,18 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
           orderType: isPartnerOrder ? "local-partner" : "customer",
         });
         console.log("🚀 ~ syncPaymentToQuickBooks:  ~TRUE");
-      } else if (!doc.quickBooksInvoiceId) {
+      } else if (shouldSyncPaidQbo && !doc.quickBooksInvoiceId) {
         console.log("🚀 ~ syncInvoiceOnQuikBooks:  ~FALSE");
         syncInvoiceOnQuikBooks({
           orderId: orderId || partnerOrderId,
           orderType: isPartnerOrder ? "local-partner" : "customer",
         });
       }
-      req.body.orderData.invoicePaidDate = new Date();
-      req.body.orderData.paymentMethod = "Bank Check";
-      manualPaymentEmail = true;
+      if (!isPartnerOrder) {
+        req.body.orderData.invoicePaidDate = new Date();
+        req.body.orderData.paymentMethod = "Bank Check";
+        manualPaymentEmail = true;
+      }
     }
 
     await Model.update(req.body?.orderData, {

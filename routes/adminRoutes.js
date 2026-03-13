@@ -2165,6 +2165,11 @@ router.post(
   manageOrderController.deleteInvoice,
 );
 
+router.get(
+  "/order-management/invoice-tracking/:orderType/:orderId",
+  manageOrderController.invoiceTracking,
+);
+
 /**
  * @swagger
  * /api/v1/admin/order-details/{id}:

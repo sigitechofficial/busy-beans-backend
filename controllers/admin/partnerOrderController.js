@@ -282,6 +282,18 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     orderEvents({ orderId: newOrder?.id, orderType: "local-partner" });
   }
 
+  if (input?.order?.type === "direct-invoice") {
+    syncInvoiceOnQuikBooks({
+      orderId: newOrder?.id,
+      orderType: "local-partner",
+    }).catch((error) => {
+      console.error(
+        "❌ Error syncing direct-invoice partner order to QBO:",
+        error?.message,
+      );
+    });
+  }
+
   return res.status(200).json({
     status: "success",
     data: { id: newOrder?.id, allitems },

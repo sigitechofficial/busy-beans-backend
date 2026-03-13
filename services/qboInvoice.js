@@ -103,6 +103,19 @@ async function deleteQboCustomerMappingForUserInRealm(where) {
   }
 }
 
+function shouldSkipAdminQboSync({ orderType, order }) {
+  if (orderType !== "customer" || !order?.salesRepId) return false;
+
+  // Existing business rule: direct-partner customer orders do not sync to admin QBO.
+  if (order?.partnerType === "direct-partner") return true;
+
+  // New business rule: dropship direct-invoice orders should not sync to admin QBO.
+  return (
+    order?.partnerType === "dropship-partner" &&
+    order?.type === "direct-invoice"
+  );
+}
+
 /**
  * Query QBO for Sales Rep custom field DefinitionId
  * Uses GraphQL API to find custom field by name
@@ -1056,16 +1069,24 @@ async function handleAdminQboSync({
       DBMODEL,
       updateRequest,
     });
-    // Skip admin QBO sync when orderType is customer and order belongs to a direct local-partner
-    if (
-      orderType === "customer" &&
-      order?.salesRepId &&
-      order?.partnerType === "direct-partner"
-    ) {
+    // Skip admin sync for direct-partner orders and dropship direct-invoice orders.
+    if (shouldSkipAdminQboSync({ orderType, order })) {
+      if (order?.partnerType === "direct-partner") {
+        console.log(
+          "[QBO] Skipping admin sync — order belongs to direct local-partner",
+        );
+        return {
+          saved: true,
+          reason: "skipped_admin_sync_direct_partner_order",
+        };
+      }
       console.log(
-        "[QBO] Skipping admin sync — order belongs to direct local-partner",
+        "[QBO] Skipping admin sync — dropship direct-invoice order",
       );
-      return { saved: true, reason: "skipped_admin_sync_direct_partner_order" };
+      return {
+        saved: true,
+        reason: "skipped_admin_sync_dropship_direct_invoice_order",
+      };
     }
     if (!ADMIN?.currentRealmId) {
       console.log(
@@ -1366,7 +1387,8 @@ async function createInvoiceFromOrder({
   const neededAdminSync =
     orderType === "customer" &&
     !order.quickBooksInvoiceId &&
-    ADMIN?.currentRealmId;
+    ADMIN?.currentRealmId &&
+    !shouldSkipAdminQboSync({ orderType, order });
   const neededPartnerSync =
     orderType === "customer" &&
     order?.partnerCurrentRealmId &&
@@ -1451,7 +1473,8 @@ async function createMultipleInvoicesFromOrders({
       const neededAdminSync =
         orderType === "customer" &&
         !order.quickBooksInvoiceId &&
-        ADMIN?.currentRealmId;
+        ADMIN?.currentRealmId &&
+        !shouldSkipAdminQboSync({ orderType, order });
       const neededPartnerSync =
         orderType === "customer" &&
         order?.partnerCurrentRealmId &&

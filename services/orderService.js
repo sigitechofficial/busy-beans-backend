@@ -111,9 +111,9 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         ],
         [
           literal(`COALESCE(
-             (SELECT SUM(salerCommission)
-              FROM items
-              WHERE items.orderId = order.id ), 0)`),
+               (SELECT SUM(salerCommission)
+                FROM items
+                WHERE items.orderId = order.id ), 0)`),
           "localPatnerCommission",
         ],
         "quickBooksInvoiceIdPartner",
@@ -132,6 +132,7 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "invoiceDate",
         "shippingCompany",
         "termDays",
+        "type",
         "note",
         "trackingNumber",
         "partnerRealmId",
@@ -356,9 +357,9 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         ],
         [
           literal(`COALESCE(
-             (SELECT SUM(salerCommission)
-              FROM items
-              WHERE items.orderId = order.id ), 0)`),
+               (SELECT SUM(salerCommission)
+                FROM items
+                WHERE items.orderId = order.id ), 0)`),
           "localPatnerCommission",
         ],
         "quickBooksInvoiceIdPartner",
@@ -377,6 +378,7 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "invoiceDate",
         "shippingCompany",
         "termDays",
+        "type",
         "note",
         "trackingNumber",
         "partnerRealmId",
