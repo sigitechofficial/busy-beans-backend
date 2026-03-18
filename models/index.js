@@ -1,74 +1,58 @@
-/* eslint-disable global-require */
-/* eslint-disable import/no-dynamic-require */
-// 'use strict';
-require('dotenv').config();
+const db = require("./models");
+require("dotenv").config();
+require("./redis_connect");
+const server = require("./app");
 
-const fs = require('fs');
-const path = require('path');
-const Sequelize = require('sequelize');
-const process = require('process');
+const serverPort = process.env.PORT || 8013;
 
-const basename = path.basename(__filename);
-const db = {};
+// Accept connections from anywhere (Crucial for AWS ECS)
+const serverHost = process.env.HOST || "0.0.0.0";     
 
-// ---------------------------------------------
-// MySQL config from Container ENV variables
-// ---------------------------------------------
-const {
-  DB_NAME,
-  DB_USER,
-  DB_PASSWORD,
-  DB_HOST,
-  DB_PORT,
-} = process.env;
+const syncDb = 0;
 
-// ---------------------------------------------
-// Sequelize instance
-// ---------------------------------------------
-const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
-  host: DB_HOST,
-  port: DB_PORT || 3306, // Default to 3306 if not provided
-  dialect: 'mysql',
-  logging: false, // Set to true if you want to see SQL queries in logs
-  pool: {
-    max: 10,
-    min: 0,
-    acquire: 30000,
-    idle: 10000,
-  },
+if (syncDb) {
+  db.sequelize
+    .sync({ alter: true })
+    .then(() => console.log("✅ Database synchronized successfully."))
+    .catch((err) => console.error("❌ Error synchronizing database:", err));
+}
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("\n🔴 Unhandled Rejection at:", promise);
+  console.error("Reason:", reason, "\n");
 });
 
-// ---------------------------------------------
-// Load models
-// ---------------------------------------------
-fs.readdirSync(__dirname)
-  .filter(
-    (file) =>
-      file.indexOf('.') !== 0 && 
-      file !== basename && 
-      file.slice(-3) === '.js',
-  )
-  .forEach((file) => {
-    const model = require(path.join(__dirname, file))(
-      sequelize,
-      Sequelize.DataTypes,
-    );
-    db[model.name] = model;
+// Handle uncaught exceptions
+process.on("uncaughtException", (err) => {
+  console.error("\n🔴 Uncaught Exception:", err, "\n");
+  process.exit(1);
+});
+
+// Graceful shutdown
+const gracefulShutdown = () => {
+  console.log("\n🟡 Received shutdown signal. Closing server...");
+  server.close(() => {
+    console.log("✅ Server closed successfully.\n");
+    process.exit(0);
   });
 
-// ---------------------------------------------
-// Associations
-// ---------------------------------------------
-Object.keys(db).forEach((modelName) => {
-  if (db[modelName].associate) {
-    db[modelName].associate(db);
-  }
+  setTimeout(() => {
+    console.error("❌ Force shutdown: Timed out.");
+    process.exit(1);
+  }, 10000);
+};
+
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
+
+// Start the server
+server.listen(serverPort, serverHost, (err) => {
+  if (err) throw err;
+
+  const localURL = `http://${serverHost}:${serverPort}`;
+  console.log("\n🟢 Server started successfully!");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log(`🚀 Listening on:         ${localURL}`);
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 });
-
-// ---------------------------------------------
-// Export
-// ---------------------------------------------
-db.sequelize = sequelize;
-db.Sequelize = Sequelize;
-
-module.exports = db;
