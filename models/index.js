@@ -1,58 +1,39 @@
-const db = require("./models");
-require("dotenv").config();
-require("./redis_connect");
-const server = require("./app");
+/* eslint-disable global-require */
+/* eslint-disable import/no-dynamic-require */
+require('dotenv').config();
 
-const serverPort = process.env.PORT || 8013;
+const fs = require('fs');
+const path = require('path');
+const Sequelize = require('sequelize');
+const process = require('process');
 
-// Accept connections from anywhere (Crucial for AWS ECS)
-const serverHost = process.env.HOST || "0.0.0.0";     
+const basename = path.basename(__filename);
+const db = {};
 
-const syncDb = 0;
+const { DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT } = process.env;
 
-if (syncDb) {
-  db.sequelize
-    .sync({ alter: true })
-    .then(() => console.log("✅ Database synchronized successfully."))
-    .catch((err) => console.error("❌ Error synchronizing database:", err));
-}
-
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("\n🔴 Unhandled Rejection at:", promise);
-  console.error("Reason:", reason, "\n");
+const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+  host: DB_HOST,
+  port: DB_PORT || 3306,
+  dialect: 'mysql',
+  logging: false,
+  pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
 });
 
-// Handle uncaught exceptions
-process.on("uncaughtException", (err) => {
-  console.error("\n🔴 Uncaught Exception:", err, "\n");
-  process.exit(1);
-});
-
-// Graceful shutdown
-const gracefulShutdown = () => {
-  console.log("\n🟡 Received shutdown signal. Closing server...");
-  server.close(() => {
-    console.log("✅ Server closed successfully.\n");
-    process.exit(0);
+fs.readdirSync(__dirname)
+  .filter((file) => file.indexOf('.') !== 0 && file !== basename && file.slice(-3) === '.js')
+  .forEach((file) => {
+    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
+    db[model.name] = model;
   });
 
-  setTimeout(() => {
-    console.error("❌ Force shutdown: Timed out.");
-    process.exit(1);
-  }, 10000);
-};
-
-process.on("SIGTERM", gracefulShutdown);
-process.on("SIGINT", gracefulShutdown);
-
-// Start the server
-server.listen(serverPort, serverHost, (err) => {
-  if (err) throw err;
-
-  const localURL = `http://${serverHost}:${serverPort}`;
-  console.log("\n🟢 Server started successfully!");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log(`🚀 Listening on:         ${localURL}`);
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+Object.keys(db).forEach((modelName) => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
+  }
 });
+
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+module.exports = db;
