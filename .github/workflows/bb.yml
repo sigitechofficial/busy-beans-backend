@@ -132,7 +132,7 @@ jobs:
       AWS_REGION: us-east-1
       ECR_REPOSITORY: busybeans-stage
       ECS_CLUSTER: busybeancoffee
-      ECS_SERVICE: busybeans-backend-stage
+      ECS_SERVICE: busybeans-stage
       TASK_DEFINITION: task-definition-busybeans-stage
       CONTAINER_NAME: busybeans-backend-stage
     steps:

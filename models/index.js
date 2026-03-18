@@ -14,7 +14,26 @@ const config = require(`${__dirname}/../config/config.json`)[env];
 const db = {};
 
 let sequelize;
-if (config.use_env_variable) {
+
+/**
+ * Priority 1: Use specific individual environment variables
+ * Priority 2: Use a single environment connection string (config.use_env_variable)
+ * Priority 3: Fallback to config.json values
+ */
+if (process.env.DB_NAME && process.env.DB_USER) {
+  sequelize = new Sequelize(
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASSWORD,
+    {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT || 3306,
+      dialect: config.dialect || 'mysql',
+      logging: config.logging,
+      ...config, // Spreads extra options like 'define' or 'pool' from config.json
+    }
+  );
+} else if (config.use_env_variable) {
   sequelize = new Sequelize(process.env[config.use_env_variable], config);
 } else {
   sequelize = new Sequelize(
@@ -25,6 +44,7 @@ if (config.use_env_variable) {
   );
 }
 
+// Read all files in the current directory to import models
 fs.readdirSync(__dirname)
   .filter(
     (file) =>
@@ -38,6 +58,7 @@ fs.readdirSync(__dirname)
     db[model.name] = model;
   });
 
+// Setup associations if they exist
 Object.keys(db).forEach((modelName) => {
   if (db[modelName].associate) {
     db[modelName].associate(db);
