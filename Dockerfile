@@ -20,4 +20,4 @@ COPY . .
 EXPOSE 8011
 
 # Start the application
-CMD ["node", "testbb.js"]
+CMD ["node", "bb.js"]
