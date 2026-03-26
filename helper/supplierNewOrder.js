@@ -6,6 +6,7 @@ const attachment = attachments();
 const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
 const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
+const { order, partnerOrder } = require("../models");
 const generateFooterHtml = require("./footerLocalpatner");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 const { header } = require("./header");
@@ -213,6 +214,13 @@ module.exports = async function ({ email, data }) {
   };
   try {
     const info = await sendMailPromise(mailOptions);
+    const isLocalPartner = (data?.orderOf || "customer") === "local-partner";
+    const model = isLocalPartner ? partnerOrder : order;
+    await model.increment("supplierEmailSendCount", { where: { id: data?.id } });
+    await model.update(
+      { supplierEmailLastSentAt: new Date() },
+      { where: { id: data?.id } },
+    );
     await logEmailSuccess({
       emailType: "supplier_new_order",
       orderId: data?.id,

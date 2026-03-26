@@ -61,7 +61,7 @@ module.exports = async function ({
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: [email], // main recipient(s)
+      to: email, // main recipient(s)
       bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `Your Busy Beans Coffee Order #${data.id} Has Been Confirmed`, // Subject line
       attachments: attachment.footer,
@@ -217,6 +217,6 @@ module.exports = async function ({
       } else {
         console.log(info);
       }
-    }
+    },
   );
 };

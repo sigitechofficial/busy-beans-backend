@@ -32,12 +32,16 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
     if (!orderData) return false;
 
     const input = JSON.parse(JSON.stringify(orderData));
+    // Never carry source PK/audit fields into orderFrequency PK.
+    delete input.id;
+    delete input.createdAt;
+    delete input.updatedAt;
+    delete input.deletedAt;
 
     const { nextOrderDate, visibilityDate } = nextFrequencyDate({
       currentDate: new Date(),
       frequency: input.frequency,
     });
-    input.orderId = orderData.id;
     input.orderId = orderData.id;
     input.salesRepId = salesRepId;
     input.orderDate = new Date();
@@ -45,25 +49,25 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
     input.visibilityDate = visibilityDate;
 
     const frequency = await orderFrequency.create(input);
-    order.update(
-      { orderFrequencyId: frequency?.id },
-      { where: { id: orderData?.id } },
-    );
-    item.update(
-      { orderFrequencyId: frequency?.id },
-      { where: { orderId: orderData?.id } },
-    );
+    await Promise.all([
+      order.update(
+        { orderFrequencyId: frequency?.id },
+        { where: { id: orderData?.id } },
+      ),
+      item.update(
+        { orderFrequencyId: frequency?.id },
+        { where: { orderId: orderData?.id } },
+      ),
+    ]);
 
     return true;
   } catch (error) {
-    console.log("ðŸš€ ~ exports.onlineAppointmentConfirm= ~ error:", error);
+    console.log("[SET_ORDER_FREQUENCY][ERROR]", error);
+    return false;
   }
 };
 
 //* Pending order according to their frequency cycle
-
-const { setOrderFrequency } = require("../admin/orderFrequencyController");
-console.log(typeof setOrderFrequency);
 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   // Build manual filter conditions (preserve existing logic)
@@ -1013,10 +1017,13 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //   });
 // });
 
-const frequencyBookOrder = async ({ id }) => {
+const frequencyBookOrder = async ({ id, runId }) => {
   //orderData is
   // let productsPrice = 0;
   try {
+    console.log(
+      `[FREQ_ORDER][START] runId=${runId || "manual"} frequencyId=${id}`,
+    );
     // STEP 1: First fetch orderFrequency to get salesRepId and orderId
     const orderFreqData = await orderFrequency.findByPk(id, {
       attributes: [
@@ -1031,7 +1038,15 @@ const frequencyBookOrder = async ({ id }) => {
     });
 
     if (!orderFreqData) {
-      return false;
+      console.log(
+        `[FREQ_ORDER][SKIP] runId=${runId || "manual"} frequencyId=${id} reason=frequency_not_found`,
+      );
+      return {
+        success: false,
+        orderId: null,
+        frequencyId: id,
+        error: "Frequency record not found",
+      };
     }
 
     const salesRepId = orderFreqData.salesRepId;
@@ -1041,19 +1056,19 @@ const frequencyBookOrder = async ({ id }) => {
     const itemAttributes = [
       [
         literal(
-          `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
+          `(SELECT products.name FROM products WHERE products.id = item.productId LIMIT 1)`,
         ),
         "product",
       ],
       [
         literal(
-          `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
+          `(SELECT products.weight FROM products WHERE products.id = item.productId LIMIT 1)`,
         ),
         "weight",
       ],
       [
         literal(
-          `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = ${userId} LIMIT 1)`,
+          `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = item.categoryId AND userDiscounts.userId = ${userId} LIMIT 1)`,
         ),
         "percentageDiscount",
       ],
@@ -1074,13 +1089,13 @@ const frequencyBookOrder = async ({ id }) => {
       itemAttributes.push(
         [
           literal(
-            `(SELECT COALESCE(srpp.price, products.price) FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+            `(SELECT COALESCE(srpp.price, products.price) FROM salesRepProductPrices srpp WHERE srpp.productId = item.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
           ),
           "price",
         ],
         [
           literal(
-            `(SELECT COALESCE(srpp.wholesalePrice, products.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+            `(SELECT COALESCE(srpp.wholesalePrice, products.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = item.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
           ),
           "wholesalePrice",
         ],
@@ -1092,13 +1107,13 @@ const frequencyBookOrder = async ({ id }) => {
       itemAttributes.push(
         [
           literal(
-            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
+            `(SELECT products.price FROM products WHERE products.id = item.productId LIMIT 1)`,
           ),
           "price",
         ],
         [
           literal(
-            `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
+            `(SELECT products.wholesalePrice FROM products WHERE products.id = item.productId LIMIT 1)`,
           ),
           "wholesalePrice",
         ],
@@ -1113,6 +1128,9 @@ const frequencyBookOrder = async ({ id }) => {
       attributes: itemAttributes,
       raw: true,
     });
+    console.log(
+      `[FREQ_ORDER][ITEMS_FETCHED] runId=${runId || "manual"} frequencyId=${id} sourceOrderId=${orderFreqData.orderId} items=${items?.length || 0}`,
+    );
 
     // STEP 4: Fetch additional order details from original order
     const orderDetails = await order.findOne({
@@ -1124,6 +1142,7 @@ const frequencyBookOrder = async ({ id }) => {
         "paymentMethod",
         "on",
         "vat",
+        "type",
       ],
       raw: true,
     });
@@ -1163,7 +1182,15 @@ const frequencyBookOrder = async ({ id }) => {
         { status: 0 },
         { where: { id: result.orderFrequencyId } },
       );
-      return false;
+      console.log(
+        `[FREQ_ORDER][SKIP] runId=${runId || "manual"} frequencyId=${id} reason=customer_not_found status_set=0`,
+      );
+      return {
+        success: false,
+        orderId: null,
+        frequencyId: id,
+        error: "Customer not found for frequency order",
+      };
     }
     let productsPrice = 0;
     // let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
@@ -1173,11 +1200,9 @@ const frequencyBookOrder = async ({ id }) => {
     result?.items.forEach((item) => {
       const percentageDiscount = parseFloat(item.percentageDiscount || 0);
       item.weight = parseFloat(item?.weight || 0) * (item?.qty * 1);
-      console.log("🚀 ~ frequencyBookOrder BEFORE ~ item?.price:", item?.price);
       item.price = item?.price
         ? parseFloat(item?.price) * (item?.qty * 1)
         : parseFloat(item?.servicePrice);
-      console.log("🚀 ~ frequencyBookOrder AFTER ~ item?.price:", item?.price);
       item.discount = 0;
       if (percentageDiscount > 0 && item?.productId) {
         // Calculate discount amount
@@ -1192,11 +1217,6 @@ const frequencyBookOrder = async ({ id }) => {
       productsPrice += item.price;
       totalWeight += item.weight;
       if (result?.salesRepId) {
-        console.log(
-          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
-          item?.price,
-        );
-
         const currentPrice = item?.price
           ? item?.price
           : parseFloat(item?.servicePrice);
@@ -1206,7 +1226,10 @@ const frequencyBookOrder = async ({ id }) => {
           item.wholesalePrice = 0;
         } else {
           item.salerCommission =
-            currentPrice - parseFloat(item?.wholesalePrice || 0) * item?.qty; // Multiply weight by quantity
+            result?.type === "direct-invoice"
+              ? parseFloat(currentPrice)
+              : currentPrice -
+                parseFloat(item?.wholesalePrice || 0) * item?.qty;
           item.wholesalePrice =
             parseFloat(item?.wholesalePrice || 0) * item?.qty;
         }
@@ -1227,7 +1250,15 @@ const frequencyBookOrder = async ({ id }) => {
       attributes: ["charges"],
     });
 
-    result.shippingCharges = shippingCompany?.charges || 0;
+    if (!shippingCompany && customer?.partnerType != "direct-partner") {
+      throw new AppError(
+        "Not dealing in such weights. Contact customer support for this order.",
+        400,
+      );
+    }
+
+    result.shippingCharges =
+      customer?.partnerType == "direct-partner" ? 0 : shippingCompany?.charges;
     // console.log('🚀 ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
     // console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
     result.itemsPrice = productsPrice;
@@ -1241,10 +1272,12 @@ const frequencyBookOrder = async ({ id }) => {
     result.totalWeight = parseFloat(totalWeight || 0);
     result.shippingCompany =
       result.totalWeight > 400 ? `Shipping By Truck` : "UPS";
-    result.statusId = 1;
+    result.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
     result.salesRepId = result?.salesRepId;
     result.createdBy = "sales-rep";
-    console.log("🚀 ~ frequencyBookOrder ~ result:", result);
+    console.log(
+      `[FREQ_ORDER][CALCULATED] runId=${runId || "manual"} frequencyId=${id} itemsPrice=${result.itemsPrice} discountPrice=${result.discountPrice} shippingCharges=${result.shippingCharges} totalBill=${result.totalBill} totalWeight=${result.totalWeight} type=${result?.type || "n/a"}`,
+    );
 
     // return true;
     const newOrder = await order.create(result);
@@ -1255,14 +1288,28 @@ const frequencyBookOrder = async ({ id }) => {
       item.orderId = newOrder.id;
     });
 
-    console.log("🚀 ~ frequencyBookOrder ~ result.items:", result.items);
-    item.bulkCreate(result.items);
+    await item.bulkCreate(result.items);
 
-    orderHistory.create({
-      statusId: 1,
-      orderId: newOrder?.id,
-      on: Date.now(),
-    });
+    const historyEntry = [
+      {
+        statusId: 1,
+        orderId: newOrder.id,
+        on: Date.now(),
+      },
+      {
+        statusId: 2,
+        orderId: newOrder.id,
+        on: Date.now(),
+      },
+    ];
+    if (customer.partnerType == "direct-partner") {
+      historyEntry.push({
+        statusId: 3,
+        orderId: newOrder.id,
+        on: Date.now(),
+      });
+    }
+    await orderHistory.bulkCreate(historyEntry);
 
     const { nextOrderDate, visibilityDate } = nextFrequencyDate({
       currentDate: result?.on,
@@ -1281,10 +1328,26 @@ const frequencyBookOrder = async ({ id }) => {
     };
     await orderFrequency.update(updateFrequencyData, { where: { id: id } });
 
-    console.log("ðŸš€ ~ frequencyBookOrder ~ result:", updateFrequencyData);
-    return true;
+    if (result?.items && result.items?.length > 0) {
+      orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
+      orderEvents({ orderId: newOrder?.id });
+    }
+
+    console.log(
+      `[FREQ_ORDER][SUCCESS] runId=${runId || "manual"} frequencyId=${id} newOrderId=${newOrder.id} nextOrderDate=${nextOrderDate} visibilityDate=${visibilityDate}`,
+    );
+    return { success: true, orderId: newOrder.id, frequencyId: id };
   } catch (error) {
-    console.log("ðŸš€ ~ exports.frequencyBookOrder = ~ error:", error);
+    console.log(
+      `[FREQ_ORDER][ERROR] runId=${runId || "manual"} frequencyId=${id} message=${error?.message || "Unknown error"}`,
+      error,
+    );
+    return {
+      success: false,
+      orderId: null,
+      frequencyId: id,
+      error: error?.message || "Unknown error",
+    };
   }
 };
 
@@ -1316,16 +1379,20 @@ exports.bookOrderAccordingToFrequency = catchAsync(async (req, res, next) => {
 exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
   async (req, res, next) => {
     const today = new Date().toISOString().split("T")[0]; // 'YYYY-MM-DD'
-    console.log("🚀🚀🚀🚀🚀🚀 ~ today:", today);
+    const runId = `freq-${Date.now()}`;
+    console.log(`[FREQ_LAMBDA][START] runId=${runId} date=${today}`);
     const pendingOrders = await orderFrequency.findAll({
       where: { visibilityDate: today, status: 1 },
       attributes: ["id"],
     });
-
-    console.log("🚀 ~ pendingOrders:", pendingOrders);
+    console.log(
+      `[FREQ_LAMBDA][FETCHED] runId=${runId} pendingOrders=${pendingOrders?.length || 0}`,
+    );
 
     if (!pendingOrders || pendingOrders.length === 0) {
-      console.log("❌ No pending frequency orders for today.");
+      console.log(
+        `[FREQ_LAMBDA][NOOP] runId=${runId} reason=no_pending_orders`,
+      );
       return res.status(200).json({
         status: "fail",
         message: "No pending frequency orders for today.",
@@ -1333,15 +1400,39 @@ exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
       });
     }
 
+    const succeeded = [];
+    const failed = [];
     for (const order of pendingOrders) {
-      console.log("🔁~processing order", order?.id);
-      await frequencyBookOrder({ id: order?.id });
+      console.log(
+        `[FREQ_LAMBDA][PROCESSING] runId=${runId} frequencyId=${order?.id}`,
+      );
+      const output = await frequencyBookOrder({ id: order?.id, runId });
+      if (output?.success) {
+        succeeded.push({
+          frequencyId: order?.id,
+          orderId: output?.orderId,
+        });
+      } else {
+        failed.push({
+          frequencyId: order?.id,
+          error: output?.error || "Failed to process frequency order",
+        });
+      }
     }
+    console.log(
+      `[FREQ_LAMBDA][DONE] runId=${runId} processed=${pendingOrders.length} succeeded=${succeeded.length} failed=${failed.length}`,
+    );
 
     return res.status(200).json({
-      status: "success",
-      message: "Orders booked according to frequency successfully.",
+      status: failed.length > 0 ? "partial-success" : "success",
+      message:
+        failed.length > 0
+          ? "Some orders were not booked according to frequency."
+          : "Orders booked according to frequency successfully.",
       processed: pendingOrders.length,
+      succeeded: succeeded.length,
+      failed: failed.length,
+      failedOrders: failed,
     });
   },
 );

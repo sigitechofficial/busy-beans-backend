@@ -18,6 +18,7 @@ const shippingCompanyController = require("../controllers/admin/shippingCompanyC
 const employeeController = require("../controllers/admin/employeeController");
 const adminController = require("../controllers/admin/adminController");
 const machineController = require("../controllers/admin/machineController");
+const supplierEmailReminderController = require("../controllers/admin/supplierEmailReminderController");
 
 const patnerOrderController = require("../controllers/admin/partnerOrderController");
 
@@ -91,6 +92,34 @@ router.post(
 router.post(
   "/order-management/ensure-invoice-pdfs",
   manageOrderController.ensurePendingInvoicePdfs,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/resend-unopened-supplier-emails:
+ *   post:
+ *     summary: Resend supplier new-order emails when unopened for X hours and statusId is 2 (Lambda/job endpoint)
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               minHours:
+ *                 type: integer
+ *                 default: 24
+ *               maxRetry:
+ *                 type: integer
+ *                 default: 3
+ *     responses:
+ *       200:
+ *         description: Job summary
+ */
+router.post(
+  "/order-management/resend-unopened-supplier-emails",
+  supplierEmailReminderController.resendUnopenedSupplierEmails,
 );
 
 /**

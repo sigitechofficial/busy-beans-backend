@@ -1,13 +1,13 @@
+const os = require("os");
 const db = require("./models");
 require("dotenv").config();
 require("./redis_connect");
 const server = require("./app");
 
 const serverPort = process.env.PORT || 8011;
-const serverHost = process.env.HOST || "127.0.0.1"; // Accept connections from anywhere
-// const serverHost = "192.168.1.25";
+// 0.0.0.0 = listen on all interfaces so phones / other PCs on your LAN can reach this machine
+const serverHost = process.env.HOST || "0.0.0.0";
 
-//
 const syncDb = 0;
 
 if (syncDb) {
@@ -17,19 +17,16 @@ if (syncDb) {
     .catch((err) => console.error("❌ Error synchronizing database:", err));
 }
 
-// Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
   console.error("\n🔴 Unhandled Rejection at:", promise);
   console.error("Reason:", reason, "\n");
 });
 
-// Handle uncaught exceptions
 process.on("uncaughtException", (err) => {
   console.error("\n🔴 Uncaught Exception:", err, "\n");
   process.exit(1);
 });
 
-// Graceful shutdown
 const gracefulShutdown = () => {
   console.log("\n🟡 Received shutdown signal. Closing server...");
   server.close(() => {
@@ -46,15 +43,33 @@ const gracefulShutdown = () => {
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
 
-// Start the server
+function lanIpv4Addresses() {
+  const nets = os.networkInterfaces();
+  const out = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      const family = net.family;
+      if ((family === "IPv4" || family === 4) && !net.internal) {
+        out.push(net.address);
+      }
+    }
+  }
+  return out;
+}
+
 server.listen(serverPort, serverHost, (err) => {
   if (err) throw err;
 
-  const localURL = `http://${serverHost}:${serverPort}`;
-  console.log("\n🟢 Server started successfully!");
+  console.log("\n🟢 Server started successfully (local / LAN)!");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log(`🚀 Listening on:         ${localURL}`);
-  // console.log('🌐 To expose publicly:   Run the following command:');
-  // console.log(`                         ngrok http ${serverPort}`);
+  console.log(`🚀 Bound on:             http://${serverHost}:${serverPort}`);
+  console.log(`🏠 This machine:         http://127.0.0.1:${serverPort}`);
+  const lan = lanIpv4Addresses();
+  if (lan.length) {
+    console.log("🌐 On your network (use from phone / other PC):");
+    lan.forEach((ip) =>
+      console.log(`                         http://${ip}:${serverPort}`),
+    );
+  }
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 });

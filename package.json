@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "start": "node bb.js",
+    "local": "node local.js",
     "dev": "nodemon bb.js",
     "test": "nodemon testbb.js",
     "start:prod": "NODE_ENV=production nodemon bb.js",
