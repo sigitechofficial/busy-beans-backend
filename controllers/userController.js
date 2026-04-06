@@ -1,36 +1,38 @@
-require('dotenv').config(); // This will load variables from .env file into process.env
+require("dotenv").config(); // This will load variables from .env file into process.env
 
-const crypto = require('crypto');
-const { promisify } = require('util');
-const jwt = require('jsonwebtoken');
-const { Op } = require('sequelize');
-const User = require('../models/user');
-const Address = require('../models/address');
-const catchAsync = require('../utils/catchAsync');
-const AppError = require('../utils/appError');
-const { response } = require('../../utils/response');
-const account = require('../models/account');
+const crypto = require("crypto");
+const { promisify } = require("util");
+const jwt = require("jsonwebtoken");
+const { Op } = require("sequelize");
+const User = require("../models/user");
+const Address = require("../models/address");
+const catchAsync = require("../utils/catchAsync");
+const AppError = require("../utils/appError");
+const { response } = require("../utils/response");
+const account = require("../models/account");
+const { GetInTouch } = require("../models");
+const sendGetInTouchEmail = require("../helper/getInTouchEmail");
 
 const signToken = (userId) =>
   jwt.sign({ id: userId || 1 }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '365d',
+    expiresIn: process.env.JWT_EXPIRES_IN || "365d",
   });
 
 const createSendToken = (user, statusCode, req, res) => {
   const token = signToken(user.id);
 
-  res.cookie('jwt', token, {
+  res.cookie("jwt", token, {
     expires: new Date(
       Date.now() + process.env.JWT_COOKIE_EXPIRES_IN || 1 * 24 * 60 * 60 * 1000,
     ),
     httpOnly: true,
-    secure: req.secure || req.headers['x-forwarded-proto'] === 'https',
+    secure: req.secure || req.headers["x-forwarded-proto"] === "https",
   });
 
   user.password = undefined;
 
   res.status(statusCode).json({
-    status: 'success',
+    status: "success",
     token,
     data: {
       user,
@@ -41,7 +43,7 @@ const createSendToken = (user, statusCode, req, res) => {
 exports.signup = catchAsync(async (req, res, next) => {
   // Validation check for password confirmation
   if (req.body?.password !== req.body?.passwordConfirm) {
-    return next(new AppError('Passwords do not match!', 400));
+    return next(new AppError("Passwords do not match!", 400));
   }
 
   // Create a new user
@@ -54,14 +56,14 @@ exports.login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return next(new AppError('Please provide email and password!', 400));
+    return next(new AppError("Please provide email and password!", 400));
   }
 
   const user = await account.findOne({ where: { email } });
 
   const isMatch = password == user.password;
   if (!user || !isMatch) {
-    return next(new AppError('Incorrect email or password', 401));
+    return next(new AppError("Incorrect email or password", 401));
   }
 
   createSendToken(user, 200, req, res);
@@ -71,16 +73,16 @@ exports.protect = catchAsync(async (req, res, next) => {
   let token;
   if (
     req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
+    req.headers.authorization.startsWith("Bearer")
   ) {
-    token = req.headers.authorization.split(' ')[1];
+    token = req.headers.authorization.split(" ")[1];
   } else if (req.cookies.jwt) {
     token = req.cookies.jwt;
   }
 
   if (!token) {
     return next(
-      new AppError('You are not logged in! Please log in to get access.', 401),
+      new AppError("You are not logged in! Please log in to get access.", 401),
     );
   }
 
@@ -90,7 +92,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   if (!currentUser) {
     return next(
       new AppError(
-        'The user belonging to this token does no longer exist.',
+        "The user belonging to this token does no longer exist.",
         401,
       ),
     );
@@ -101,7 +103,7 @@ exports.protect = catchAsync(async (req, res, next) => {
     currentUser.changedPasswordAt > decoded.iat * 1000
   ) {
     return next(
-      new AppError('User recently changed password! Please log in again.', 401),
+      new AppError("User recently changed password! Please log in again.", 401),
     );
   }
 
@@ -141,9 +143,9 @@ exports.protect = catchAsync(async (req, res, next) => {
 
 exports.resetPassword = catchAsync(async (req, res, next) => {
   const hashedToken = crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(req.params.token)
-    .digest('hex');
+    .digest("hex");
 
   const user = await User.findOne({
     where: {
@@ -153,7 +155,7 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   });
 
   if (!user) {
-    return next(new AppError('Token is invalid or has expired', 400));
+    return next(new AppError("Token is invalid or has expired", 400));
   }
 
   user.password = req.body.password;
@@ -169,7 +171,7 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
   const user = await User.findByPk(req.user.id);
 
   if (!(await user.correctPassword(req.body.passwordCurrent, user.password))) {
-    return next(new AppError('Your current password is wrong.', 401));
+    return next(new AppError("Your current password is wrong.", 401));
   }
 
   user.password = req.body.password;
@@ -177,4 +179,39 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
   await user.save();
 
   createSendToken(user, 200, req, res);
+});
+
+exports.getInTouch = catchAsync(async (req, res, next) => {
+  const { name, email, phone, company, teamSize, date, notes } = req.body;
+
+  if (!name || !email) {
+    return next(new AppError("Please provide name and email.", 400));
+  }
+
+  const record = await GetInTouch.create({
+    name,
+    email,
+    phone: phone || null,
+    company: company || null,
+    teamSize: teamSize || null,
+    preferredDate: date || null,
+    notes: notes || null,
+  });
+
+  sendGetInTouchEmail({
+    data: {
+      name,
+      email,
+      phone,
+      company,
+      teamSize,
+      preferredDate: date,
+      notes,
+    },
+  });
+
+  res.status(201).json({
+    status: "success",
+    data: { id: record.id },
+  });
 });

@@ -158,7 +158,7 @@ exports.createSubscription = async (req, res) => {
     // 6. Create dynamic Stripe price (one cycle = subscriptionDays, e.g. 60 days = one charge every 60 days)
     const cycleDays = Math.max(
       1,
-      Math.min(365, parseInt(subscriptionDays, 10) || 30)
+      Math.min(365, parseInt(subscriptionDays, 10) || 30),
     );
     const productDescription =
       products.length > 0 ? `${products.length} product(s)` : "no products";
@@ -207,7 +207,7 @@ exports.createSubscription = async (req, res) => {
       productsTotal: productsTotal || 0,
       addonsTotal: addonsTotal || 0,
       currentPeriodStart: new Date(
-        stripeSubscription.current_period_start * 1000
+        stripeSubscription.current_period_start * 1000,
       ),
       currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
     });
@@ -341,13 +341,18 @@ exports.cancelSubscription = async (req, res) => {
       subscriptionRecord.stripeSubscriptionId,
       {
         cancel_at_period_end: true,
-      }
+      },
     );
 
-    // Update in database
     await subscriptionRecord.update({
-      status: "canceled",
-      canceledAt: new Date(),
+      status: stripeSubscription.status,
+      currentPeriodStart: new Date(
+        stripeSubscription.current_period_start * 1000,
+      ),
+      currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+      canceledAt: stripeSubscription.canceled_at
+        ? new Date(stripeSubscription.canceled_at * 1000)
+        : null,
     });
 
     console.log("✅ Subscription canceled:", id);

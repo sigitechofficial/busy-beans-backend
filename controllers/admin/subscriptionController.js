@@ -16,7 +16,9 @@ const {
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const sendSubscriptionInvitationEmail = require("../../helper/subscriptionInvitation");
-const { subscriptionCancellationEmailEvent } = require("../events/subscriptionCancellationEvent");
+const {
+  subscriptionCancellationEmailEvent,
+} = require("../events/subscriptionCancellationEvent");
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -67,7 +69,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
 
     if (foundProducts.length !== productIds.length) {
       return next(
-        new AppError("One or more products not found or inactive", 400)
+        new AppError("One or more products not found or inactive", 400),
       );
     }
   }
@@ -80,8 +82,8 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           `addonId should not be provided for addons of type "extra". Addon "${extraAddon.name || "unnamed"}" has addonId: ${extraAddon.addonId}`,
-          400
-        )
+          400,
+        ),
       );
     }
   }
@@ -96,7 +98,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
     // Check if all addonIds are provided
     if (addonIds.length !== addonTypeAddons.length) {
       return next(
-        new AppError("addonId is required for addons of type 'addon'", 400)
+        new AppError("addonId is required for addons of type 'addon'", 400),
       );
     }
 
@@ -120,17 +122,17 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
       // Find which addonIds are missing
       const foundAddonIds = foundAddons.map((a) => a.id);
       const missingAddonIds = addonIds.filter(
-        (id) => !foundAddonIds.includes(id)
+        (id) => !foundAddonIds.includes(id),
       );
       console.error(
         "❌ Addon validation failed. Missing addon IDs:",
-        missingAddonIds
+        missingAddonIds,
       );
       return next(
         new AppError(
           `One or more add-ons not found or inactive. Missing addon IDs: ${missingAddonIds.join(", ")}`,
-          400
-        )
+          400,
+        ),
       );
     }
   }
@@ -202,8 +204,8 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
             return next(
               new AppError(
                 `addonId is required for addon type "addon" but was not provided`,
-                400
-              )
+                400,
+              ),
             );
           }
           record.addonId = addonItem.addonId;
@@ -230,16 +232,16 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
           ) {
             console.error(
               "❌ Foreign key constraint error for addonId:",
-              error
+              error,
             );
             const problematicAddonId = addonTypeRecords.find(
-              (r) => r.addonId != null
+              (r) => r.addonId != null,
             )?.addonId;
             return next(
               new AppError(
                 `Invalid addon ID: ${problematicAddonId || "unknown"}. This addon does not exist in the database or is inactive.`,
-                400
-              )
+                400,
+              ),
             );
           }
           throw error;
@@ -274,8 +276,8 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
             return next(
               new AppError(
                 "Database schema issue: addonId column must allow NULL for 'extra' type addons. Please run the migration script to fix this: ALTER TABLE subscriptionAddons DROP FOREIGN KEY subscriptionaddons_ibfk_14; ALTER TABLE subscriptionAddons MODIFY COLUMN addonId INT NULL; ALTER TABLE subscriptionAddons ADD CONSTRAINT subscriptionaddons_ibfk_14 FOREIGN KEY (addonId) REFERENCES addons(id) ON DELETE CASCADE ON UPDATE CASCADE;",
-                500
-              )
+                500,
+              ),
             );
           }
           throw error;
@@ -372,7 +374,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
   // 6. Create dynamic Stripe price (one cycle = subscriptionDays, e.g. 60 days = one charge every 60 days)
   const cycleDays = Math.max(
     1,
-    Math.min(365, parseInt(subscriptionDays, 10) || 30)
+    Math.min(365, parseInt(subscriptionDays, 10) || 30),
   );
   const stripePrice = await stripe.prices.create({
     unit_amount: totalInCents,
@@ -417,7 +419,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
     productsTotal: productsTotal || 0,
     addonsTotal: addonsTotal || 0,
     currentPeriodStart: new Date(
-      stripeSubscription.current_period_start * 1000
+      stripeSubscription.current_period_start * 1000,
     ),
     currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
   });
@@ -458,8 +460,8 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
           return next(
             new AppError(
               `addonId is required for addon type "addon" but was not provided`,
-              400
-            )
+              400,
+            ),
           );
         }
         record.addonId = addonItem.addonId;
@@ -486,13 +488,13 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
         ) {
           console.error("❌ Foreign key constraint error for addonId:", error);
           const problematicAddonId = addonTypeRecords.find(
-            (r) => r.addonId != null
+            (r) => r.addonId != null,
           )?.addonId;
           return next(
             new AppError(
               `Invalid addon ID: ${problematicAddonId || "unknown"}. This addon does not exist in the database or is inactive.`,
-              400
-            )
+              400,
+            ),
           );
         }
         throw error;
@@ -527,8 +529,8 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
           return next(
             new AppError(
               "Database schema issue: addonId column must allow NULL for 'extra' type addons. Please run the migration script to fix this: ALTER TABLE subscriptionAddons DROP FOREIGN KEY subscriptionaddons_ibfk_14; ALTER TABLE subscriptionAddons MODIFY COLUMN addonId INT NULL; ALTER TABLE subscriptionAddons ADD CONSTRAINT subscriptionaddons_ibfk_14 FOREIGN KEY (addonId) REFERENCES addons(id) ON DELETE CASCADE ON UPDATE CASCADE;",
-              500
-            )
+              500,
+            ),
           );
         }
         throw error;
@@ -545,7 +547,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
   // 12. Send email if subscription requires 3D Secure authentication (incomplete status)
   if (stripeSubscription.status === "incomplete" && clientSecret) {
     console.log(
-      "📧 Subscription requires 3D Secure authentication. Sending payment completion email..."
+      "📧 Subscription requires 3D Secure authentication. Sending payment completion email...",
     );
 
     // Get subscription with all associations for email
@@ -575,7 +577,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
             },
           },
         ],
-      }
+      },
     );
 
     // Prepare products and addons for email
@@ -594,7 +596,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
           if (!throughData) {
             console.warn(
               `⚠️ No through data found for product ${prod.id}. Available keys:`,
-              Object.keys(prod)
+              Object.keys(prod),
             );
             return null;
           }
@@ -621,7 +623,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
           if (!throughData) {
             console.warn(
               `⚠️ No through data found for addon ${addonItem.id}. Available keys:`,
-              Object.keys(addonItem)
+              Object.keys(addonItem),
             );
             return null;
           }
@@ -656,7 +658,7 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
 
     console.log(
       "✅ 3D Secure payment completion email sent to:",
-      customerEmail
+      customerEmail,
     );
   }
 
@@ -727,7 +729,7 @@ exports.completeSubscriptionPayment = catchAsync(async (req, res, next) => {
     subscriptionRecord.status !== "incomplete"
   ) {
     return next(
-      new AppError(`Subscription is already ${subscriptionRecord.status}`, 400)
+      new AppError(`Subscription is already ${subscriptionRecord.status}`, 400),
     );
   }
 
@@ -754,7 +756,7 @@ exports.completeSubscriptionPayment = catchAsync(async (req, res, next) => {
   let stripeCustomer;
   if (subscriptionRecord.stripeCustomerId) {
     stripeCustomer = await stripe.customers.retrieve(
-      subscriptionRecord.stripeCustomerId
+      subscriptionRecord.stripeCustomerId,
     );
   } else {
     // Search or create
@@ -791,7 +793,7 @@ exports.completeSubscriptionPayment = catchAsync(async (req, res, next) => {
   // 3. Create Price (one cycle = subscriptionDays)
   const cycleDays = Math.max(
     1,
-    Math.min(365, parseInt(subscriptionRecord.subscriptionDays, 10) || 30)
+    Math.min(365, parseInt(subscriptionRecord.subscriptionDays, 10) || 30),
   );
   const stripePrice = await stripe.prices.create({
     unit_amount: totalInCents,
@@ -819,7 +821,7 @@ exports.completeSubscriptionPayment = catchAsync(async (req, res, next) => {
     stripePriceId: stripePrice.id,
     status: stripeSubscription.status,
     currentPeriodStart: new Date(
-      stripeSubscription.current_period_start * 1000
+      stripeSubscription.current_period_start * 1000,
     ),
     currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
   });
@@ -879,8 +881,8 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "This subscription does not belong to the specified user",
-        403
-      )
+        403,
+      ),
     );
   }
 
@@ -892,8 +894,8 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         `Cannot create payment intent for subscription with status: ${subscriptionRecord.status}`,
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -921,7 +923,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
       });
       console.log(
         "✅ Created new Stripe customer and saved to user:",
-        stripeCustomerId
+        stripeCustomerId,
       );
     }
 
@@ -933,7 +935,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         subscriptionRecord.stripeSubscriptionId,
         {
           expand: ["latest_invoice.payment_intent"],
-        }
+        },
       );
 
       // Get client secret from latest invoice
@@ -949,7 +951,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         // If clientSecret wasn't found via expand, try to retrieve it from the latest invoice manually
         if (!clientSecret) {
           console.log(
-            "⚠️ ClientSecret not found in expanded invoice, retrieving from latest invoice..."
+            "⚠️ ClientSecret not found in expanded invoice, retrieving from latest invoice...",
           );
           const invoices = await stripe.invoices.list({
             subscription: subscriptionRecord.stripeSubscriptionId,
@@ -961,7 +963,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
               invoices.data[0].id,
               {
                 expand: ["payment_intent"],
-              }
+              },
             );
             clientSecret = latestInvoice.payment_intent?.client_secret;
           }
@@ -970,7 +972,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         // If we have a clientSecret, return it for 3D Secure confirmation
         if (clientSecret) {
           console.log(
-            `✅ Subscription is incomplete. Returning existing payment intent clientSecret for 3D Secure confirmation.`
+            `✅ Subscription is incomplete. Returning existing payment intent clientSecret for 3D Secure confirmation.`,
           );
 
           // Check if subscription has a payment method attached
@@ -1033,13 +1035,13 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         } else {
           // If no clientSecret found, this is unexpected for incomplete subscriptions
           console.warn(
-            `⚠️ Subscription is incomplete but no clientSecret found. This might indicate a payment issue.`
+            `⚠️ Subscription is incomplete but no clientSecret found. This might indicate a payment issue.`,
           );
           return next(
             new AppError(
               "Unable to retrieve payment confirmation details. Please contact support.",
-              500
-            )
+              500,
+            ),
           );
         }
       }
@@ -1062,7 +1064,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
           subscriptionRecord.stripeSubscriptionId,
           {
             default_payment_method: paymentMethodId,
-          }
+          },
         );
 
         // Get the latest invoice
@@ -1076,7 +1078,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
             invoices.data[0].id,
             {
               expand: ["payment_intent"],
-            }
+            },
           );
           clientSecret = latestInvoice.payment_intent?.client_secret;
         }
@@ -1094,7 +1096,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         });
 
         console.log(
-          `✅ Created setup intent for customer ${stripeCustomerId} to collect payment method`
+          `✅ Created setup intent for customer ${stripeCustomerId} to collect payment method`,
         );
 
         // Return setup intent client secret so frontend can collect card details
@@ -1117,8 +1119,8 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         return next(
           new AppError(
             "Invalid payment method ID format. Please provide a valid payment method ID.",
-            400
-          )
+            400,
+          ),
         );
       }
 
@@ -1131,7 +1133,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
           customer: stripeCustomerId,
         });
         console.log(
-          `✅ Attached payment method ${paymentMethodId} to customer ${stripeCustomerId}`
+          `✅ Attached payment method ${paymentMethodId} to customer ${stripeCustomerId}`,
         );
       } catch (err) {
         if (!err.message.includes("already been attached")) {
@@ -1140,7 +1142,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
           throw err;
         }
         console.log(
-          `ℹ️ Payment method ${paymentMethodId} already attached to customer`
+          `ℹ️ Payment method ${paymentMethodId} already attached to customer`,
         );
       }
 
@@ -1157,7 +1159,7 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
       // Create Stripe price (one cycle = subscriptionDays)
       const cycleDays = Math.max(
         1,
-        Math.min(365, parseInt(subscriptionRecord.subscriptionDays, 10) || 30)
+        Math.min(365, parseInt(subscriptionRecord.subscriptionDays, 10) || 30),
       );
       const stripePrice = await stripe.prices.create({
         unit_amount: totalInCents,
@@ -1191,10 +1193,10 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
         stripePriceId: stripePrice.id,
         status: stripeSubscription.status,
         currentPeriodStart: new Date(
-          stripeSubscription.current_period_start * 1000
+          stripeSubscription.current_period_start * 1000,
         ),
         currentPeriodEnd: new Date(
-          stripeSubscription.current_period_end * 1000
+          stripeSubscription.current_period_end * 1000,
         ),
       });
 
@@ -1245,8 +1247,8 @@ exports.createPaymentIntent = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         error.message || "Failed to create payment intent",
-        error.statusCode || 500
-      )
+        error.statusCode || 500,
+      ),
     );
   }
 });
@@ -1269,7 +1271,7 @@ exports.confirmSubscriptionPayment = catchAsync(async (req, res, next) => {
   // If no Stripe subscription ID, can't sync
   if (!subscriptionRecord.stripeSubscriptionId) {
     return next(
-      new AppError("Subscription does not have a Stripe subscription ID", 400)
+      new AppError("Subscription does not have a Stripe subscription ID", 400),
     );
   }
 
@@ -1279,20 +1281,20 @@ exports.confirmSubscriptionPayment = catchAsync(async (req, res, next) => {
       subscriptionRecord.stripeSubscriptionId,
       {
         expand: ["latest_invoice.payment_intent"],
-      }
+      },
     );
 
     // Update subscription status in database
     await subscriptionRecord.update({
       status: stripeSubscription.status,
       currentPeriodStart: new Date(
-        stripeSubscription.current_period_start * 1000
+        stripeSubscription.current_period_start * 1000,
       ),
       currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
     });
 
     console.log(
-      `✅ Subscription ${id} status updated to: ${stripeSubscription.status}`
+      `✅ Subscription ${id} status updated to: ${stripeSubscription.status}`,
     );
 
     return res.status(200).json({
@@ -1309,8 +1311,8 @@ exports.confirmSubscriptionPayment = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         error.message || "Failed to sync subscription status",
-        error.statusCode || 500
-      )
+        error.statusCode || 500,
+      ),
     );
   }
 });
@@ -1358,7 +1360,7 @@ exports.getSubscription = catchAsync(async (req, res, next) => {
   if (subscriptionRecord.stripeSubscriptionId) {
     try {
       const stripeSubscription = await stripe.subscriptions.retrieve(
-        subscriptionRecord.stripeSubscriptionId
+        subscriptionRecord.stripeSubscriptionId,
       );
 
       // Set cancelAtPeriodEnd from Stripe
@@ -1381,7 +1383,7 @@ exports.getSubscription = catchAsync(async (req, res, next) => {
       if (stripeSubscription.cancel_at) {
         // cancel_at is a Unix timestamp in seconds
         scheduledCancelAt = new Date(
-          stripeSubscription.cancel_at * 1000
+          stripeSubscription.cancel_at * 1000,
         ).toISOString();
       } else if (
         stripeSubscription.cancel_at_period_end === true &&
@@ -1389,7 +1391,7 @@ exports.getSubscription = catchAsync(async (req, res, next) => {
       ) {
         // current_period_end is a Unix timestamp in seconds
         scheduledCancelAt = new Date(
-          stripeSubscription.current_period_end * 1000
+          stripeSubscription.current_period_end * 1000,
         ).toISOString();
       } else {
         scheduledCancelAt = null;
@@ -1433,13 +1435,19 @@ exports.cancelSubscription = catchAsync(async (req, res, next) => {
     subscriptionRecord.stripeSubscriptionId,
     {
       cancel_at_period_end: true,
-    }
+    },
   );
 
-  // Update in database
+  // Align DB with Stripe (subscription stays active until period end; canceled_at is set when cancel is scheduled)
   await subscriptionRecord.update({
-    status: "canceled",
-    canceledAt: new Date(),
+    status: stripeSubscription.status,
+    currentPeriodStart: new Date(
+      stripeSubscription.current_period_start * 1000,
+    ),
+    currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+    canceledAt: stripeSubscription.canceled_at
+      ? new Date(stripeSubscription.canceled_at * 1000)
+      : null,
   });
 
   // Send cancellation email (non-blocking)
@@ -1448,7 +1456,9 @@ exports.cancelSubscription = catchAsync(async (req, res, next) => {
     userName: subscriptionRecord.userName,
     periodEnd: new Date(stripeSubscription.current_period_end * 1000),
     cancelAtPeriodEnd: true,
-  }).catch((err) => console.error("❌ Cancellation email failed:", err.message));
+  }).catch((err) =>
+    console.error("❌ Cancellation email failed:", err.message),
+  );
 
   console.log("✅ Subscription canceled:", id);
 
@@ -1484,14 +1494,14 @@ exports.reactivateSubscription = catchAsync(async (req, res, next) => {
   // Check if subscription has Stripe subscription ID
   if (!subscriptionRecord.stripeSubscriptionId) {
     return next(
-      new AppError("Subscription does not have a Stripe subscription ID", 400)
+      new AppError("Subscription does not have a Stripe subscription ID", 400),
     );
   }
 
   try {
     // Fetch the Stripe subscription by id
     const stripeSubscription = await stripe.subscriptions.retrieve(
-      subscriptionRecord.stripeSubscriptionId
+      subscriptionRecord.stripeSubscriptionId,
     );
 
     // Reactivation is allowed only if:
@@ -1523,7 +1533,7 @@ exports.reactivateSubscription = catchAsync(async (req, res, next) => {
       subscriptionRecord.stripeSubscriptionId,
       {
         cancel_at_period_end: false,
-      }
+      },
     );
 
     // Update database record if needed (optional - you may want to update status or clear canceledAt)
@@ -1543,10 +1553,10 @@ exports.reactivateSubscription = catchAsync(async (req, res, next) => {
         status: updatedStripeSubscription.status,
         cancel_at_period_end: updatedStripeSubscription.cancel_at_period_end,
         current_period_start: new Date(
-          updatedStripeSubscription.current_period_start * 1000
+          updatedStripeSubscription.current_period_start * 1000,
         ),
         current_period_end: new Date(
-          updatedStripeSubscription.current_period_end * 1000
+          updatedStripeSubscription.current_period_end * 1000,
         ),
       },
       stripeSubscription: {
@@ -1554,10 +1564,10 @@ exports.reactivateSubscription = catchAsync(async (req, res, next) => {
         status: updatedStripeSubscription.status,
         cancel_at_period_end: updatedStripeSubscription.cancel_at_period_end,
         current_period_start: new Date(
-          updatedStripeSubscription.current_period_start * 1000
+          updatedStripeSubscription.current_period_start * 1000,
         ),
         current_period_end: new Date(
-          updatedStripeSubscription.current_period_end * 1000
+          updatedStripeSubscription.current_period_end * 1000,
         ),
       },
     });
@@ -1570,8 +1580,8 @@ exports.reactivateSubscription = catchAsync(async (req, res, next) => {
       return next(
         new AppError(
           `Stripe error: ${error.message || "Failed to reactivate subscription"}`,
-          error.statusCode || 400
-        )
+          error.statusCode || 400,
+        ),
       );
     }
 
@@ -1579,8 +1589,8 @@ exports.reactivateSubscription = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         error.message || "Failed to reactivate subscription",
-        error.statusCode || 500
-      )
+        error.statusCode || 500,
+      ),
     );
   }
 });

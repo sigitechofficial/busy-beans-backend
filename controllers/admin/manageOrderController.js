@@ -49,11 +49,20 @@ const {
   syncInvoiceOnQuikBooks,
   updateInvoiceOnQuickBooks,
 } = require("../../services/syncInvoiceOnQBO");
-const { quickBooksInvocieDelete } = require("../../services/qboDeleteInvoice");
+const {
+  quickBooksInvocieDelete,
+  deleteAdminQboInvoicesForOrders,
+} = require("../../services/qboDeleteInvoice");
 
 const {
   syncPaymentToQuickBooks,
 } = require("../../services/paymentSyncService");
+const {
+  listAdminQboSyncedOrdersBeforeCutoff,
+} = require("../../services/qboOrderQueryService");
+const {
+  deleteAdminQboPaymentsForOrders,
+} = require("../../services/qboPaymentService");
 const {
   processTransferToLocalPartner,
 } = require("../../utils/localPatnerCommissionTranfer");
@@ -2539,5 +2548,142 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: "success",
     data: {},
+  });
+});
+
+exports.listAdminQboSyncedOrdersBeforeMarch2026 = catchAsync(
+  async (req, res, next) => {
+    if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+      return next(
+        new AppError("You do not have permission to perform this action.", 403),
+      );
+    }
+
+    const { cutoff, date } = req.query;
+    const cutoffInput = date ?? cutoff;
+    let data;
+    try {
+      data = await listAdminQboSyncedOrdersBeforeCutoff(cutoffInput);
+    } catch (err) {
+      if (err.message === "Invalid cutoffDate") {
+        return next(new AppError("Invalid cutoff query parameter.", 400));
+      }
+      throw err;
+    }
+
+    return res.status(200).json({
+      status: "success",
+      results: data.counts.total,
+      data,
+    });
+  },
+);
+
+/**
+ * POST /api/v1/admin/qbo/payments/delete-admin
+ * Body: { orderIds: number[], orderType?: 'customer' | 'local-partner' }
+ * Deletes admin QBO payment for each order and clears quickBooksPaymentId in DB.
+ */
+exports.deleteAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
+  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+    return next(
+      new AppError("You do not have permission to perform this action.", 403),
+    );
+  }
+
+  const { orderIds, orderType = "customer" } = req.body || {};
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    return next(
+      new AppError("orderIds must be a non-empty array.", 400),
+    );
+  }
+
+  if (
+    orderType !== "customer" &&
+    orderType !== "local-partner"
+  ) {
+    return next(
+      new AppError(
+        "orderType must be 'customer' or 'local-partner'.",
+        400,
+      ),
+    );
+  }
+
+  let result;
+  try {
+    result = await deleteAdminQboPaymentsForOrders({ orderIds, orderType });
+  } catch (err) {
+    if (
+      err.message === "orderIds must be a non-empty array." ||
+      err.message === "orderIds must contain valid numeric ids." ||
+      err.message.includes("Admin QuickBooks is not connected")
+    ) {
+      return next(new AppError(err.message, 400));
+    }
+    throw err;
+  }
+
+  const { summary } = result;
+  const message =
+    summary.paymentsFailed === 0
+      ? `Removed ${summary.paymentsDeleted} admin QBO payment(s); ${summary.ordersUpdated} order row(s) updated.`
+      : `Removed ${summary.paymentsDeleted} payment(s); ${summary.paymentsFailed} failed. ${summary.ordersUpdated} order row(s) updated.`;
+
+  return res.status(200).json({
+    status: "success",
+    message,
+    data: result,
+  });
+});
+
+/**
+ * POST /api/v1/admin/qbo/invoices/delete-admin
+ * Body: { orderIds: number[], orderType?: 'customer' | 'local-partner' }
+ * Deletes admin QBO invoice per order; clears quickBooksInvoiceId, quickBooksPaymentId, paymentSyncedToQBO.
+ */
+exports.deleteAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
+  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+    return next(
+      new AppError("You do not have permission to perform this action.", 403),
+    );
+  }
+
+  const { orderIds, orderType = "customer" } = req.body || {};
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    return next(new AppError("orderIds must be a non-empty array.", 400));
+  }
+
+  if (orderType !== "customer" && orderType !== "local-partner") {
+    return next(
+      new AppError("orderType must be 'customer' or 'local-partner'.", 400),
+    );
+  }
+
+  let result;
+  try {
+    result = await deleteAdminQboInvoicesForOrders({ orderIds, orderType });
+  } catch (err) {
+    if (
+      err.message === "orderIds must be a non-empty array." ||
+      err.message === "orderIds must contain valid numeric ids." ||
+      err.message.includes("Admin QuickBooks is not connected") ||
+      err.message.includes("QBO credentials missing")
+    ) {
+      return next(new AppError(err.message, 400));
+    }
+    throw err;
+  }
+
+  const { summary } = result;
+  const message =
+    summary.invoicesFailed === 0
+      ? `Removed ${summary.invoicesDeleted} admin QBO invoice(s); ${summary.ordersUpdated} order row(s) updated.`
+      : `Removed ${summary.invoicesDeleted} invoice(s); ${summary.invoicesFailed} failed. ${summary.ordersUpdated} order row(s) updated.`;
+
+  return res.status(200).json({
+    status: "success",
+    message,
+    data: result,
   });
 });

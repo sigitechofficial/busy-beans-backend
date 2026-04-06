@@ -10,6 +10,7 @@ const machineSubController = require("../controllers/customer/machineSubControll
 const leadController = require("../controllers/admin/leadController");
 const subscriptionController = require("../controllers/admin/subscriptionController");
 const categoryController = require("../controllers/admin/categoriesController");
+const userController = require("../controllers/userController");
 const Authorization = require("../middlewares/protect");
 const {
   signupRateLimiter,
@@ -550,6 +551,43 @@ router.get("/coffee-machine/:id", machineController.getMachines);
  *         description: Lead created successfully
  */
 router.post("/create-lead", leadController.createLead);
+
+/**
+ * @swagger
+ * /api/v1/users/get-in-touch:
+ *   post:
+ *     summary: Submit Get in Touch form (public)
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               company:
+ *                 type: string
+ *               teamSize:
+ *                 type: string
+ *               date:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Submission saved and notification sent
+ */
+router.post("/get-in-touch", userController.getInTouch);
 
 /**
  * @swagger

@@ -18,6 +18,7 @@ const shippingCompanyController = require("../controllers/admin/shippingCompanyC
 const employeeController = require("../controllers/admin/employeeController");
 const adminController = require("../controllers/admin/adminController");
 const machineController = require("../controllers/admin/machineController");
+const leadController = require("../controllers/admin/leadController");
 const supplierEmailReminderController = require("../controllers/admin/supplierEmailReminderController");
 
 const patnerOrderController = require("../controllers/admin/partnerOrderController");
@@ -2540,6 +2541,112 @@ router.get(
 
 /**
  * @swagger
+ * /api/v1/admin/qbo/synced-orders-admin-before-march-2026:
+ *   get:
+ *     summary: List orders with admin QBO invoice created before March 2026
+ *     description: Returns customer and partner orders with quickBooksInvoiceId (admin) and quickBooksPaymentId, plus customerOrdersIdsOnly and partnerOrdersIdsOnly. Query date as DD-MM-YYYY (date param) or ISO (cutoff). Default cutoff 2026-03-01 UTC.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema: { type: string, example: "01-03-2026" }
+ *         description: Optional. DD-MM-YYYY — orders with createdAt before start of that day (UTC). Overrides cutoff if both sent.
+ *       - in: query
+ *         name: cutoff
+ *         schema: { type: string, example: "2026-03-01T00:00:00.000Z" }
+ *         description: Optional. Exclusive upper bound for createdAt (ISO 8601).
+ *     responses:
+ *       200:
+ *         description: Lists and counts
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  "/qbo/synced-orders-admin-before-march-2026",
+  manageOrderController.listAdminQboSyncedOrdersBeforeMarch2026,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/payments/delete-admin:
+ *   post:
+ *     summary: Delete admin QBO payments for orders and update DB
+ *     description: Uses each order's quickBooksPaymentId; clears quickBooksPaymentId, paymentSyncedToQBO, updates qboLastSync on success.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: deletedPayments, failedPayments, skipped, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/payments/delete-admin",
+  manageOrderController.deleteAdminQboPaymentsForOrders,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/invoices/delete-admin:
+ *   post:
+ *     summary: Delete admin QBO invoices for orders and update DB
+ *     description: Uses quickBooksInvoiceId. Clears quickBooksInvoiceId, quickBooksPaymentId, paymentSyncedToQBO; sets qboLastSync. Remove linked QBO payments first if delete fails.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: deletedInvoices, failedInvoices, skipped, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/invoices/delete-admin",
+  manageOrderController.deleteAdminQboInvoicesForOrders,
+);
+
+/**
+ * @swagger
  * /api/v1/admin/customer-management/customer-list/sale-rep/{sr}:
  *   get:
  *     summary: Get customer list by sales rep name
@@ -3077,6 +3184,8 @@ router.post(
 );
 
 router.get("/coffee-machine/requests", machineController.coffeeMachineQuries);
+router.get("/get-in-touch", leadController.getAllGetInTouch);
+router.delete("/get-in-touch/:id", leadController.deleteGetInTouch);
 
 router
   .route("/coffee-machine")
