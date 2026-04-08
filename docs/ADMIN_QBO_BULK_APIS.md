@@ -24,9 +24,9 @@ These operations target **admin QuickBooks only** (platform `account` / `current
 
 #### Query parameters
 
-| Name     | Required | Description                                                                                                                                                                                                 |
-| -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `date`   | No       | Calendar date as **`DD-MM-YYYY`** (e.g. `01-03-2026` = 1 March 2026 UTC). Orders with `createdAt` **&lt;** start of that day (UTC). Takes precedence over `cutoff` if both are sent.                         |
+| Name     | Required | Description                                                                                                                                                                                                      |
+| -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `date`   | No       | Calendar date as **`DD-MM-YYYY`** (e.g. `01-03-2026` = 1 March 2026 UTC). Orders with `createdAt` **&lt;** start of that day (UTC). Takes precedence over `cutoff` if both are sent.                             |
 | `cutoff` | No       | ISO 8601 datetime (e.g. `2026-03-01T00:00:00.000Z`). Orders with `createdAt` **&lt;** this instant. Use `date` instead if you prefer `01-03-2026` style. If neither `date` nor `cutoff`: default 1 Mar 2026 UTC. |
 
 #### Example
@@ -86,11 +86,11 @@ GET /api/v1/admin/qbo/synced-orders-admin-before-march-2026?cutoff=2026-03-01T00
 
 ### Errors
 
-| Status  | When                                       |
-| ------- | ------------------------------------------ |
+| Status  | When                                                                                        |
+| ------- | ------------------------------------------------------------------------------------------- |
 | **400** | Invalid `date` / `cutoff` (bad `DD-MM-YYYY`, impossible calendar date, or unparseable ISO). |
-| **403** | User is not `admin` / `adminEmployee`.     |
-| **401** | Not authenticated (middleware).            |
+| **403** | User is not `admin` / `adminEmployee`.                                                      |
+| **401** | Not authenticated (middleware).                                                             |
 
 ---
 
@@ -263,6 +263,74 @@ For affected order rows:
 
 ---
 
+## 4. Update admin QBO invoices by order IDs
+
+Pushes the latest order data to the **existing** admin QuickBooks invoice (`quickBooksInvoiceId`) via `updateInvoiceInQuickBooks`. **Partner QBO is not called.**
+
+Orders without `quickBooksInvoiceId` are **skipped** (`no_admin_invoice`). Direct-partner / dropship direct-invoice admin-skip rules still apply (see `shouldSkipAdminQboSync` in `qboInvoice.js`).
+
+### Request
+
+| Item         | Value                                               |
+| ------------ | --------------------------------------------------- |
+| Method       | `POST`                                              |
+| Path         | `/qbo/invoices/update-admin`                        |
+| Full URL     | `{API_BASE}/api/v1/admin/qbo/invoices/update-admin` |
+| Content-Type | `application/json`                                  |
+
+#### Body (JSON)
+
+| Field       | Type       | Required | Description                                  |
+| ----------- | ---------- | -------- | -------------------------------------------- |
+| `orderIds`  | `number[]` | Yes      | Order IDs to update in admin QBO.            |
+| `orderType` | `string`   | No       | `"customer"` (default) or `"local-partner"`. |
+
+#### Example
+
+```json
+{
+  "orderIds": [1001, 1002],
+  "orderType": "customer"
+}
+```
+
+### Response `200 OK`
+
+```json
+{
+  "status": "success",
+  "message": "Admin QBO invoice update: 2 updated, 0 failed, 1 skipped, 0 id(s) not found.",
+  "data": {
+    "orderType": "customer",
+    "updatedOrderIds": [1001, 1002],
+    "failed": [
+      { "orderId": 1003, "reason": "admin_qbo_customer_not_connected" }
+    ],
+    "skipped": [{ "orderId": 1004, "reason": "no_admin_invoice" }],
+    "ordersNotFound": [9999],
+    "summary": {
+      "updated": 2,
+      "failed": 1,
+      "skipped": 1,
+      "ordersNotFound": 1,
+      "totalRequested": 5
+    }
+  }
+}
+```
+
+Requests are spaced by **300 ms** between orders to reduce QBO throttling.
+
+### Errors
+
+| Status  | When                                                                    |
+| ------- | ----------------------------------------------------------------------- |
+| **400** | Missing/empty `orderIds`, invalid `orderType`, or no valid numeric ids. |
+| **403** | Not admin / adminEmployee.                                              |
+| **401** | Not authenticated.                                                      |
+
+---
+
 ## Quick reference
 
 | #   | Method | Path                                                      |
@@ -270,5 +338,6 @@ For affected order rows:
 | 1   | `GET`  | `/api/v1/admin/qbo/synced-orders-admin-before-march-2026` |
 | 2   | `POST` | `/api/v1/admin/qbo/payments/delete-admin`                 |
 | 3   | `POST` | `/api/v1/admin/qbo/invoices/delete-admin`                 |
+| 4   | `POST` | `/api/v1/admin/qbo/invoices/update-admin`                 |
 
-**Implementation:** `services/qboOrderQueryService.js`, `services/qboPaymentService.js`, `services/qboDeleteInvoice.js`, `controllers/admin/manageOrderController.js`, `routes/adminRoutes.js`.
+**Implementation:** `services/qboOrderQueryService.js`, `services/qboPaymentService.js`, `services/qboDeleteInvoice.js`, `services/qboInvoice.js` (`updateAdminQboInvoicesForOrders`), `controllers/admin/manageOrderController.js`, `routes/adminRoutes.js`.

@@ -2647,6 +2647,44 @@ router.post(
 
 /**
  * @swagger
+ * /api/v1/admin/qbo/invoices/update-admin:
+ *   post:
+ *     summary: Update admin QBO invoices for orders (bulk)
+ *     description: Pushes latest order data to existing quickBooksInvoiceId in admin QBO only. Skips orders with no admin invoice. Does not touch partner QBO.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: updatedOrderIds, failed, skipped, ordersNotFound, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/invoices/update-admin",
+  manageOrderController.updateAdminQboInvoicesForOrders,
+);
+
+/**
+ * @swagger
  * /api/v1/admin/customer-management/customer-list/sale-rep/{sr}:
  *   get:
  *     summary: Get customer list by sales rep name

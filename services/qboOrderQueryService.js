@@ -58,8 +58,12 @@ async function listAdminQboSyncedOrdersBeforeCutoff(cutoffInput) {
 
   const baseWhere = {
     ...whereAdminQboInvoiceSynced(),
-    createdAt: { [Op.lt]: cutoff },
+    createdAt: {
+      [Op.gte]: new Date("2026-02-01T00:00:00.000Z"),
+      [Op.lte]: new Date("2026-02-28T23:59:59.999Z"),
+    },
     deleted: false,
+    salesRepId: 5,
   };
 
   const attributes = [

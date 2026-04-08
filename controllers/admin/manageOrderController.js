@@ -63,6 +63,7 @@ const {
 const {
   deleteAdminQboPaymentsForOrders,
 } = require("../../services/qboPaymentService");
+const { updateAdminQboInvoicesForOrders } = require("../../services/qboInvoice");
 const {
   processTransferToLocalPartner,
 } = require("../../utils/localPatnerCommissionTranfer");
@@ -2680,6 +2681,52 @@ exports.deleteAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
     summary.invoicesFailed === 0
       ? `Removed ${summary.invoicesDeleted} admin QBO invoice(s); ${summary.ordersUpdated} order row(s) updated.`
       : `Removed ${summary.invoicesDeleted} invoice(s); ${summary.invoicesFailed} failed. ${summary.ordersUpdated} order row(s) updated.`;
+
+  return res.status(200).json({
+    status: "success",
+    message,
+    data: result,
+  });
+});
+
+/**
+ * POST /api/v1/admin/qbo/invoices/update-admin
+ * Body: { orderIds: number[], orderType?: 'customer' | 'local-partner' }
+ * Updates existing **admin** QBO invoices only (partner QBO untouched).
+ */
+exports.updateAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
+  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+    return next(
+      new AppError("You do not have permission to perform this action.", 403),
+    );
+  }
+
+  const { orderIds, orderType = "customer" } = req.body || {};
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    return next(new AppError("orderIds must be a non-empty array.", 400));
+  }
+
+  if (orderType !== "customer" && orderType !== "local-partner") {
+    return next(
+      new AppError("orderType must be 'customer' or 'local-partner'.", 400),
+    );
+  }
+
+  let result;
+  try {
+    result = await updateAdminQboInvoicesForOrders({ orderIds, orderType });
+  } catch (err) {
+    if (
+      err.message === "orderIds must be a non-empty array" ||
+      err.message === "orderIds must contain valid numeric ids"
+    ) {
+      return next(new AppError(`${err.message}.`, 400));
+    }
+    throw err;
+  }
+
+  const { summary } = result;
+  const message = `Admin QBO invoice update: ${summary.updated} updated, ${summary.failed} failed, ${summary.skipped} skipped, ${summary.ordersNotFound} id(s) not found.`;
 
   return res.status(200).json({
     status: "success",
