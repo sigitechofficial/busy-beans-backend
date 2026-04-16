@@ -56,6 +56,7 @@ const {
 
 const {
   syncPaymentToQuickBooks,
+  syncAdminPaymentsForOrders,
 } = require("../../services/paymentSyncService");
 const {
   listAdminQboSyncedOrdersBeforeCutoff,
@@ -2727,6 +2728,53 @@ exports.updateAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
 
   const { summary } = result;
   const message = `Admin QBO invoice update: ${summary.updated} updated, ${summary.failed} failed, ${summary.skipped} skipped, ${summary.ordersNotFound} id(s) not found.`;
+
+  return res.status(200).json({
+    status: "success",
+    message,
+    data: result,
+  });
+});
+
+/**
+ * POST /api/v1/admin/qbo/payments/sync-admin
+ * Body: { orderIds: number[], orderType?: 'customer' | 'local-partner' }
+ * Creates/links **admin** QBO payment only (partner QBO untouched).
+ */
+exports.syncAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
+  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+    return next(
+      new AppError("You do not have permission to perform this action.", 403),
+    );
+  }
+
+  const { orderIds, orderType = "customer" } = req.body || {};
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    return next(new AppError("orderIds must be a non-empty array.", 400));
+  }
+
+  if (orderType !== "customer" && orderType !== "local-partner") {
+    return next(
+      new AppError("orderType must be 'customer' or 'local-partner'.", 400),
+    );
+  }
+
+  let result;
+  try {
+    result = await syncAdminPaymentsForOrders({ orderIds, orderType });
+  } catch (err) {
+    if (
+      err.message === "orderIds must be a non-empty array" ||
+      err.message === "orderIds must contain valid numeric ids" ||
+      err.message === "Admin account not found"
+    ) {
+      return next(new AppError(`${err.message}.`, 400));
+    }
+    throw err;
+  }
+
+  const { summary } = result;
+  const message = `Admin QBO payment sync: ${summary.synced} synced, ${summary.failed} failed, ${summary.skipped} skipped, ${summary.ordersNotFound} id(s) not found.`;
 
   return res.status(200).json({
     status: "success",

@@ -2609,6 +2609,44 @@ router.post(
 
 /**
  * @swagger
+ * /api/v1/admin/qbo/payments/sync-admin:
+ *   post:
+ *     summary: Sync admin QBO payments for orders (bulk)
+ *     description: Creates admin QBO payments only; partner QBO untouched. Requires payment done, admin invoice id, adminRealmId, and no admin payment id yet.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: synced, failed, skipped, ordersNotFound, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/payments/sync-admin",
+  manageOrderController.syncAdminQboPaymentsForOrders,
+);
+
+/**
+ * @swagger
  * /api/v1/admin/qbo/invoices/delete-admin:
  *   post:
  *     summary: Delete admin QBO invoices for orders and update DB

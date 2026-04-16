@@ -331,6 +331,75 @@ Requests are spaced by **300 ms** between orders to reduce QBO throttling.
 
 ---
 
+## 5. Sync admin QBO payments by order IDs (bulk)
+
+Creates the **admin** QuickBooks payment for paid orders that already have `quickBooksInvoiceId` and `adminRealmId` but no `quickBooksPaymentId`. **Partner QBO is not contacted.**
+
+Skip reasons include: `payment_not_done`, `no_admin_invoice`, `admin_payment_already_synced`, `no_admin_realm`.
+
+### Request
+
+| Item | Value |
+|------|--------|
+| Method | `POST` |
+| Path | `/qbo/payments/sync-admin` |
+| Full URL | `{API_BASE}/api/v1/admin/qbo/payments/sync-admin` |
+| Content-Type | `application/json` |
+
+#### Body (JSON)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `orderIds` | `number[]` | Yes | Order IDs to sync. |
+| `orderType` | `string` | No | `"customer"` (default) or `"local-partner"`. |
+
+#### Example
+
+```json
+{
+  "orderIds": [1001, 1002],
+  "orderType": "customer"
+}
+```
+
+### Response `200 OK`
+
+```json
+{
+  "status": "success",
+  "message": "Admin QBO payment sync: 2 synced, 0 failed, 1 skipped, 0 id(s) not found.",
+  "data": {
+    "orderType": "customer",
+    "synced": [
+      { "orderId": 1001, "paymentId": "229" },
+      { "orderId": 1002, "paymentId": "230" }
+    ],
+    "failed": [{ "orderId": 1003, "message": "QBO customer not found for admin" }],
+    "skipped": [{ "orderId": 1004, "reason": "payment_not_done" }],
+    "ordersNotFound": [9999],
+    "summary": {
+      "synced": 2,
+      "failed": 1,
+      "skipped": 1,
+      "ordersNotFound": 1,
+      "totalRequested": 5
+    }
+  }
+}
+```
+
+**300 ms** between orders (QBO throttling). On success, DB sets `quickBooksPaymentId`, `paymentSyncedToQBO: true`, `qboLastSync` (same as `syncAdminPaymentToQBO`).
+
+### Errors
+
+| Status | When |
+|--------|------|
+| **400** | Missing/empty `orderIds`, invalid `orderType`, invalid ids, or admin account missing. |
+| **403** | Not admin / adminEmployee. |
+| **401** | Not authenticated. |
+
+---
+
 ## Quick reference
 
 | #   | Method | Path                                                      |
@@ -339,5 +408,6 @@ Requests are spaced by **300 ms** between orders to reduce QBO throttling.
 | 2   | `POST` | `/api/v1/admin/qbo/payments/delete-admin`                 |
 | 3   | `POST` | `/api/v1/admin/qbo/invoices/delete-admin`                 |
 | 4   | `POST` | `/api/v1/admin/qbo/invoices/update-admin`                 |
+| 5   | `POST` | `/api/v1/admin/qbo/payments/sync-admin`                  |
 
-**Implementation:** `services/qboOrderQueryService.js`, `services/qboPaymentService.js`, `services/qboDeleteInvoice.js`, `services/qboInvoice.js` (`updateAdminQboInvoicesForOrders`), `controllers/admin/manageOrderController.js`, `routes/adminRoutes.js`.
+**Implementation:** `services/qboOrderQueryService.js`, `services/qboPaymentService.js`, `services/paymentSyncService.js` (`syncAdminPaymentsForOrders`), `services/qboDeleteInvoice.js`, `services/qboInvoice.js` (`updateAdminQboInvoicesForOrders`), `controllers/admin/manageOrderController.js`, `routes/adminRoutes.js`.
