@@ -19,6 +19,10 @@ const options = {
         description: "Development server",
       },
       {
+        url: "https://testingbb.trimworldwide.com",
+        description: "Testing server",
+      },
+      {
         url: "https://api.busybeans.com",
         description: "Production server",
       },
