@@ -158,6 +158,7 @@ exports.getEmployee = async (req, res, next) => {
 
 exports.updateEmployee = async (req, res, next) => {
   const { employeeId } = req.params;
+
   let exist = req.body?.email
     ? await account.findOne({ where: { email: req.body?.email } })
     : null;
@@ -172,13 +173,15 @@ exports.updateEmployee = async (req, res, next) => {
   }
 
   const updateData = { ...req.body };
+  console.log("🚀 ~ updateData:", updateData);
   if (updateData.password) {
     updateData.password = bcrypt.hashSync(updateData.password, 12);
   }
 
+  console.log("🚀 ~ updateData after hash`:", updateData);
+
   await employee.update(updateData, {
     where: { id: employeeId },
-    individualHooks: true,
   });
 
   const { features } = req.body;
@@ -419,10 +422,11 @@ exports.attachDirectPartnerEmployeeBankAccount = catchAsync(
       }
     }
 
-    const bankAccount = await Stripe.attachExternalBankAccountToConnectedAccount({
-      accountId: partner.connectAccountId,
-      externalAccountToken,
-    });
+    const bankAccount =
+      await Stripe.attachExternalBankAccountToConnectedAccount({
+        accountId: partner.connectAccountId,
+        externalAccountToken,
+      });
 
     emp.directPartnerExternalAccountId = bankAccount?.id || null;
     await emp.save();
@@ -587,7 +591,9 @@ exports.retryDirectPartnerEmployeePayout = catchAsync(
 
     if (
       orderRow.directPartnerEmployeePayoutId &&
-      ACTIVE_PAYOUT_STATUSES.includes(orderRow.directPartnerEmployeePayoutStatus)
+      ACTIVE_PAYOUT_STATUSES.includes(
+        orderRow.directPartnerEmployeePayoutStatus,
+      )
     ) {
       return next(
         new AppError(
@@ -604,13 +610,12 @@ exports.retryDirectPartnerEmployeePayout = catchAsync(
     });
 
     if (!result || !result.success) {
-      const reasonCode = result?.reasonCode || "DIRECT_PARTNER_PAYOUT_RETRY_FAILED";
+      const reasonCode =
+        result?.reasonCode || "DIRECT_PARTNER_PAYOUT_RETRY_FAILED";
       const message =
         result?.message ||
         "Retry payout was not created. Check current payout status or logs.";
-      return next(
-        new AppError(`${message} [reasonCode=${reasonCode}]`, 400),
-      );
+      return next(new AppError(`${message} [reasonCode=${reasonCode}]`, 400));
     }
 
     res.status(200).json({

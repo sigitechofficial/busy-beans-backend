@@ -1409,6 +1409,99 @@ async function createInvoiceFromOrder({
   };
 }
 
+/**
+ * Update existing **admin** QBO invoices only (no partner QBO, no create).
+ * Orders without `quickBooksInvoiceId` are skipped.
+ *
+ * @param {Object} opts
+ * @param {number[]} opts.orderIds
+ * @param {'customer'|'local-partner'} [opts.orderType='customer']
+ */
+async function updateAdminQboInvoicesForOrders({
+  orderIds,
+  orderType = "customer",
+} = {}) {
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error("orderIds must be a non-empty array");
+  }
+
+  const numericIds = [
+    ...new Set(
+      orderIds
+        .map((id) => Number(id))
+        .filter((n) => !Number.isNaN(n) && n > 0),
+    ),
+  ];
+  if (numericIds.length === 0) {
+    throw new Error("orderIds must contain valid numeric ids");
+  }
+
+  const DBMODEL = orderType === "local-partner" ? PartnerOrder : Order;
+  const ADMIN = await account.findOne({});
+
+  const orders = await getOrdersWithAssociations({
+    orderIds: numericIds,
+    orderType,
+  });
+  const foundIdSet = new Set(orders.map((o) => o.id));
+  const ordersNotFound = numericIds.filter((id) => !foundIdSet.has(id));
+
+  const updatedOrderIds = [];
+  const failed = [];
+  const skipped = [];
+
+  for (const ord of orders) {
+    if (
+      !ord.quickBooksInvoiceId ||
+      String(ord.quickBooksInvoiceId).trim() === ""
+    ) {
+      skipped.push({ orderId: ord.id, reason: "no_admin_invoice" });
+      await new Promise((r) => setTimeout(r, 300));
+      continue;
+    }
+
+    const adminResult = await handleAdminQboSync({
+      order: ord,
+      orderType,
+      orderId: ord.id,
+      ADMIN,
+      DBMODEL,
+      updateRequest: true,
+    });
+
+    if (adminResult.saved && adminResult.reason === "admin_invoice_updated") {
+      updatedOrderIds.push(ord.id);
+    } else if (adminResult.saved) {
+      skipped.push({
+        orderId: ord.id,
+        reason: adminResult.reason || "skipped",
+      });
+    } else {
+      failed.push({
+        orderId: ord.id,
+        reason: adminResult.reason || "admin_update_failed",
+      });
+    }
+
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  return {
+    orderType,
+    updatedOrderIds,
+    failed,
+    skipped,
+    ordersNotFound,
+    summary: {
+      updated: updatedOrderIds.length,
+      failed: failed.length,
+      skipped: skipped.length,
+      ordersNotFound: ordersNotFound.length,
+      totalRequested: numericIds.length,
+    },
+  };
+}
+
 // ---- Bulk Invoice creation ----
 async function createMultipleInvoicesFromOrders({
   orderIds,
@@ -1539,6 +1632,7 @@ async function createMultipleInvoicesFromOrders({
 module.exports = {
   createInvoiceFromOrder,
   createMultipleInvoicesFromOrders,
+  updateAdminQboInvoicesForOrders,
   createPaymentForInvoice,
   mapPaymentMethodName,
   createQboPayment,

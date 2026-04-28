@@ -37,17 +37,24 @@ function parseFromOverride(fromOverride) {
 
 function normalizeToZeptoRecipients(to) {
   const arr = Array.isArray(to) ? to : [to];
-  return arr.map((item) => {
+  return arr
+    .map((item) => {
     if (typeof item === "string") {
-      return { email_address: { address: item, name: "" } };
+      const address = item.trim();
+      if (!address) return null;
+      return { email_address: { address, name: "" } };
     }
+    if (!item || typeof item !== "object") return null;
+    const address = (item.address || item.email || "").trim();
+    if (!address) return null;
     return {
       email_address: {
-        address: item.address || item.email,
+        address,
         name: item.name || "",
       },
     };
-  });
+    })
+    .filter(Boolean);
 }
 
 async function resolveAttachments(attachments) {
@@ -148,6 +155,9 @@ async function sendMail(options, callback) {
     to: normalizeToZeptoRecipients(to),
     subject,
   };
+  if (!payload.to.length) {
+    throw new Error("sendMail: Missing valid recipient email in `to` field");
+  }
   if (html != null && html !== "") {
     payload.htmlbody = html;
   }

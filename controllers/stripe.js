@@ -58,6 +58,43 @@ function convertToCents(amount) {
 function convertToDollars(cents) {
   return cents / 100;
 }
+
+/**
+ * Stripe Checkout charges unit_amount (integer minor units) × quantity per row.
+ * Using (lineTotal/qty).toFixed(2) as the unit can make unit_cents × qty ≠ round(lineTotal*100).
+ * When recomposed matches the saved line, keep unit × qty; otherwise charge exact line as qty 1.
+ */
+function checkoutLineItemFromOrderItem(item, currency) {
+  const qty = Number(item.qty);
+  const lineTotal = Number(item.price);
+  const baseName = item.product || item.productName || "Item";
+  const lineCents = convertToCents(lineTotal);
+  const unitDollarsTwoDp = Number((lineTotal / qty).toFixed(2));
+  const unitCentsFromRoundedUnit = convertToCents(unitDollarsTwoDp);
+  const recomposedCents = unitCentsFromRoundedUnit * qty;
+
+  if (qty > 0 && recomposedCents === lineCents) {
+    return {
+      price_data: {
+        currency,
+        product_data: { name: baseName },
+        unit_amount: unitCentsFromRoundedUnit,
+      },
+      quantity: qty,
+    };
+  }
+
+  const name = qty > 1 ? `${baseName} (Qty ${qty})` : baseName;
+  return {
+    price_data: {
+      currency,
+      product_data: { name },
+      unit_amount: lineCents,
+    },
+    quantity: 1,
+  };
+}
+
 /*
  *  1:  Create Customer ________________________
  */
@@ -786,21 +823,12 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
   const { items, shippingCharges, vat } = order;
   const line_items = [];
 
-  // Build line items (item.price assumed as LINE TOTAL; unit = price/qty)
+  // Build line items (item.price is DB line total; cent-safe for Stripe — checkoutLineItemFromOrderItem)
   for (const item of items) {
     const qty = Number(item.qty);
     const lineTotal = Number(item.price);
     if (!qty || !lineTotal) throw new Error("Each item needs qty and price.");
-    const unit = lineTotal / qty;
-
-    line_items.push({
-      price_data: {
-        currency,
-        product_data: { name: item.product || item.productName || "Item" },
-        unit_amount: convertToCents(unit, currency), // must be integer
-      },
-      quantity: qty,
-    });
+    line_items.push(checkoutLineItemFromOrderItem(item, currency));
   }
 
   if (shippingCharges && Number(shippingCharges) > 0) {

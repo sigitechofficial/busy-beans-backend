@@ -135,6 +135,15 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: 0,
     },
+    supplierEmailSendCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    supplierEmailLastSentAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     localPatnerCommission: {
       type: DataTypes.DECIMAL(20, 2),
       allowNull: true,

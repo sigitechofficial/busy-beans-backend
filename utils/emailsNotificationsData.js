@@ -528,7 +528,7 @@ const localPartnerOrder = async ({ orderId }) => {
         },
       ],
     });
-    console.log("🚀 ~ localPartnerOrder ~ doc:", doc.id);
+    console.log("🚀 ~ localPartnerOrder ~ doc:", doc?.id);
     const output = JSON.parse(JSON.stringify(doc));
     output.orderOf = "local-partner";
     return output;

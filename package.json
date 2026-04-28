@@ -4,8 +4,9 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "start": "node testbb.js",
-    "dev": "nodemon testbb.js",
+    "start": "node bb.js",
+    "local": "nodemon local.js",
+    "dev": "nodemon bb.js",
     "test": "nodemon testbb.js",
     "start:prod": "NODE_ENV=production nodemon testbb.js",
     "debug": "ndb testbb.js",

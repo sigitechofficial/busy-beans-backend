@@ -2,10 +2,12 @@
 // Fetches unapplied payments from a QuickBooks Online account.
 
 const axios = require("axios");
+const { Op } = require("sequelize");
 const { refreshAccessTokenIfNeeded } = require("./qboTokenService");
 const { getActiveToken } = require("./qboTokenService");
 const { QBO, MINOR, headers } = require("./qboHelpers");
 const { handleQboError } = require("./qboErrorHandler");
+const { account, order, partnerOrder } = require("../models");
 
 const MAX_RESULTS = 1000;
 
@@ -195,7 +197,142 @@ async function deletePaymentsByIds({ condition, ids } = {}) {
   };
 }
 
+/**
+ * Delete payments in the **admin** QuickBooks company only (platform account).
+ * Uses admin `currentRealmId` + `account` row for token lookup.
+ *
+ * @param {string[]} ids - QBO Payment Ids
+ * @returns {Promise<{ deletedIds: string[], failedIds: string[], errors: Array<{ id: string, message: string }> }>}
+ */
+async function deleteAdminQboPaymentsByIds(ids) {
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw new Error("ids must be a non-empty array of payment IDs.");
+  }
+
+  const ADMIN = await account.findOne({});
+  if (!ADMIN?.currentRealmId) {
+    throw new Error("Admin QuickBooks is not connected (missing currentRealmId).");
+  }
+
+  const condition = {
+    realmId: ADMIN.currentRealmId,
+    accountId: ADMIN.id,
+  };
+
+  return deletePaymentsByIds({ condition, ids });
+}
+
+/**
+ * For each order, delete its **admin** QBO payment (`quickBooksPaymentId`) and clear that field in DB.
+ * Deduplicates by payment id so the same QBO payment is only deleted once.
+ *
+ * @param {Object} opts
+ * @param {number[]} opts.orderIds
+ * @param {'customer'|'local-partner'} [opts.orderType='customer'] — `order` vs `partnerOrder` model
+ */
+async function deleteAdminQboPaymentsForOrders({
+  orderIds,
+  orderType = "customer",
+} = {}) {
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error("orderIds must be a non-empty array.");
+  }
+
+  const ADMIN = await account.findOne({});
+  if (!ADMIN?.currentRealmId) {
+    throw new Error("Admin QuickBooks is not connected (missing currentRealmId).");
+  }
+
+  const condition = {
+    realmId: ADMIN.currentRealmId,
+    accountId: ADMIN.id,
+  };
+
+  const MODEL = orderType === "local-partner" ? partnerOrder : order;
+  const numericIds = [
+    ...new Set(
+      orderIds
+        .map((id) => Number(id))
+        .filter((n) => !Number.isNaN(n) && n > 0),
+    ),
+  ];
+  if (numericIds.length === 0) {
+    throw new Error("orderIds must contain valid numeric ids.");
+  }
+
+  const rows = await MODEL.findAll({
+    where: { id: { [Op.in]: numericIds }, deleted: false },
+    attributes: ["id", "quickBooksPaymentId"],
+  });
+
+  const foundIdSet = new Set(rows.map((r) => r.id));
+  const ordersNotFound = numericIds.filter((id) => !foundIdSet.has(id));
+
+  const paymentToOrderIds = new Map();
+  const skippedNoAdminPayment = [];
+
+  for (const row of rows) {
+    const raw = row.quickBooksPaymentId;
+    if (raw == null || String(raw).trim() === "") {
+      skippedNoAdminPayment.push(row.id);
+      continue;
+    }
+    const paymentId = String(raw).trim();
+    if (!paymentToOrderIds.has(paymentId)) {
+      paymentToOrderIds.set(paymentId, []);
+    }
+    paymentToOrderIds.get(paymentId).push(row.id);
+  }
+
+  const deletedPayments = [];
+  const failedPayments = [];
+
+  for (const [paymentId, affectedOrderIds] of paymentToOrderIds) {
+    const batch = await deletePaymentsByIds({ condition, ids: [paymentId] });
+    if (batch.deletedIds.includes(paymentId)) {
+      await MODEL.update(
+        {
+          quickBooksPaymentId: null,
+          paymentSyncedToQBO: false,
+          qboLastSync: new Date(),
+        },
+        { where: { id: { [Op.in]: affectedOrderIds } } },
+      );
+      deletedPayments.push({ paymentId, orderIds: affectedOrderIds });
+    } else {
+      const errMsg =
+        batch.errors.find((e) => e.id === paymentId)?.message ||
+        "QuickBooks payment delete failed";
+      failedPayments.push({
+        paymentId,
+        orderIds: affectedOrderIds,
+        message: errMsg,
+      });
+    }
+  }
+
+  return {
+    deletedPayments,
+    failedPayments,
+    skippedNoAdminPayment,
+    ordersNotFound,
+    orderType,
+    summary: {
+      paymentsDeleted: deletedPayments.length,
+      paymentsFailed: failedPayments.length,
+      ordersUpdated: deletedPayments.reduce(
+        (n, d) => n + d.orderIds.length,
+        0,
+      ),
+      skippedNoAdminPayment: skippedNoAdminPayment.length,
+      ordersNotFound: ordersNotFound.length,
+    },
+  };
+}
+
 module.exports = {
   getUnappliedPayments,
   deletePaymentsByIds,
+  deleteAdminQboPaymentsByIds,
+  deleteAdminQboPaymentsForOrders,
 };

@@ -566,6 +566,7 @@ async function bulkTransferEmployeeCommission({
     console.log(
       `🚀 ~ bulkTransferEmployeeCommission ~ Processing ${orderIds.length} orders`,
     );
+    const normalizedOrderIds = orderIds.map((id) => Number(id));
 
     const employeeOfCondition =
       employeeOf === "admin"
@@ -646,6 +647,51 @@ async function bulkTransferEmployeeCommission({
     const results = [];
     const successful = [];
     const failed = [];
+    const errors = [];
+    const failedOrders = [];
+
+    const addFailedOrders = ({
+      orderIds: sourceOrderIds,
+      message,
+      employeeId = null,
+    }) => {
+      sourceOrderIds.forEach((id) => {
+        failedOrders.push({
+          orderId: Number(id),
+          employeeId,
+          message,
+        });
+      });
+    };
+
+    const fetchedOrderIds = new Set(ordersData.map((o) => Number(o.id)));
+    const notEligibleOrderIds = normalizedOrderIds.filter(
+      (id) => !fetchedOrderIds.has(id),
+    );
+    if (notEligibleOrderIds.length) {
+      const message =
+        "Order is not eligible for bulk transfer (missing commission, already transferred, invalid employee, or outside scope)";
+      addFailedOrders({ orderIds: notEligibleOrderIds, message });
+      errors.push({
+        employeeId: null,
+        message,
+        orderIds: notEligibleOrderIds,
+      });
+    }
+
+    const partnerScopedOrderIds = ordersData
+      .filter((o) => o?.salesRepId)
+      .map((o) => Number(o.id));
+    if (partnerScopedOrderIds.length) {
+      const message =
+        "Partner scoped orders are excluded from admin employee bulk transfer";
+      addFailedOrders({ orderIds: partnerScopedOrderIds, message });
+      errors.push({
+        employeeId: null,
+        message,
+        orderIds: partnerScopedOrderIds,
+      });
+    }
 
     for (const empId in ordersByEmployee) {
       const empData = ordersByEmployee[empId];
@@ -655,11 +701,27 @@ async function bulkTransferEmployeeCommission({
         console.error(
           `❌ Employee ${empId} does not have a Stripe Connect account ID`,
         );
-        failed.push({
+        const failedRecord = {
           employeeId: empId,
           orderIds: empData.orders.map((o) => o.id),
           totalCommission: empData.totalCommission,
           message: "Employee does not have Stripe Connect account",
+        };
+        failed.push(failedRecord);
+        results.push({
+          employeeId: empId,
+          status: "failed",
+          ...failedRecord,
+        });
+        addFailedOrders({
+          orderIds: failedRecord.orderIds,
+          employeeId: Number(empId),
+          message: failedRecord.message,
+        });
+        errors.push({
+          employeeId: empId,
+          message: failedRecord.message,
+          orderIds: failedRecord.orderIds,
         });
         continue;
       }
@@ -758,18 +820,27 @@ async function bulkTransferEmployeeCommission({
           `❌ Error transferring commission for employee ${empId}:`,
           error.message,
         );
-        failed.push({
+        const failedRecord = {
           employeeId: empId,
           orderIds: empData.orders.map((o) => o.id),
           totalCommission: empData.totalCommission,
           message: error.message || "Transfer failed",
-        });
+        };
+        failed.push(failedRecord);
         results.push({
           employeeId: empId,
           status: "failed",
-          orderIds: empData.orders.map((o) => o.id),
-          totalCommission: empData.totalCommission,
-          message: error.message || "Transfer failed",
+          ...failedRecord,
+        });
+        addFailedOrders({
+          orderIds: failedRecord.orderIds,
+          employeeId: Number(empId),
+          message: failedRecord.message,
+        });
+        errors.push({
+          employeeId: empId,
+          message: failedRecord.message,
+          orderIds: failedRecord.orderIds,
         });
       }
     }
@@ -785,6 +856,8 @@ async function bulkTransferEmployeeCommission({
       successful: successful.length,
       failed: failed.length,
       results: results,
+      errors,
+      failedOrders,
       summary: {
         successful: successful,
         failed: failed,
