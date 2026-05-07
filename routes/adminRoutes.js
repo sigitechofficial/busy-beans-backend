@@ -3091,6 +3091,58 @@ router.get(
   "/admin-reports/category-wise-product-sales-report",
   adminReportsController.categoryWiseProductSalesSummary,
 );
+/**
+ * @swagger
+ * /api/v1/admin/admin-reports/pulled-orders-receivable:
+ *   get:
+ *     summary: Get pulled orders receivable report with fallback intent id
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "2026-01-01"
+ *         description: Start date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "2026-01-31"
+ *         description: End date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+ *       - in: query
+ *         name: salesRepId
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: Optional filter by sales rep id
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Pulled receivable orders list with pagination
+ *       400:
+ *         description: Validation error
+ */
+router.get(
+  "/admin-reports/pulled-orders-receivable",
+  adminReportsController.pulledOrdersReceivableReport,
+);
 //! SUPPLIER REPORTS SECTION
 
 router.get(

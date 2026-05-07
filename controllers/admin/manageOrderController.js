@@ -508,6 +508,9 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
     invoicePaidDate: new Date(),
     pulloutDate: Date.now(),
   };
+  if (paymentIntentId) {
+    updateData.pulloutIntentId = paymentIntentId;
+  }
 
   // Add optional fields if provided
 

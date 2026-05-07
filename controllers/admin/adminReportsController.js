@@ -1480,3 +1480,123 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
     data: result,
   });
 });
+
+exports.pulledOrdersReceivableReport = catchAsync(async (req, res, next) => {
+  const { startDate, endDate, salesRepId } = req.query;
+  const page = Math.max(parseInt(req.query.page || 1, 10), 1);
+  const limit = Math.max(parseInt(req.query.limit || 20, 10), 1);
+  const offset = (page - 1) * limit;
+
+  if (!startDate || !endDate) {
+    return next(new AppError("startDate and endDate are required", 400));
+  }
+
+  // Validate date format (YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)
+  const dateRegex = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/;
+  if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+    return next(
+      new AppError(
+        "Invalid date format. Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS",
+        400,
+      ),
+    );
+  }
+
+  // Validate that dates are valid
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return next(new AppError("Invalid date values", 400));
+  }
+
+  // Build optional salesRep filter
+  let salesRepFilter = "";
+  const replacements = {
+    startDate,
+    endDate,
+    limit,
+    offset,
+  };
+
+  if (salesRepId !== undefined && salesRepId !== null && salesRepId !== "") {
+    const parsedSalesRepId = parseInt(salesRepId, 10);
+    if (isNaN(parsedSalesRepId) || parsedSalesRepId <= 0) {
+      return next(new AppError("Invalid salesRepId", 400));
+    }
+    salesRepFilter = "AND orders.salesRepId = :salesRepId";
+    replacements.salesRepId = parsedSalesRepId;
+  }
+
+  const baseWhere = `
+    orders.on >= :startDate
+    AND orders.on <= :endDate
+    AND orders.deleted = 0
+    AND orders.adminReceivableStatus = true
+    AND COALESCE(orders.adminReceivableAmount, 0) > 0
+    AND COALESCE(NULLIF(orders.pulloutIntentId, ''), NULLIF(orders.paymentIntentId, '')) IS NOT NULL
+    ${salesRepFilter}
+  `;
+
+  const countQuery = `
+    SELECT COUNT(*) AS total
+    FROM orders
+    WHERE ${baseWhere}
+  `;
+
+  const dataQuery = `
+    SELECT
+      orders.id,
+      orders.invoiceNumber,
+      orders.totalBill,
+      orders.on,
+      orders.salesRepId,
+      (
+        SELECT users.companyName
+        FROM users
+        WHERE users.id = orders.userId
+        LIMIT 1
+      ) AS companyName,
+      (
+        SELECT salesReps.srName
+        FROM salesReps
+        WHERE salesReps.id = orders.salesRepId
+        LIMIT 1
+      ) AS salesRepName,
+      orders.adminReceivableStatus,
+      orders.adminReceivableAmount,
+      orders.localPatnerCommission,
+      orders.pulloutIntentId,
+      orders.paymentIntentId,
+      COALESCE(NULLIF(orders.pulloutIntentId, ''), NULLIF(orders.paymentIntentId, '')) AS effectivePulloutIntentId,
+      orders.pulloutDate,
+      orders.paymentStatus
+    FROM orders
+    WHERE ${baseWhere}
+    ORDER BY orders.on DESC, orders.id DESC
+    LIMIT :limit OFFSET :offset
+  `;
+
+  const countRows = await order.sequelize.query(countQuery, {
+    replacements,
+    type: order.sequelize.QueryTypes.SELECT,
+  });
+  const total = parseInt(countRows?.[0]?.total || 0, 10);
+
+  const rows = await order.sequelize.query(dataQuery, {
+    replacements,
+    type: order.sequelize.QueryTypes.SELECT,
+  });
+
+  res.status(200).json({
+    status: "success",
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPrevPage: page > 1,
+    },
+    data: rows,
+  });
+});
