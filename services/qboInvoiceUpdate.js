@@ -13,6 +13,8 @@ const BASE =
     : "https://quickbooks.api.intuit.com";
 const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 const MINOR = 70;
+const MINOR_CUSTOM_FIELDS = 75;
+const { getPulloutCustomFieldEntry } = require("./qboPulloutCustomField");
 
 /**
  * Query QBO for Sales Rep custom field DefinitionId
@@ -210,6 +212,14 @@ function buildQboInvoiceUpdatePayload({
     );
   }
 
+  const pulloutCf = getPulloutCustomFieldEntry(order);
+  if (pulloutCf) {
+    customFields.push(pulloutCf);
+    console.log(
+      `✅ [QBO] Update: Adding Pullout CustomField (pulloutIntentId=${pulloutCf.StringValue})`,
+    );
+  }
+
   /* -------------------------------------------------------
       6. Build sparse payload
   --------------------------------------------------------*/
@@ -327,7 +337,11 @@ async function updateInvoiceInQuickBooks({
     /* -------------------------------------------------------
         6. Send update request
     --------------------------------------------------------*/
-    const postUrl = `${QBO(realmId)}/invoice?minorversion=${MINOR}`;
+    const hasCustomFields =
+      Array.isArray(payload.CustomField) && payload.CustomField.length > 0;
+    const postUrl = hasCustomFields
+      ? `${QBO(realmId)}/invoice?minorversion=${MINOR_CUSTOM_FIELDS}&include=enhancedAllCustomFields`
+      : `${QBO(realmId)}/invoice?minorversion=${MINOR}`;
     const res = await axios.post(postUrl, payload, {
       headers: {
         Authorization: `Bearer ${accessToken}`,

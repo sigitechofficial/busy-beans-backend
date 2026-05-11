@@ -10,6 +10,7 @@ const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
 const { order, partnerOrder, account, qboCustomerMap } = require("../models");
 const { handleQboError } = require("./qboErrorHandler");
 const { qboQuery } = require("./qboHelpers");
+const { getPulloutCustomFieldEntry } = require("./qboPulloutCustomField");
 
 console.log("🚀 ~ qboInvoice.js ~ process.env.QBO_ENV:", Number(19.8));
 
@@ -884,6 +885,14 @@ async function createQboInvoice({
     } else if (localPartnerValue) {
       console.log(
         `⚠️ [QBO] Sales Rep CustomField not found. Using fallback method...`,
+      );
+    }
+
+    const pulloutCf = getPulloutCustomFieldEntry(order);
+    if (pulloutCf) {
+      customFields.push(pulloutCf);
+      console.log(
+        `✅ [QBO] Adding Pullout CustomField (pulloutIntentId=${pulloutCf.StringValue})`,
       );
     }
 
