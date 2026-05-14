@@ -138,6 +138,10 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "trackingNumber",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
+        "adminReceivableStatus",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`,
@@ -215,6 +219,9 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "salesRepId",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`,
@@ -386,6 +393,10 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "trackingNumber",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
+        "adminReceivableStatus",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`,
@@ -463,6 +474,9 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "salesRepId",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
         [
           literal(
             `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`,

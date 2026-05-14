@@ -206,6 +206,11 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    pulloutIntentIdSynced: {
+      type: DataTypes.ENUM("not-eligible", "eligible", "synced"),
+      allowNull: false,
+      defaultValue: "not-eligible",
+    },
     quickBooksInvoiceId: {
       type: DataTypes.STRING,
       allowNull: true,

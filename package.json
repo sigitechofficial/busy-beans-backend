@@ -18,6 +18,8 @@
     "migrate": "node migrations/migrate.js",
     "migrate:single": "node migrations/run-migration.js",
     "qbo:sales-rep-id": "node scripts/fetchQboSalesRepDefinitionIdAndUpdateEnv.js",
+    "qbo:list-custom-fields": "node scripts/fetchAllQboCustomFields.js",
+    "qbo:audit-duplicate-payments": "node scripts/auditQboDuplicatePayments.js",
     "postinstall": "patch-package"
   },
   "author": "Arbab Hassan",

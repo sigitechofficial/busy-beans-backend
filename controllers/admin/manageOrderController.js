@@ -83,6 +83,9 @@ const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
 } = require("../events/orderEvents");
+const {
+  reconcilePulloutSyncStateForOrder,
+} = require("../../services/pulloutSyncStateService");
 
 exports.emailHelper = catchAsync(async (req, res, next) => {
   const { orderId, orderType, emailType } = req.body;
@@ -1530,6 +1533,27 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
     await Model.update(req.body?.orderData, {
       where: { id: orderId || partnerOrderId },
     });
+
+    // Post-pullout: reconcile pulloutIntentIdSynced state machine.
+    // Only fires when this request just performed a pullout (the journey
+    // status-change path sets paidInvoiceEventFired = true after writing
+    // pulloutIntentId / pulloutDate / adminReceivableStatus on the row).
+    // Without this, the row's pulloutIntentIdSynced column stays at its
+    // default value forever even after a successful pullout, which makes
+    // it show up in the pullout-intent-unsynced-orders report.
+    if (paidInvoiceEventFired) {
+      try {
+        await reconcilePulloutSyncStateForOrder({
+          orderId: orderId || partnerOrderId,
+          orderType: isPartnerOrder ? "local-partner" : "customer",
+        });
+      } catch (stateErr) {
+        console.warn(
+          "[pullout-state] reconcile failed (journey pullout):",
+          stateErr?.message,
+        );
+      }
+    }
 
     // Paid invoice event after order update so email sees updated paymentStatus
     if (

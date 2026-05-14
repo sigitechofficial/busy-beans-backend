@@ -53,6 +53,10 @@ const {
   sentPaymentInvoiceEvent,
 } = require("../events/sentPaymentInvoiceEvent");
 
+const {
+  reconcilePulloutSyncStateForOrder,
+} = require("../../services/pulloutSyncStateService");
+
 exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ input:", input);
@@ -1421,6 +1425,21 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
     await partnerOrder.update(data, {
       where: { id: partnerOrderId },
     });
+
+    // Post-pullout: reconcile pulloutIntentIdSynced state machine
+    // (non-blocking — failures stay in logs only).
+    try {
+      await reconcilePulloutSyncStateForOrder({
+        orderId: partnerOrderId,
+        orderType: isPartnerOrder ? "local-partner" : "customer",
+      });
+    } catch (stateErr) {
+      console.warn(
+        "[pullout-state] reconcile failed (partner pullout):",
+        stateErr?.message,
+      );
+    }
+
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({
       orderId: partnerOrderId,
       orderType: isPartnerOrder ? "local-partner" : "customer",

@@ -64,6 +64,18 @@ function mergePulloutIntoCustomFields(existing, pulloutEntry) {
   return arr;
 }
 
+/** Payload keys this function is allowed to POST. The whole point of this
+ *  service is to be CustomField-only, so it is safe to call on paid /
+ *  closed invoices. The guard below enforces that contract — if a future
+ *  edit ever adds `Line`, `TotalAmt`, `TxnDate`, etc., we fail loud in
+ *  dev before mutating financial data on QBO. */
+const ALLOWED_PATCH_KEYS = new Set([
+  "Id",
+  "SyncToken",
+  "sparse",
+  "CustomField",
+]);
+
 /**
  * Sparse-update **admin** QBO invoice custom fields only (no line items, dates, etc.).
  * Currently applies **Pullout** when `getPulloutCustomFieldEntry` passes.
@@ -72,7 +84,9 @@ function mergePulloutIntoCustomFields(existing, pulloutEntry) {
  * - Admin sync skipped (direct-partner / dropship rules) → skipped with reason
  * - Gates met, no `quickBooksInvoiceId` → `syncInvoiceOnQuikBooks` (create path includes Pullout)
  * - Gates met, invoice exists → GET merge `CustomField` for Pullout definition, POST sparse
- * - Paid invoice (Balance 0) → skipped (same policy as full invoice update)
+ * - Paid / closed invoice (Balance 0) → still patched. CustomField-only writes
+ *   do not affect financials, so QBO accepts them on paid invoices. The
+ *   payload-shape guard below enforces this contract.
  *
  * @param {Object} opts
  * @param {number} opts.orderId
@@ -193,9 +207,10 @@ async function patchAdminInvoiceCustomFields({
   }
 
   const currentInvoice = invRes.data.Invoice;
-  if (Number(currentInvoice.Balance || 0) === 0) {
-    return { ok: true, action: "skipped", reason: "invoice_already_paid" };
-  }
+  // NOTE: paid / closed invoices (Balance 0) are intentionally NOT skipped
+  // here. This function is CustomField-only by contract (see
+  // ALLOWED_PATCH_KEYS guard below), and QBO permits custom field updates
+  // on paid invoices since they do not affect financials.
 
   const existingRows = normalizeQboCustomFieldArray(currentInvoice.CustomField);
   const existingPullout = existingRows.find(
@@ -205,6 +220,21 @@ async function patchAdminInvoiceCustomFields({
     existingPullout &&
     String(existingPullout.StringValue || "").trim() === pulloutCf.StringValue
   ) {
+    // Invoice already carries the same PulloutIntentId — reconcile the row's
+    // state machine even though we don't need to call QBO again.
+    if (orderRow.pulloutIntentIdSynced !== "synced") {
+      try {
+        await DBMODEL.update(
+          { pulloutIntentIdSynced: "synced" },
+          { where: { id: orderRow.id } },
+        );
+      } catch (flipErr) {
+        console.warn(
+          `[QBO] Could not flip pulloutIntentIdSynced=synced for order ${orderRow.id}:`,
+          flipErr?.message,
+        );
+      }
+    }
     return { ok: true, action: "skipped", reason: "pullout_already_set" };
   }
 
@@ -219,6 +249,18 @@ async function patchAdminInvoiceCustomFields({
     sparse: true,
     CustomField: mergedCustomFields,
   };
+
+  // Belt-and-suspenders: this function is CustomField-only by contract so it
+  // is safe to call on paid invoices. If anyone later adds Line / TotalAmt /
+  // TxnDate / Customer here, fail loud before the request reaches QBO instead
+  // of silently mutating financial data on paid invoices.
+  for (const key of Object.keys(payload)) {
+    if (!ALLOWED_PATCH_KEYS.has(key)) {
+      throw new Error(
+        `[patchAdminInvoiceCustomFields] disallowed payload key "${key}" — this path must remain CustomField-only.`,
+      );
+    }
+  }
 
   const postUrl = `${QBO(realmId)}/invoice?minorversion=${MINOR_CUSTOM_FIELDS}&include=enhancedAllCustomFields`;
   const postRes = await axios.post(postUrl, payload, {
@@ -246,7 +288,12 @@ async function patchAdminInvoiceCustomFields({
   }
 
   await DBMODEL.update(
-    { qboLastSync: new Date() },
+    {
+      qboLastSync: new Date(),
+      // Sparse patch is admin-only by design and just succeeded for the
+      // Pullout custom field, so the admin invoice now carries it.
+      pulloutIntentIdSynced: "synced",
+    },
     { where: { id: orderRow.id } },
   );
 

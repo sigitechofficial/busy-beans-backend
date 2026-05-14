@@ -10,7 +10,10 @@ const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
 const { order, partnerOrder, account, qboCustomerMap } = require("../models");
 const { handleQboError } = require("./qboErrorHandler");
 const { qboQuery } = require("./qboHelpers");
-const { getPulloutCustomFieldEntry } = require("./qboPulloutCustomField");
+const {
+  getPulloutCustomFieldEntry,
+  isPulloutCustomFieldEligible,
+} = require("./qboPulloutCustomField");
 
 console.log("🚀 ~ qboInvoice.js ~ process.env.QBO_ENV:", Number(19.8));
 
@@ -293,6 +296,31 @@ async function ensurePaymentMethod({ accessToken, realmId, name }) {
 // 🔸 Main Function
 // =========================
 // ---- Payment creation ----
+/**
+ * Create (or reuse) a QBO Payment row linked to a given invoice.
+ *
+ * Order of operations (production-safe — prevents duplicate payments):
+ *   1. GET the invoice, validate it exists and belongs to the customer.
+ *   2. ALWAYS query QBO for an existing Payment whose LinkedTxn references
+ *      this invoice. If found → return it as `isExisting: true`. This
+ *      single check is the safety net that prevents duplicate payments
+ *      on already-paid / already-closed invoices.
+ *   3. If no existing linked Payment was found:
+ *        a. `Balance > 0`   → create a new Payment (normal path).
+ *        b. `Balance <= 0`  → invoice is closed with NO linked payment
+ *                             (a "zombie" / orphan row).
+ *           - If `allowRecovery=false` (default) → return
+ *             `{ skipped: true, reason: 'paid_no_linked_payment' }`.
+ *             Caller can retry with `allowRecovery=true` after manual
+ *             review.
+ *           - If `allowRecovery=true` → create a link-only "recovery"
+ *             payment using the invoice TotalAmt.
+ *
+ * @param {object} args
+ * @param {boolean} [args.allowRecovery=false]  When true, allow creation of
+ *   a recovery payment on a paid/closed invoice that has NO linked Payment.
+ *   Step (2) still runs first, so this can never cause a duplicate.
+ */
 async function createPaymentForInvoice({
   accessToken,
   realmId,
@@ -303,6 +331,7 @@ async function createPaymentForInvoice({
   refNumber,
   paidDate,
   invoiceNumber,
+  allowRecovery = false,
 }) {
   console.log("🚀 Creating QBO Payment:", {
     invoiceId,
@@ -313,15 +342,12 @@ async function createPaymentForInvoice({
     paidDate,
     realmId,
     invoiceNumber,
+    allowRecovery,
   });
 
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
   if (!invoiceId || !customerId)
     throw new Error("Missing invoice or customer ID");
-
-  /* -----------------------------------------------------------
-   ✅ 1. Normalize amount + date
-  ----------------------------------------------------------- */
 
   /* -----------------------------------------------------------
    Validate Invoice before creating payment
@@ -360,15 +386,128 @@ async function createPaymentForInvoice({
     .toISOString()
     .slice(0, 10);
 
-  // Check if invoice is already paid - return existing payment ID if found
-  if (Number(inv.Balance) <= 0) {
-    console.log(
-      `⚠️ [QBO] Invoice ${invoiceId} is already paid or closed. Checking for existing payment...`,
-    );
-    // Invoice is paid but no linked payment found → try to recover by creating link-only payment
+  /* -----------------------------------------------------------
+   ✅ 1. SAFETY NET — always look for an existing linked payment first.
+   This runs regardless of invoice Balance, which fixes the duplicate-
+   payment bug where closed invoices used to bypass this check and go
+   straight to "recovery" payment creation.
+
+   Helper is defined inline so the recovery branch can re-run the same
+   check (defense in depth against a transient pre-check failure).
+  ----------------------------------------------------------- */
+  async function findLinkedPaymentForThisInvoice() {
+    try {
+      const safeInvId = String(invoiceId).replace(/'/g, "''");
+      const q = `select Id, TotalAmt, TxnDate, LinkedTxn from Payment where Any(LinkedTxn.TxnId) = '${safeInvId}' and Any(LinkedTxn.TxnType) = 'Invoice'`;
+      const url = `${QBO(realmId)}/query?query=${encodeURIComponent(q)}&minorversion=${MINOR}`;
+      const r = await axios.get(url, {
+        headers: headers(accessToken),
+        validateStatus: () => true,
+      });
+      if (r.status !== 200) {
+        return {
+          ok: false,
+          status: r.status,
+          fault: r.data?.Fault || r.data,
+          payment: null,
+          allMatches: [],
+        };
+      }
+      const raw = r?.data?.QueryResponse?.Payment;
+      const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      const verified = list.filter((p) => {
+        if (!p?.LinkedTxn) return false;
+        const txns = Array.isArray(p.LinkedTxn) ? p.LinkedTxn : [p.LinkedTxn];
+        return txns.some(
+          (lt) =>
+            String(lt?.TxnId) === String(invoiceId) &&
+            String(lt?.TxnType) === "Invoice",
+        );
+      });
+      return { ok: true, payment: verified[0] || null, allMatches: verified };
+    } catch (e) {
+      return { ok: false, error: e?.message || String(e), payment: null, allMatches: [] };
+    }
+  }
+
+  const preCheck = await findLinkedPaymentForThisInvoice();
+  if (!preCheck.ok) {
     console.warn(
-      `⚠️ [QBO] Invoice ${invoiceId} is closed but has no linked payment. Attempting recovery...`,
+      `⚠️ [QBO] Existing-payment pre-check failed for invoice ${invoiceId} (status=${preCheck.status ?? "n/a"}, err=${preCheck.error ?? "n/a"}). Will refuse recovery if Balance<=0; create path still protected by catch-block duplicate-detect.`,
     );
+  } else if (preCheck.allMatches.length > 1) {
+    console.warn(
+      `⚠️ [QBO] Invoice ${invoiceId} already has ${preCheck.allMatches.length} linked payments on QBO (paymentIds=${preCheck.allMatches
+        .map((v) => v.Id)
+        .join(
+          ", ",
+        )}). Reusing the first one. Run \`npm run qbo:audit-duplicate-payments\` to investigate.`,
+    );
+  }
+
+  const existingLinkedPayment = preCheck.ok ? preCheck.payment : null;
+
+  if (existingLinkedPayment?.Id) {
+    console.log(
+      `✅ [QBO] Linked payment already exists for invoice ${invoiceId}: ${existingLinkedPayment.Id} — reusing (no new Payment will be created).`,
+    );
+    return {
+      id: existingLinkedPayment.Id,
+      totalAmt: existingLinkedPayment.TotalAmt,
+      txnDate: existingLinkedPayment.TxnDate || safeDate,
+      raw: existingLinkedPayment,
+      isExisting: true,
+    };
+  }
+
+  /* -----------------------------------------------------------
+   ✅ 2. No existing linked payment. Decide what to do based on balance.
+  ----------------------------------------------------------- */
+  if (Number(inv.Balance) <= 0) {
+    if (!allowRecovery) {
+      console.log(
+        `⏭️ [QBO] Invoice ${invoiceId} is closed (Balance=${inv.Balance}) with NO linked payment on QBO. Skipping creation to avoid duplicates. Pass allowRecovery=true (or force=true through createQboPayment) to create a recovery payment.`,
+      );
+      return {
+        skipped: true,
+        reason: "paid_no_linked_payment",
+        note: "Invoice is paid/closed but no linked QBO Payment exists. No payment created to avoid duplicates. Retry with allowRecovery=true to create a recovery payment.",
+        invoiceId,
+      };
+    }
+
+    console.warn(
+      `⚠️ [QBO] Invoice ${invoiceId} is closed but has no linked payment AND allowRecovery=true. Re-confirming before creating recovery payment...`,
+    );
+
+    // Defense in depth: re-run the existing-payment query right before
+    // creating a recovery payment. If it now finds one (race / earlier
+    // network blip), reuse it. If the second check fails too, REFUSE
+    // recovery rather than risk a duplicate.
+    const reConfirm = await findLinkedPaymentForThisInvoice();
+    if (!reConfirm.ok) {
+      console.warn(
+        `⚠️ [QBO] Could not verify "no existing payment" before recovery for invoice ${invoiceId} (status=${reConfirm.status ?? "n/a"}, err=${reConfirm.error ?? "n/a"}). Refusing recovery to avoid duplicates.`,
+      );
+      return {
+        skipped: true,
+        reason: "precheck_unverified_refuse_recovery",
+        note: "Existing-payment verification failed twice; refusing to create recovery payment to avoid duplicates. Retry later or investigate QBO connectivity.",
+        invoiceId,
+      };
+    }
+    if (reConfirm.payment?.Id) {
+      console.log(
+        `✅ [QBO] On re-confirm, linked payment was found for invoice ${invoiceId}: ${reConfirm.payment.Id} — reusing instead of recovering.`,
+      );
+      return {
+        id: reConfirm.payment.Id,
+        totalAmt: reConfirm.payment.TotalAmt,
+        txnDate: reConfirm.payment.TxnDate || safeDate,
+        raw: reConfirm.payment,
+        isExisting: true,
+      };
+    }
 
     // Force-create linking payment with original total
     const recoveryAmount = Number(inv.TotalAmt || amount || 0);
@@ -426,54 +565,6 @@ async function createPaymentForInvoice({
       );
       throw recoveryErr;
     }
-  }
-
-  /* -----------------------------------------------------------
-   ✅ 2. Check for existing payment before creating (same method as above)
-  ----------------------------------------------------------- */
-  // Use same customer-based query method
-  try {
-    const query = `select Id, TotalAmt, TxnDate, LinkedTxn from Payment where CustomerRef = '${String(customerId)}'`;
-    const queryUrl = `${QBO(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR}`;
-    const queryRes = await axios.get(queryUrl, {
-      headers: headers(accessToken),
-      validateStatus: () => true,
-    });
-
-    if (queryRes?.data?.QueryResponse?.Payment) {
-      const payments = Array.isArray(queryRes.data.QueryResponse.Payment)
-        ? queryRes.data.QueryResponse.Payment
-        : [queryRes.data.QueryResponse.Payment];
-
-      const existingPayment = payments.find((p) => {
-        if (!p.LinkedTxn) return false;
-        const linkedTxns = Array.isArray(p.LinkedTxn)
-          ? p.LinkedTxn
-          : [p.LinkedTxn];
-        return linkedTxns.some(
-          (lt) => lt?.TxnId === String(invoiceId) && lt?.TxnType === "Invoice",
-        );
-      });
-
-      if (existingPayment?.Id) {
-        console.log(
-          `✅ [QBO] Payment already exists for invoice ${invoiceId}: ${existingPayment.Id}`,
-        );
-        return {
-          id: existingPayment.Id,
-          totalAmt: existingPayment.TotalAmt,
-          txnDate: existingPayment.TxnDate || safeDate,
-          raw: existingPayment,
-          isExisting: true,
-        };
-      }
-    }
-  } catch (preCheckErr) {
-    console.warn(
-      `⚠️ [QBO] Pre-check for existing payment failed:`,
-      preCheckErr.message,
-    );
-    // Continue with payment creation
   }
 
   /* -----------------------------------------------------------
@@ -624,6 +715,17 @@ async function createPaymentForInvoice({
   }
 }
 
+/**
+ * Wraps `createPaymentForInvoice` for the sync pipelines.
+ *
+ * @param {object} args
+ * @param {boolean} [args.force=false]  When true, forwarded as
+ *   `allowRecovery=true` to `createPaymentForInvoice`. Used by the
+ *   retry-on-skipped path in `paymentSyncService.js`. The duplicate-
+ *   payment safety net in `createPaymentForInvoice` (step 1 — query
+ *   existing linked payments) still runs even with `force=true`, so
+ *   this can never produce a duplicate payment.
+ */
 async function createQboPayment({
   order,
   invoiceId,
@@ -631,9 +733,12 @@ async function createQboPayment({
   realmId,
   qboCustomerId = null,
   subtractLocalPartnerCommission = false,
+  force = false,
 }) {
   try {
-    console.log("⚡ [QBO] Creating Payment for invoice:", invoiceId);
+    console.log("⚡ [QBO] Creating Payment for invoice:", invoiceId, {
+      force,
+    });
 
     // For admin + customer only: payment amount = totalBill - localPatnerCommission
     const rawTotal = Number(order.totalBill) || 0;
@@ -653,18 +758,27 @@ async function createQboPayment({
       refNumber: order.paymentIntentId || order.invoiceId,
       paidDate: order.invoicePaidDate,
       invoiceNumber: order.invoiceNumber,
+      allowRecovery: !!force,
     });
 
     const paymentId = paymentRes?.id;
 
     // Handle different scenarios
     if (paymentRes?.skipped) {
-      // Invoice is already paid but payment not found - this is unusual
+      // Invoice is already paid but no linked payment found on QBO. We refuse
+      // to create a "recovery" payment here to avoid duplicates. The caller
+      // (e.g. paymentSyncService) may retry with `force: true` after manual
+      // review, which will activate the recovery path inside
+      // createPaymentForInvoice (still gated by the duplicate-payment check).
       console.log(
-        `ℹ️ [QBO] Payment skipped - invoice already paid but payment not found: ${paymentRes.note || ""}`,
+        `ℹ️ [QBO] Payment skipped (reason=${paymentRes.reason || "unknown"}): ${paymentRes.note || ""}`,
       );
-      // Return null so caller can handle (don't update DB)
-      return { paymentId: null, skipped: true };
+      return {
+        paymentId: null,
+        skipped: true,
+        reason: paymentRes.reason || "skipped",
+        note: paymentRes.note,
+      };
     }
 
     if (paymentRes?.isExisting) {
@@ -677,9 +791,15 @@ async function createQboPayment({
       throw new Error("QBO Payment creation failed - no payment ID returned.");
     }
 
-    console.log("✅ [QBO] Payment Created:", paymentId);
+    console.log("✅ [QBO] Payment Created:", paymentId, {
+      recovered: !!paymentRes?.recovered,
+    });
 
-    return { paymentId, isExisting: false };
+    return {
+      paymentId,
+      isExisting: false,
+      recovered: !!paymentRes?.recovered,
+    };
   } catch (err) {
     handleQboError({
       err: err,
@@ -1156,12 +1276,23 @@ async function handleAdminQboSync({
           orderType === "customer" && !!order?.salesRepId,
       });
 
+      const adminUpdateInput = {
+        quickBooksInvoiceId: adminQboInvoice?.invoiceId,
+        adminRealmId: realmId,
+      };
+      // If the Pullout custom field gates were satisfied at build time, the
+      // field was included in the create payload — record that admin QBO now
+      // carries it so we don't redundantly patch it again.
+      if (
+        isPulloutCustomFieldEligible(order) &&
+        order?.pulloutIntentIdSynced !== "synced"
+      ) {
+        adminUpdateInput.pulloutIntentIdSynced = "synced";
+      }
+
       updateOrderRecord({
         orderId,
-        input: {
-          quickBooksInvoiceId: adminQboInvoice?.invoiceId,
-          adminRealmId: realmId,
-        },
+        input: adminUpdateInput,
         MODEL: DBMODEL,
       });
 
@@ -1196,6 +1327,25 @@ async function handleAdminQboSync({
         subtractSalerCommission:
           orderType === "customer" && !!order?.salesRepId,
       });
+
+      // Full admin update payload also carries the Pullout custom field when
+      // gates pass — mark it synced so future invariants stay correct.
+      if (
+        isPulloutCustomFieldEligible(order) &&
+        order?.pulloutIntentIdSynced !== "synced"
+      ) {
+        try {
+          await DBMODEL.update(
+            { pulloutIntentIdSynced: "synced" },
+            { where: { id: orderId } },
+          );
+        } catch (flipErr) {
+          console.warn(
+            `[QBO] Could not flip pulloutIntentIdSynced=synced for order ${orderId}:`,
+            flipErr?.message,
+          );
+        }
+      }
       return { saved: true, reason: "admin_invoice_updated" };
     }
     return { saved: false, reason: "admin_qbo_token_or_realm_missing" };

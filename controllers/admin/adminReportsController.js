@@ -1600,3 +1600,7 @@ exports.pulledOrdersReceivableReport = catchAsync(async (req, res, next) => {
     data: rows,
   });
 });
+
+// NOTE: `pulloutIntentUnsyncedOrdersReport` moved to
+// `controllers/admin/qboCustomFieldSyncController.js` so the read endpoint
+// and its companion bulk-sync action live together.

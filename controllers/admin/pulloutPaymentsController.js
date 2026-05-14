@@ -13,6 +13,9 @@ const { Op, literal, where, fn } = require("sequelize");
 const APIFeatures = require("../../utils/apiFeatures");
 const Stripe = require("../stripe");
 const sendPaymentPulloutEmail = require("../../helper/paymentPulloutEmail");
+const {
+  reconcilePulloutSyncStateForOrders,
+} = require("../../services/pulloutSyncStateService");
 
 //TODO creaete a model where we save that paymentintent and the amount update all order and add pulloutsId against them . pull out has status processiong we will add webhook if succeedd than status change orther wise set all order pulloutsId null so we can pull again
 
@@ -59,7 +62,9 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
         "🚀 ~ exports.pullPaymentsFromPatnersBankAccounts=catchAsync ~ pullouts:",
         pullouts,
       );
-      order.update(
+      // Awaited so downstream reconcile / per-order updates see the new
+      // adminReceivableStatus + pulloutIntentId values.
+      await order.update(
         {
           adminReceivableStatus: true,
           pulloutDate: Date.now(),
@@ -74,6 +79,20 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
             localPatnerCommission: ele.localPatnerCommission,
           },
           { where: { id: ele.id } },
+        );
+      }
+
+      // Post-pullout: reconcile pulloutIntentIdSynced state machine
+      // (non-blocking — failures stay in logs only).
+      try {
+        await reconcilePulloutSyncStateForOrders({
+          orderIds,
+          orderType: "customer",
+        });
+      } catch (stateErr) {
+        console.warn(
+          "[pullout-state] reconcile failed (manual pullout):",
+          stateErr?.message,
         );
       }
 
@@ -158,6 +177,20 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
             grossPartnerAmount: ele.localPatnerCommission,
           },
           { where: { id: ele.id } },
+        );
+      }
+
+      // Post-pullout: reconcile pulloutIntentIdSynced state machine
+      // (non-blocking — failures stay in logs only).
+      try {
+        await reconcilePulloutSyncStateForOrders({
+          orderIds,
+          orderType: "customer",
+        });
+      } catch (stateErr) {
+        console.warn(
+          "[pullout-state] reconcile failed (auto pullout):",
+          stateErr?.message,
         );
       }
 

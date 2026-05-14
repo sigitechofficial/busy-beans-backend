@@ -25,6 +25,7 @@ const patnerOrderController = require("../controllers/admin/partnerOrderControll
 
 const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsController");
 const emailLogController = require("../controllers/admin/emailLogController");
+const qboCustomFieldSyncController = require("../controllers/admin/qboCustomFieldSyncController");
 
 const multer = require("multer");
 const path = require("path");
@@ -3143,6 +3144,150 @@ router.get(
   "/admin-reports/pulled-orders-receivable",
   adminReportsController.pulledOrdersReceivableReport,
 );
+
+/**
+ * @swagger
+ * /api/v1/admin/admin-reports/pullout-intent-unsynced-orders:
+ *   get:
+ *     summary: List dropship-partner regular orders by PulloutIntentId sync state
+ *     description: |
+ *       Returns customer orders that satisfy every gate required to push the
+ *       `PulloutIntentId` custom field to admin QBO, optionally filtered by
+ *       sync state.
+ *
+ *       Static filters applied:
+ *         - `orders.deleted = 0`
+ *         - `orders.paymentMethod = 'Bank Check'` (case-insensitive via MySQL default collation)
+ *         - `orders.userId`, `orders.salesRepId`, `orders.pulloutIntentId` all present
+ *         - `orders.quickBooksInvoiceId` is not null
+ *         - `orders.type = 'regular-order'`
+ *         - `salesRep.partnerType = 'dropship-partner'`
+ *
+ *       Sync-state filter — `syncStatus` query param (default `unsynced`):
+ *         - `unsynced` -> `pulloutIntentIdSynced <> 'synced'` (i.e. `not-eligible` or `eligible`)
+ *         - `synced`   -> `pulloutIntentIdSynced = 'synced'` (audit view of already-synced orders)
+ *         - `all`      -> no filter on sync state
+ *
+ *       Optional query filters: `startDate`/`endDate` (on `orders.on`) and `salesRepId`.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: syncStatus
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [unsynced, synced, all]
+ *           default: unsynced
+ *         description: |
+ *           Which sync-state bucket to return.
+ *           - `unsynced` (default): orders whose Pullout custom field still
+ *             needs to be pushed to admin QBO.
+ *           - `synced`: orders whose Pullout custom field has already been
+ *             confirmed on admin QBO. Useful for an "Already synced" audit tab.
+ *           - `all`: both buckets together.
+ *       - in: query
+ *         name: startDate
+ *         required: false
+ *         schema:
+ *           type: string
+ *           example: "2026-01-01"
+ *         description: Optional start date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS. Must be paired with endDate.
+ *       - in: query
+ *         name: endDate
+ *         required: false
+ *         schema:
+ *           type: string
+ *           example: "2026-01-31"
+ *         description: Optional end date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS. Must be paired with startDate.
+ *       - in: query
+ *         name: salesRepId
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: Optional filter by sales rep id
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Pullout custom-field orders list with pagination
+ *       400:
+ *         description: Validation error
+ */
+router.get(
+  "/admin-reports/pullout-intent-unsynced-orders",
+  qboCustomFieldSyncController.pulloutIntentUnsyncedOrdersReport,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/pullout-custom-field/sync:
+ *   post:
+ *     summary: Bulk-push the PulloutIntentId custom field to admin QBO invoices for the selected orders
+ *     description: |
+ *       Accepts a list of `orderIds` selected from the
+ *       `pullout-intent-unsynced-orders` report and, for each one, runs the
+ *       sparse-update flow against the admin's QBO invoice via
+ *       `services/qboInvoiceCustomFieldPatch.js::patchAdminInvoiceCustomFields`.
+ *
+ *       Per-order failures never break the batch — every order is processed
+ *       inside its own try/catch and the endpoint always returns HTTP 200
+ *       with a detailed summary plus per-order results.
+ *
+ *       Behaviour per order:
+ *         - Gates fail (no Bank Check / no pulloutIntentId / admin-skip / etc.) -> `outcome: "skipped"`.
+ *         - Invoice paid (Balance 0) -> `outcome: "skipped"` with reason `"invoice_already_paid"`.
+ *         - QBO already carries the same value -> `outcome: "skipped"` with reason `"pullout_already_set"` (DB state is reconciled to `synced`).
+ *         - Sparse patch succeeds -> `outcome: "synced"`, DB state moves to `pulloutIntentIdSynced='synced'`.
+ *         - No admin invoice yet (rare since the report filters those out) -> `outcome: "synced"` and the admin invoice is created from scratch.
+ *         - Any error (QBO down, customer mapping missing, etc.) -> `outcome: "failed"` with a descriptive `reason`.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 maxItems: 100
+ *                 example: [1092, 1234, 1500]
+ *                 description: Positive integer order ids selected on the report. Max 100 per request.
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *                 description: Which Sequelize model the ids belong to. Defaults to "customer".
+ *     responses:
+ *       200:
+ *         description: Sync results for every requested order id.
+ *       400:
+ *         description: Validation error (empty array, too many ids, invalid id, invalid orderType).
+ */
+router.post(
+  "/qbo/pullout-custom-field/sync",
+  qboCustomFieldSyncController.bulkSyncPulloutCustomField,
+);
+
 //! SUPPLIER REPORTS SECTION
 
 router.get(

@@ -71,10 +71,14 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
       orderType === "customer" && !!ord?.salesRepId,
   });
 
-  // Retry if skipped
-  if (result?.skipped) {
+  // Retry with force=true (which enables allowRecovery inside
+  // createPaymentForInvoice) ONLY when the first attempt was skipped because
+  // the invoice is paid/closed but has no linked payment on QBO. The
+  // targeted "existing-payment" pre-check runs again inside the retry, so
+  // this can never produce a duplicate payment.
+  if (result?.skipped && result?.reason === "paid_no_linked_payment") {
     console.warn(
-      `⚠️ [QBO] Invoice ${ord.quickBooksInvoiceId} closed without payment. Retrying...`,
+      `⚠️ [QBO] Invoice ${ord.quickBooksInvoiceId} closed without linked payment. Retrying with allowRecovery...`,
     );
 
     result = await createQboPayment({
@@ -92,7 +96,14 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
   const paymentId = result?.paymentId || result?.id;
 
   if (!paymentId) {
-    throw new Error("Failed to create or recover admin payment");
+    if (result?.skipped) {
+      throw new Error(
+        `Failed to create or recover admin payment for invoice ${ord.quickBooksInvoiceId}: ${result.reason || "skipped"} - ${result.note || ""}`,
+      );
+    }
+    throw new Error(
+      `Failed to create or recover admin payment for invoice ${ord.quickBooksInvoiceId}`,
+    );
   }
 
   await MODEL.update(
@@ -160,9 +171,12 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
     subtractLocalPartnerCommission: false,
   });
 
-  if (result?.skipped) {
+  // Retry with force=true (allowRecovery) only for the "paid invoice with
+  // no linked payment" case. The targeted pre-check inside the retry will
+  // prevent duplicate creation.
+  if (result?.skipped && result?.reason === "paid_no_linked_payment") {
     console.warn(
-      `⚠️ [QBO] Partner invoice ${ord.quickBooksInvoiceIdPartner} closed. Retrying...`,
+      `⚠️ [QBO] Partner invoice ${ord.quickBooksInvoiceIdPartner} closed without linked payment. Retrying with allowRecovery...`,
     );
 
     result = await createQboPayment({
@@ -179,7 +193,14 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
   const paymentId = result?.paymentId || result?.id;
 
   if (!paymentId) {
-    throw new Error("Failed to create or recover partner payment");
+    if (result?.skipped) {
+      throw new Error(
+        `Failed to create or recover partner payment for invoice ${ord.quickBooksInvoiceIdPartner}: ${result.reason || "skipped"} - ${result.note || ""}`,
+      );
+    }
+    throw new Error(
+      `Failed to create or recover partner payment for invoice ${ord.quickBooksInvoiceIdPartner}`,
+    );
   }
 
   await MODEL.update(
