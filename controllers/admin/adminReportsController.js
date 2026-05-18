@@ -1532,6 +1532,7 @@ exports.pulledOrdersReceivableReport = catchAsync(async (req, res, next) => {
     AND orders.on <= :endDate
     AND orders.deleted = 0
     AND orders.adminReceivableStatus = true
+    AND orders.salesRepId IS NOT NULL 
     AND COALESCE(orders.adminReceivableAmount, 0) > 0
     AND COALESCE(NULLIF(orders.pulloutIntentId, ''), NULLIF(orders.paymentIntentId, '')) IS NOT NULL
     ${salesRepFilter}

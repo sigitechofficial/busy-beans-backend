@@ -336,10 +336,17 @@ exports.bulkSyncPulloutCustomField = catchAsync(async (req, res, next) => {
         // syncResult is only present when patchAdminInvoiceCustomFields
         // falls back to creating an admin invoice from scratch.
         syncResult: result?.syncResult ?? null,
+        // True when QBO rejected the full merged CustomField payload with
+        // the legacy 31-char validation and the patch service retried with
+        // a Pullout-only payload (QBO Plus realms). The patch still
+        // succeeded; this is informational only.
+        usedPulloutOnlyFallback: result?.usedPulloutOnlyFallback === true,
       });
 
       console.log(
-        `[QBO-PULLOUT-CF][bulk-sync] <- order#${orderId} outcome=${outcome} action=${result?.action} reason=${result?.reason ?? "-"}`,
+        `[QBO-PULLOUT-CF][bulk-sync] <- order#${orderId} outcome=${outcome} action=${result?.action} reason=${result?.reason ?? "-"}${
+          result?.usedPulloutOnlyFallback ? " (legacy-fallback)" : ""
+        }`,
       );
     } catch (err) {
       summary.failed += 1;

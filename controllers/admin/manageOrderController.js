@@ -64,7 +64,9 @@ const {
 const {
   deleteAdminQboPaymentsForOrders,
 } = require("../../services/qboPaymentService");
-const { updateAdminQboInvoicesForOrders } = require("../../services/qboInvoice");
+const {
+  updateAdminQboInvoicesForOrders,
+} = require("../../services/qboInvoice");
 const {
   processTransferToLocalPartner,
 } = require("../../utils/localPatnerCommissionTranfer");
@@ -899,7 +901,21 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
   let condition = {
     // paymentStatus: 'done',
     adminReceivableStatus: false,
-    // localPatnerCommission: 0.0,
+    // Only orders with commission and positive admin receivable (totalBill - salerCommission)
+    [Op.and]: [
+      //   literal(`(
+      //             SELECT COALESCE(SUM(salerCommission), 0)
+      //             FROM items
+      //             WHERE items.orderId = \`order\`.id
+      //         ) > 0`),
+      literal(`(
+                COALESCE(\`order\`.totalBill, 0) - COALESCE((
+                    SELECT SUM(salerCommission)
+                    FROM items
+                    WHERE items.orderId = \`order\`.id
+                ), 0)
+            ) > 0`),
+    ],
     // paymentMethod: { [Op.not]: 'card'},
     salesRepId: req.params.srId,
     // statusId: {
@@ -952,33 +968,33 @@ exports.ordersPendingPullouts = catchAsync(async (req, res, next) => {
       ],
       [
         literal(`COALESCE(
-         (SELECT SUM(salerCommission)
-          FROM items
-          WHERE items.orderId = order.id ), 0)`),
+            (SELECT SUM(salerCommission)
+            FROM items
+            WHERE items.orderId = order.id ), 0)`),
         "localPatnerCommission",
       ],
       [
         literal(`
-        COALESCE(order.totalBill, 0) - COALESCE((
-          SELECT SUM(salerCommission)
-          FROM items
-          WHERE items.orderId = order.id
-        ), 0)
-      `),
+            COALESCE(order.totalBill, 0) - COALESCE((
+            SELECT SUM(salerCommission)
+            FROM items
+            WHERE items.orderId = order.id
+            ), 0)
+        `),
         "adminReceivableAmount",
       ],
       [
         literal(`COALESCE(
-         (SELECT SUM(qty)
-          FROM items
-          WHERE items.orderId = order.id ), 0)`),
+            (SELECT SUM(qty)
+            FROM items
+            WHERE items.orderId = order.id ), 0)`),
         "totalQuantity",
       ],
       [
         literal(`COALESCE(
-         (SELECT SUM(wholesalePrice)
-          FROM items
-          WHERE items.orderId = order.id ), 0)`),
+            (SELECT SUM(wholesalePrice)
+            FROM items
+            WHERE items.orderId = order.id ), 0)`),
         "wholesalePrice",
       ],
       [
@@ -2622,20 +2638,12 @@ exports.deleteAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
 
   const { orderIds, orderType = "customer" } = req.body || {};
   if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-    return next(
-      new AppError("orderIds must be a non-empty array.", 400),
-    );
+    return next(new AppError("orderIds must be a non-empty array.", 400));
   }
 
-  if (
-    orderType !== "customer" &&
-    orderType !== "local-partner"
-  ) {
+  if (orderType !== "customer" && orderType !== "local-partner") {
     return next(
-      new AppError(
-        "orderType must be 'customer' or 'local-partner'.",
-        400,
-      ),
+      new AppError("orderType must be 'customer' or 'local-partner'.", 400),
     );
   }
 

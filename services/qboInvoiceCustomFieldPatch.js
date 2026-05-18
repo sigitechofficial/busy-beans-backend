@@ -77,6 +77,33 @@ const ALLOWED_PATCH_KEYS = new Set([
 ]);
 
 /**
+ * Returns true when a QBO response is the specific "legacy 3-slot custom
+ * field length" validation rejection, e.g.:
+ *
+ *   "You cannot enter more than 31 characters in the sales_custom_1_val
+ *    field. You tried entering Joe Argyle..., which is 48 characters."
+ *
+ * That validation fires on QBO Plus realms (where Sales Rep / etc. live
+ * in the legacy 3-slot custom field system, hard-capped at 31 chars per
+ * value) but NOT on QBO Advanced (which uses Enhanced custom fields with
+ * ~250 char limits). It always rejects with `code: "6000"` and a Message
+ * that mentions "31 characters" and/or a field name like
+ * `sales_custom_<N>_val`.
+ */
+function isLegacyCustomFieldLengthError(postRes) {
+  if (!postRes || postRes.status !== 400) return false;
+  const errs = postRes.data?.Fault?.Error;
+  if (!Array.isArray(errs) || errs.length === 0) return false;
+  return errs.some((e) => {
+    if (String(e?.code) !== "6000") return false;
+    const blob = `${e?.Message || ""} ${e?.Detail || ""}`.toLowerCase();
+    return (
+      blob.includes("31 characters") || /sales_custom_\d+_val/.test(blob)
+    );
+  });
+}
+
+/**
  * Sparse-update **admin** QBO invoice custom fields only (no line items, dates, etc.).
  * Currently applies **Pullout** when `getPulloutCustomFieldEntry` passes.
  *
@@ -87,6 +114,16 @@ const ALLOWED_PATCH_KEYS = new Set([
  * - Paid / closed invoice (Balance 0) → still patched. CustomField-only writes
  *   do not affect financials, so QBO accepts them on paid invoices. The
  *   payload-shape guard below enforces this contract.
+ *
+ * QBO Plus (legacy 3-slot custom fields) compatibility:
+ * The first POST sends the full merged CustomField array. If QBO rejects
+ * it with the specific "31 characters in sales_custom_<N>_val" validation
+ * (see `isLegacyCustomFieldLengthError`), the function retries with a
+ * Pullout-only payload. QBO's sparse merge-by-DefinitionId semantics
+ * preserve the un-sent custom fields, so Sales Rep etc. stay intact on
+ * the invoice. The result includes `usedPulloutOnlyFallback: true` when
+ * this path took effect — handy for monitoring how many client realms
+ * are on the legacy system.
  *
  * @param {Object} opts
  * @param {number} opts.orderId
@@ -243,39 +280,90 @@ async function patchAdminInvoiceCustomFields({
     pulloutCf,
   );
 
-  const payload = {
-    Id: String(currentInvoice.Id),
-    SyncToken: String(currentInvoice.SyncToken),
-    sparse: true,
-    CustomField: mergedCustomFields,
+  // Inline helper — builds the QBO sparse-update payload from a CustomField
+  // array, runs the payload-shape guard, and POSTs. Defined here so the
+  // fallback path below can reuse the exact same code path (one place to
+  // change auth/headers/url forever).
+  const postSparseCustomFieldPatch = async (customFields, attemptLabel) => {
+    const body = {
+      Id: String(currentInvoice.Id),
+      SyncToken: String(currentInvoice.SyncToken),
+      sparse: true,
+      CustomField: customFields,
+    };
+
+    // Belt-and-suspenders: this function is CustomField-only by contract so
+    // it is safe to call on paid invoices. If anyone later adds Line /
+    // TotalAmt / TxnDate / Customer here, fail loud before the request
+    // reaches QBO instead of silently mutating financial data on paid
+    // invoices.
+    for (const key of Object.keys(body)) {
+      if (!ALLOWED_PATCH_KEYS.has(key)) {
+        throw new Error(
+          `[patchAdminInvoiceCustomFields] disallowed payload key "${key}" — this path must remain CustomField-only.`,
+        );
+      }
+    }
+
+    const url = `${QBO(realmId)}/invoice?minorversion=${MINOR_CUSTOM_FIELDS}&include=enhancedAllCustomFields`;
+    console.log(
+      `[QBO][patchAdminInvoiceCustomFields] POST attempt=${attemptLabel} invoice=${currentInvoice.Id} customFieldCount=${customFields.length}`,
+    );
+    return axios.post(url, body, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      validateStatus: () => true,
+    });
   };
 
-  // Belt-and-suspenders: this function is CustomField-only by contract so it
-  // is safe to call on paid invoices. If anyone later adds Line / TotalAmt /
-  // TxnDate / Customer here, fail loud before the request reaches QBO instead
-  // of silently mutating financial data on paid invoices.
-  for (const key of Object.keys(payload)) {
-    if (!ALLOWED_PATCH_KEYS.has(key)) {
-      throw new Error(
-        `[patchAdminInvoiceCustomFields] disallowed payload key "${key}" — this path must remain CustomField-only.`,
-      );
-    }
-  }
+  // ── First attempt: full merged CustomField array. ──────────────────
+  // On QBO Advanced / Enhanced custom-field realms (e.g. our dev) this is
+  // the normal happy path and succeeds in one round-trip.
+  let postRes = await postSparseCustomFieldPatch(mergedCustomFields, "merged");
+  let attemptedFallback = false;
 
-  const postUrl = `${QBO(realmId)}/invoice?minorversion=${MINOR_CUSTOM_FIELDS}&include=enhancedAllCustomFields`;
-  const postRes = await axios.post(postUrl, payload, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    validateStatus: () => true,
-  });
+  // ── Fallback for QBO Plus / legacy 3-slot realms: ──────────────────
+  // QBO Plus stores Sales Rep / Customer PO etc. in the legacy
+  // `sales_custom_<N>_val` slots, which enforce a hard 31-char limit at
+  // sparse-update time even though the same value was happily accepted
+  // when the invoice was originally created. Re-sending those existing
+  // values verbatim trips a 6000 ValidationFault.
+  //
+  // The workaround relies on QBO's documented sparse semantics with
+  // `include=enhancedAllCustomFields` (minorversion 75+): when only some
+  // CustomField entries are sent, QBO merges by DefinitionId and leaves
+  // un-sent rows untouched. So a Pullout-only payload patches *only* the
+  // Pullout field without re-validating Sales Rep at all.
+  //
+  // We trigger this fallback ONLY on the exact "legacy 31-char" error
+  // signature so realms that don't have this problem don't change
+  // behavior at all.
+  if (isLegacyCustomFieldLengthError(postRes)) {
+    attemptedFallback = true;
+    console.warn(
+      `[QBO][patchAdminInvoiceCustomFields] Legacy 3-slot custom-field validation rejected the full payload for invoice ${currentInvoice.Id} (likely QBO Plus realm). Retrying with Pullout-only payload — other custom fields are preserved by QBO sparse merge-by-DefinitionId semantics. Original Fault: ${JSON.stringify(postRes.data?.Fault || null)}`,
+    );
+
+    const pulloutOnlyCustomFields = [
+      {
+        DefinitionId: pulloutCf.DefinitionId,
+        StringValue: pulloutCf.StringValue,
+      },
+    ];
+
+    postRes = await postSparseCustomFieldPatch(
+      pulloutOnlyCustomFields,
+      "pullout-only-fallback",
+    );
+  }
 
   if (postRes.status < 200 || postRes.status >= 300 || !postRes.data?.Invoice) {
     handleQboError({
       err: { response: postRes },
-      context: "[QBO][patchAdminInvoiceCustomFields] POST invoice failed:",
+      context: `[QBO][patchAdminInvoiceCustomFields] POST invoice failed${attemptedFallback ? " (after pullout-only fallback)" : ""}:`,
     });
     const msg =
       postRes.data?.Fault?.Error?.[0]?.Message ||
@@ -285,6 +373,12 @@ async function patchAdminInvoiceCustomFields({
     err.isPublic = true;
     err.qboResponse = postRes.data;
     throw err;
+  }
+
+  if (attemptedFallback) {
+    console.log(
+      `[QBO][patchAdminInvoiceCustomFields] Pullout-only fallback succeeded for invoice ${currentInvoice.Id}.`,
+    );
   }
 
   await DBMODEL.update(
@@ -302,6 +396,7 @@ async function patchAdminInvoiceCustomFields({
     action: "patched_custom_fields",
     invoiceId: postRes.data.Invoice.Id,
     customField: pulloutCf,
+    usedPulloutOnlyFallback: attemptedFallback,
   };
 }
 
