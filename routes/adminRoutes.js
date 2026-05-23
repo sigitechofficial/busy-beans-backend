@@ -25,6 +25,7 @@ const patnerOrderController = require("../controllers/admin/partnerOrderControll
 
 const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsController");
 const emailLogController = require("../controllers/admin/emailLogController");
+const bulkEmailController = require("../controllers/admin/bulkEmailController");
 const qboCustomFieldSyncController = require("../controllers/admin/qboCustomFieldSyncController");
 
 const multer = require("multer");
@@ -79,6 +80,45 @@ router.post(
 router.post(
   "/order-management/email-helper",
   manageOrderController.emailHelper,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/bulk-email-helper:
+ *   post:
+ *     summary: Send emails for multiple orders (batch email helper)
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ordersToSentEmail:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     orderId: { type: integer }
+ *                     orderType: { type: string, enum: [customer, local-partner] }
+ *                     emailType:
+ *                       type: string
+ *                       enum:
+ *                         - order-confirmation
+ *                         - paid-invoice
+ *                         - invoice-sent
+ *                         - invoice-reminder
+ *                         - order-dispatch
+ *                         - order-shipped
+ *                         - order-ship-supplier
+ *     responses:
+ *       200:
+ *         description: Per-order send results and summary
+ */
+router.post(
+  "/order-management/bulk-email-helper",
+  bulkEmailController.bulkEmailHelper,
 );
 
 /**
@@ -143,13 +183,13 @@ router.get(
  * @swagger
  * /api/v1/admin/order-management/email-log:
  *   get:
- *     summary: List email log (success and failed) with filters (protected)
+ *     summary: List email log (success and failed) with filters (protected). Local partners only see logs for their salesRep orders.
  *     tags: [Admin]
  *     parameters:
  *       - in: query
  *         name: emailType
  *         schema: { type: string }
- *         description: invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order | order_shipped
+ *         description: invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order | order_shipped | order_confirmation
  *       - in: query
  *         name: orderId
  *         schema: { type: integer }
@@ -157,6 +197,10 @@ router.get(
  *         name: emailSent
  *         schema: { type: string }
  *         description: Success | Failed
+ *       - in: query
+ *         name: retrySuccess
+ *         schema: { type: string }
+ *         description: true | false | null (initial send, not a retry)
  *       - in: query
  *         name: from
  *         schema: { type: string, format: date }

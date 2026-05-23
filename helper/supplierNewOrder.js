@@ -11,7 +11,7 @@ const generateFooterHtml = require("./footerLocalpatner");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 const { header } = require("./header");
 
-module.exports = async function ({ email, data }) {
+module.exports = async function ({ email, data, isRetry = false }) {
   let footer = await Footer();
 
   let hiSupplierName = `Hi ${data.supplierName}`;
@@ -228,6 +228,7 @@ module.exports = async function ({ email, data }) {
       recipients: email,
       metadata: { subject: mailOptions.subject },
       zeptoRequestId: info?.request_id,
+      retrySuccess: isRetry ? true : null,
     });
   } catch (error) {
     console.log(error);
@@ -239,6 +240,7 @@ module.exports = async function ({ email, data }) {
       emailSent: "Failed",
       errorMessage: error?.message || String(error),
       metadata: { subject: mailOptions.subject },
+      retrySuccess: isRetry ? false : null,
     });
   }
 };

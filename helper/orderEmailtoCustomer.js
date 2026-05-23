@@ -3,7 +3,8 @@ dotenv.config({ path: "../.env" });
 
 const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require("./transpoter");
+const { sendMailPromise } = require("./transpoter");
+const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
 const generateFooterHtml = require("./footerLocalpatner");
 let Footer = require("./footer");
 const { emailDateFormate } = require("../utils/emailDateFormate");
@@ -58,8 +59,7 @@ module.exports = async function ({
 
   const on = emailDateFormate(data?.on);
   items = items.join("");
-  transporter.sendMail(
-    {
+  const mailOptions = {
       from: process.env.EMAIL_USERNAME, // sender address
       to: email, // main recipient(s)
       bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
@@ -210,13 +210,28 @@ module.exports = async function ({
       </tr>
        ${footer}
       `,
-    },
-    function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(info);
-      }
-    },
-  );
+  };
+
+  try {
+    const info = await sendMailPromise(mailOptions);
+    await logEmailSuccess({
+      emailType: "order_confirmation",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      metadata: { subject: mailOptions.subject },
+      zeptoRequestId: info?.request_id,
+    });
+  } catch (error) {
+    console.error("orderEmailtoCustomer error:", error);
+    await logEmailOutcome({
+      emailType: "order_confirmation",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      emailSent: "Failed",
+      errorMessage: error?.message || String(error),
+      metadata: { subject: mailOptions.subject },
+    });
+  }
 };

@@ -331,8 +331,14 @@ exports.bulkSyncPulloutCustomField = catchAsync(async (req, res, next) => {
         outcome,
         action: result?.action ?? null,
         reason: result?.reason ?? null,
+        note: result?.note ?? null,
         invoiceId: result?.invoiceId ?? null,
         customField: result?.customField ?? null,
+        staleInvoiceId: result?.staleInvoiceId ?? null,
+        docNumber: result?.docNumber ?? null,
+        candidateInvoiceIds: result?.candidateInvoiceIds ?? null,
+        invoiceRepair: result?.invoiceRepair ?? null,
+        qboFault: result?.qboFault ?? null,
         // syncResult is only present when patchAdminInvoiceCustomFields
         // falls back to creating an admin invoice from scratch.
         syncResult: result?.syncResult ?? null,
@@ -346,7 +352,7 @@ exports.bulkSyncPulloutCustomField = catchAsync(async (req, res, next) => {
       console.log(
         `[QBO-PULLOUT-CF][bulk-sync] <- order#${orderId} outcome=${outcome} action=${result?.action} reason=${result?.reason ?? "-"}${
           result?.usedPulloutOnlyFallback ? " (legacy-fallback)" : ""
-        }`,
+        }${result?.invoiceRepair?.relinked ? ` (relinked ${result.invoiceRepair.fromInvoiceId}->${result.invoiceRepair.toInvoiceId})` : ""}`,
       );
     } catch (err) {
       summary.failed += 1;

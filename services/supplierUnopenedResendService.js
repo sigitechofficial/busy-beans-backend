@@ -63,7 +63,11 @@ async function processCandidate({ orderId, orderType, minHours }) {
     return { action: "skipped", reason: "less_than_required_hours" };
   }
 
-  await supplierNewOrder({ email: details.supplierEmail, data: details });
+  await supplierNewOrder({
+    email: details.supplierEmail,
+    data: details,
+    isRetry: true,
+  });
   return { action: "resent" };
 }
 

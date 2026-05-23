@@ -82,46 +82,19 @@ const {
 const { orderShippedEvent } = require("../events/orderShippedEvent");
 const { orderDispatchEvent } = require("../events/orderDispatchEvent");
 const {
-  orderEvents,
-  orderEventsToLocalPatnerOrAdmin,
-} = require("../events/orderEvents");
-const {
   reconcilePulloutSyncStateForOrder,
 } = require("../../services/pulloutSyncStateService");
+const {
+  dispatchOrderEmail,
+} = require("../../services/orderEmailDispatchService");
 
 exports.emailHelper = catchAsync(async (req, res, next) => {
   const { orderId, orderType, emailType } = req.body;
 
-  const model = orderType == "local-partner" ? partnerOrder : order;
-
-  const orderData = await model.findOne({
-    where: { id: orderId },
-    attributes: ["id", "type", "invoiceDate"],
-  });
-  if (!orderData) {
-    return next(new AppError("Order not found", 404));
-  } else if (orderData.type == "direct-invoice") {
-    return next(
-      new AppError("This is a direct invoice and email cannot be sent.", 400),
-    );
-  }
-
-  if (emailType == "order-confirmation") {
-    orderEvents({ orderId, orderType });
-  } else if (emailType == "paid-invoice") {
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({ orderId, orderType });
-  } else if (emailType == "invoice-sent" || emailType == "invoice-reminder") {
-    const input = {};
-    if (!orderData.invoiceDate) input.invoiceDate = new Date();
-    if (orderData.invoiceDate) input.invoiceReminder = new Date();
-    await model.update(input, { where: { id: orderId } });
-    sentPaymentInvoiceEvent({ orderId, orderType });
-  } else if (emailType == "order-dispatch") {
-    orderDispatchEvent({ orderId, orderType });
-  } else if (emailType == "order-shipped") {
-    orderShippedEvent({ orderId, orderType });
-  } else if (emailType == "order-ship-supplier") {
-    supplierNewOrderEvent({ orderId, orderType });
+  const outcome = await dispatchOrderEmail({ orderId, orderType, emailType });
+  if (!outcome.success) {
+    const statusCode = outcome.error === "Order not found" ? 404 : 400;
+    return next(new AppError(outcome.error, statusCode));
   }
 
   res.status(200).json({

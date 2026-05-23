@@ -11,7 +11,7 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: false,
       comment:
-        "invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order | order_shipped",
+        "invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order | order_shipped | order_confirmation",
     },
     orderId: {
       type: DataTypes.INTEGER,
@@ -91,6 +91,13 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true,
       comment: "Soft bounce reason/diagnostic (from Zepto webhook)",
+    },
+    retrySuccess: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: null,
+      comment:
+        "NULL = initial send; true = resend/retry succeeded; false = resend/retry failed",
     },
   });
   return emailLog;

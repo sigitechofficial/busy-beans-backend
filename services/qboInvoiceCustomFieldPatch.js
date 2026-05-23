@@ -26,6 +26,53 @@ function shouldSkipAdminQboSync({ orderType, order }) {
   );
 }
 
+function normalizeRealmId(value) {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+}
+
+/**
+ * Read-only diagnostics: log when the order's stored admin realm differs from
+ * the admin account's current connected realm (or when adminRealmId was never
+ * saved but a QBO invoice id exists). Does NOT change which realm/tokens the
+ * patch uses — still `accounts.currentRealmId` — so behavior is unchanged.
+ */
+function logPulloutPatchRealmDiagnostics({ orderRow, currentRealmId }) {
+  const orderId = orderRow?.id ?? "?";
+  const invoiceNumber = orderRow?.invoiceNumber ?? "?";
+  const orderAdminRealmId = normalizeRealmId(orderRow?.adminRealmId);
+  const activeRealmId = normalizeRealmId(currentRealmId);
+  const qboInvoiceId =
+    orderRow?.quickBooksInvoiceId != null &&
+    String(orderRow.quickBooksInvoiceId).trim() !== ""
+      ? String(orderRow.quickBooksInvoiceId).trim()
+      : null;
+
+  if (!activeRealmId) return;
+
+  if (
+    orderAdminRealmId &&
+    orderAdminRealmId !== activeRealmId
+  ) {
+    console.warn(
+      `[QBO][patchAdminInvoiceCustomFields][realm-mismatch] order#${orderId} invoice=${invoiceNumber} ` +
+        `order.adminRealmId=${orderAdminRealmId} accounts.currentRealmId=${activeRealmId} ` +
+        `quickBooksInvoiceId=${qboInvoiceId ?? "null"} — ` +
+        `Pullout patch uses currentRealmId; invoice may have been synced on a different QBO company.`,
+    );
+    return;
+  }
+
+  if (qboInvoiceId && !orderAdminRealmId) {
+    console.warn(
+      `[QBO][patchAdminInvoiceCustomFields][realm-missing] order#${orderId} invoice=${invoiceNumber} ` +
+        `adminRealmId=null quickBooksInvoiceId=${qboInvoiceId} accounts.currentRealmId=${activeRealmId} — ` +
+        `cannot verify which QBO company owns this invoice id.`,
+    );
+  }
+}
+
 async function deleteQboCustomerMappingForUserInRealm(where) {
   if (!where || !where.realmId) return;
   try {
@@ -104,6 +151,215 @@ function isLegacyCustomFieldLengthError(postRes) {
 }
 
 /**
+ * True when QBO refused to return an invoice by stored Id — stale id,
+ * deleted invoice, wrong realm, or broken/inactive links on the invoice.
+ * Used to gate the DocNumber relink repair (we only repair on these).
+ */
+function isStaleInvoiceGetError(getRes) {
+  if (!getRes) return false;
+  if (getRes.status === 404) return true;
+  const errs = getRes.data?.Fault?.Error;
+  if (!Array.isArray(errs) || errs.length === 0) return false;
+  return errs.some((e) => {
+    const code = String(e?.code || "");
+    const blob = `${e?.Message || ""} ${e?.Detail || ""}`.toLowerCase();
+    return (
+      code === "610" ||
+      blob.includes("object not found") ||
+      blob.includes("made inactive")
+    );
+  });
+}
+
+function qboAuthHeaders(accessToken) {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+}
+
+/** GET a single QBO invoice by Id. Never throws — returns { ok, invoice, response }. */
+async function fetchQboInvoiceById({ accessToken, realmId, invoiceId }) {
+  const id = String(invoiceId).trim();
+  const url = `${QBO(realmId)}/invoice/${encodeURIComponent(id)}?minorversion=${MINOR_READ}`;
+  const response = await axios.get(url, {
+    headers: qboAuthHeaders(accessToken),
+    validateStatus: () => true,
+  });
+  if (response.status === 200 && response.data?.Invoice) {
+    return { ok: true, invoice: response.data.Invoice, response };
+  }
+  return { ok: false, invoice: null, response };
+}
+
+/**
+ * Look up admin QBO invoice(s) by DocNumber (= our invoiceNumber).
+ * Returns [] on query failure. Does NOT create invoices.
+ */
+async function findQboInvoiceIdsByDocNumber({
+  accessToken,
+  realmId,
+  docNumber,
+}) {
+  const doc = String(docNumber || "").trim();
+  if (!doc) return { ok: false, ids: [], error: "no_doc_number" };
+
+  const safeDoc = doc.replace(/'/g, "''");
+  const query = `select Id, DocNumber from Invoice where DocNumber = '${safeDoc}'`;
+  const url = `${QBO(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR_READ}`;
+  const response = await axios.get(url, {
+    headers: qboAuthHeaders(accessToken),
+    validateStatus: () => true,
+  });
+
+  if (response.status !== 200) {
+    return {
+      ok: false,
+      ids: [],
+      error: `query_http_${response.status}`,
+      response,
+    };
+  }
+
+  const raw = response.data?.QueryResponse?.Invoice;
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const ids = list
+    .map((row) => (row?.Id != null ? String(row.Id).trim() : ""))
+    .filter(Boolean);
+
+  return { ok: true, ids, response };
+}
+
+/**
+ * When GET by stored quickBooksInvoiceId fails with a stale/not-found
+ * signature, try to find the live invoice by DocNumber and relink the DB.
+ *
+ * Conservative rules:
+ *   - Never creates a new QBO invoice from this path.
+ *   - Only updates quickBooksInvoiceId when a different Id loads via GET.
+ *   - If DocNumber lookup finds nothing → caller returns a structured failure.
+ *   - If candidates exist but none load → structured failure (inactive links).
+ */
+async function tryRepairStaleAdminInvoiceId({
+  accessToken,
+  realmId,
+  storedInvoiceId,
+  docNumber,
+  orderRow,
+  DBMODEL,
+}) {
+  const staleId = String(storedInvoiceId).trim();
+  const lookup = await findQboInvoiceIdsByDocNumber({
+    accessToken,
+    realmId,
+    docNumber,
+  });
+
+  if (!lookup.ok) {
+    console.warn(
+      `[QBO][patchAdminInvoiceCustomFields] DocNumber lookup failed for order#${orderRow.id} doc=${docNumber}:`,
+      lookup.error,
+    );
+    return {
+      repaired: false,
+      reason: "docnumber_lookup_failed",
+      staleInvoiceId: staleId,
+      docNumber,
+    };
+  }
+
+  if (lookup.ids.length === 0) {
+    console.warn(
+      `[QBO][patchAdminInvoiceCustomFields] No QBO invoice with DocNumber=${docNumber} for order#${orderRow.id} (stale id=${staleId}).`,
+    );
+    return {
+      repaired: false,
+      reason: "admin_invoice_not_found_by_docnumber",
+      staleInvoiceId: staleId,
+      docNumber,
+    };
+  }
+
+  // Prefer ids different from the stale pointer first, then retry the same id
+  // (covers "query works but direct GET path differed" edge cases).
+  const candidates = [
+    ...lookup.ids.filter((id) => id !== staleId),
+    ...lookup.ids.filter((id) => id === staleId),
+  ];
+  const uniqueCandidates = [...new Set(candidates)];
+
+  if (lookup.ids.length > 1) {
+    console.warn(
+      `[QBO][patchAdminInvoiceCustomFields] Multiple QBO invoices share DocNumber=${docNumber} (ids=${lookup.ids.join(
+        ", ",
+      )}). Trying GET on each until one loads.`,
+    );
+  }
+
+  for (const candidateId of uniqueCandidates) {
+    const fetched = await fetchQboInvoiceById({
+      accessToken,
+      realmId,
+      invoiceId: candidateId,
+    });
+    if (!fetched.ok) continue;
+
+    const relinked = candidateId !== staleId;
+    if (relinked) {
+      try {
+        await DBMODEL.update(
+          {
+            quickBooksInvoiceId: candidateId,
+            adminRealmId: realmId,
+          },
+          { where: { id: orderRow.id } },
+        );
+        console.log(
+          `[QBO][patchAdminInvoiceCustomFields] Relinked order#${orderRow.id} quickBooksInvoiceId ${staleId} -> ${candidateId} (DocNumber=${docNumber}).`,
+        );
+      } catch (dbErr) {
+        console.warn(
+          `[QBO][patchAdminInvoiceCustomFields] Found live invoice ${candidateId} but failed to update DB for order#${orderRow.id}:`,
+          dbErr?.message,
+        );
+        return {
+          repaired: false,
+          reason: "relink_db_update_failed",
+          staleInvoiceId: staleId,
+          docNumber,
+          candidateInvoiceId: candidateId,
+        };
+      }
+    } else {
+      console.warn(
+        `[QBO][patchAdminInvoiceCustomFields] DocNumber=${docNumber} resolves to same id=${staleId} but GET still failed earlier — invoice may have inactive customer/items.`,
+      );
+    }
+
+    return {
+      repaired: true,
+      invoice: fetched.invoice,
+      repair: {
+        method: "docnumber_lookup",
+        fromInvoiceId: staleId,
+        toInvoiceId: candidateId,
+        docNumber,
+        relinked,
+      },
+    };
+  }
+
+  return {
+    repaired: false,
+    reason: "admin_invoice_found_by_docnumber_but_unloadable",
+    staleInvoiceId: staleId,
+    docNumber,
+    candidateInvoiceIds: lookup.ids,
+  };
+}
+
+/**
  * Sparse-update **admin** QBO invoice custom fields only (no line items, dates, etc.).
  * Currently applies **Pullout** when `getPulloutCustomFieldEntry` passes.
  *
@@ -124,6 +380,13 @@ function isLegacyCustomFieldLengthError(postRes) {
  * the invoice. The result includes `usedPulloutOnlyFallback: true` when
  * this path took effect — handy for monitoring how many client realms
  * are on the legacy system.
+ *
+ * Stale admin invoice id repair (conservative):
+ * When GET by stored `quickBooksInvoiceId` fails with Object Not Found /
+ * code 610, we query QBO by `order.invoiceNumber` (DocNumber). If a live
+ * invoice is found under a different Id, we relink the DB row and retry
+ * the Pullout patch. We never create a new invoice from this path — that
+ * avoids duplicate invoices during bulk Pullout sync.
  *
  * @param {Object} opts
  * @param {number} opts.orderId
@@ -162,6 +425,11 @@ async function patchAdminInvoiceCustomFields({
   if (!ADMIN?.currentRealmId) {
     return { ok: false, action: "skipped", reason: "admin_qbo_not_connected" };
   }
+
+  logPulloutPatchRealmDiagnostics({
+    orderRow,
+    currentRealmId: ADMIN.currentRealmId,
+  });
 
   const adminQboCondition = {
     realmId: ADMIN.currentRealmId,
@@ -223,27 +491,74 @@ async function patchAdminInvoiceCustomFields({
     };
   }
 
-  const getUrl = `${QBO(realmId)}/invoice/${encodeURIComponent(qboInvoiceId)}?minorversion=${MINOR_READ}`;
-  const invRes = await axios.get(getUrl, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    validateStatus: () => true,
+  let invoiceRepair = null;
+  let fetched = await fetchQboInvoiceById({
+    accessToken,
+    realmId,
+    invoiceId: qboInvoiceId,
   });
 
-  if (invRes.status !== 200 || !invRes.data?.Invoice) {
+  if (!fetched.ok && isStaleInvoiceGetError(fetched.response)) {
+    const docNumber = orderRow.invoiceNumber;
+    if (docNumber && String(docNumber).trim()) {
+      console.warn(
+        `[QBO][patchAdminInvoiceCustomFields] GET failed for stored invoice id=${qboInvoiceId} order#${orderRow.id}. Attempting DocNumber repair (doc=${docNumber})...`,
+      );
+      const repair = await tryRepairStaleAdminInvoiceId({
+        accessToken,
+        realmId,
+        storedInvoiceId: qboInvoiceId,
+        docNumber: String(docNumber).trim(),
+        orderRow,
+        DBMODEL,
+      });
+
+      if (repair.repaired && repair.invoice) {
+        fetched = { ok: true, invoice: repair.invoice, response: null };
+        invoiceRepair = repair.repair;
+      } else {
+        handleQboError({
+          err: { response: fetched.response },
+          context:
+            "[QBO][patchAdminInvoiceCustomFields] GET invoice failed (repair also failed):",
+        });
+        return {
+          ok: false,
+          action: "failed",
+          reason: repair.reason || "admin_invoice_get_failed",
+          staleInvoiceId: qboInvoiceId,
+          docNumber: String(docNumber).trim(),
+          candidateInvoiceIds: repair.candidateInvoiceIds ?? null,
+          note:
+            repair.reason === "admin_invoice_not_found_by_docnumber"
+              ? "Stored quickBooksInvoiceId is stale and no QBO invoice matches this DocNumber. Re-sync the admin invoice for this order manually — this path does not create invoices to avoid duplicates."
+              : repair.reason ===
+                  "admin_invoice_found_by_docnumber_but_unloadable"
+                ? "QBO lists this DocNumber but the invoice cannot be loaded (often inactive customer or items on the invoice). Fix in QuickBooks, then retry."
+                : "Could not load admin QBO invoice and DocNumber repair did not recover.",
+          qboFault: fetched.response?.data?.Fault ?? null,
+        };
+      }
+    }
+  }
+
+  if (!fetched.ok) {
     handleQboError({
-      err: { response: invRes },
+      err: { response: fetched.response },
       context: "[QBO][patchAdminInvoiceCustomFields] GET invoice failed:",
     });
     const msg =
-      invRes.data?.Fault?.Error?.[0]?.Message ||
+      fetched.response?.data?.Fault?.Error?.[0]?.Message ||
       `Could not load QBO invoice ${qboInvoiceId}`;
     const err = new Error(msg);
-    err.statusCode = invRes.status === 404 ? 404 : 400;
+    err.statusCode =
+      fetched.response?.status === 404 ? 404 : fetched.response?.status || 400;
     err.isPublic = true;
+    err.qboResponse = fetched.response?.data;
     throw err;
   }
 
-  const currentInvoice = invRes.data.Invoice;
+  const currentInvoice = fetched.invoice;
   // NOTE: paid / closed invoices (Balance 0) are intentionally NOT skipped
   // here. This function is CustomField-only by contract (see
   // ALLOWED_PATCH_KEYS guard below), and QBO permits custom field updates
@@ -397,6 +712,7 @@ async function patchAdminInvoiceCustomFields({
     invoiceId: postRes.data.Invoice.Id,
     customField: pulloutCf,
     usedPulloutOnlyFallback: attemptedFallback,
+    invoiceRepair,
   };
 }
 
