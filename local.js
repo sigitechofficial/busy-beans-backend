@@ -3,6 +3,10 @@ const db = require("./models");
 require("dotenv").config();
 require("./redis_connect");
 const server = require("./app");
+const {
+  startLandingPageScheduler,
+  stopLandingPageScheduler,
+} = require("./marketing");
 
 const serverPort = process.env.PORT || 8011;
 // 0.0.0.0 = listen on all interfaces so phones / other PCs on your LAN can reach this machine
@@ -29,6 +33,7 @@ process.on("uncaughtException", (err) => {
 
 const gracefulShutdown = () => {
   console.log("\n🟡 Received shutdown signal. Closing server...");
+  stopLandingPageScheduler();
   server.close(() => {
     console.log("✅ Server closed successfully.\n");
     process.exit(0);
@@ -72,4 +77,5 @@ server.listen(serverPort, serverHost, (err) => {
     );
   }
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+  startLandingPageScheduler();
 });

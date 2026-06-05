@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS `custom_templates` (
+  `id` VARCHAR(64) NOT NULL,
+  `spec_index` INT NOT NULL DEFAULT 0,
+  `name` VARCHAR(255) NOT NULL,
+  `category` VARCHAR(128) NOT NULL DEFAULT '',
+  `objective` VARCHAR(255) NOT NULL DEFAULT '',
+  `audience` VARCHAR(255) NOT NULL DEFAULT '',
+  `use_case` TEXT NULL,
+  `main_cta` VARCHAR(255) NOT NULL DEFAULT '',
+  `url_examples` JSON NULL,
+  `thumbnail_tone` VARCHAR(64) NOT NULL DEFAULT '',
+  `section_types` JSON NULL,
+  `required_section_types` JSON NULL,
+  `status` ENUM('approved','draft','retired') NOT NULL DEFAULT 'draft',
+  `description` TEXT NULL,
+  `initial_sections` JSON NULL,
+  `usage_count` INT NOT NULL DEFAULT 0,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `custom_templates_status_idx` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -18,6 +18,22 @@ const {
   qboCustomerMap,
 } = require("../models");
 
+/**
+ * When payment sync uses the invoice's CustomerRef (not the map), align the map
+ * so future invoice/customer flows do not keep using a stale qboCustomerId.
+ */
+async function healQboCustomerMapIfNeeded({ mapRow, invoiceCustomerId }) {
+  const mapped = String(mapRow?.qboCustomerId || "").trim();
+  const fromInvoice = String(invoiceCustomerId || "").trim();
+  if (!mapRow?.id || !mapped || !fromInvoice || mapped === fromInvoice) {
+    return;
+  }
+  console.warn(
+    `[QBO] Heal qboCustomerMap id=${mapRow.id}: ${mapped} -> ${fromInvoice} (invoice CustomerRef)`,
+  );
+  await mapRow.update({ qboCustomerId: fromInvoice });
+}
+
 /* ============================================================
    ADMIN PAYMENT SYNC
 ============================================================ */
@@ -105,6 +121,11 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
       `Failed to create or recover admin payment for invoice ${ord.quickBooksInvoiceId}`,
     );
   }
+
+  await healQboCustomerMapIfNeeded({
+    mapRow: qboCustomer,
+    invoiceCustomerId: result?.customerIdUsed,
+  });
 
   await MODEL.update(
     {
@@ -203,6 +224,11 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
     );
   }
 
+  await healQboCustomerMapIfNeeded({
+    mapRow: qboCustomer,
+    invoiceCustomerId: result?.customerIdUsed,
+  });
+
   await MODEL.update(
     {
       quickBooksPaymentIdPartner: paymentId,
@@ -218,10 +244,287 @@ async function syncPartnerPaymentToQBO({ ord, MODEL }) {
 }
 
 /* ============================================================
+   ISOLATED ADMIN + PARTNER RUNNERS (admin failure must not block partner)
+============================================================ */
+
+function shouldAttemptAdminPaymentSync(ord, orderType) {
+  return (
+    ord?.paymentStatus === "done" &&
+    !!ord?.adminRealmId &&
+    !ord?.quickBooksPaymentId &&
+    !!ord?.quickBooksInvoiceId
+  );
+}
+
+function shouldAttemptPartnerPaymentSync(ord, orderType) {
+  return (
+    orderType === "customer" &&
+    ord?.paymentStatus === "done" &&
+    !!ord?.partnerRealmId &&
+    !ord?.quickBooksPaymentIdPartner &&
+    !!ord?.quickBooksInvoiceIdPartner
+  );
+}
+
+async function runAdminPaymentSyncSafe({ ord, ADMIN, MODEL, orderType }) {
+  if (!shouldAttemptAdminPaymentSync(ord, orderType)) {
+    return { attempted: false };
+  }
+  try {
+    const result = await syncAdminPaymentToQBO({
+      ord,
+      ADMIN,
+      MODEL,
+      orderType,
+    });
+    if (result?.skipped) {
+      return { attempted: true, skipped: true };
+    }
+    return {
+      attempted: true,
+      success: true,
+      paymentId: result.paymentId,
+    };
+  } catch (err) {
+    console.error(
+      `❌ [QBO] Admin payment sync failed for order ${ord.id} (partner sync will still run if eligible):`,
+      err.message,
+    );
+    return { attempted: true, success: false, error: err.message };
+  }
+}
+
+async function runPartnerPaymentSyncSafe({ ord, MODEL, orderType }) {
+  if (!shouldAttemptPartnerPaymentSync(ord, orderType)) {
+    return { attempted: false };
+  }
+  try {
+    const result = await syncPartnerPaymentToQBO({ ord, MODEL });
+    if (result?.skipped) {
+      return { attempted: true, skipped: true };
+    }
+    return {
+      attempted: true,
+      success: true,
+      paymentId: result.paymentId,
+    };
+  } catch (err) {
+    console.error(
+      `❌ [QBO] Partner payment sync failed for order ${ord.id}:`,
+      err.message,
+    );
+    return { attempted: true, success: false, error: err.message };
+  }
+}
+
+/**
+ * Classify per-order payment sync after isolated admin + partner attempts.
+ */
+function buildOrderPaymentSyncOutcome(ord, { neededAdmin, neededPartner, adminRun, partnerRun }) {
+  const adminOk = !neededAdmin || adminRun?.success === true;
+  const partnerOk = !neededPartner || partnerRun?.success === true;
+
+  const adminFailed = neededAdmin && adminRun?.attempted && !adminOk;
+  const partnerFailed = neededPartner && partnerRun?.attempted && !partnerOk;
+
+  const details = {
+    admin: neededAdmin
+      ? {
+          attempted: true,
+          success: adminOk && !adminFailed,
+          paymentId: adminRun?.paymentId || ord.quickBooksPaymentId || null,
+          error: adminRun?.error || null,
+        }
+      : { attempted: false },
+    partner: neededPartner
+      ? {
+          attempted: true,
+          success: partnerOk && !partnerFailed,
+          paymentId: partnerRun?.paymentId || ord.quickBooksPaymentIdPartner || null,
+          error: partnerRun?.error || null,
+        }
+      : { attempted: false },
+  };
+
+  if (adminOk && partnerOk && (neededAdmin || neededPartner)) {
+    const parts = [];
+    if (neededAdmin && adminRun?.success) parts.push("admin");
+    if (neededPartner && partnerRun?.success) parts.push("partner");
+    return {
+      status: "success",
+      message:
+        parts.length > 0
+          ? `Payment synced (${parts.join(" and ")})`
+          : "Payment synced successfully",
+      ...details,
+    };
+  }
+
+  if (
+    (neededAdmin && adminRun?.success) ||
+    (neededPartner && partnerRun?.success)
+  ) {
+    const okParts = [];
+    const failParts = [];
+    if (neededAdmin && adminRun?.success) okParts.push("admin");
+    else if (neededAdmin) failParts.push("admin");
+    if (neededPartner && partnerRun?.success) okParts.push("partner");
+    else if (neededPartner) failParts.push("partner");
+    return {
+      status: "partial",
+      message: `Partial sync: ${okParts.join(", ") || "none"} succeeded; ${failParts.join(", ") || "none"} failed`,
+      ...details,
+    };
+  }
+
+  if (adminFailed || partnerFailed) {
+    const msgs = [];
+    if (adminRun?.error) msgs.push(`Admin: ${adminRun.error}`);
+    if (partnerRun?.error) msgs.push(`Partner: ${partnerRun.error}`);
+    return {
+      status: "failed",
+      message: msgs.join(" | ") || "Payment sync failed",
+      ...details,
+    };
+  }
+
+  return {
+    status: "warning",
+    message: "No payment created or linked",
+    ...details,
+  };
+}
+
+/** @returns {'admin'|'partner'|'both'} */
+function resolvePaymentSyncSideFromEntity(entity) {
+  if (entity === "localPartner" || entity === "partnerEmployee") {
+    return "partner";
+  }
+  if (entity === "admin" || entity === "adminEmployee") {
+    return "admin";
+  }
+  return "both";
+}
+
+function partnerPaymentSyncSkipReason(ord, orderType) {
+  if (orderType !== "customer") return "partner_sync_customer_orders_only";
+  if (ord.paymentStatus !== "done") return "payment_not_done";
+  if (
+    !ord.quickBooksInvoiceIdPartner ||
+    String(ord.quickBooksInvoiceIdPartner).trim() === ""
+  ) {
+    return "no_partner_invoice";
+  }
+  if (
+    ord.quickBooksPaymentIdPartner &&
+    String(ord.quickBooksPaymentIdPartner).trim() !== ""
+  ) {
+    return "partner_payment_already_synced";
+  }
+  if (!ord.partnerRealmId) return "no_partner_realm";
+  return null;
+}
+
+function formatBulkPaymentSyncSummaryMessage({
+  successCount,
+  partialCount,
+  failureCount,
+  total,
+}) {
+  let msg = `Bulk payment sync completed: ${successCount} succeeded`;
+  if (partialCount > 0) {
+    msg += `, ${partialCount} partial`;
+  }
+  msg += `, ${failureCount} failed out of ${total} total orders`;
+  return msg;
+}
+
+/**
+ * Per-order outcome for a single QBO side (admin or partner), used for entity-scoped bulk sync.
+ */
+function buildOrderPaymentSyncOutcomeForSide(
+  ord,
+  syncSide,
+  { needed, run, existingPaymentId, alreadySyncedMessage, orderType = "customer" },
+) {
+  const hasExisting =
+    existingPaymentId != null && String(existingPaymentId).trim() !== "";
+
+  if (!needed) {
+    if (hasExisting) {
+      return {
+        status: "success",
+        message: alreadySyncedMessage,
+        paymentId: String(existingPaymentId).trim(),
+      };
+    }
+    const skipReason =
+      syncSide === "admin"
+        ? adminPaymentSyncSkipReason(ord)
+        : partnerPaymentSyncSkipReason(ord, orderType);
+    const skipMessages = {
+      payment_not_done: "Payment not marked as done",
+      no_admin_invoice: "No admin QuickBooks invoice on order",
+      admin_payment_already_synced: alreadySyncedMessage,
+      no_admin_realm: "No admin QuickBooks realm on order",
+      no_partner_invoice: "No partner QuickBooks invoice on order",
+      partner_payment_already_synced: alreadySyncedMessage,
+      no_partner_realm: "No partner QuickBooks realm on order",
+      partner_sync_customer_orders_only:
+        "Partner payment sync applies to customer orders only",
+      not_eligible: "No payment sync needed for this order",
+    };
+    return {
+      status: "warning",
+      message: skipMessages[skipReason] || "No payment created or linked",
+      paymentId: null,
+    };
+  }
+
+  if (run?.success && run?.paymentId) {
+    return {
+      status: "success",
+      message: "Payment synced successfully",
+      paymentId: run.paymentId,
+    };
+  }
+
+  if (run?.attempted && run?.error) {
+    return {
+      status: "failed",
+      message: run.error,
+      paymentId: null,
+    };
+  }
+
+  return {
+    status: "warning",
+    message: "No payment created or linked",
+    paymentId: null,
+  };
+}
+
+function mapBulkResultRowForSide(orderId, outcome) {
+  const row = {
+    orderId,
+    status: outcome.status,
+    message: outcome.message,
+  };
+  if (outcome.paymentId) {
+    row.paymentId = outcome.paymentId;
+  }
+  return row;
+}
+
+/* ============================================================
    SINGLE ORDER PAYMENT SYNC
 ============================================================ */
 
-async function syncPaymentToQuickBooks({ orderId, orderType = "customer" }) {
+async function syncPaymentToQuickBooks({
+  orderId,
+  orderType = "customer",
+  syncSide = "both",
+}) {
   console.log("🚀 [QBO] Sync single payment:", orderId);
 
   try {
@@ -232,23 +535,94 @@ async function syncPaymentToQuickBooks({ orderId, orderType = "customer" }) {
 
     if (!ord) throw new Error(`Order ${orderId} not found`);
 
-    // ADMIN
-    await syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType });
+    const side =
+      syncSide === "admin" || syncSide === "partner" ? syncSide : "both";
 
-    // PARTNER
-    if (orderType === "customer" && ord?.partnerRealmId) {
-      await syncPartnerPaymentToQBO({ ord, MODEL });
+    const neededAdmin = shouldAttemptAdminPaymentSync(ord, orderType);
+    const neededPartner = shouldAttemptPartnerPaymentSync(ord, orderType);
+
+    let outcome;
+    if (side === "admin") {
+      const adminRun = await runAdminPaymentSyncSafe({
+        ord,
+        ADMIN,
+        MODEL,
+        orderType,
+      });
+      outcome = buildOrderPaymentSyncOutcomeForSide(ord, "admin", {
+        needed: neededAdmin,
+        run: adminRun,
+        existingPaymentId: ord.quickBooksPaymentId,
+        alreadySyncedMessage: "Admin payment already synced",
+        orderType,
+      });
+    } else if (side === "partner") {
+      const partnerRun = await runPartnerPaymentSyncSafe({
+        ord,
+        MODEL,
+        orderType,
+      });
+      outcome = buildOrderPaymentSyncOutcomeForSide(ord, "partner", {
+        needed: neededPartner,
+        run: partnerRun,
+        existingPaymentId: ord.quickBooksPaymentIdPartner,
+        alreadySyncedMessage: "Partner payment already synced",
+        orderType,
+      });
+    } else {
+      const adminRun = await runAdminPaymentSyncSafe({
+        ord,
+        ADMIN,
+        MODEL,
+        orderType,
+      });
+      const partnerRun = await runPartnerPaymentSyncSafe({
+        ord,
+        MODEL,
+        orderType,
+      });
+      outcome = buildOrderPaymentSyncOutcome(ord, {
+        neededAdmin,
+        neededPartner,
+        adminRun,
+        partnerRun,
+      });
     }
 
-    console.log(`✅ [QBO] Payment synced: ${orderId}`);
+    if (outcome.status === "failed") {
+      const err = new Error(outcome.message);
+      handleQboError({
+        err,
+        context: `[QBO][PaymentSync] Error syncing order ${orderId}`,
+      });
+      throw err;
+    }
 
-    return { status: "success" };
+    if (outcome.status === "partial") {
+      console.warn(
+        `⚠️ [QBO] Partial payment sync for order ${orderId}: ${outcome.message}`,
+      );
+    } else {
+      console.log(`✅ [QBO] Payment synced: ${orderId} (${outcome.status})`);
+    }
+
+    const response = {
+      status: outcome.status,
+      message: outcome.message,
+      syncSide: side,
+    };
+    if (side === "both") {
+      response.admin = outcome.admin;
+      response.partner = outcome.partner;
+    } else if (outcome.paymentId) {
+      response.paymentId = outcome.paymentId;
+    }
+    return response;
   } catch (err) {
     handleQboError({
       err,
       context: `[QBO][PaymentSync] Error syncing order ${orderId}`,
     });
-
     throw err;
   }
 }
@@ -260,8 +634,11 @@ async function syncPaymentToQuickBooks({ orderId, orderType = "customer" }) {
 async function syncMultiplePaymentsToQuickBooks({
   orderIds,
   orderType = "customer",
+  syncSide = "both",
 }) {
-  console.log("🚀 [QBO] Bulk payment sync:", orderIds);
+  const side =
+    syncSide === "admin" || syncSide === "partner" ? syncSide : "both";
+  console.log("🚀 [QBO] Bulk payment sync:", { orderIds, syncSide: side });
 
   if (!Array.isArray(orderIds) || !orderIds.length) {
     throw new Error("orderIds must be a non-empty array");
@@ -280,90 +657,112 @@ async function syncMultiplePaymentsToQuickBooks({
     const results = [];
 
     let successCount = 0;
+    let partialCount = 0;
     let failureCount = 0;
 
     for (const ord of orders) {
-      try {
-        console.log(`🔄 [QBO] Processing order ${ord.id}`);
+      console.log(`🔄 [QBO] Processing order ${ord.id}`);
 
-        if (ord.paymentStatus !== "done") {
-          results.push({
-            orderId: ord.id,
-            status: "skipped",
-            message: "Payment not marked as done",
-          });
-
-          continue;
-        }
-
-        let adminResult = null;
-        let partnerResult = null;
-
-        if (
-          ord.adminRealmId &&
-          !ord.quickBooksPaymentId &&
-          ord.quickBooksInvoiceId
-        ) {
-          adminResult = await syncAdminPaymentToQBO({
-            ord,
-            ADMIN,
-            MODEL,
-            orderType,
-          });
-        }
-
-        if (
-          orderType === "customer" &&
-          ord.partnerRealmId &&
-          !ord.quickBooksPaymentIdPartner &&
-          ord.quickBooksInvoiceIdPartner
-        ) {
-          partnerResult = await syncPartnerPaymentToQBO({
-            ord,
-            MODEL,
-          });
-        }
-
-        if (
-          adminResult?.paymentId ||
-          ord.quickBooksPaymentId ||
-          partnerResult?.paymentId ||
-          ord.quickBooksPaymentIdPartner
-        ) {
-          results.push({
-            orderId: ord.id,
-            status: "success",
-            message: "Payment synced successfully",
-          });
-
-          successCount++;
-        } else {
-          results.push({
-            orderId: ord.id,
-            status: "warning",
-            message: "No payment created or linked",
-          });
-        }
-      } catch (err) {
-        console.error(`❌ [QBO] Order ${ord.id} failed:`, err.message);
-
+      if (ord.paymentStatus !== "done") {
         results.push({
           orderId: ord.id,
-          status: "failed",
-          message: err.message,
+          status: "skipped",
+          message: "Payment not marked as done",
         });
+        continue;
+      }
 
+      let outcome;
+      if (side === "admin") {
+        const neededAdmin = shouldAttemptAdminPaymentSync(ord, orderType);
+        const adminRun = await runAdminPaymentSyncSafe({
+          ord,
+          ADMIN,
+          MODEL,
+          orderType,
+        });
+        outcome = buildOrderPaymentSyncOutcomeForSide(ord, "admin", {
+          needed: neededAdmin,
+          run: adminRun,
+          existingPaymentId: ord.quickBooksPaymentId,
+          alreadySyncedMessage: "Admin payment already synced",
+          orderType,
+        });
+      } else if (side === "partner") {
+        const neededPartner = shouldAttemptPartnerPaymentSync(ord, orderType);
+        const partnerRun = await runPartnerPaymentSyncSafe({
+          ord,
+          MODEL,
+          orderType,
+        });
+        outcome = buildOrderPaymentSyncOutcomeForSide(ord, "partner", {
+          needed: neededPartner,
+          run: partnerRun,
+          existingPaymentId: ord.quickBooksPaymentIdPartner,
+          alreadySyncedMessage: "Partner payment already synced",
+          orderType,
+        });
+      } else {
+        const neededAdmin = shouldAttemptAdminPaymentSync(ord, orderType);
+        const neededPartner = shouldAttemptPartnerPaymentSync(ord, orderType);
+        const adminRun = await runAdminPaymentSyncSafe({
+          ord,
+          ADMIN,
+          MODEL,
+          orderType,
+        });
+        const partnerRun = await runPartnerPaymentSyncSafe({
+          ord,
+          MODEL,
+          orderType,
+        });
+        outcome = buildOrderPaymentSyncOutcome(ord, {
+          neededAdmin,
+          neededPartner,
+          adminRun,
+          partnerRun,
+        });
+      }
+
+      const row =
+        side === "both"
+          ? {
+              orderId: ord.id,
+              status: outcome.status,
+              message: outcome.message,
+              admin: outcome.admin,
+              partner: outcome.partner,
+            }
+          : mapBulkResultRowForSide(ord.id, outcome);
+
+      results.push(row);
+
+      if (outcome.status === "success") {
+        successCount++;
+      } else if (outcome.status === "partial") {
+        partialCount++;
+      } else if (outcome.status === "failed") {
         failureCount++;
       }
+
+      await new Promise((r) => setTimeout(r, 300));
     }
 
+    const skippedCount = results.filter((r) => r.status === "skipped").length;
     const summary = {
       total: orders.length,
+      syncSide: side,
       successCount,
+      partialCount,
       failureCount,
-      skippedCount: results.filter((r) => r.status === "skipped").length,
+      skippedCount,
       results,
-      message: `Bulk payment sync completed: ${successCount} succeeded, ${failureCount} failed out of ${orders.length}`,
+      message: formatBulkPaymentSyncSummaryMessage({
+        successCount,
+        partialCount,
+        failureCount,
+        total: orders.length,
+      }),
     };
 
     console.log("📊 [QBO] Bulk summary:", summary);
@@ -489,4 +888,5 @@ module.exports = {
   syncPaymentToQuickBooks,
   syncMultiplePaymentsToQuickBooks,
   syncAdminPaymentsForOrders,
+  resolvePaymentSyncSideFromEntity,
 };

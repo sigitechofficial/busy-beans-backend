@@ -346,8 +346,7 @@ async function createPaymentForInvoice({
   });
 
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
-  if (!invoiceId || !customerId)
-    throw new Error("Missing invoice or customer ID");
+  if (!invoiceId) throw new Error("Missing invoice ID");
 
   /* -----------------------------------------------------------
    Validate Invoice before creating payment
@@ -364,10 +363,24 @@ async function createPaymentForInvoice({
     );
   }
 
-  if (String(inv.CustomerRef?.value) !== String(customerId)) {
+  const invoiceCustomerId = String(inv.CustomerRef?.value || "").trim();
+  if (!invoiceCustomerId) {
     throw new Error(
-      `Invoice ${invoiceId} belongs to customer ${inv.CustomerRef.value}, not ${customerId}`,
+      `Invoice ${invoiceId} has no CustomerRef in QBO realm ${realmId}`,
     );
+  }
+
+  let effectiveCustomerId =
+    customerId != null && customerId !== ""
+      ? String(customerId).trim()
+      : "";
+  if (!effectiveCustomerId) {
+    effectiveCustomerId = invoiceCustomerId;
+  } else if (effectiveCustomerId !== invoiceCustomerId) {
+    console.warn(
+      `[QBO] Payment: invoice ${invoiceId} belongs to customer ${invoiceCustomerId}, map/caller passed ${effectiveCustomerId}. Using invoice customer for payment.`,
+    );
+    effectiveCustomerId = invoiceCustomerId;
   }
 
   // Log invoice details for debugging
@@ -457,6 +470,7 @@ async function createPaymentForInvoice({
       txnDate: existingLinkedPayment.TxnDate || safeDate,
       raw: existingLinkedPayment,
       isExisting: true,
+      customerIdUsed: effectiveCustomerId,
     };
   }
 
@@ -473,6 +487,7 @@ async function createPaymentForInvoice({
         reason: "paid_no_linked_payment",
         note: "Invoice is paid/closed but no linked QBO Payment exists. No payment created to avoid duplicates. Retry with allowRecovery=true to create a recovery payment.",
         invoiceId,
+        customerIdUsed: effectiveCustomerId,
       };
     }
 
@@ -494,6 +509,7 @@ async function createPaymentForInvoice({
         reason: "precheck_unverified_refuse_recovery",
         note: "Existing-payment verification failed twice; refusing to create recovery payment to avoid duplicates. Retry later or investigate QBO connectivity.",
         invoiceId,
+        customerIdUsed: effectiveCustomerId,
       };
     }
     if (reConfirm.payment?.Id) {
@@ -506,6 +522,7 @@ async function createPaymentForInvoice({
         txnDate: reConfirm.payment.TxnDate || safeDate,
         raw: reConfirm.payment,
         isExisting: true,
+        customerIdUsed: effectiveCustomerId,
       };
     }
 
@@ -519,7 +536,7 @@ async function createPaymentForInvoice({
     }
 
     const recoveryPayload = {
-      CustomerRef: { value: String(customerId) },
+      CustomerRef: { value: String(effectiveCustomerId) },
       TotalAmt: recoveryAmount,
       TxnDate: safeDate,
       PaymentRefNum: `REC-${invoiceId}`.substring(0, 21),
@@ -557,6 +574,7 @@ async function createPaymentForInvoice({
         raw: recoveryPay,
         isExisting: false,
         recovered: true,
+        customerIdUsed: effectiveCustomerId,
       };
     } catch (recoveryErr) {
       console.error(
@@ -598,7 +616,7 @@ async function createPaymentForInvoice({
   }
 
   const payload = {
-    CustomerRef: { value: String(customerId) },
+    CustomerRef: { value: String(effectiveCustomerId) },
     TotalAmt: safeAmount,
     TxnDate: safeDate,
     PaymentRefNum: safeRefNumber,
@@ -650,6 +668,7 @@ async function createPaymentForInvoice({
       txnDate: payment.TxnDate,
       raw: payment,
       isExisting: false,
+      customerIdUsed: effectiveCustomerId,
     };
   } catch (error) {
     // Handle duplicate payment or validation errors
@@ -697,6 +716,7 @@ async function createPaymentForInvoice({
             txnDate: safeDate,
             raw: existingPayment,
             isExisting: true,
+            customerIdUsed: effectiveCustomerId,
           };
         }
       } catch (findErr) {
@@ -778,13 +798,18 @@ async function createQboPayment({
         skipped: true,
         reason: paymentRes.reason || "skipped",
         note: paymentRes.note,
+        customerIdUsed: paymentRes.customerIdUsed,
       };
     }
 
     if (paymentRes?.isExisting) {
       // Found existing payment - return it so DB can be updated
       console.log(`✅ [QBO] Using existing payment: ${paymentId}`);
-      return { paymentId, isExisting: true };
+      return {
+        paymentId,
+        isExisting: true,
+        customerIdUsed: paymentRes.customerIdUsed,
+      };
     }
 
     if (!paymentId) {
@@ -799,6 +824,7 @@ async function createQboPayment({
       paymentId,
       isExisting: false,
       recovered: !!paymentRes?.recovered,
+      customerIdUsed: paymentRes.customerIdUsed,
     };
   } catch (err) {
     handleQboError({

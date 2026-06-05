@@ -259,4 +259,5 @@ async function deleteAdminQboInvoicesForOrders({
 module.exports = {
   quickBooksInvocieDelete,
   deleteAdminQboInvoicesForOrders,
+  deleteInvoiceInRealm,
 };

@@ -2,6 +2,10 @@ const db = require("./models");
 require("dotenv").config();
 require("./redis_connect");
 const server = require("./app");
+const {
+  startLandingPageScheduler,
+  stopLandingPageScheduler,
+} = require("./marketing");
 
 const serverPort = process.env.PORT || 8011;
 const serverHost = process.env.HOST || "127.0.0.1"; // Accept connections from anywhere
@@ -32,6 +36,7 @@ process.on("uncaughtException", (err) => {
 // Graceful shutdown
 const gracefulShutdown = () => {
   console.log("\n🟡 Received shutdown signal. Closing server...");
+  stopLandingPageScheduler();
   server.close(() => {
     console.log("✅ Server closed successfully.\n");
     process.exit(0);
@@ -57,4 +62,5 @@ server.listen(serverPort, serverHost, (err) => {
   // console.log('🌐 To expose publicly:   Run the following command:');
   // console.log(`                         ngrok http ${serverPort}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+  startLandingPageScheduler();
 });

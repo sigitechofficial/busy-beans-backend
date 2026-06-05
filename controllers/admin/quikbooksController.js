@@ -11,6 +11,7 @@ const {
 const {
   syncPaymentToQuickBooks,
   syncMultiplePaymentsToQuickBooks,
+  resolvePaymentSyncSideFromEntity,
 } = require("../../services/paymentSyncService");
 const {
   refreshAccessTokenIfNeeded,
@@ -316,16 +317,15 @@ exports.syncMultipleOrderPayments = async (req, res) => {
       return httpError(res, 400, "orderIds must be a non-empty array");
     }
 
+    const syncSide = resolvePaymentSyncSideFromEntity(req?.user?.entity);
+
     const result = await syncMultiplePaymentsToQuickBooks({
       orderIds: orderIds.map((id) => Number(id)),
       orderType,
+      syncSide,
     });
 
-    return httpSuccess(
-      res,
-      result,
-      `Bulk payment sync completed: ${result.successCount} succeeded, ${result.failureCount} failed out of ${result.total} total orders`,
-    );
+    return httpSuccess(res, result, result.message);
   } catch (err) {
     console.error("[QBO][syncMultipleOrderPayments] Error:", err);
     return httpError(res, 500, err.message);

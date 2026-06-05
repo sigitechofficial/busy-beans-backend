@@ -248,8 +248,32 @@ async function findQboCustomerByDisplayName({
   return found || null;
 }
 
-async function upsertQboCustomer({ u, condition, userType }) {
+/**
+ * Resolve QBO customer id from qboCustomerMaps (realm + account/partner + user keys).
+ * Used to avoid creating a second QBO customer when the portal name changes but the map is stable.
+ */
+async function getMappedQboCustomerId(where = {}) {
+  if (!where?.realmId) return null;
+  const row = await qboCustomerMap.findOne({ where });
+  const id = String(row?.qboCustomerId || "").trim();
+  return id || null;
+}
+
+async function upsertQboCustomer({ u, condition, userType, mapLookup }) {
   try {
+    if (mapLookup && condition?.realmId) {
+      const mappedId = await getMappedQboCustomerId({
+        ...condition,
+        ...mapLookup,
+      });
+      if (mappedId) {
+        console.log(
+          `[QBO] upsertQboCustomer: using existing map customer ${mappedId} (realm ${condition.realmId})`,
+        );
+        return mappedId;
+      }
+    }
+
     const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
       condition,
     });
@@ -437,18 +461,25 @@ async function importCustomersToQuickBooks({
         where: existCondition,
       });
 
-      if (alreadyExist) {
+      const adminMapLookup =
+        userType === "customer"
+          ? { userId: u.id }
+          : userType === "local-partner"
+            ? { salesRepId: u.id }
+            : null;
+
+      if (alreadyExist?.qboCustomerId) {
         console.log(
-          "🚀 ~ importCustomersToQuickBooks ~ Customer Already On Admin QBO:"
+          `[QBO][CustomerImport] Admin map exists (user ${u.id}), qboCustomerId=${alreadyExist.qboCustomerId} — skip`,
         );
       } else {
         const adminCustomerId = await upsertQboCustomer({
           u,
-          condition: adminCondition, // pass condition instead of token
+          condition: adminCondition,
           userType,
+          mapLookup: adminMapLookup || undefined,
         });
 
-        // Only create mapping if we got a valid customer ID
         if (adminCustomerId) {
           const adminInput = {
             ...adminCondition,
@@ -463,13 +494,18 @@ async function importCustomersToQuickBooks({
 
           console.log(
             "🚀 ~ importCustomersToQuickBooks ~ adminInput:",
-            adminInput
+            adminInput,
           );
-          await qboCustomerMap.create(adminInput);
+
+          if (alreadyExist) {
+            await alreadyExist.update({ qboCustomerId: adminCustomerId });
+          } else {
+            await qboCustomerMap.create(adminInput);
+          }
           results.push(adminInput);
         } else {
           console.log(
-            `⚠️ [QBO] Failed to create/find customer for ${u.email}, skipping...`
+            `⚠️ [QBO] Failed to create/find admin customer for ${u.email}, skipping...`,
           );
         }
       }
@@ -486,38 +522,49 @@ async function importCustomersToQuickBooks({
             realmId: u.salesRep.currentRealmId,
           };
 
-          const exisit = await qboCustomerMap.findOne({
-            where: { ...repCondition, userid: u.id },
+          const partnerExistCondition = {
+            ...repCondition,
+            userId: u.id,
+          };
+
+          const existingPartnerMap = await qboCustomerMap.findOne({
+            where: partnerExistCondition,
           });
 
-          if (exisit) {
+          if (existingPartnerMap?.qboCustomerId) {
             console.log(
-              "🚀 ~ importCustomersToQuickBooks ~ Customer Already On Partner QBO:",
-              exisit
+              `[QBO][CustomerImport] Partner map exists (user ${u.id}, salesRep ${u.salesRepId}), qboCustomerId=${existingPartnerMap.qboCustomerId} — skip`,
             );
           } else {
             const partnerCustomerId = await upsertQboCustomer({
               u,
               condition: repCondition,
               userType,
+              mapLookup: { userId: u.id },
             });
 
-            // Only create mapping if we got a valid customer ID
             if (partnerCustomerId) {
               const partnerInput = {
                 ...repCondition,
                 qboCustomerId: partnerCustomerId,
-                userId: u?.id,
+                userId: u.id,
               };
               console.log(
                 "🚀 ~ importCustomersToQuickBooks ~ partnerInput:",
-                partnerInput
+                partnerInput,
               );
-              await qboCustomerMap.create(partnerInput);
+
+              if (existingPartnerMap) {
+                await existingPartnerMap.update({
+                  qboCustomerId: partnerCustomerId,
+                });
+              } else {
+                await qboCustomerMap.create(partnerInput);
+              }
               results.push(partnerInput);
             } else {
               console.log(
-                `⚠️ [QBO] Failed to create/find partner customer for ${u.email}, skipping...`
+                `⚠️ [QBO] Failed to create/find partner customer for ${u.email}, skipping...`,
               );
             }
           }

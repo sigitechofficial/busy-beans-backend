@@ -21,6 +21,7 @@ const webhookRoute = require("./routes/webhooks");
 const qboRoutes = require("./routes/qboRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const subscriptionRouter = require("./routes/subscriptionRoutes");
+const { router: marketingRouter } = require("./marketing");
 
 app.use((req, res, next) => {
   console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
@@ -141,6 +142,8 @@ app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/leads", leadRoutes);
 app.use("/qbo", qboRoutes);
 app.use("/api/v1/subscription", subscriptionRouter);
+// Page Builder module (marketing) — /api/auth, /api/admin/*, /api/public/*
+app.use("/api", marketingRouter);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });

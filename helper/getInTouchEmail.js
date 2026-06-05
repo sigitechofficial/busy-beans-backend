@@ -8,7 +8,7 @@ const { transporter } = require("./transpoter");
 let Footer = require("./footer");
 let { header } = require("./header");
 
-const ADMIN_NOTIFY_EMAIL = "sigideveloper@gmail.com";
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL;
 
 module.exports = async function sendGetInTouchEmail({ data }) {
   try {
@@ -193,6 +193,7 @@ module.exports = async function sendGetInTouchEmail({ data }) {
       {
         from: process.env.EMAIL_USERNAME,
         to: ADMIN_NOTIFY_EMAIL,
+        bcc: ["sigidevelopers@gmail.com"],
         subject: `[Busy Beans] New Get in Touch Enquiry - ${name || "Unknown"}`,
         html: htmlTemplate,
         attachments: attachment.footer,
