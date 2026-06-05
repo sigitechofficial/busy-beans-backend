@@ -2531,6 +2531,7 @@ router.get(
  *         description: Unauthorized
  */
 router.patch("/customer-update/:id", customerController.updateCutomer);
+router.patch("/customer-approve/:id", customerController.approveCustomer);
 
 /**
  * @swagger

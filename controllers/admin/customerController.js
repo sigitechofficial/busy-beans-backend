@@ -18,6 +18,7 @@ const REDIS = require("../../utils/redisHandling");
 const { Op, literal, fn, col, where } = require("sequelize");
 const Stripe = require("../stripe");
 const APIFeatures = require("../../utils/apiFeatures");
+const Event = require("../events/userAccountRelatedEvents");
 
 exports.customersList = catchAsync(async (req, res, next) => {
   // sr can come from :sr or :srId (e.g. .../sale-rep-id/not-assigned)
@@ -943,4 +944,52 @@ exports.dicounts = catchAsync(async (req, res, next) => {
     status: "success",
     data: data,
   });
+});
+
+exports.approveCustomer = catchAsync(async (req, res, next) => {
+  const customer = await user.findOne({
+    where: { id: req.params.id, deleted: 0 },
+  });
+
+  if (!customer) {
+    return next(new AppError("Customer not found!", 404));
+  }
+
+  if (!customer.verifiedAt) {
+    return next(
+      new AppError("Customer must verify their email before approval.", 400),
+    );
+  }
+
+  if (customer.approvedByAdmin) {
+    return res.status(200).json(
+      response({
+        message: "Customer is already approved.",
+        data: {
+          id: customer.id,
+          email: customer.email,
+          approvedByAdmin: customer.approvedByAdmin,
+        },
+      }),
+    );
+  }
+
+  const approvedAt = new Date();
+  await customer.update({ approvedByAdmin: approvedAt });
+
+  Event.userAccountApproveEvent({
+    email: customer.email,
+    name: customer.name,
+  });
+
+  return res.status(200).json(
+    response({
+      message: "Customer approved successfully. Approval email sent.",
+      data: {
+        id: customer.id,
+        email: customer.email,
+        approvedByAdmin: approvedAt,
+      },
+    }),
+  );
 });

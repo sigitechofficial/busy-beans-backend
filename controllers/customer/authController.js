@@ -33,6 +33,37 @@ const {
   clearTemporaryBlock,
 } = require("../../middlewares/temporaryBlockFlow");
 
+const ADMIN_APPROVAL_MESSAGE =
+  "Your account has been registered successfully. It is now pending admin approval. You will receive an email once your account is approved and you can log in.";
+
+const ADMIN_APPROVAL_PENDING_MESSAGE =
+  "Your account is pending admin approval. You will receive an email once your account has been approved and you can log in.";
+
+const isEmailSelfRegistration = (record) =>
+  record?.createdBy === "registration" &&
+  (!record?.registerBy || record?.registerBy === "email");
+
+const needsAdminApproval = (record) =>
+  isEmailSelfRegistration(record) &&
+  record?.verifiedAt &&
+  !record?.approvedByAdmin;
+
+const returnAdminApprovalRequired = (
+  res,
+  customer,
+  message = ADMIN_APPROVAL_MESSAGE,
+) =>
+  res.status(200).json(
+    response({
+      status: "admin-approval-required",
+      message,
+      data: {
+        id: customer?.id,
+        email: customer?.email,
+      },
+    }),
+  );
+
 const signToken = (data) =>
   jwt.sign(
     data,
@@ -82,8 +113,15 @@ exports.signup = catchAsync(async (req, res, next) => {
     specialChars: false,
   });
 
-  if (!req.body?.info?.registerBy || req.body?.info?.registerBy != "email") {
+  const registerBy = req.body?.info?.registerBy || "email";
+  req.body.info.registerBy = registerBy;
+
+  if (registerBy === "email") {
+    delete req.body.info.verifiedAt;
+    delete req.body.info.approvedByAdmin;
+  } else {
     req.body.info.verifiedAt = Date.now();
+    req.body.info.approvedByAdmin = Date.now();
   }
 
   const sr = await salesRep.findAll({
@@ -114,7 +152,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   await newUser.save();
   const input = JSON.parse(JSON.stringify(newUser));
   input.address = defaultAddress;
-  if (!req.body?.info?.registerBy || req.body?.info?.registerBy == "email") {
+  if (registerBy === "email") {
     Event.otpToUsersEvent({
       email: newUser?.email,
       name: newUser.name,
@@ -208,6 +246,14 @@ exports.login = catchAsync(async (req, res, next) => {
     );
   }
 
+  if (needsAdminApproval(customer)) {
+    return returnAdminApprovalRequired(
+      res,
+      customer,
+      ADMIN_APPROVAL_PENDING_MESSAGE,
+    );
+  }
+
   await REDIS.resetLoginFailedAttempts("user", customer.id);
   if (req.body?.tokenId)
     deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
@@ -263,25 +309,33 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
     return next(new AppError("User not found", 200));
   }
 
-  if (customer.latestOtp == otp && on == "signup") {
+  let verificationOn = on;
+  if (on === "login" && !customer.verifiedAt) {
+    verificationOn = "signup";
+  }
+
+  if (customer.latestOtp == otp && verificationOn == "signup") {
+    if (!customer.verifiedAt) {
+      customer.verifiedAt = Date.now();
+      await customer.save();
+      Event.customerRegistrationAdminNotifyEvent({ customer });
+    }
+
+    if (needsAdminApproval(customer)) {
+      return returnAdminApprovalRequired(res, customer);
+    }
+
     const data = JSON.parse(JSON.stringify(customer));
     data.addresses = undefined;
     data.address = customer?.addresses[0];
-    createSendToken(data, 200, req, res);
-    customer.verifiedAt = Date.now();
-    await customer.save();
-    Event.userAccountApproveEvent({
-      email: customer?.email,
-      name: customer.name,
-    });
-    return;
+    return createSendToken(data, 200, req, res);
   } else if (
-    on === "login" ||
-    on === "forgot_password" ||
+    verificationOn === "login" ||
+    verificationOn === "forgot_password" ||
     customer?.verificationContext
   ) {
     const context = normalizeVerificationContext(
-      on || customer?.verificationContext,
+      verificationOn || customer?.verificationContext,
     );
     if (!isValidTemporaryBlockOtp({ record: customer, otp, context })) {
       return next(new AppError("Invalid OTP", 200));
@@ -289,6 +343,13 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
     await clearTemporaryBlock(customer);
     if (context === "login") {
       await REDIS.resetLoginFailedAttempts("user", customer.id);
+      if (needsAdminApproval(customer)) {
+        return returnAdminApprovalRequired(
+          res,
+          customer,
+          ADMIN_APPROVAL_PENDING_MESSAGE,
+        );
+      }
       await purgeSessionsAndDeviceTokens({ entity: "user", id: customer.id });
       if (req.body?.tokenId) {
         deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });

@@ -107,6 +107,10 @@ module.exports = (sequelize) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      approvedByAdmin: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
       stripeCustomerId: {
         type: DataTypes.STRING(),
         allowNull: true,

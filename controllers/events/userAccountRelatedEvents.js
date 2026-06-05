@@ -1,5 +1,6 @@
 const userAccountApprove = require("../../helper/userAccountApprove");
 const userAccountCreated = require("../../helper/userAccountCreated");
+const customerRegistrationAdminNotify = require("../../helper/customerRegistrationAdminNotify");
 const otpToUsers = require("../../helper/otpToUsers");
 const otpToUsersForgotPassword = require("../../helper/otpToUsersForgotPassword");
 const {
@@ -27,6 +28,28 @@ exports.userAccountCreatedEvent = async ({ email, name }) => {
     return true;
   } catch (error) {
     console.log("🚀 ~ exports.userAccountApprove = ~ error:", error);
+  }
+};
+
+exports.customerRegistrationAdminNotifyEvent = async ({ customer }) => {
+  try {
+    customerRegistrationAdminNotify({
+      name: customer?.name,
+      email: customer?.email,
+      phone: customer?.phoneNumber,
+      company: customer?.companyName,
+      userId: customer?.id,
+      address: customer?.addresses?.[0],
+    });
+    console.log(
+      "🚀 ~~~~~ eventDrivenCommunication customerRegistrationAdminNotify~~~~~~~ 🚀",
+    );
+    return true;
+  } catch (error) {
+    console.log(
+      "🚀 ~ exports.customerRegistrationAdminNotifyEvent ~ error:",
+      error,
+    );
   }
 };
 
