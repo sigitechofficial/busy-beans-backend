@@ -3,6 +3,7 @@ const userAccountCreated = require("../../helper/userAccountCreated");
 const customerRegistrationAdminNotify = require("../../helper/customerRegistrationAdminNotify");
 const otpToUsers = require("../../helper/otpToUsers");
 const otpToUsersForgotPassword = require("../../helper/otpToUsersForgotPassword");
+const { salesRep } = require("../../models");
 const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
@@ -33,6 +34,34 @@ exports.userAccountCreatedEvent = async ({ email, name }) => {
 
 exports.customerRegistrationAdminNotifyEvent = async ({ customer }) => {
   try {
+    let notifyEmail = null;
+    let recipientType = "admin";
+    let localPartnerName = null;
+
+    if (customer?.salesRepId) {
+      const partner = await salesRep.findOne({
+        where: { id: customer.salesRepId, deleted: 0, status: true },
+        attributes: ["email", "srName"],
+      });
+      if (partner?.email) {
+        notifyEmail = partner.email;
+        recipientType = "localPartner";
+        localPartnerName = partner.srName;
+      }
+    }
+
+    if (!notifyEmail) {
+      notifyEmail = process.env.ADMIN_NOTIFY_EMAIL || null;
+      recipientType = "admin";
+    }
+
+    if (!notifyEmail) {
+      console.log(
+        "customerRegistrationAdminNotifyEvent: no recipient email configured",
+      );
+      return false;
+    }
+
     customerRegistrationAdminNotify({
       name: customer?.name,
       email: customer?.email,
@@ -40,6 +69,9 @@ exports.customerRegistrationAdminNotifyEvent = async ({ customer }) => {
       company: customer?.companyName,
       userId: customer?.id,
       address: customer?.addresses?.[0],
+      notifyEmail,
+      recipientType,
+      localPartnerName,
     });
     console.log(
       "🚀 ~~~~~ eventDrivenCommunication customerRegistrationAdminNotify~~~~~~~ 🚀",

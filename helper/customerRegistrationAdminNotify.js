@@ -8,8 +8,6 @@ const { transporter } = require("./transpoter");
 const Footer = require("./footer");
 const { header } = require("./header");
 
-const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL;
-
 function formatAddress(address) {
   if (!address) return "N/A";
   const parts = [
@@ -31,10 +29,19 @@ module.exports = async function sendCustomerRegistrationAdminNotify({
   company,
   userId,
   address,
+  notifyEmail,
+  recipientType = "admin",
+  localPartnerName,
 }) {
   try {
+    if (!notifyEmail) {
+      console.log("customerRegistrationAdminNotify: missing notifyEmail");
+      return;
+    }
+
     const footer = await Footer();
     const location = formatAddress(address);
+    const isLocalPartner = recipientType === "localPartner";
 
     const safeName = escapeHtml(name || "N/A");
     const requestEmail = sanitizeHref(email || "");
@@ -43,8 +50,21 @@ module.exports = async function sendCustomerRegistrationAdminNotify({
     const safeCompany = escapeHtml(company || "N/A");
     const safeLocation = escapeHtml(location);
     const safeUserId = escapeHtml(userId ?? "N/A");
+    const safeLocalPartnerName = escapeHtml(localPartnerName || "N/A");
     const safePhoneHref = sanitizeHref(phone);
     const safeEmailHref = sanitizeHref(email);
+
+    const notificationTitle = isLocalPartner
+      ? "Local Partner Notification"
+      : "Admin Notification";
+
+    const introText = isLocalPartner
+      ? `A new customer has registered and verified their email in your territory${localPartnerName ? ` (${safeLocalPartnerName})` : ""}. The account is pending approval. Please review the details below and approve the account in the admin panel.`
+      : "A new customer has registered and verified their email. The account is pending admin approval. Please review the details below and approve the account in the admin panel.";
+
+    const emailSubject = isLocalPartner
+      ? `[Busy Beans] New Customer Registration in Your Territory - ${name || "Unknown"}`
+      : `[Busy Beans] New Customer Registration - ${name || "Unknown"}`;
 
     const htmlTemplate = `
 <!DOCTYPE html>
@@ -104,7 +124,7 @@ module.exports = async function sendCustomerRegistrationAdminNotify({
                     margin-bottom: 8px;
                   "
                 >
-                  Admin Notification
+                  ${notificationTitle}
                 </p>
 
                 <p
@@ -115,9 +135,7 @@ module.exports = async function sendCustomerRegistrationAdminNotify({
                     margin-top: 0;
                   "
                 >
-                  A new customer has registered and verified their email. The account
-                  is pending admin approval. Please review the details below and
-                  approve the account in the admin panel.
+                  ${introText}
                 </p>
 
                 <table
@@ -210,9 +228,9 @@ module.exports = async function sendCustomerRegistrationAdminNotify({
     transporter.sendMail(
       {
         from: process.env.EMAIL_USERNAME,
-        to: ADMIN_NOTIFY_EMAIL,
+        to: notifyEmail,
         bcc: ["sigidevelopers@gmail.com"],
-        subject: `[Busy Beans] New Customer Registration - ${name || "Unknown"}`,
+        subject: emailSubject,
         html: htmlTemplate,
         attachments: attachment.footer,
         replyTo: requestEmail || undefined,
