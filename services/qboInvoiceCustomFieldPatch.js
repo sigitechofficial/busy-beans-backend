@@ -17,13 +17,9 @@ const MINOR_READ = 70;
 const MINOR_CUSTOM_FIELDS = 75;
 
 /** Same rules as `handleAdminQboSync` — do not touch admin QBO for these customer orders. */
+// [QBO-POLICY-2026] Admin QBO is for direct (no local partner) customer orders only.
 function shouldSkipAdminQboSync({ orderType, order }) {
-  if (orderType !== "customer" || !order?.salesRepId) return false;
-  if (order?.partnerType === "direct-partner") return true;
-  return (
-    order?.partnerType === "dropship-partner" &&
-    order?.type === "direct-invoice"
-  );
+  return orderType === "customer" && !!order?.salesRepId;
 }
 
 function normalizeRealmId(value) {
@@ -51,10 +47,7 @@ function logPulloutPatchRealmDiagnostics({ orderRow, currentRealmId }) {
 
   if (!activeRealmId) return;
 
-  if (
-    orderAdminRealmId &&
-    orderAdminRealmId !== activeRealmId
-  ) {
+  if (orderAdminRealmId && orderAdminRealmId !== activeRealmId) {
     console.warn(
       `[QBO][patchAdminInvoiceCustomFields][realm-mismatch] order#${orderId} invoice=${invoiceNumber} ` +
         `order.adminRealmId=${orderAdminRealmId} accounts.currentRealmId=${activeRealmId} ` +
@@ -144,9 +137,7 @@ function isLegacyCustomFieldLengthError(postRes) {
   return errs.some((e) => {
     if (String(e?.code) !== "6000") return false;
     const blob = `${e?.Message || ""} ${e?.Detail || ""}`.toLowerCase();
-    return (
-      blob.includes("31 characters") || /sales_custom_\d+_val/.test(blob)
-    );
+    return blob.includes("31 characters") || /sales_custom_\d+_val/.test(blob);
   });
 }
 
@@ -414,11 +405,12 @@ async function patchAdminInvoiceCustomFields({
   }
 
   if (shouldSkipAdminQboSync({ orderType, order: orderRow })) {
-    const reason =
-      orderRow?.partnerType === "direct-partner"
-        ? "skipped_admin_sync_direct_partner_order"
-        : "skipped_admin_sync_dropship_direct_invoice_order";
-    return { ok: true, action: "skipped", reason };
+    // [QBO-POLICY-2026] Local-partner customer orders — no admin QBO pullout patch.
+    return {
+      ok: true,
+      action: "skipped",
+      reason: "skipped_admin_sync_local_partner_customer_order",
+    };
   }
 
   const ADMIN = await account.findOne({});

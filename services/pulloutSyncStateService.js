@@ -40,21 +40,15 @@
 
 const { order, partnerOrder } = require("../models");
 const { getOrderWithAssociations } = require("./orderService");
-const {
-  isPulloutCustomFieldEligible,
-} = require("./qboPulloutCustomField");
+const { isPulloutCustomFieldEligible } = require("./qboPulloutCustomField");
 const {
   patchAdminInvoiceCustomFields,
 } = require("./qboInvoiceCustomFieldPatch");
 
 /** Mirrors `shouldSkipAdminQboSync` in qboInvoice.js / qboInvoiceCustomFieldPatch.js. */
+// [QBO-POLICY-2026] Any customer order with salesRepId is excluded from admin QBO pullout sync.
 function isAdminSkipForCustomer(orderRow) {
-  if (!orderRow?.salesRepId) return false;
-  if (orderRow?.partnerType === "direct-partner") return true;
-  return (
-    orderRow?.partnerType === "dropship-partner" &&
-    orderRow?.type === "direct-invoice"
-  );
+  return !!orderRow?.salesRepId;
 }
 
 function resolveModel(orderType) {
@@ -127,8 +121,7 @@ async function reconcilePulloutSyncStateForOrder({
     };
   }
 
-  // Admin-skip orders (direct-partner / dropship direct-invoice) stay
-  // not-eligible because their custom field never ships to admin QBO.
+  // [QBO-POLICY-2026] Customer orders with salesRepId — admin QBO pullout sync disabled; stay not-eligible.
   if (orderType === "customer" && isAdminSkipForCustomer(orderRow)) {
     if (current !== "not-eligible") {
       await safeUpdateState({
@@ -278,7 +271,11 @@ async function runWithConcurrency(items, concurrency, fn) {
         results[idx] = await fn(items[idx], idx);
       } catch (err) {
         // fn already handles its own errors; defensive only.
-        results[idx] = { ok: false, action: "worker_error", reason: err?.message };
+        results[idx] = {
+          ok: false,
+          action: "worker_error",
+          reason: err?.message,
+        };
       }
     }
   }
@@ -327,7 +324,8 @@ async function reconcilePulloutSyncStateForOrders({
   // know how many rows actually reached `synced` vs `eligible`.
   const summary = results.reduce(
     (acc, r) => {
-      acc[r.finalState || "unknown"] = (acc[r.finalState || "unknown"] || 0) + 1;
+      acc[r.finalState || "unknown"] =
+        (acc[r.finalState || "unknown"] || 0) + 1;
       if (r.action === "patch_failed") acc.failures += 1;
       return acc;
     },

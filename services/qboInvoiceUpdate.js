@@ -14,7 +14,8 @@ const BASE =
 const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
 const MINOR = 70;
 const MINOR_CUSTOM_FIELDS = 75;
-const { getPulloutCustomFieldEntry } = require("./qboPulloutCustomField");
+// [QBO-POLICY-2026] Pullout custom field no longer pushed to admin QBO — import kept commented for reference.
+// const { getPulloutCustomFieldEntry } = require("./qboPulloutCustomField");
 
 /**
  * Query QBO for Sales Rep custom field DefinitionId
@@ -212,13 +213,14 @@ function buildQboInvoiceUpdatePayload({
     );
   }
 
-  const pulloutCf = getPulloutCustomFieldEntry(order);
-  if (pulloutCf) {
-    customFields.push(pulloutCf);
-    console.log(
-      `✅ [QBO] Update: Adding Pullout CustomField (pulloutIntentId=${pulloutCf.StringValue})`,
-    );
-  }
+  // [QBO-POLICY-2026] PulloutIntentId is stored on the order only — not written to admin QBO on update.
+  // const pulloutCf = getPulloutCustomFieldEntry(order);
+  // if (pulloutCf) {
+  //   customFields.push(pulloutCf);
+  //   console.log(
+  //     `✅ [QBO] Update: Adding Pullout CustomField (pulloutIntentId=${pulloutCf.StringValue})`,
+  //   );
+  // }
 
   /* -------------------------------------------------------
       6. Build sparse payload

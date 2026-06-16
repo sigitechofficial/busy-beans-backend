@@ -10,10 +10,11 @@ const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
 const { order, partnerOrder, account, qboCustomerMap } = require("../models");
 const { handleQboError } = require("./qboErrorHandler");
 const { qboQuery } = require("./qboHelpers");
-const {
-  getPulloutCustomFieldEntry,
-  isPulloutCustomFieldEligible,
-} = require("./qboPulloutCustomField");
+// [QBO-POLICY-2026] Pullout custom field no longer pushed to admin QBO — imports kept commented for reference.
+// const {
+//   getPulloutCustomFieldEntry,
+//   isPulloutCustomFieldEligible,
+// } = require("./qboPulloutCustomField");
 
 console.log("🚀 ~ qboInvoice.js ~ process.env.QBO_ENV:", Number(19.8));
 
@@ -107,17 +108,9 @@ async function deleteQboCustomerMappingForUserInRealm(where) {
   }
 }
 
+// [QBO-POLICY-2026] Admin QBO is for direct (no local partner) customer orders only.
 function shouldSkipAdminQboSync({ orderType, order }) {
-  if (orderType !== "customer" || !order?.salesRepId) return false;
-
-  // Existing business rule: direct-partner customer orders do not sync to admin QBO.
-  if (order?.partnerType === "direct-partner") return true;
-
-  // New business rule: dropship direct-invoice orders should not sync to admin QBO.
-  return (
-    order?.partnerType === "dropship-partner" &&
-    order?.type === "direct-invoice"
-  );
+  return orderType === "customer" && !!order?.salesRepId;
 }
 
 /**
@@ -371,9 +364,7 @@ async function createPaymentForInvoice({
   }
 
   let effectiveCustomerId =
-    customerId != null && customerId !== ""
-      ? String(customerId).trim()
-      : "";
+    customerId != null && customerId !== "" ? String(customerId).trim() : "";
   if (!effectiveCustomerId) {
     effectiveCustomerId = invoiceCustomerId;
   } else if (effectiveCustomerId !== invoiceCustomerId) {
@@ -439,7 +430,12 @@ async function createPaymentForInvoice({
       });
       return { ok: true, payment: verified[0] || null, allMatches: verified };
     } catch (e) {
-      return { ok: false, error: e?.message || String(e), payment: null, allMatches: [] };
+      return {
+        ok: false,
+        error: e?.message || String(e),
+        payment: null,
+        allMatches: [],
+      };
     }
   }
 
@@ -1034,13 +1030,14 @@ async function createQboInvoice({
       );
     }
 
-    const pulloutCf = getPulloutCustomFieldEntry(order);
-    if (pulloutCf) {
-      customFields.push(pulloutCf);
-      console.log(
-        `✅ [QBO] Adding Pullout CustomField (pulloutIntentId=${pulloutCf.StringValue})`,
-      );
-    }
+    // [QBO-POLICY-2026] PulloutIntentId is stored on the order only — not written to admin QBO.
+    // const pulloutCf = getPulloutCustomFieldEntry(order);
+    // if (pulloutCf) {
+    //   customFields.push(pulloutCf);
+    //   console.log(
+    //     `✅ [QBO] Adding Pullout CustomField (pulloutIntentId=${pulloutCf.StringValue})`,
+    //   );
+    // }
 
     payload = {
       CustomerRef: { value: String(order.qboCustomerId) },
@@ -1224,23 +1221,14 @@ async function handleAdminQboSync({
       DBMODEL,
       updateRequest,
     });
-    // Skip admin sync for direct-partner orders and dropship direct-invoice orders.
+    // [QBO-POLICY-2026] Customer orders with a local partner sync to partner QBO only, not admin.
     if (shouldSkipAdminQboSync({ orderType, order })) {
-      if (order?.partnerType === "direct-partner") {
-        console.log(
-          "[QBO] Skipping admin sync — order belongs to direct local-partner",
-        );
-        return {
-          saved: true,
-          reason: "skipped_admin_sync_direct_partner_order",
-        };
-      }
       console.log(
-        "[QBO] Skipping admin sync — dropship direct-invoice order",
+        "[QBO] Skipping admin sync — customer order has local partner (salesRepId)",
       );
       return {
         saved: true,
-        reason: "skipped_admin_sync_dropship_direct_invoice_order",
+        reason: "skipped_admin_sync_local_partner_customer_order",
       };
     }
     if (!ADMIN?.currentRealmId) {
@@ -1306,15 +1294,13 @@ async function handleAdminQboSync({
         quickBooksInvoiceId: adminQboInvoice?.invoiceId,
         adminRealmId: realmId,
       };
-      // If the Pullout custom field gates were satisfied at build time, the
-      // field was included in the create payload — record that admin QBO now
-      // carries it so we don't redundantly patch it again.
-      if (
-        isPulloutCustomFieldEligible(order) &&
-        order?.pulloutIntentIdSynced !== "synced"
-      ) {
-        adminUpdateInput.pulloutIntentIdSynced = "synced";
-      }
+      // [QBO-POLICY-2026] Pullout custom field no longer synced to admin QBO — do not flip pulloutIntentIdSynced here.
+      // if (
+      //   isPulloutCustomFieldEligible(order) &&
+      //   order?.pulloutIntentIdSynced !== "synced"
+      // ) {
+      //   adminUpdateInput.pulloutIntentIdSynced = "synced";
+      // }
 
       updateOrderRecord({
         orderId,
@@ -1354,24 +1340,23 @@ async function handleAdminQboSync({
           orderType === "customer" && !!order?.salesRepId,
       });
 
-      // Full admin update payload also carries the Pullout custom field when
-      // gates pass — mark it synced so future invariants stay correct.
-      if (
-        isPulloutCustomFieldEligible(order) &&
-        order?.pulloutIntentIdSynced !== "synced"
-      ) {
-        try {
-          await DBMODEL.update(
-            { pulloutIntentIdSynced: "synced" },
-            { where: { id: orderId } },
-          );
-        } catch (flipErr) {
-          console.warn(
-            `[QBO] Could not flip pulloutIntentIdSynced=synced for order ${orderId}:`,
-            flipErr?.message,
-          );
-        }
-      }
+      // [QBO-POLICY-2026] Pullout custom field no longer synced to admin QBO — do not flip pulloutIntentIdSynced on update.
+      // if (
+      //   isPulloutCustomFieldEligible(order) &&
+      //   order?.pulloutIntentIdSynced !== "synced"
+      // ) {
+      //   try {
+      //     await DBMODEL.update(
+      //       { pulloutIntentIdSynced: "synced" },
+      //       { where: { id: orderId } },
+      //     );
+      //   } catch (flipErr) {
+      //     console.warn(
+      //       `[QBO] Could not flip pulloutIntentIdSynced=synced for order ${orderId}:`,
+      //       flipErr?.message,
+      //     );
+      //   }
+      // }
       return { saved: true, reason: "admin_invoice_updated" };
     }
     return { saved: false, reason: "admin_qbo_token_or_realm_missing" };
@@ -1612,9 +1597,7 @@ async function updateAdminQboInvoicesForOrders({
 
   const numericIds = [
     ...new Set(
-      orderIds
-        .map((id) => Number(id))
-        .filter((n) => !Number.isNaN(n) && n > 0),
+      orderIds.map((id) => Number(id)).filter((n) => !Number.isNaN(n) && n > 0),
     ),
   ];
   if (numericIds.length === 0) {

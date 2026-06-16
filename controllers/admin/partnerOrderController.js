@@ -53,9 +53,10 @@ const {
   sentPaymentInvoiceEvent,
 } = require("../events/sentPaymentInvoiceEvent");
 
-const {
-  reconcilePulloutSyncStateForOrder,
-} = require("../../services/pulloutSyncStateService");
+// [QBO-POLICY-2026] Post-pullout QBO reconcile disabled — pulloutIntentId stays in DB only, not pushed to admin QBO.
+// const {
+//   reconcilePulloutSyncStateForOrder,
+// } = require("../../services/pulloutSyncStateService");
 
 exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
@@ -1426,19 +1427,18 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
       where: { id: partnerOrderId },
     });
 
-    // Post-pullout: reconcile pulloutIntentIdSynced state machine
-    // (non-blocking — failures stay in logs only).
-    try {
-      await reconcilePulloutSyncStateForOrder({
-        orderId: partnerOrderId,
-        orderType: isPartnerOrder ? "local-partner" : "customer",
-      });
-    } catch (stateErr) {
-      console.warn(
-        "[pullout-state] reconcile failed (partner pullout):",
-        stateErr?.message,
-      );
-    }
+    // [QBO-POLICY-2026] Disabled: no longer push pulloutIntentId to admin QBO after partner pullout.
+    // try {
+    //   await reconcilePulloutSyncStateForOrder({
+    //     orderId: partnerOrderId,
+    //     orderType: isPartnerOrder ? "local-partner" : "customer",
+    //   });
+    // } catch (stateErr) {
+    //   console.warn(
+    //     "[pullout-state] reconcile failed (partner pullout):",
+    //     stateErr?.message,
+    //   );
+    // }
 
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({
       orderId: partnerOrderId,

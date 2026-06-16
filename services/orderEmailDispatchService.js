@@ -6,9 +6,15 @@ const {
 const {
   sentPaymentInvoiceEvent,
 } = require("../controllers/events/sentPaymentInvoiceEvent");
-const { orderShippedEvent } = require("../controllers/events/orderShippedEvent");
-const { orderDispatchEvent } = require("../controllers/events/orderDispatchEvent");
-const { supplierNewOrderEvent } = require("../controllers/events/orderToSupplierEvents");
+const {
+  orderShippedEvent,
+} = require("../controllers/events/orderShippedEvent");
+const {
+  orderDispatchEvent,
+} = require("../controllers/events/orderDispatchEvent");
+const {
+  supplierNewOrderEvent,
+} = require("../controllers/events/orderToSupplierEvents");
 
 const VALID_EMAIL_TYPES = [
   "order-confirmation",

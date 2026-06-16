@@ -81,9 +81,10 @@ const {
 } = require("../events/sentPaymentInvoiceEvent");
 const { orderShippedEvent } = require("../events/orderShippedEvent");
 const { orderDispatchEvent } = require("../events/orderDispatchEvent");
-const {
-  reconcilePulloutSyncStateForOrder,
-} = require("../../services/pulloutSyncStateService");
+// [QBO-POLICY-2026] Post-pullout QBO reconcile disabled — pulloutIntentId stays in DB only, not pushed to admin QBO.
+// const {
+//   reconcilePulloutSyncStateForOrder,
+// } = require("../../services/pulloutSyncStateService");
 const {
   dispatchOrderEmail,
 } = require("../../services/orderEmailDispatchService");
@@ -588,7 +589,8 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
       condition[Op.and] = [
         literal(
-          `(order.salesRepId IS NULL OR ((SELECT partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1) != 'direct-partner' AND NOT ((SELECT partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1) = 'dropship-partner' AND order.type = 'direct-invoice')))`,
+          // [QBO-POLICY-2026] Admin QBO list: only direct customers (no local partner on order).
+          `(order.salesRepId IS NULL)`,
         ),
       ];
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
@@ -1523,26 +1525,20 @@ exports.orderJourneryComplete = catchAsync(async (req, res, next) => {
       where: { id: orderId || partnerOrderId },
     });
 
-    // Post-pullout: reconcile pulloutIntentIdSynced state machine.
-    // Only fires when this request just performed a pullout (the journey
-    // status-change path sets paidInvoiceEventFired = true after writing
-    // pulloutIntentId / pulloutDate / adminReceivableStatus on the row).
-    // Without this, the row's pulloutIntentIdSynced column stays at its
-    // default value forever even after a successful pullout, which makes
-    // it show up in the pullout-intent-unsynced-orders report.
-    if (paidInvoiceEventFired) {
-      try {
-        await reconcilePulloutSyncStateForOrder({
-          orderId: orderId || partnerOrderId,
-          orderType: isPartnerOrder ? "local-partner" : "customer",
-        });
-      } catch (stateErr) {
-        console.warn(
-          "[pullout-state] reconcile failed (journey pullout):",
-          stateErr?.message,
-        );
-      }
-    }
+    // [QBO-POLICY-2026] Disabled: no longer push pulloutIntentId to admin QBO after pullout (DB fields still saved above).
+    // if (paidInvoiceEventFired) {
+    //   try {
+    //     await reconcilePulloutSyncStateForOrder({
+    //       orderId: orderId || partnerOrderId,
+    //       orderType: isPartnerOrder ? "local-partner" : "customer",
+    //     });
+    //   } catch (stateErr) {
+    //     console.warn(
+    //       "[pullout-state] reconcile failed (journey pullout):",
+    //       stateErr?.message,
+    //     );
+    //   }
+    // }
 
     // Paid invoice event after order update so email sees updated paymentStatus
     if (
