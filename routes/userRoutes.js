@@ -11,6 +11,7 @@ const leadController = require("../controllers/admin/leadController");
 const subscriptionController = require("../controllers/admin/subscriptionController");
 const categoryController = require("../controllers/admin/categoriesController");
 const userController = require("../controllers/userController");
+const multiInvoiceCheckoutController = require("../controllers/customer/multiInvoiceCheckoutController");
 const Authorization = require("../middlewares/protect");
 const {
   signupRateLimiter,
@@ -976,6 +977,41 @@ router.post(
 router.post(
   "/invoices/:orderId/confirm-payment",
   manageOrderController.confirmPaymentForInvoiceIntent,
+);
+
+/**
+ * @swagger
+ * /api/v1/users/multi-invoice-checkout/fetch:
+ *   post:
+ *     summary: Create combined Stripe checkout for multiple unpaid invoices
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderIds
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: Checkout session created or reused
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/multi-invoice-checkout/fetch",
+  multiInvoiceCheckoutController.fetchMultiInvoiceCheckout,
 );
 
 /**

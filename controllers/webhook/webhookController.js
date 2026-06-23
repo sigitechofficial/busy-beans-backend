@@ -24,6 +24,9 @@ const {
 const {
   calculateAndPayoutDirectPartnerEmployeeCommission,
 } = require("../../utils/directPartnerEmployeePayoutUtils");
+const {
+  onMultiInvoiceCheckoutCompleted,
+} = require("./multiInvoiceWebhookHandler");
 
 const endpointSecret = `${STRIPE_WEBHOOK_SECERET}`;
 console.log("🚀 ~ endpointSecret:", endpointSecret);
@@ -74,7 +77,11 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   console.log("ЁЯЪАЁЯЪАЁЯЪА ~~~~~~~~~~ >  EVENT TYPE }:", event.type);
   switch (event.type) {
     case "checkout.session.completed":
-      await invoicePaid(event);
+      if (event.data.object?.metadata?.multipleInvoices === "yes") {
+        await onMultiInvoiceCheckoutCompleted(event);
+      } else {
+        await invoicePaid(event);
+      }
       break;
     case "invoice.paid": //not needed yet  "_" add underscore to prevent tranfers for now
       await invoicePaid(event);
@@ -99,16 +106,47 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
 const invoicePaid = async (event) => {
   try {
     const invoice = event.data.object;
-    const localPartnerId = invoice.metadata?.salesRepId;
-    let localPatnerAccount = invoice.metadata?.localPatnerAccount;
-    let orderType = invoice.metadata?.orderType || "customer";
-    const orderId = invoice.metadata?.orderId;
+    let metadata = { ...(invoice.metadata || {}) };
+
+    // Checkout Session business metadata lives on the PaymentIntent.
+    if (
+      invoice.object === "checkout.session" &&
+      !metadata.orderId &&
+      invoice.payment_intent
+    ) {
+      try {
+        const piId =
+          typeof invoice.payment_intent === "string"
+            ? invoice.payment_intent
+            : invoice.payment_intent?.id;
+        if (piId) {
+          const pi = await stripe.paymentIntents.retrieve(piId);
+          metadata = { ...(pi.metadata || {}), ...metadata };
+        }
+      } catch (metaErr) {
+        console.warn("[invoicePaid] PI metadata lookup failed:", metaErr.message);
+      }
+    }
+
+    if (metadata.multipleInvoices === "yes") {
+      return;
+    }
+
+    const localPartnerId = metadata?.salesRepId;
+    let localPatnerAccount = metadata?.localPatnerAccount;
+    let orderType = metadata?.orderType || "customer";
+    if (String(orderType).toLowerCase() === "customer") {
+      orderType = "customer";
+    }
+    const orderId = metadata?.orderId ? Number(metadata.orderId) : undefined;
     const condition = { invoiceId: invoice?.id };
     if (orderId) condition.id = orderId;
 
     console.log("🚀 ~ invoicePaid ~ orderId:", condition);
 
     if (orderType == "local-partner") {
+      const partnerWhere = orderId ? { id: orderId } : { invoiceId: invoice?.id };
+
       await partnerOrder.update(
         {
           paymentMethod: "card",
@@ -118,7 +156,7 @@ const invoicePaid = async (event) => {
           pulloutDate: Date.now(),
           paymentIntentId: invoice.payment_intent,
         },
-        { where: { id: orderId } },
+        { where: partnerWhere },
       );
 
       const orderPlaced = await order.findOne({
@@ -174,6 +212,7 @@ const invoicePaid = async (event) => {
             "partnerType",
           ],
           "employeeTransferId",
+          "invoiceDate",
           "quickBooksInvoiceId",
           "quickBooksInvoiceIdPartner",
           "quickBooksPaymentId",
@@ -246,20 +285,23 @@ const invoicePaid = async (event) => {
       }
 
       // Update order with all data including employee commission
-      await order.update(
-        {
-          paymentMethod: "card",
-          localPatnerCommission: orderPlaced?.totalSalerCommission || 0,
-          adminReceivableAmount: orderPlaced?.adminEarnings || 0,
-          adminReceivableStatus: true,
-          paymentStatus: "done",
-          invoicePaidDate: Date.now(),
-          pulloutDate: Date.now(),
-          paymentIntentId: invoice.payment_intent,
-          ...employeeCommissionData,
-        },
-        { where: { id: orderPlaced?.id } },
-      );
+      const orderUpdateFields = {
+        paymentMethod: "card",
+        localPatnerCommission: orderPlaced?.totalSalerCommission || 0,
+        adminReceivableAmount: orderPlaced?.adminEarnings || 0,
+        adminReceivableStatus: true,
+        paymentStatus: "done",
+        invoicePaidDate: Date.now(),
+        pulloutDate: Date.now(),
+        paymentIntentId: invoice.payment_intent,
+        ...employeeCommissionData,
+      };
+
+      if (!orderPlaced?.invoiceDate) {
+        orderUpdateFields.invoiceDate = new Date();
+      }
+
+      await order.update(orderUpdateFields, { where: { id: orderPlaced?.id } });
 
       if (
         orderPlaced?.quickBooksInvoiceId &&
@@ -281,10 +323,12 @@ const invoicePaid = async (event) => {
           orderType: "customer",
         });
       }
-      paidInvoiceAdminOrLocalPatnerEventAndCustomer({
-        orderId: orderId,
-        orderType,
-      });
+      if (orderPlaced?.id) {
+        paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+          orderId: orderPlaced.id,
+          orderType: "customer",
+        });
+      }
     }
     // paidInvoiceAdminOrLocalPatnerEvent({ orderId });
     //   if(!localPartnerId) {
