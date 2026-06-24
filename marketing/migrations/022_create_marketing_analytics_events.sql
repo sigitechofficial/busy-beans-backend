@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS `marketing_analytics_events` (
+  `id` VARCHAR(80) NOT NULL,
+  `visitor_id` VARCHAR(64) NOT NULL,
+  `session_id` VARCHAR(64) NOT NULL,
+  `event_type` VARCHAR(64) NOT NULL,
+  `timestamp` DATETIME NOT NULL,
+  `page_url` VARCHAR(2000) NULL,
+  `pathname` VARCHAR(500) NULL,
+  `landing_page_id` VARCHAR(64) NULL,
+  `landing_page_slug` VARCHAR(200) NULL,
+  `attribution` JSON NULL,
+  `first_touch_utm` JSON NULL,
+  `last_touch_utm` JSON NULL,
+  `click_ids` JSON NULL,
+  `metadata` JSON NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `marketing_analytics_events_visitor_idx` (`visitor_id`),
+  KEY `marketing_analytics_events_session_idx` (`session_id`),
+  KEY `marketing_analytics_events_type_idx` (`event_type`),
+  KEY `marketing_analytics_events_timestamp_idx` (`timestamp`),
+  KEY `marketing_analytics_events_landing_slug_idx` (`landing_page_slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

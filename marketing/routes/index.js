@@ -12,8 +12,11 @@ const sectionCatalogRoutes = require("./admin/sectionCatalog.routes");
 const productListingCatalogRoutes = require("./admin/productListingCatalog.routes");
 const templatesRoutes = require("./admin/templates.routes");
 const seedRoutes = require("./admin/seed.routes");
+const leadSubmissionsAdminRoutes = require("./admin/leadSubmissions.routes");
+const analyticsRoutes = require("./admin/analytics.routes");
 const landingPagesPublicRoutes = require("./public/landingPagesPublic.routes");
 const leadSubmissionsRoutes = require("./public/leadSubmissions.routes");
+const publicTrackingRoutes = require("./public/tracking.routes");
 
 const router = express.Router();
 router.use(marketingRequestLogger);
@@ -39,7 +42,10 @@ router.use("/admin/section-catalog", sectionCatalogRoutes);
 router.use("/admin/product-listing-catalog", productListingCatalogRoutes);
 router.use("/admin/templates", templatesRoutes);
 router.use("/admin/seed", seedRoutes);
+router.use("/admin/lead-submissions", leadSubmissionsAdminRoutes);
+router.use("/admin/analytics", analyticsRoutes);
 router.use("/public/landing-pages", landingPagesPublicRoutes);
 router.use("/public/lead-submissions", leadSubmissionsRoutes);
+router.use("/public/tracking", publicTrackingRoutes);
 
 module.exports = router;

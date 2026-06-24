@@ -58,6 +58,43 @@ async function run() {
   });
   if (leadRes.status !== 200) throw new Error("Lead submission endpoint failed");
 
+  const visitorId = `smoke-visitor-${Date.now()}`;
+  const sessionId = `smoke-session-${Date.now()}`;
+  const ts = new Date().toISOString();
+
+  const touchpointRes = await axios.post(`${baseUrl}/public/tracking/touchpoints`, {
+    id: `tp-smoke-${Date.now()}`,
+    visitorId,
+    sessionId,
+    timestamp: ts,
+    source: "direct",
+    landingPage: slug,
+    isLandingPage: true,
+  });
+  if (touchpointRes.status !== 204) throw new Error("Touchpoint ingest failed");
+
+  const eventRes = await axios.post(`${baseUrl}/public/tracking/events`, {
+    id: `ev-smoke-${Date.now()}`,
+    visitorId,
+    sessionId,
+    eventType: "landing_page_view",
+    timestamp: ts,
+    landingPageSlug: slug,
+  });
+  if (eventRes.status !== 204) throw new Error("Analytics event ingest failed");
+
+  const dashboardRes = await axios.get(`${baseUrl}/admin/analytics/dashboard`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (dashboardRes.status !== 200 || !dashboardRes?.data?.data?.executive) {
+    throw new Error("Analytics dashboard failed");
+  }
+
+  const leadsListRes = await axios.get(`${baseUrl}/admin/lead-submissions`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (leadsListRes.status !== 200) throw new Error("Admin lead submissions list failed");
+
   const productsRes = await axios.get(`${baseUrl}/admin/products`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -97,7 +134,7 @@ async function run() {
 
   // eslint-disable-next-line no-console
   console.log(
-    "[smoke] health + auth + landing-page + publish + public + lead + phase2 lists passed",
+    "[smoke] health + auth + landing-page + publish + public + lead + analytics + phase2 lists passed",
   );
 }
 

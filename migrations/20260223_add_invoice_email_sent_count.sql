@@ -1,5 +1,0 @@
-ALTER TABLE `orders`
-ADD COLUMN IF NOT EXISTS `invoiceEmailSentCount` INT NOT NULL DEFAULT 0;
-
-ALTER TABLE `partnerOrders`
-ADD COLUMN IF NOT EXISTS `invoiceEmailSentCount` INT NOT NULL DEFAULT 0;
