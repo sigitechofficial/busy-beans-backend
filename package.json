@@ -22,6 +22,8 @@
     "marketing:seed-products": "node marketing/seeds/products.seed.js",
     "marketing:seed-all": "node marketing/seeds/seedAll.js",
     "marketing:smoke": "node marketing/scripts/smokeTest.js",
+    "marketing:analytics-contract": "node marketing/scripts/analyticsContractTest.js",
+    "marketing:capture-demos": "node marketing/scripts/captureDemoResponses.js",
     "qbo:sales-rep-id": "node scripts/fetchQboSalesRepDefinitionIdAndUpdateEnv.js",
     "qbo:list-custom-fields": "node scripts/fetchAllQboCustomFields.js",
     "qbo:audit-duplicate-payments": "node scripts/auditQboDuplicatePayments.js",

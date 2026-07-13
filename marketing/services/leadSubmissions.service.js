@@ -1,6 +1,10 @@
 const { sendMailPromise } = require("../../helper/transpoter");
 const { getLeadSubmissionModel } = require("../models/leadSubmission");
 const { getLandingPageModel } = require("../models/landingPage");
+const {
+  pickString,
+  normalizeLeadFields,
+} = require("../utils/analyticsPayload");
 
 function parseLandingPageSlugFromUrl(pageUrl) {
   const normalized = String(pageUrl || "");
@@ -9,15 +13,11 @@ function parseLandingPageSlugFromUrl(pageUrl) {
   return slugMatch[1].toLowerCase();
 }
 
-function pickString(value) {
-  if (value === null || value === undefined) return "";
-  return String(value);
-}
-
 function buildAttribution(payload) {
-  const nested = payload.attribution && typeof payload.attribution === "object"
-    ? { ...payload.attribution }
-    : {};
+  const nested =
+    payload.attribution && typeof payload.attribution === "object"
+      ? { ...payload.attribution }
+      : {};
 
   const flat = {
     utmSource: payload.utmSource || nested.utmSource,
@@ -58,9 +58,8 @@ function buildAttribution(payload) {
 }
 
 function buildDevice(payload) {
-  const nested = payload.device && typeof payload.device === "object"
-    ? { ...payload.device }
-    : {};
+  const nested =
+    payload.device && typeof payload.device === "object" ? { ...payload.device } : {};
 
   return {
     ...nested,
@@ -77,7 +76,10 @@ function buildDevice(payload) {
 
 function buildLeadEmailHtml(fields, pageUrl, submittedAt) {
   const rows = Object.entries(fields || {})
-    .map(([key, value]) => `<tr><td><strong>${key}</strong></td><td>${String(value)}</td></tr>`)
+    .map(
+      ([key, value]) =>
+        `<tr><td><strong>${key}</strong></td><td>${String(value)}</td></tr>`,
+    )
     .join("");
   return `
     <h3>New Landing Page Lead</h3>
@@ -128,8 +130,10 @@ function formatLeadRow(row) {
     attribution,
     device,
     conversionStatus: row.conversionStatus || "new",
-    revenue: row.revenue !== null && row.revenue !== undefined ? Number(row.revenue) : null,
-    profit: row.profit !== null && row.profit !== undefined ? Number(row.profit) : null,
+    revenue:
+      row.revenue !== null && row.revenue !== undefined ? Number(row.revenue) : null,
+    profit:
+      row.profit !== null && row.profit !== undefined ? Number(row.profit) : null,
     notes: row.notes || null,
     updatedAt: row.updatedAt || row.createdAt || row.submittedAt,
     utmSource: attribution.utmSource || "",
@@ -142,7 +146,6 @@ function formatLeadRow(row) {
 }
 
 async function submitLead(payload) {
-  const fields = payload?.fields;
   const pageUrl = pickString(payload?.pageUrl).trim();
   const testMode = Boolean(payload?.testMode);
   const submittedAt = payload?.submittedAt ? new Date(payload.submittedAt) : new Date();
@@ -153,7 +156,11 @@ async function submitLead(payload) {
     throw error;
   }
 
-  if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
+  if (
+    !payload?.fields ||
+    typeof payload.fields !== "object" ||
+    Array.isArray(payload.fields)
+  ) {
     const error = new Error("fields must be an object.");
     error.code = "VALIDATION_ERROR";
     throw error;
@@ -165,9 +172,11 @@ async function submitLead(payload) {
     throw error;
   }
 
+  const fields = normalizeLeadFields(payload.fields);
   const slugFromUrl = parseLandingPageSlugFromUrl(pageUrl);
   const landingPageSlug =
-    pickString(payload.landingPageSlug || payload.landing_page_slug || slugFromUrl) || null;
+    pickString(payload.landingPageSlug || payload.landing_page_slug || slugFromUrl) ||
+    null;
   const landingPageId =
     pickString(payload.landingPageId || payload.landing_page_id) ||
     (await resolveLandingPageIdBySlug(landingPageSlug || slugFromUrl)) ||

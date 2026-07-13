@@ -401,38 +401,95 @@ async function createPaymentForInvoice({
   ----------------------------------------------------------- */
   async function findLinkedPaymentForThisInvoice() {
     try {
-      const safeInvId = String(invoiceId).replace(/'/g, "''");
-      const q = `select Id, TotalAmt, TxnDate, LinkedTxn from Payment where Any(LinkedTxn.TxnId) = '${safeInvId}' and Any(LinkedTxn.TxnType) = 'Invoice'`;
-      const url = `${QBO(realmId)}/query?query=${encodeURIComponent(q)}&minorversion=${MINOR}`;
+      const safeCustomerId = String(effectiveCustomerId).replace(/'/g, "''");
+
+      // QBO does not support filtering nested LinkedTxn arrays in its query language.
+      // Fetch payments for this customer, then inspect the links locally.
+      const q = `
+      select * from Payment
+      where CustomerRef = '${safeCustomerId}'
+      orderby MetaData.CreateTime desc
+      maxresults 1000
+    `
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const url =
+        `${QBO(realmId)}/query` +
+        `?query=${encodeURIComponent(q)}` +
+        `&minorversion=${MINOR}`;
+
       const r = await axios.get(url, {
         headers: headers(accessToken),
         validateStatus: () => true,
       });
+
       if (r.status !== 200) {
+        const fault = r.data?.Fault || r.data;
+
+        console.error(
+          `❌ [QBO] Existing-payment lookup failed for invoice ${invoiceId}:`,
+          {
+            status: r.status,
+            query: q,
+            fault,
+          },
+        );
+
         return {
           ok: false,
           status: r.status,
-          fault: r.data?.Fault || r.data,
+          fault,
           payment: null,
           allMatches: [],
         };
       }
-      const raw = r?.data?.QueryResponse?.Payment;
-      const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      const verified = list.filter((p) => {
-        if (!p?.LinkedTxn) return false;
-        const txns = Array.isArray(p.LinkedTxn) ? p.LinkedTxn : [p.LinkedTxn];
-        return txns.some(
-          (lt) =>
-            String(lt?.TxnId) === String(invoiceId) &&
-            String(lt?.TxnType) === "Invoice",
-        );
+
+      const raw = r.data?.QueryResponse?.Payment;
+      const payments = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+      const verified = payments.filter((payment) => {
+        const lines = Array.isArray(payment?.Line)
+          ? payment.Line
+          : payment?.Line
+            ? [payment.Line]
+            : [];
+
+        return lines.some((line) => {
+          const linkedTransactions = Array.isArray(line?.LinkedTxn)
+            ? line.LinkedTxn
+            : line?.LinkedTxn
+              ? [line.LinkedTxn]
+              : [];
+
+          return linkedTransactions.some(
+            (linkedTransaction) =>
+              String(linkedTransaction?.TxnId) === String(invoiceId) &&
+              String(linkedTransaction?.TxnType).toLowerCase() === "invoice",
+          );
+        });
       });
-      return { ok: true, payment: verified[0] || null, allMatches: verified };
-    } catch (e) {
+
+      return {
+        ok: true,
+        payment: verified[0] || null,
+        allMatches: verified,
+      };
+    } catch (error) {
+      console.error(
+        `❌ [QBO] Existing-payment lookup exception for invoice ${invoiceId}:`,
+        {
+          message: error?.message,
+          status: error?.response?.status,
+          data: error?.response?.data,
+        },
+      );
+
       return {
         ok: false,
-        error: e?.message || String(e),
+        status: error?.response?.status,
+        error: error?.message || String(error),
+        fault: error?.response?.data,
         payment: null,
         allMatches: [],
       };
@@ -641,6 +698,7 @@ async function createPaymentForInvoice({
   /* -----------------------------------------------------------
    ✅ 6. Send Request to QBO
   ----------------------------------------------------------- */
+
   try {
     const res = await axios.post(
       `${QBO(realmId)}/payment?minorversion=${MINOR}`,
@@ -691,34 +749,44 @@ async function createPaymentForInvoice({
       );
 
       try {
-        // Query QBO to find existing payment for this invoice
-        const query = encodeURIComponent(
-          `select Id, TotalAmt from Payment where Any(LinkedTxn.TxnId) = '${String(invoiceId)}' and Any(LinkedTxn.TxnType) = 'Invoice'`,
-        );
-        const queryUrl = `${QBO(realmId)}/query?query=${query}&minorversion=${MINOR}`;
-        const queryRes = await axios.get(queryUrl, {
-          headers: headers(accessToken),
-          validateStatus: () => true,
-        });
+        // Reuse the same helper used throughout this function
+        const existingCheck = await findLinkedPaymentForThisInvoice();
 
-        const existingPayment = queryRes?.data?.QueryResponse?.Payment?.[0];
-        if (existingPayment?.Id) {
+        if (existingCheck.ok && existingCheck.payment?.Id) {
+          const existingPayment = existingCheck.payment;
+
           console.log(
             `✅ [QBO] Found existing payment ${existingPayment.Id} for invoice ${invoiceId}`,
           );
+
           return {
             id: existingPayment.Id,
             totalAmt: existingPayment.TotalAmt,
-            txnDate: safeDate,
+            txnDate: existingPayment.TxnDate || safeDate,
             raw: existingPayment,
             isExisting: true,
             customerIdUsed: effectiveCustomerId,
           };
         }
+
+        if (!existingCheck.ok) {
+          console.warn(
+            `⚠️ [QBO] Could not verify existing payment after duplicate error for invoice ${invoiceId}`,
+            {
+              status: existingCheck.status,
+              error: existingCheck.error,
+              fault: existingCheck.fault,
+            },
+          );
+        } else {
+          console.warn(
+            `⚠️ [QBO] QBO reported a duplicate payment, but no linked payment was found for invoice ${invoiceId}`,
+          );
+        }
       } catch (findErr) {
         console.error(
           "❌ [QBO] Error while trying to find existing payment:",
-          findErr.message,
+          findErr?.response?.data || findErr.message,
         );
       }
     }
@@ -730,7 +798,6 @@ async function createPaymentForInvoice({
     throw error; // keep error bubbling
   }
 }
-
 /**
  * Wraps `createPaymentForInvoice` for the sync pipelines.
  *

@@ -173,6 +173,7 @@ exports.customersList = catchAsync(async (req, res, next) => {
     `saleTaxNumber`,
     `emailToSendInvoices`,
     `companyName`,
+    `verifiedAt`,
   ];
 
   // Get pagination metadata using APIFeatures
@@ -955,11 +956,11 @@ exports.approveCustomer = catchAsync(async (req, res, next) => {
     return next(new AppError("Customer not found!", 404));
   }
 
-  if (!customer.verifiedAt) {
-    return next(
-      new AppError("Customer must verify their email before approval.", 400),
-    );
-  }
+  //   if (!customer.verifiedAt) {
+  //     return next(
+  //       new AppError("Customer must verify their email before approval.", 400),
+  //     );
+  //   }
 
   if (customer.approvedByAdmin) {
     return res.status(200).json(
@@ -973,9 +974,10 @@ exports.approveCustomer = catchAsync(async (req, res, next) => {
       }),
     );
   }
-
-  const approvedAt = new Date();
-  await customer.update({ approvedByAdmin: approvedAt });
+  const input = {};
+  input.approvedByAdmin = new Date();
+  input.verifiedAt = customer.verifiedAt || new Date();
+  await customer.update(input);
 
   Event.userAccountApproveEvent({
     email: customer.email,
@@ -988,7 +990,8 @@ exports.approveCustomer = catchAsync(async (req, res, next) => {
       data: {
         id: customer.id,
         email: customer.email,
-        approvedByAdmin: approvedAt,
+        approvedByAdmin: input.approvedByAdmin,
+        verifiedAt: input.verifiedAt,
       },
     }),
   );

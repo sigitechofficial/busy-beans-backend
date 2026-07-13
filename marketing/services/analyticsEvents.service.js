@@ -1,10 +1,10 @@
 const { getAnalyticsEventModel } = require("../models/analyticsEvent");
 const { touchIdentity } = require("./visitors.service");
-
-function pickString(value, fallback = "") {
-  if (value === null || value === undefined) return fallback;
-  return String(value);
-}
+const {
+  pickString,
+  normalizeAttribution,
+  normalizeMetadata,
+} = require("../utils/analyticsPayload");
 
 async function ingestEvent(payload) {
   const id = pickString(payload?.id).trim();
@@ -45,12 +45,13 @@ async function ingestEvent(payload) {
     pageUrl: pickString(payload.pageUrl) || null,
     pathname: pickString(payload.pathname) || null,
     landingPageId: pickString(payload.landingPageId) || null,
-    landingPageSlug: pickString(payload.landingPageSlug) || null,
-    attribution: payload.attribution || {},
+    landingPageSlug:
+      pickString(payload.landingPageSlug || payload.landingPage) || null,
+    attribution: normalizeAttribution(payload),
     firstTouchUtm: payload.firstTouchUtm || {},
     lastTouchUtm: payload.lastTouchUtm || {},
     clickIds: payload.clickIds || {},
-    metadata: payload.metadata || {},
+    metadata: normalizeMetadata(payload),
   });
 
   return { stored: true, duplicate: false };

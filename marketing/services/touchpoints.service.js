@@ -1,10 +1,6 @@
 const { getTouchpointModel } = require("../models/touchpoint");
 const { touchIdentity } = require("./visitors.service");
-
-function pickString(value, fallback = "") {
-  if (value === null || value === undefined) return fallback;
-  return String(value);
-}
+const { pickString, normalizeAttribution } = require("../utils/analyticsPayload");
 
 async function ingestTouchpoint(payload) {
   const id = pickString(payload?.id).trim();
@@ -35,23 +31,27 @@ async function ingestTouchpoint(payload) {
 
   await touchIdentity(payload, timestamp);
 
+  const attribution = normalizeAttribution(payload);
+
   await Touchpoint.create({
     id,
     visitorId,
     sessionId,
     timestamp,
-    source: pickString(payload.source, "direct"),
-    medium: pickString(payload.medium),
-    campaign: pickString(payload.campaign),
-    content: pickString(payload.content),
-    term: pickString(payload.term),
-    referrer: pickString(payload.referrer),
-    landingPage: pickString(payload.landingPage) || null,
+    source: pickString(payload.source || attribution.source, "direct"),
+    medium: pickString(payload.medium || attribution.medium),
+    campaign: pickString(payload.campaign || attribution.campaign),
+    content: pickString(payload.content || attribution.content),
+    term: pickString(payload.term || attribution.term),
+    referrer: pickString(payload.referrer || attribution.referrer),
+    landingPage:
+      pickString(payload.landingPage || payload.landingPageSlug || attribution.landingPage) ||
+      null,
     landingPageId: pickString(payload.landingPageId) || null,
     pageUrl: pickString(payload.pageUrl) || null,
     pathname: pickString(payload.pathname) || null,
     pageTitle: pickString(payload.pageTitle) || null,
-    category: pickString(payload.category) || null,
+    category: pickString(payload.category || attribution.category) || null,
     clickIds: payload.clickIds || {},
     isLandingPage: Boolean(payload.isLandingPage),
   });

@@ -6,6 +6,7 @@ const { getAnalyticsEventModel } = require("../models/analyticsEvent");
 const { parseDateRange, appendTimestampFilter } = require("../utils/dateRange");
 const { formatTouchpointRow } = require("./touchpoints.service");
 const { formatEventRow } = require("./analyticsEvents.service");
+const { countNonTestLeads } = require("./leadSubmissionsAdmin.service");
 
 const FUNNEL_STEPS = [
   { step: "landing_page_view", label: "Landing page views" },
@@ -104,6 +105,36 @@ async function getFunnelCounts(range) {
   return counts;
 }
 
+async function getLeadCountsBySlug(range) {
+  const sequelize = getMarketingSequelize();
+  const leadFilter = appendTimestampFilter(range, "l.submitted_at", "AND");
+  const rows = await sequelize.query(
+    `SELECT
+       l.landing_page_slug AS slug,
+       MAX(l.landing_page_id) AS landingPageId,
+       COUNT(*) AS leads
+     FROM lead_submissions l
+     WHERE l.test_mode = 0
+       AND l.landing_page_slug IS NOT NULL
+       AND l.landing_page_slug != ''
+       ${leadFilter.sql}
+     GROUP BY l.landing_page_slug`,
+    {
+      replacements: { ...leadFilter.replacements },
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  const bySlug = {};
+  for (const row of rows) {
+    bySlug[row.slug] = {
+      leads: Number(row.leads || 0),
+      landingPageId: row.landingPageId || null,
+    };
+  }
+  return bySlug;
+}
+
 async function getTrafficSources(range) {
   const tpFilter = appendTimestampFilter(range, "tp.timestamp", "AND");
   const leadFilter = appendTimestampFilter(range, "l.submitted_at", "AND");
@@ -197,6 +228,7 @@ async function getUtmCampaigns(range) {
 async function getLandingPageMetrics(range) {
   const sequelize = getMarketingSequelize();
   const filter = appendTimestampFilter(range, "timestamp", "AND");
+  const leadCountsBySlug = await getLeadCountsBySlug(range);
 
   const slugRows = await sequelize.query(
     `SELECT DISTINCT landing_page_slug AS slug, landing_page_id AS landingPageId
@@ -209,9 +241,22 @@ async function getLandingPageMetrics(range) {
     },
   );
 
+  const slugMap = new Map();
+  for (const slugRow of slugRows) {
+    slugMap.set(slugRow.slug, {
+      slug: slugRow.slug,
+      landingPageId: slugRow.landingPageId || null,
+    });
+  }
+  for (const [slug, info] of Object.entries(leadCountsBySlug)) {
+    if (!slugMap.has(slug)) {
+      slugMap.set(slug, { slug, landingPageId: info.landingPageId || null });
+    }
+  }
+
   const landingPages = [];
 
-  for (const slugRow of slugRows) {
+  for (const slugRow of slugMap.values()) {
     const slug = slugRow.slug;
     const slugFilter = appendTimestampFilter(range, "timestamp", "AND");
     const replacements = {
@@ -321,7 +366,7 @@ async function getLandingPageMetrics(range) {
       campaignBreakdown[row.campaign] = Number(row.cnt || 0);
     }
 
-    const leads = counts.lead_created || 0;
+    const leads = leadCountsBySlug[slug]?.leads ?? counts.lead_created ?? 0;
     const conversionRate =
       views > 0 ? roundOneDecimal((leads / views) * 100) : 0;
 
@@ -391,7 +436,8 @@ async function getDashboard(query = {}) {
 
   const totalVisitors = await countUniqueVisitorsFromEvents(range);
   const funnelCounts = await getFunnelCounts(range);
-  const totalLeads = funnelCounts.lead_created || 0;
+  const totalLeads = await countNonTestLeads(range);
+  funnelCounts.lead_created = totalLeads;
   const totalOrders = funnelCounts.order_completed || 0;
   const revenue = await sumRevenueFromEvents(range);
   const conversionRate =
