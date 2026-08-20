@@ -27,6 +27,8 @@ const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsC
 const emailLogController = require("../controllers/admin/emailLogController");
 const bulkEmailController = require("../controllers/admin/bulkEmailController");
 const qboCustomFieldSyncController = require("../controllers/admin/qboCustomFieldSyncController");
+const dailyEodDigestController = require("../controllers/admin/dailyEodDigestController");
+const qboUnsyncedPaidPaymentSyncController = require("../controllers/admin/qboUnsyncedPaidPaymentSyncController");
 
 const multer = require("multer");
 const path = require("path");
@@ -726,6 +728,75 @@ router.post(
 router.post(
   "/lambda-function/create-upcomming-orders",
   orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/lambda-function/send-daily-eod-digests:
+ *   post:
+ *     summary: Send end-of-day admin and partner digest emails (Lambda / cron)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: reportDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Optional YYYY-MM-DD (defaults to America/New_York today)
+ *       - in: query
+ *         name: forceRetryFailed
+ *         schema:
+ *           type: boolean
+ *           default: true
+ *         description: Retry previously failed digest slots only (never resends successful ones)
+ *     responses:
+ *       200:
+ *         description: Digest job completed (idempotent per recipient per reportDate)
+ */
+router.post(
+  "/lambda-function/send-daily-eod-digests",
+  dailyEodDigestController.sendDailyEodDigests,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/lambda-function/sync-unsynced-paid-customer-payments:
+ *   post:
+ *     summary: Sync missing QBO invoices then payments for paid customer orders (Lambda / cron)
+ *     description: >
+ *       Paid orders only. With salesRepId syncs partner invoice (if missing) then partner payment;
+ *       without salesRep syncs admin invoice (if missing) then admin payment. Max 10 per run.
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: dryRun
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: If true, return candidates and planned actions only (no QBO calls)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 10
+ *         description: Max orders to process per run (capped at 10)
+ *       - in: query
+ *         name: syncSide
+ *         schema:
+ *           type: string
+ *           enum: [admin, partner, both]
+ *           default: both
+ *         description: Filter to admin-path (no salesRep), partner-path (has salesRep), or both
+ *     responses:
+ *       200:
+ *         description: Job completed (may be partial-success if some syncs failed)
+ *       401:
+ *         description: Unauthorized when LAMBDA_JOB_SECRET is set and missing/invalid
+ */
+router.post(
+  "/lambda-function/sync-unsynced-paid-customer-payments",
+  qboUnsyncedPaidPaymentSyncController.syncUnsyncedPaidCustomerPayments,
 );
 
 //! Country Management
@@ -2243,6 +2314,48 @@ router.post(
 router.get(
   "/order-management/invoice-tracking/:orderType/:orderId",
   manageOrderController.invoiceTracking,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/update-tracking-number:
+ *   patch:
+ *     summary: Update order tracking number
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderId, trackingNumber]
+ *             properties:
+ *               orderId:
+ *                 type: integer
+ *                 description: Order id
+ *               trackingNumber:
+ *                 type: string
+ *                 description: Tracking number to set on the order
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer-order, partner-order, local-partner]
+ *                 description: Optional. Use partner-order/local-partner for partner orders; defaults to customer order
+ *     responses:
+ *       200:
+ *         description: Tracking number updated
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Order not found
+ */
+router.patch(
+  "/order-management/update-tracking-number",
+  manageOrderController.updateTrackingNumber,
 );
 
 /**

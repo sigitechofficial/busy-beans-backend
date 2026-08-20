@@ -1341,6 +1341,47 @@ exports.invoiceTracking = catchAsync(async (req, res, next) => {
   });
 });
 
+//* UPDATE TRACKING NUMBER
+exports.updateTrackingNumber = catchAsync(async (req, res, next) => {
+  const { orderId, orderType, trackingNumber } = req.body;
+
+  if (!orderId) {
+    return next(new AppError("Order ID is required", 400));
+  }
+
+  if (trackingNumber === undefined || trackingNumber === null) {
+    return next(new AppError("Tracking number is required", 400));
+  }
+
+  const model =
+    orderType === "partner-order" || orderType === "local-partner"
+      ? partnerOrder
+      : order;
+
+  const doc = await model.findOne({
+    where: { id: orderId },
+    attributes: ["id", "trackingNumber"],
+  });
+
+  if (!doc) {
+    return next(new AppError("Order not found", 404));
+  }
+
+  await model.update(
+    { trackingNumber: String(trackingNumber).trim() },
+    { where: { id: orderId } },
+  );
+
+  return res.status(200).json({
+    status: "success",
+    message: "Tracking number updated successfully",
+    data: {
+      orderId: Number(orderId),
+      trackingNumber: String(trackingNumber).trim(),
+    },
+  });
+});
+
 //*
 //! dont need this now
 // if(req.body?.orderData?.statusId == 4)processTransferToLocalPartner({orderId:orderId})
