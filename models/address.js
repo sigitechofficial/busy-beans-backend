@@ -35,6 +35,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      shippingContact: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       lng: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -62,7 +66,7 @@ module.exports = (sequelize, DataTypes) => {
           name: "town_index",
         },
       ],
-    }
+    },
   );
 
   address.associate = (models) => {
