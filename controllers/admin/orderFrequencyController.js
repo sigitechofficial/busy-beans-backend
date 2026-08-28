@@ -32,12 +32,16 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
     if (!orderData) return false;
 
     const input = JSON.parse(JSON.stringify(orderData));
+    // Never carry source PK/audit fields into orderFrequency PK.
+    delete input.id;
+    delete input.createdAt;
+    delete input.updatedAt;
+    delete input.deletedAt;
 
     const { nextOrderDate, visibilityDate } = nextFrequencyDate({
       currentDate: new Date(),
       frequency: input.frequency,
     });
-    input.orderId = orderData.id;
     input.orderId = orderData.id;
     input.salesRepId = salesRepId;
     input.orderDate = new Date();
@@ -45,25 +49,27 @@ exports.setOrderFrequency = async ({ orderData, salesRepId }) => {
     input.visibilityDate = visibilityDate;
 
     const frequency = await orderFrequency.create(input);
-    order.update(
-      { orderFrequencyId: frequency?.id },
-      { where: { id: orderData?.id } }
-    );
-    item.update(
-      { orderFrequencyId: frequency?.id },
-      { where: { orderId: orderData?.id } }
-    );
+    await Promise.all([
+      order.update(
+        { orderFrequencyId: frequency?.id },
+        { where: { id: orderData?.id } },
+      ),
+      item.update(
+        { orderFrequencyId: frequency?.id },
+        { where: { orderId: orderData?.id } },
+      ),
+    ]);
 
     return true;
   } catch (error) {
-    console.log("ðŸš€ ~ exports.onlineAppointmentConfirm= ~ error:", error);
+    console.log("[SET_ORDER_FREQUENCY][ERROR]", error);
+    return false;
   }
 };
 
-//* Pending order according to their frequency cycle
-
 const { setOrderFrequency } = require("../admin/orderFrequencyController");
-console.log(typeof setOrderFrequency);
+
+//* Pending order according to their frequency cycle
 
 exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   // Build manual filter conditions (preserve existing logic)
@@ -73,17 +79,34 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
       attributes: [
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "product",
         ],
         [
           literal(
-            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
+            `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`,
           ),
           "price",
         ],
-
+        [
+          literal(
+            `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`,
+          ),
+          "wholesalePrice",
+        ],
+        [
+          literal(
+            `(SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = orderFrequency.salesRepId AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "customPrice",
+        ],
+        [
+          literal(
+            `(SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp WHERE srpp.productId = items.productId AND srpp.salesRepId = orderFrequency.salesRepId AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "customWholesalePrice",
+        ],
         "qty",
         "productId",
       ],
@@ -128,8 +151,8 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   const nextOrderDateCondition = {
     nextOrderDate: {
       [Op.notIn]: literal(`
-        (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
-      `),
+          (SELECT DATE(orders.on) FROM orders WHERE DATE(orders.on) = DATE(orderFrequency.nextOrderDate) AND orders.orderFrequencyId = orderFrequency.id)
+        `),
     },
   };
 
@@ -179,28 +202,29 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   // Custom attributes with literal fields
   queryOptions.attributes = [
     "id",
+    "salesRepId",
     [
       literal(
-        `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.name FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "customerName",
     ],
     [
       literal(
-        `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.companyName FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "companyName",
     ],
     [
       literal(`COALESCE(
-       (SELECT SUM(qty)
-        FROM items
-        WHERE items.orderId = orderFrequency.orderId ), 0)`),
+         (SELECT SUM(qty)
+          FROM items
+          WHERE items.orderId = orderFrequency.orderId ), 0)`),
       "totalQuantity",
     ],
     [
       literal(
-        `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`
+        `(SELECT users.email FROM users WHERE users.id = orderFrequency.userId LIMIT 1)`,
       ),
       "email",
     ],
@@ -239,10 +263,13 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
 
 exports.bookNewOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
-  console.log(
-    "🚀 ~ exports.bookNewOrder=catchAsync ~ input:",
-    input?.order?.userId
-  );
+  console.log("[bookNewOrder] step:1 start", {
+    userId: input?.order?.userId,
+    itemsCount: input?.items?.length ?? 0,
+    typeChargesCount: input?.typeCharges?.length ?? 0,
+    orderType: input?.orderType,
+    orderKeys: input?.order ? Object.keys(input.order) : [],
+  });
   // if (input?.items?.length < 1) {
   //   throw new AppError('Cart is empty add products to place order', 404);
   // }
@@ -255,20 +282,24 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       "defaultDiscount",
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
       [
         literal(
-          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "partnerType",
       ],
     ],
     raw: true,
   });
-  console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
+  console.log("[bookNewOrder] step:2 customer loaded", {
+    id: customer?.id,
+    salesRepId: customer?.salesRepId,
+    partnerType: customer?.partnerType,
+  });
   if (!customer) {
     return next(new AppError("Customer not found.", 404));
   }
@@ -277,12 +308,18 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
+  console.log("[bookNewOrder] step:3 shippingCharges present", {
+    shippingCharges: input?.order?.shippingCharges,
+  });
 
   if (customer?.salesRepId && customer?.partnerType == "dropship-partner") {
+    console.log("[bookNewOrder] step:4 dropship credit check", {
+      salesRepId: customer.salesRepId,
+    });
     const credit = await salesRep.findOne({
       where: {
         id: customer?.salesRepId,
@@ -291,14 +328,14 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         "creditLimit",
         [
           literal(`
-              (
-                SELECT SUM(items.price)
-                FROM orders
-                JOIN items ON items.orderId = orders.id
-                WHERE orders.salesRepId = salesRep.id
-                  AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
-              )
-            `),
+                  (
+                    SELECT SUM(items.price)
+                    FROM orders
+                    JOIN items ON items.orderId = orders.id
+                    WHERE orders.salesRepId = salesRep.id
+                      AND orders.createdBy = 'sales-rep' AND orders.paymentStatus = 'pending'
+                  )
+                `),
           "creditUsed",
         ],
       ],
@@ -308,138 +345,264 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       (credit?.dataValues?.creditUsed / credit?.creditLimit) * 100;
     console.log(
       "---------------------------------creaditUed",
-      credit?.dataValues?.creditUsed
+      credit?.dataValues?.creditUsed,
     );
     console.log(
       "---------------------------------creditLimit",
-      credit?.creditLimit
+      credit?.creditLimit,
     );
 
     if (percentage >= 80) {
       throw new AppError(
         `You've used over 80% of your credit limit. Please clear your balance before placing further orders.`,
-        404
+        404,
       );
     }
+    console.log("[bookNewOrder] step:4 dropship credit ok", {
+      percentage: Number.isFinite(percentage) ? percentage : null,
+    });
+  } else {
+    console.log("[bookNewOrder] step:4 dropship credit skipped");
   }
 
   input.order.statusId = input.order?.invoiceOnly ? 5 : 1;
   input.order.userId = customer.id;
   input.order.salesRepId = customer?.salesRepId;
+  console.log("[bookNewOrder] step:5 order header normalized", {
+    statusId: input.order.statusId,
+    userId: input.order.userId,
+    salesRepId: input.order.salesRepId,
+    invoiceOnly: input.order?.invoiceOnly,
+  });
   let itemsPrice = 0;
   let discountOnItemsPrice = 0;
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
-  console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  console.log("[bookNewOrder] step:6 productIds", productIds);
+  const productAttributes = [
+    `id`,
+    `name`,
+    `quantity`,
+    `categoryId`,
+    `weight`,
+    `sku`,
+    `grind`,
+    `productCode`,
+    [
+      literal(`
+              (SELECT percentage
+              FROM userDiscounts
+              WHERE userDiscounts.categoryId = product.categoryId
+                AND userDiscounts.userId = ${customer.id}
+              LIMIT 1)
+            `),
+      "discountPercentage",
+    ],
+  ];
+  if (customer?.salesRepId) {
+    console.log(
+      "ðŸš€ ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVENTORY PRICE & WHOLESALE APPLIED:",
+      customer?.salesRepId,
+    );
+    productAttributes.push(
+      [
+        literal(
+          `(SELECT COALESCE(srpp.price, product.price) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "price",
+      ],
+      [
+        literal(
+          `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${customer?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+        ),
+        "wholesalePrice",
+      ],
+    );
+  } else {
+    console.log(
+      "ðŸš€ ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVENTORY PRICE APPLIED:",
+      customer?.salesRepId,
+    );
+    productAttributes.push(`price`, `wholesalePrice`);
+  }
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      [
-        literal(`
-            (SELECT percentage
-            FROM userDiscounts
-            WHERE userDiscounts.categoryId = product.categoryId
-              AND userDiscounts.userId = ${customer.id}
-            LIMIT 1)
-          `),
-        "discountPercentage",
-      ],
-    ],
+    attributes: productAttributes,
+    raw: true,
   });
 
-  console.log(
-    "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length
-  );
+  console.log("[bookNewOrder] step:7 products fetched", {
+    count: products?.length,
+    ids: products?.map((p) => p.id),
+  });
 
   // let percentageDiscount = input?.order?.discountPercentage
   //   ? parseFloat(input?.order?.discountPercentage)
   //   : parseFloat(customer?.defaultDiscount);
 
-  const finalItems = products.map((obj) => {
+  const finalItems = products.map((obj, productIndex) => {
     const element = {};
-    const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
-    );
+    const percentageDiscount = parseFloat(obj?.discountPercentage || 0);
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
-    // console.log("🚀 ~ finalItems ~ obj:", obj)
 
-    // Find the matching product in input.items based on productId
     let prod = input?.items.find((item) => item.productId == obj.id);
-
-    // Set the qty from input.items or default to 1 if not found
     let qty = prod ? parseInt(prod.qty) : 1;
-    console.log("🚀 ~ finalItems ~ qty:", qty);
+
+    console.log("[bookNewOrder] product:start", {
+      index: productIndex,
+      productId: obj.id,
+      name: obj?.name,
+      sku: obj?.sku,
+      categoryId: obj?.categoryId,
+      dbUnitPrice: obj?.price,
+      dbUnitWholesale: obj?.wholesalePrice,
+      dbUnitWeight: obj?.weight,
+      discountPercentageFromUserDiscounts: percentageDiscount,
+      cartLineMatched: !!prod,
+      cartLine: prod
+        ? { productId: prod.productId, qty: prod.qty, raw: prod }
+        : null,
+      resolvedQty: qty,
+    });
+
     element.qty = qty;
-    // Calculate price, wholesalePrice, and weight for the item
     element.price = obj.price * qty;
     element.wholesalePrice = obj.wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.categoryId = obj.categoryId;
     element.discount = 0;
+
+    const lineGrossPrice = element.price;
+    const lineGrossWholesale = element.wholesalePrice;
+    const lineGrossWeight = element.weight;
+
+    console.log("[bookNewOrder] product:preDiscountLine", {
+      productId: obj.id,
+      linePriceNoDiscount: lineGrossPrice,
+      lineWholesaleNoDiscount: lineGrossWholesale,
+      lineWeight: lineGrossWeight,
+    });
+
     if (percentageDiscount > 0) {
-      // Calculate discount amount
       const discountAmount = (element.price * percentageDiscount) / 100;
-      // Calculate final price after discount
       const discountedPrice = element.price - discountAmount;
+
+      console.log("[bookNewOrder] product:discountApply", {
+        productId: obj.id,
+        pct: percentageDiscount,
+        lineBeforeDiscount: element.price,
+        discountAmount,
+        lineAfterDiscount: discountedPrice,
+      });
 
       element.price = discountedPrice;
       element.discount = discountAmount;
+    } else {
+      console.log("[bookNewOrder] product:discountSkip", {
+        productId: obj.id,
+        reason: "category discount % is 0 or missing",
+      });
     }
-    // Accumulate the total weight and price
+
     discountOnItemsPrice += element.discount;
     itemsPrice += element.price;
     totalWeight += element.weight;
-    // Handle salesRep commission if applicable
+
+    console.log("[bookNewOrder] product:afterDiscountAccum", {
+      productId: obj.id,
+      linePrice: element.price,
+      lineDiscount: element.discount,
+      runningItemsPrice: itemsPrice,
+      runningDiscountOnItems: discountOnItemsPrice,
+      runningTotalWeight: totalWeight,
+    });
+
     if (customer?.salesRepId) {
       if (customer.partnerType == "direct-partner") {
         element.salerCommission = parseFloat(element.price);
         element.wholesalePrice = 0;
+        console.log("[bookNewOrder] product:commission", {
+          productId: obj.id,
+          branch: "direct-partner",
+          salerCommission: element.salerCommission,
+          wholesalePriceCleared: true,
+        });
       } else {
         element.salerCommission =
-          parseFloat(element.price) - parseFloat(element.wholesalePrice || 0);
+          input?.order?.type === "direct-invoice"
+            ? parseFloat(element.price)
+            : parseFloat(element.price) -
+              parseFloat(element.wholesalePrice || 0);
+        console.log("[bookNewOrder] product:commission", {
+          productId: obj.id,
+          branch:
+            input?.order?.type === "direct-invoice"
+              ? "dropship/other + direct-invoice"
+              : "dropship/other (price - wholesale)",
+          orderType: input?.order?.type,
+          linePrice: element.price,
+          lineWholesale: element.wholesalePrice,
+          salerCommission: element.salerCommission,
+        });
       }
     } else {
       element.wholesalePrice = 0;
+      console.log("[bookNewOrder] product:commission", {
+        productId: obj.id,
+        branch: "no salesRep",
+        salerCommission: 0,
+        wholesalePriceCleared: true,
+      });
     }
-    return element; // Return the transformed element
+
+    console.log("[bookNewOrder] product:finalRow", {
+      productId: element.productId,
+      categoryId: element.categoryId,
+      qty: element.qty,
+      price: element.price,
+      discount: element.discount,
+      wholesalePrice: element.wholesalePrice,
+      weight: element.weight,
+      salerCommission: element.salerCommission,
+    });
+
+    return element;
+  });
+  console.log("[bookNewOrder] step:8 line items built", {
+    finalItemsCount: finalItems.length,
+    itemsPrice,
+    discountOnItemsPrice,
+    totalWeight,
   });
 
   // Handle typeCharges if provided
   if (input?.typeCharges?.length > 0) {
     console.log(
-      "🚀 ~ req.body?.typeCharges?.length:",
-      input?.typeCharges?.length
+      "ðŸš€ ~ req.body?.typeCharges?.length:",
+      input?.typeCharges?.length,
     );
-    input?.typeCharges.forEach((obj) => {
+    input?.typeCharges.forEach((obj, chargeIndex) => {
+      console.log("[bookNewOrder] typeCharge:start", {
+        index: chargeIndex,
+        raw: obj,
+      });
       const element = {};
       element.code = obj.code;
       element.qty = obj.qty;
       element.price = obj.total;
-      console.log("🚀 ~  element.price = obj.total;:", obj.total);
       element.productName = obj.name;
       element.type = "charges";
       element.discount = 0;
 
-      itemsPrice += parseFloat(element?.price || 0);
-      console.log("🚀 ~ itemsPrice TYPE CHARGES:", itemsPrice);
+      const chargeAmount = parseFloat(element?.price || 0);
+      itemsPrice += chargeAmount;
 
-      // Handle salesRep commission if applicable
       if (customer?.salesRepId) {
         element.salerCommission = parseFloat(element?.price);
       } else {
@@ -447,8 +610,24 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         element.salerCommission = 0;
       }
 
+      console.log("[bookNewOrder] typeCharge:built", {
+        index: chargeIndex,
+        code: element.code,
+        name: element.productName,
+        qty: element.qty,
+        price: element.price,
+        salerCommission: element.salerCommission,
+        runningItemsPrice: itemsPrice,
+      });
+
       finalItems.push(element);
     });
+    console.log("[bookNewOrder] step:9 typeCharges merged", {
+      finalItemsCount: finalItems.length,
+      itemsPrice,
+    });
+  } else {
+    console.log("[bookNewOrder] step:9 typeCharges none");
   }
 
   const shippingCompany = input.order?.invoiceOnly
@@ -465,22 +644,27 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
         attributes: ["charges"],
       });
 
-  if (!shippingCompany) {
+  if (!shippingCompany && customer?.partnerType != "direct-partner") {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
-  console.log("🚀 ~ shippingCompany:", shippingCompany);
+  console.log("[bookNewOrder] step:10 shipping resolved", {
+    invoiceOnly: !!input.order?.invoiceOnly,
+    charges: shippingCompany?.charges,
+    totalWeight,
+  });
 
   input.order.itemsPrice = itemsPrice;
   input.order.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
   input.order.discountPrice = discountOnItemsPrice;
   // input.order.discountPercentage = percentageDiscount;
-  input.order.shippingCharges = shippingCompany?.charges;
+  input.order.shippingCharges =
+    customer?.partnerType == "direct-partner" ? 0 : shippingCompany?.charges;
   input.order.totalWeight = parseFloat(totalWeight || 0);
   input.order.shippingCompany =
     input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
@@ -488,7 +672,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   input.order.totalBill =
     parseFloat(itemsPrice) +
     parseFloat(input?.order?.vat || 0) +
-    parseFloat(shippingCompany?.charges || 0);
+    parseFloat(input.order.shippingCharges || 0);
 
   if (
     input?.orderType == "direct-invoice" &&
@@ -496,9 +680,24 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
   ) {
     input.order.invoiceDate = new Date();
   }
+  console.log("[bookNewOrder] step:11 totals before create", {
+    itemsPrice: input.order.itemsPrice,
+    statusId: input.order.statusId,
+    discountPrice: input.order.discountPrice,
+    shippingCharges: input.order.shippingCharges,
+    subTotal: input.order.subTotal,
+    totalBill: input.order.totalBill,
+    totalWeight: input.order.totalWeight,
+    shippingCompany: input.order.shippingCompany,
+  });
   const newOrder = await order.create(input?.order);
   newOrder.invoiceNumber = `INV00${newOrder?.id}`;
   await newOrder.save();
+  console.log("[bookNewOrder] step:12 order persisted", {
+    id: newOrder?.id,
+    invoiceNumber: newOrder?.invoiceNumber,
+    frequency: newOrder?.frequency,
+  });
 
   const historyEntry = [
     {
@@ -506,14 +705,19 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
       orderId: newOrder.id,
       on: Date.now(),
     },
-    {
-      statusId: 2,
-      orderId: newOrder.id,
-      on: Date.now(),
-    },
+    // {
+    //   statusId: 2,
+    //   orderId: newOrder.id,
+    //   on: Date.now(),
+    // },
   ];
 
   if (customer.partnerType == "direct-partner") {
+    historyEntry.push({
+      statusId: 2,
+      orderId: newOrder.id,
+      on: Date.now(),
+    });
     historyEntry.push({
       statusId: 3,
       orderId: newOrder.id,
@@ -521,18 +725,35 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     });
   }
   await orderHistory.bulkCreate(historyEntry);
+  console.log("[bookNewOrder] step:13 order history created", {
+    entries: historyEntry.length,
+    orderId: newOrder.id,
+  });
 
   finalItems.forEach((element) => {
     element.orderId = newOrder.id;
   });
 
   await item.bulkCreate(finalItems);
+  console.log("[bookNewOrder] step:14 items bulk created", {
+    count: finalItems.length,
+    orderId: newOrder.id,
+  });
 
-  if (newOrder.frequency != "just-onces")
-    setOrderFrequency({
+  if (newOrder.frequency != "just-onces") {
+    console.log("[bookNewOrder] step:15 setOrderFrequency", {
+      frequency: newOrder.frequency,
+      orderId: newOrder.id,
+    });
+    exports.setOrderFrequency({
       orderData: newOrder,
       salesRepId: customer?.salesRepId,
     });
+  } else {
+    console.log(
+      "[bookNewOrder] step:15 setOrderFrequency skipped (just-onces)",
+    );
+  }
 
   if (
     input?.items &&
@@ -540,15 +761,27 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
     input?.order?.type != "direct-invoice" &&
     !input?.order?.emailInvoiceToCustomer
   ) {
+    console.log("[bookNewOrder] step:16 events standard order", {
+      orderId: newOrder?.id,
+    });
     orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
     orderEvents({ orderId: newOrder?.id });
   } else if (
     input?.order?.type == "direct-invoice" &&
     input?.order?.emailInvoiceToCustomer
   ) {
+    console.log("[bookNewOrder] step:16 events invoice email", {
+      orderId: newOrder?.id,
+    });
     sentPaymentInvoiceEvent({ orderId: newOrder?.id, orderType: "customer" });
+  } else {
+    console.log("[bookNewOrder] step:16 events skipped", {
+      orderId: newOrder?.id,
+      reason: "branch conditions not met",
+    });
   }
 
+  console.log("[bookNewOrder] step:17 done", { orderId: newOrder?.id });
   return res.status(200).json({
     status: "success",
     data: { id: newOrder?.id },
@@ -558,7 +791,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 // exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //     const input = req.body;
 //     console.log(
-//       "🚀 ~ exports.bookNewOrder=catchAsync ~ input:",
+//       "ðŸš€ ~ exports.bookNewOrder=catchAsync ~ input:",
 //       input?.order?.userId
 //     );
 //     // if (input?.items?.length < 1) {
@@ -586,7 +819,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //       ],
 //       raw: true,
 //     });
-//     console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
+//     console.log("ðŸš€ ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
 //     if (!customer) {
 //       return next(new AppError("Customer not found.", 404));
 //     }
@@ -648,7 +881,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //     let discountOnItemsPrice = 0;
 //     let totalWeight = 0;
 //     let productIds = input?.items.map((item) => item.productId);
-//     console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+//     console.log("ðŸš€ ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
 //     const products = await product.findAll({
 //       where: {
 //         id: {
@@ -680,7 +913,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //     });
 
 //     console.log(
-//       "🚀 ~ exports.bookOrder=catchAsync ~ products:",
+//       "ðŸš€ ~ exports.bookOrder=catchAsync ~ products:",
 //       products?.length
 //     );
 
@@ -695,14 +928,14 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //       );
 //       element.productId = obj.id;
 //       element.categoryId = obj?.categoryId;
-//       // console.log("🚀 ~ finalItems ~ obj:", obj)
+//       // console.log("ðŸš€ ~ finalItems ~ obj:", obj)
 
 //       // Find the matching product in input.items based on productId
 //       let prod = input?.items.find((item) => item.productId == obj.id);
 
 //       // Set the qty from input.items or default to 1 if not found
 //       let qty = prod ? parseInt(prod.qty) : 1;
-//       console.log("🚀 ~ finalItems ~ qty:", qty);
+//       console.log("ðŸš€ ~ finalItems ~ qty:", qty);
 //       element.qty = qty;
 //       // Calculate price, wholesalePrice, and weight for the item
 //       element.price = obj.price * qty;
@@ -761,7 +994,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //       );
 //     }
 
-//     console.log("🚀 ~ shippingCompany:", shippingCompany);
+//     console.log("ðŸš€ ~ shippingCompany:", shippingCompany);
 
 //     input.order.itemsPrice = itemsPrice;
 //     input.order.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
@@ -849,7 +1082,7 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //   }
 
 //   const customer = await user.findOne({ where: { id: input?.order?.userId } });
-//   console.log('🚀 ~ exports.bookNewOrder=customer ~ customer:', customer?.id);
+//   console.log('ðŸš€ ~ exports.bookNewOrder=customer ~ customer:', customer?.id);
 //   if (!customer) {
 //     return next(new AppError('Customer not found.', 404));
 //   }
@@ -966,118 +1199,160 @@ exports.bookNewOrder = catchAsync(async (req, res, next) => {
 //   });
 // });
 
-const frequencyBookOrder = async ({ id }) => {
+const frequencyBookOrder = async ({ id, runId }) => {
   //orderData is
   // let productsPrice = 0;
   try {
-    const doc = await orderFrequency.findByPk(id, {
-      include: [
-        {
-          model: item,
-          // where: { productId: { [Op.ne]: null } },
-          attributes: [
-            [
-              literal(
-                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "product",
-            ],
-            [
-              literal(
-                `(SELECT products.price FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "price",
-            ],
-            [
-              literal(
-                `(SELECT products.wholesalePrice FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "wholesalePrice",
-            ],
-            [
-              literal(
-                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
-              ),
-              "weight",
-            ],
-            "qty",
-            "productId",
-            "categoryId",
-            [
-              literal(
-                `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = items.categoryId AND userDiscounts.userId = orderFrequency.userId LIMIT 1)`
-              ),
-              "percentageDiscount",
-            ],
-            ["price", "servicePrice"],
-            "productName",
-            "type",
-          ],
-          raw: true,
-        },
-      ],
+    console.log(
+      `[FREQ_ORDER][START] runId=${runId || "manual"} frequencyId=${id}`,
+    );
+    // STEP 1: First fetch orderFrequency to get salesRepId and orderId
+    const orderFreqData = await orderFrequency.findByPk(id, {
       attributes: [
         ["id", "orderFrequencyId"],
-        [
-          literal(
-            `(SELECT orders.addressId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "addressId",
-        ],
-        [
-          literal(
-            `(SELECT orders.orderFrequencyId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "orderFrequencyId",
-        ],
-        [
-          literal(
-            `(SELECT orders.paymentMethodId FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "paymentMethodId",
-        ],
-        [
-          literal(
-            `(SELECT orders.paymentMethod FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "paymentMethod",
-        ],
-        [
-          literal(
-            `(SELECT orders.on FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "on",
-        ],
-        [
-          literal(
-            `(SELECT orders.vat FROM orders WHERE orders.id = orderFrequency.orderId LIMIT 1)`
-          ),
-          "vat",
-        ],
-        ["nextOrderDate", "on"],
+        "orderId",
         "frequency",
         "userId",
         "salesRepId",
+        "nextOrderDate",
       ],
+      raw: true,
     });
 
-    const result = JSON.parse(JSON.stringify(doc));
-    // console.log('🚀 ~ frequencyBookOrder ~ result:', result);
+    if (!orderFreqData) {
+      console.log(
+        `[FREQ_ORDER][SKIP] runId=${runId || "manual"} frequencyId=${id} reason=frequency_not_found`,
+      );
+      return {
+        success: false,
+        orderId: null,
+        frequencyId: id,
+        error: "Frequency record not found",
+      };
+    }
+
+    const salesRepId = orderFreqData.salesRepId;
+    const userId = orderFreqData.userId;
+
+    // STEP 2: Build dynamic item attributes based on salesRepId (like bookNewOrder)
+    const itemAttributes = [
+      [
+        literal(
+          `(SELECT products.name FROM products WHERE products.id = item.productId LIMIT 1)`,
+        ),
+        "product",
+      ],
+      [
+        literal(
+          `(SELECT products.weight FROM products WHERE products.id = item.productId LIMIT 1)`,
+        ),
+        "weight",
+      ],
+      [
+        literal(
+          `(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = item.categoryId AND userDiscounts.userId = ${userId} LIMIT 1)`,
+        ),
+        "percentageDiscount",
+      ],
+      "qty",
+      "productId",
+      "categoryId",
+      ["price", "servicePrice"],
+      "productName",
+      "type",
+    ];
+
+    // Conditional price & wholesalePrice based on salesRepId (SAME LOGIC AS bookNewOrder)
+    if (salesRepId) {
+      console.log(
+        "ðŸš€ ~ frequencyBookOrder ~ CASE LOCALPARTNER INVENTORY PRICE & WHOLESALE APPLIED:",
+        salesRepId,
+      );
+      itemAttributes.push(
+        [
+          literal(
+            `(SELECT COALESCE(srpp.price, products.price) FROM salesRepProductPrices srpp WHERE srpp.productId = item.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "price",
+        ],
+        [
+          literal(
+            `(SELECT COALESCE(srpp.wholesalePrice, products.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = item.productId AND srpp.salesRepId = ${salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
+          ),
+          "wholesalePrice",
+        ],
+      );
+    } else {
+      console.log(
+        "ðŸš€ ~ frequencyBookOrder ~ CASE ADMIN INVENTORY PRICE APPLIED",
+      );
+      itemAttributes.push(
+        [
+          literal(
+            `(SELECT products.price FROM products WHERE products.id = item.productId LIMIT 1)`,
+          ),
+          "price",
+        ],
+        [
+          literal(
+            `(SELECT products.wholesalePrice FROM products WHERE products.id = item.productId LIMIT 1)`,
+          ),
+          "wholesalePrice",
+        ],
+      );
+    }
+
+    // STEP 3: Fetch items with dynamic attributes
+    const items = await item.findAll({
+      where: {
+        orderId: orderFreqData.orderId,
+      },
+      attributes: itemAttributes,
+      raw: true,
+    });
+    console.log(
+      `[FREQ_ORDER][ITEMS_FETCHED] runId=${runId || "manual"} frequencyId=${id} sourceOrderId=${orderFreqData.orderId} items=${items?.length || 0}`,
+    );
+
+    // STEP 4: Fetch additional order details from original order
+    const orderDetails = await order.findOne({
+      where: { id: orderFreqData.orderId },
+      attributes: [
+        "addressId",
+        "orderFrequencyId",
+        "paymentMethodId",
+        "paymentMethod",
+        "on",
+        "vat",
+        "type",
+      ],
+      raw: true,
+    });
+
+    // STEP 5: Combine into result object (maintain existing structure)
+    const result = {
+      ...orderFreqData,
+      ...orderDetails,
+      on: orderFreqData.nextOrderDate, // Use nextOrderDate as 'on' for new order
+      items: items,
+    };
+
+    // console.log('ðŸš€ ~ frequencyBookOrder ~ result:', result);
     const customer = await user.findOne({
-      where: { id: input?.order?.userId },
+      where: { id: result.userId },
       attributes: [
         "id",
         "salesRepId",
         "defaultDiscount",
         [
           literal(
-            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.srName FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "salesRepName",
         ],
         [
           literal(
-            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.partnerType FROM salesReps WHERE user.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "partnerType",
         ],
@@ -1087,9 +1362,17 @@ const frequencyBookOrder = async ({ id }) => {
     if (!customer) {
       await orderFrequency.update(
         { status: 0 },
-        { where: { id: result.orderFrequencyId } }
+        { where: { id: result.orderFrequencyId } },
       );
-      return false;
+      console.log(
+        `[FREQ_ORDER][SKIP] runId=${runId || "manual"} frequencyId=${id} reason=customer_not_found status_set=0`,
+      );
+      return {
+        success: false,
+        orderId: null,
+        frequencyId: id,
+        error: "Customer not found for frequency order",
+      };
     }
     let productsPrice = 0;
     // let percentageDiscount = parseFloat(customer?.defaultDiscount) || 0;
@@ -1099,11 +1382,9 @@ const frequencyBookOrder = async ({ id }) => {
     result?.items.forEach((item) => {
       const percentageDiscount = parseFloat(item.percentageDiscount || 0);
       item.weight = parseFloat(item?.weight || 0) * (item?.qty * 1);
-      console.log("🚀 ~ frequencyBookOrder BEFORE ~ item?.price:", item?.price);
       item.price = item?.price
         ? parseFloat(item?.price) * (item?.qty * 1)
         : parseFloat(item?.servicePrice);
-      console.log("🚀 ~ frequencyBookOrder AFTER ~ item?.price:", item?.price);
       item.discount = 0;
       if (percentageDiscount > 0 && item?.productId) {
         // Calculate discount amount
@@ -1118,11 +1399,6 @@ const frequencyBookOrder = async ({ id }) => {
       productsPrice += item.price;
       totalWeight += item.weight;
       if (result?.salesRepId) {
-        console.log(
-          "🚀 ~ frequencyBookOrder DISCOUNTED ~ item?.price:",
-          item?.price
-        );
-
         const currentPrice = item?.price
           ? item?.price
           : parseFloat(item?.servicePrice);
@@ -1132,7 +1408,10 @@ const frequencyBookOrder = async ({ id }) => {
           item.wholesalePrice = 0;
         } else {
           item.salerCommission =
-            currentPrice - parseFloat(item?.wholesalePrice || 0) * item?.qty; // Multiply weight by quantity
+            result?.type === "direct-invoice"
+              ? parseFloat(currentPrice)
+              : currentPrice -
+                parseFloat(item?.wholesalePrice || 0) * item?.qty;
           item.wholesalePrice =
             parseFloat(item?.wholesalePrice || 0) * item?.qty;
         }
@@ -1153,9 +1432,17 @@ const frequencyBookOrder = async ({ id }) => {
       attributes: ["charges"],
     });
 
-    result.shippingCharges = shippingCompany?.charges || 0;
-    // console.log('🚀 ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
-    // console.log('🚀 ~ frequencyBookOrder ~ totalWeight:', totalWeight);
+    if (!shippingCompany && customer?.partnerType != "direct-partner") {
+      throw new AppError(
+        "Not dealing in such weights. Contact customer support for this order.",
+        400,
+      );
+    }
+
+    result.shippingCharges =
+      customer?.partnerType == "direct-partner" ? 0 : shippingCompany?.charges;
+    // console.log('ðŸš€ ~ frequencyBookOrder ~ shippingCompany:', shippingCompany);
+    // console.log('ðŸš€ ~ frequencyBookOrder ~ totalWeight:', totalWeight);
     result.itemsPrice = productsPrice;
     result.discountPrice = discountOnItemsPrice;
     // result.discountPercentage = percentageDiscount;
@@ -1167,10 +1454,12 @@ const frequencyBookOrder = async ({ id }) => {
     result.totalWeight = parseFloat(totalWeight || 0);
     result.shippingCompany =
       result.totalWeight > 400 ? `Shipping By Truck` : "UPS";
-    result.statusId = 1;
+    result.statusId = customer?.partnerType == "direct-partner" ? 3 : 1;
     result.salesRepId = result?.salesRepId;
     result.createdBy = "sales-rep";
-    console.log("🚀 ~ frequencyBookOrder ~ result:", result);
+    console.log(
+      `[FREQ_ORDER][CALCULATED] runId=${runId || "manual"} frequencyId=${id} itemsPrice=${result.itemsPrice} discountPrice=${result.discountPrice} shippingCharges=${result.shippingCharges} totalBill=${result.totalBill} totalWeight=${result.totalWeight} type=${result?.type || "n/a"}`,
+    );
 
     // return true;
     const newOrder = await order.create(result);
@@ -1181,23 +1470,37 @@ const frequencyBookOrder = async ({ id }) => {
       item.orderId = newOrder.id;
     });
 
-    console.log("🚀 ~ frequencyBookOrder ~ result.items:", result.items);
-    item.bulkCreate(result.items);
+    await item.bulkCreate(result.items);
 
-    orderHistory.create({
-      statusId: 1,
-      orderId: newOrder?.id,
-      on: Date.now(),
-    });
+    const historyEntry = [
+      {
+        statusId: 1,
+        orderId: newOrder.id,
+        on: Date.now(),
+      },
+      {
+        statusId: 2,
+        orderId: newOrder.id,
+        on: Date.now(),
+      },
+    ];
+    if (customer.partnerType == "direct-partner") {
+      historyEntry.push({
+        statusId: 3,
+        orderId: newOrder.id,
+        on: Date.now(),
+      });
+    }
+    await orderHistory.bulkCreate(historyEntry);
 
     const { nextOrderDate, visibilityDate } = nextFrequencyDate({
       currentDate: result?.on,
       frequency: result.frequency,
     });
     console.log(
-      "🚀 ~ frequencyBookOrder ~ nextOrderDate, visibilityDate:",
+      "ðŸš€ ~ frequencyBookOrder ~ nextOrderDate, visibilityDate:",
       nextOrderDate,
-      visibilityDate
+      visibilityDate,
     );
 
     const updateFrequencyData = {
@@ -1207,10 +1510,26 @@ const frequencyBookOrder = async ({ id }) => {
     };
     await orderFrequency.update(updateFrequencyData, { where: { id: id } });
 
-    console.log("ðŸš€ ~ frequencyBookOrder ~ result:", updateFrequencyData);
-    return true;
+    if (result?.items && result.items?.length > 0) {
+      orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
+      orderEvents({ orderId: newOrder?.id });
+    }
+
+    console.log(
+      `[FREQ_ORDER][SUCCESS] runId=${runId || "manual"} frequencyId=${id} newOrderId=${newOrder.id} nextOrderDate=${nextOrderDate} visibilityDate=${visibilityDate}`,
+    );
+    return { success: true, orderId: newOrder.id, frequencyId: id };
   } catch (error) {
-    console.log("ðŸš€ ~ exports.frequencyBookOrder = ~ error:", error);
+    console.log(
+      `[FREQ_ORDER][ERROR] runId=${runId || "manual"} frequencyId=${id} message=${error?.message || "Unknown error"}`,
+      error,
+    );
+    return {
+      success: false,
+      orderId: null,
+      frequencyId: id,
+      error: error?.message || "Unknown error",
+    };
   }
 };
 
@@ -1242,16 +1561,20 @@ exports.bookOrderAccordingToFrequency = catchAsync(async (req, res, next) => {
 exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
   async (req, res, next) => {
     const today = new Date().toISOString().split("T")[0]; // 'YYYY-MM-DD'
-    console.log("🚀🚀🚀🚀🚀🚀 ~ today:", today);
+    const runId = `freq-${Date.now()}`;
+    console.log(`[FREQ_LAMBDA][START] runId=${runId} date=${today}`);
     const pendingOrders = await orderFrequency.findAll({
       where: { visibilityDate: today, status: 1 },
       attributes: ["id"],
     });
-
-    console.log("🚀 ~ pendingOrders:", pendingOrders);
+    console.log(
+      `[FREQ_LAMBDA][FETCHED] runId=${runId} pendingOrders=${pendingOrders?.length || 0}`,
+    );
 
     if (!pendingOrders || pendingOrders.length === 0) {
-      console.log("❌ No pending frequency orders for today.");
+      console.log(
+        `[FREQ_LAMBDA][NOOP] runId=${runId} reason=no_pending_orders`,
+      );
       return res.status(200).json({
         status: "fail",
         message: "No pending frequency orders for today.",
@@ -1259,15 +1582,39 @@ exports.bookOrderAccordingToFrequencyLamdaFunction = catchAsync(
       });
     }
 
+    const succeeded = [];
+    const failed = [];
     for (const order of pendingOrders) {
-      console.log("🔁~processing order", order?.id);
-      await frequencyBookOrder({ id: order?.id });
+      console.log(
+        `[FREQ_LAMBDA][PROCESSING] runId=${runId} frequencyId=${order?.id}`,
+      );
+      const output = await frequencyBookOrder({ id: order?.id, runId });
+      if (output?.success) {
+        succeeded.push({
+          frequencyId: order?.id,
+          orderId: output?.orderId,
+        });
+      } else {
+        failed.push({
+          frequencyId: order?.id,
+          error: output?.error || "Failed to process frequency order",
+        });
+      }
     }
+    console.log(
+      `[FREQ_LAMBDA][DONE] runId=${runId} processed=${pendingOrders.length} succeeded=${succeeded.length} failed=${failed.length}`,
+    );
 
     return res.status(200).json({
-      status: "success",
-      message: "Orders booked according to frequency successfully.",
+      status: failed.length > 0 ? "partial-success" : "success",
+      message:
+        failed.length > 0
+          ? "Some orders were not booked according to frequency."
+          : "Orders booked according to frequency successfully.",
       processed: pendingOrders.length,
+      succeeded: succeeded.length,
+      failed: failed.length,
+      failedOrders: failed,
     });
-  }
+  },
 );

@@ -89,7 +89,7 @@ module.exports = (sequelize) => {
         "just-onces",
         "weekly",
         "every-two-weeks",
-        "every-four-weeks"
+        "every-four-weeks",
       ),
       allowNull: true,
       defaultValue: "just-onces",
@@ -114,6 +114,34 @@ module.exports = (sequelize) => {
     },
     invoicePdf: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    // Payment link (checkout session) tracking – when customer requests "pay online" URL
+    paymentLinkOpenCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    paymentLinkFirstOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    paymentLinkLastOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    invoiceEmailSentCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    supplierEmailSendCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    supplierEmailLastSentAt: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     localPatnerCommission: {
@@ -178,6 +206,11 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    pulloutIntentIdSynced: {
+      type: DataTypes.ENUM("not-eligible", "eligible", "synced"),
+      allowNull: false,
+      defaultValue: "not-eligible",
+    },
     quickBooksInvoiceId: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -240,6 +273,9 @@ module.exports = (sequelize) => {
 
     partnerOrder.hasOne(models.chequeDetail);
     models.chequeDetail.belongsTo(partnerOrder);
+
+    partnerOrder.hasMany(models.emailLog, { foreignKey: "partnerOrderId" });
+    models.emailLog.belongsTo(partnerOrder, { foreignKey: "partnerOrderId" });
   };
 
   return partnerOrder;

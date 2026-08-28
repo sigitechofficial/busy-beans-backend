@@ -4,11 +4,12 @@ const dotenv = require("dotenv");
 dotenv.config({ path: "../.env" });
 
 const { attachments } = require("./attactments");
-const { transporter } = require("./transpoter");
+const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
 const generateFooterHtml = require("./footerLocalpatner");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 const { header } = require("./header");
+const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
 
 // async function downloadPDF(pdfUrl, outputPath) {
 //   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
@@ -47,15 +48,15 @@ module.exports = async function ({ email, data, invoice }) {
   items = items.join("");
   const on = emailDateFormate(data?.on);
 
-  transporter.sendMail(
-    {
-      from: process.env.EMAIL_USERNAME, // sender address
-      to: [email], // main recipient(s)
-      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
-      subject: `Your Busy Bean Coffee order #${data.id} has been shipped.`, // Subject line
-      attachments: attachments().footer,
-      replyTo: data.supplierEmail || "info@busybeancoffee.com",
-      html: `<!DOCTYPE html>
+  const subject = `Your Busy Bean Coffee order #${data.id} has been shipped.`;
+  const mailOptions = {
+    from: process.env.EMAIL_USERNAME, // sender address
+    to: [email], // main recipient(s)
+    bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
+    subject,
+    attachments: attachments().footer,
+    replyTo: data.supplierEmail || "info@busybeancoffee.com",
+    html: `<!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -201,13 +202,28 @@ module.exports = async function ({ email, data, invoice }) {
       </tr>
        ${footer}
       `,
-    },
-    function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(info);
-      }
-    }
-  );
+  };
+
+  try {
+    const info = await sendMailPromise(mailOptions);
+    await logEmailSuccess({
+      emailType: "order_shipped",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      metadata: { subject: mailOptions.subject },
+      zeptoRequestId: info?.request_id,
+    });
+  } catch (error) {
+    console.error("orderShipped email error:", error);
+    await logEmailOutcome({
+      emailType: "order_shipped",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      emailSent: "Failed",
+      errorMessage: error?.message || String(error),
+      metadata: { subject: mailOptions.subject },
+    });
+  }
 };

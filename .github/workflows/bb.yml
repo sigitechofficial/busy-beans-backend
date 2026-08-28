@@ -64,6 +64,13 @@ jobs:
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
           timeout: 420
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            controllers/Webhook/**
+            controllers/Webhook
 
       - name: Trigger npm install on server
         run: |
@@ -104,11 +111,19 @@ jobs:
 
       - name: 📂 Sync files to development
         uses: SamKirkland/FTP-Deploy-Action@v4.2.0
+        continue-on-error: true
         with:
           server: ${{ secrets.STAGE_FTP_HOST }}
           username: ${{ secrets.STAGE_FTP_USERNAME }}
           password: ${{ secrets.STAGE_FTP_PASSWORD }}
           timeout: 560
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            controllers/Webhook/**
+            controllers/Webhook
 
       - name: Trigger npm install on server
         run: |
@@ -116,8 +131,3 @@ jobs:
           curl -X GET "https://testingbb.trimworldwide.com/trigger.php"
         env:
           HOME: /home/trimworldwide
-
-
-
-
-

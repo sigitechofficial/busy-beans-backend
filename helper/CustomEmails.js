@@ -1,13 +1,13 @@
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
+const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require('./transpoter');
-const Footer = require('./footer');
+const { transporter } = require("./transpoter");
+const Footer = require("./footer");
 
 module.exports = async function (data) {
-  console.log('🚀 ~ data:', data);
+  console.log("🚀 ~ data:", data);
   let firstParagraph = `${data.content}`;
   let footer = await Footer();
   let secondParagraph = `Thank you for choosing Trim! We look forward to supporting your salon's success.`;
@@ -18,7 +18,7 @@ module.exports = async function (data) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com', `${data.email}`], // list of receivers
+      to: ["sigidevelopers@gmail.com", `${data.email}`], // list of receivers
       subject: subject, // Subject line
       attachments: attachment.footer.concat(attachment.trim),
       html: `

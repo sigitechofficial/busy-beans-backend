@@ -53,23 +53,55 @@ const {
   sentPaymentInvoiceEvent,
 } = require("../events/sentPaymentInvoiceEvent");
 
+// [QBO-POLICY-2026] Post-pullout QBO reconcile disabled — pulloutIntentId stays in DB only, not pushed to admin QBO.
+// const {
+//   reconcilePulloutSyncStateForOrder,
+// } = require("../../services/pulloutSyncStateService");
+
 exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   const input = req.body;
   console.log("🚀 ~ exports.bookNewOrder=catchAsync ~ input:", input);
-  // if (input?.items?.length < 1) {
-  //   throw new AppError('Cart is empty add products to place order', 404);
-  // }
-  //   console.log("🚀 ~ exports.bookNewOrder=customer ~ customer:", customer?.id);
-  //   if (!customer) {
-  //     return next(new AppError("Customer not found.", 404));
-  //   }
+
+  const isLocalPartnerOrEmployee =
+    req.user?.entity === "localPartner" ||
+    req.user?.entity === "partnerEmployee";
+  const isAdminOrEmployee =
+    req.user?.entity === "admin" || req.user?.entity === "adminEmployee";
+
+  let salesRepId;
+  if (isLocalPartnerOrEmployee) {
+    if (!req.user?.localPartnerId) {
+      return next(
+        new AppError("Local partner ID not found in user data.", 403),
+      );
+    }
+    salesRepId = req.user.localPartnerId;
+  } else if (isAdminOrEmployee) {
+    const fromBody = req.body?.order?.salesRepId ?? req.query?.salesRepId;
+    if (!fromBody) {
+      return next(
+        new AppError(
+          "salesRepId (in body order or query) is required for admin users.",
+          400,
+        ),
+      );
+    }
+    salesRepId = fromBody;
+  } else {
+    return next(
+      new AppError("This route is only accessible to authorized users.", 403),
+    );
+  }
+
+  if (!input?.order) input.order = {};
+  input.order.salesRepId = salesRepId;
 
   if (!input?.order?.shippingCharges) {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -80,49 +112,47 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   let totalWeight = 0;
   let productIds = input?.items.map((item) => item.productId);
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  const productAttributes = [
+    "id",
+    "name",
+    "quantity",
+    "price",
+    "categoryId",
+    "weight",
+    "sku",
+    "grind",
+    "productCode",
+  ];
+  productAttributes.push([
+    literal(
+      `(SELECT COALESCE(
+        (SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp 
+         WHERE srpp.productId = product.id 
+           AND srpp.salesRepId = ${salesRepId} 
+           AND srpp.deleted = 0 
+         LIMIT 1),
+        product.wholesalePrice
+      ))`,
+    ),
+    "wholesalePrice",
+  ]);
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      //   [
-      //     literal(`
-      //          (SELECT percentage
-      //          FROM userDiscounts
-      //          WHERE userDiscounts.categoryId = product.categoryId
-      //            AND userDiscounts.userId = ${customer.id}
-      //          LIMIT 1)
-      //        `),
-      //     "discountPercentage",
-      //   ],
-    ],
+    attributes: productAttributes,
   });
-  // return res.json(products)
-
-  // let percentageDiscount = input?.order?.discountPercentage
-  //   ? parseFloat(input?.order?.discountPercentage)
-  //   : parseFloat(customer?.defaultDiscount);
 
   const finalItems = products.map((obj) => {
     const element = {};
     const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
+      obj.dataValues?.discountPercentage || 0,
     );
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
-    // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
     let prod = input?.items.find((item) => item.productId == obj.id);
@@ -131,7 +161,8 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     let qty = prod ? parseInt(prod.qty) : 1;
     console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
-    element.price = obj.wholesalePrice * qty;
+    const wholesalePrice = parseFloat(obj.wholesalePrice ?? 0);
+    element.price = wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.categoryId = obj.categoryId;
     element.discount = 0;
@@ -162,7 +193,7 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
   if (input?.typeCharges?.length > 0) {
     console.log(
       "🚀 ~ req.body?.typeCharges?.length:",
-      input?.typeCharges?.length
+      input?.typeCharges?.length,
     );
     input?.typeCharges.forEach((obj) => {
       const element = {};
@@ -204,8 +235,8 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Not dealing in such weights. Contact customer support for this order.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -254,6 +285,18 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
       orderType: "local-partner",
     });
     orderEvents({ orderId: newOrder?.id, orderType: "local-partner" });
+  }
+
+  if (input?.order?.type === "direct-invoice") {
+    syncInvoiceOnQuikBooks({
+      orderId: newOrder?.id,
+      orderType: "local-partner",
+    }).catch((error) => {
+      console.error(
+        "❌ Error syncing direct-invoice partner order to QBO:",
+        error?.message,
+      );
+    });
   }
 
   return res.status(200).json({
@@ -387,13 +430,13 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
         "id",
         [
           literal(
-            `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+            `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
           ),
           "product",
         ],
         [
           literal(
-            `(SELECT products.image FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+            `(SELECT products.image FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
           ),
           "image",
         ],
@@ -405,16 +448,6 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
       ],
     },
   ];
-  if (
-    req.user.entity == "adminEmployee" ||
-    req.user.entity == "partnerEmployee"
-  ) {
-    queryOptions.include.push({
-      model: user,
-      where: { employeeId: req.user?.id },
-      attributes: [],
-    });
-  }
   // Custom attributes with literal fields
 
   queryOptions.attributes = [
@@ -422,7 +455,7 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
     "type",
     [
       literal(
-        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`,
       ),
       "orderCurrentStatus",
     ],
@@ -436,13 +469,13 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
     ],
     [
       literal(
-        `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`
+        `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`,
       ),
       "salesRepName",
     ],
     [
       literal(
-        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = partnerOrder.statusId AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`
+        `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = partnerOrder.statusId AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`,
       ),
       "deliveredOn",
     ],
@@ -478,7 +511,7 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
     "pulloutDate",
     [
       literal(
-        `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`
+        `CASE WHEN \`on\` <= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END`,
       ),
       "overdueInvoice",
     ],
@@ -519,6 +552,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
           exclude: ["createdAt", "updatedAt", "userId", "deleted", "deletedAt"],
         },
       },
+
       {
         model: supplier,
         attributes: {
@@ -567,26 +601,26 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+              `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
             ),
             "product",
           ],
           [
             literal(
-              `(SELECT products.weight FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+              `(SELECT products.weight FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
             ),
             "singleUnitWeight",
           ],
           ["weight", "itemWeights"],
           [
             literal(
-              `(SELECT products.productCode FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+              `(SELECT products.productCode FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
             ),
             "productCode",
           ],
           [
             literal(
-              `(SELECT products.grind FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+              `(SELECT products.grind FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
             ),
             "grind",
           ],
@@ -615,13 +649,13 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
           "id",
           [
             literal(
-              `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+              `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`,
             ),
             "orderStatus",
           ],
           [
             literal(
-              `(SELECT statuses.discription FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`
+              `(SELECT statuses.discription FROM statuses WHERE statuses.id = orderHistories.statusId LIMIT 1)`,
             ),
             "discription",
           ],
@@ -635,7 +669,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
       "type",
       [
         literal(
-          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`
+          `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`,
         ),
         "orderCurrentStatus",
       ],
@@ -648,7 +682,7 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`
+          `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`,
         ),
         "salesRepName",
       ],
@@ -685,6 +719,10 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
       "pulloutIntentId",
       "paymentIntentId",
       "pulloutDate",
+      "paymentLinkOpenCount",
+      "paymentLinkFirstOpenedAt",
+      "paymentLinkLastOpenedAt",
+      "invoiceEmailSentCount",
     ],
   });
 
@@ -750,7 +788,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
       //   "userId",
       [
         literal(
-          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "stripeCustomerId",
       ],
@@ -771,8 +809,8 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "The order payment has already been made. You may proceed with the update.",
-        404
-      )
+        404,
+      ),
     );
   }
 
@@ -786,20 +824,20 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
 
   if (placedOrder?.invoiceId) {
     const session = await Stripe.checkCheckoutSessionStatus(
-      placedOrder?.invoiceId
+      placedOrder?.invoiceId,
     );
 
     if (session == "paid") {
       await partnerOrder.update(
         { paymentMethod: "card", paymentStatus: "done" },
-        { where: { id: placedOrder.id } }
+        { where: { id: placedOrder.id } },
       );
 
       return next(
         new AppError(
           "As the payment for the order has already been made, we are unable to update an invoice at this point.",
-          404
-        )
+          404,
+        ),
       );
     } else if (session == "open") {
       checkSession = true;
@@ -828,53 +866,52 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
   let totalLocalPatnerCommission = 0;
 
   console.log("🚀 ~ exports.bookOrder=catchAsync ~ productIds:", productIds);
+  const productAttributes = [
+    "id",
+    "name",
+    "quantity",
+    "price",
+    "categoryId",
+    "weight",
+    "sku",
+    "grind",
+    "productCode",
+  ];
+  productAttributes.push([
+    literal(
+      `(SELECT COALESCE(
+        (SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp 
+         WHERE srpp.productId = product.id 
+           AND srpp.salesRepId = ${placedOrder.salesRepId} 
+           AND srpp.deleted = 0 
+         LIMIT 1),
+        product.wholesalePrice
+      ))`,
+    ),
+    "wholesalePrice",
+  ]);
+
   const products = await product.findAll({
     where: {
       id: {
         [Op.in]: productIds,
       },
     },
-    attributes: [
-      `id`,
-      `name`,
-      `quantity`,
-      `price`,
-      `categoryId`,
-      `wholesalePrice`,
-      `weight`,
-      `sku`,
-      `grind`,
-      `productCode`,
-      //   [
-      //     literal(`
-      //         (SELECT percentage
-      //         FROM userDiscounts
-      //         WHERE userDiscounts.categoryId = product.categoryId
-      //           AND userDiscounts.userId = ${placedOrder?.userId}
-      //         LIMIT 1)
-      //       `),
-      //     "discountPercentage",
-      //   ],
-    ],
+    attributes: productAttributes,
   });
-
-  // let percentageDiscount = input?.order?.discountPercentage
-  //   ? input.order?.discountPercentage
-  //   : 0;
 
   console.log(
     "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length
+    products?.length,
   );
 
   const finalItems = products.map((obj) => {
     const element = {};
     const percentageDiscount = parseFloat(
-      obj.dataValues?.discountPercentage || 0
+      obj.dataValues?.discountPercentage || 0,
     );
     element.productId = obj.id;
     element.categoryId = obj?.categoryId;
-    // console.log("🚀 ~ finalItems ~ obj:", obj)
 
     // Find the matching product in input.items based on productId
     let prod = input?.items.find((item) => item.productId == obj.id);
@@ -884,7 +921,8 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     console.log("🚀 ~ finalItems ~ qty:", qty);
     element.qty = qty;
     element.partnerOrderId = placedOrder?.id;
-    element.price = obj.wholesalePrice * qty;
+    const wholesalePrice = parseFloat(obj.wholesalePrice ?? 0);
+    element.price = wholesalePrice * qty;
     element.weight = obj.weight * qty;
     element.categoryId = obj.categoryId;
     element.discount = 0;
@@ -914,7 +952,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
   if (req.body?.typeCharges?.length > 0) {
     console.log(
       "🚀 ~ req.body?.typeCharges?.length:",
-      req.body?.typeCharges?.length
+      req.body?.typeCharges?.length,
     );
     req.body?.typeCharges.forEach((obj) => {
       const element = {};
@@ -959,8 +997,8 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
         return next(
           new AppError(
             "Not dealing in such weights. Contact customer support for this order.",
-            400
-          )
+            400,
+          ),
         );
       }
     }
@@ -1001,7 +1039,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
         if (unlinkErr) {
           console.error(
             `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
-            unlinkErr
+            unlinkErr,
           );
         } else {
           console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
@@ -1009,7 +1047,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
       });
     } else {
       console.warn(
-        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`
+        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
       );
     }
   });
@@ -1066,11 +1104,11 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
 
   console.log(
     "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
+    placedOrder?.quickBooksInvoiceId,
   );
   console.log(
     "🚀 ~ placedOrder?.quickBooksInvoiceId:",
-    placedOrder?.quickBooksInvoiceId
+    placedOrder?.quickBooksInvoiceId,
   );
 
   if (!placedOrder?.quickBooksInvoiceId) {
@@ -1140,7 +1178,7 @@ exports.partnerOrderNavigationCounts = catchAsync(async (req, res, next) => {
           `(SELECT COUNT(partnerOrders.id) 
            FROM partnerOrders  WHERE partnerOrders.statusId = statuses.id
            AND partnerOrders.type = 'regular-order'
-           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
       ],
@@ -1225,7 +1263,7 @@ exports.partnerOrderNavigationCountsLocalPatner = catchAsync(
             `(SELECT COUNT(partnerOrders.id) 
              FROM partnerOrders 
              WHERE partnerOrders.statusId = statuses.id 
-             ${employeeFilterLiteral})`
+             ${employeeFilterLiteral})`,
           ),
           "count",
         ],
@@ -1266,7 +1304,7 @@ exports.partnerOrderNavigationCountsLocalPatner = catchAsync(
       status: "success",
       data: output,
     });
-  }
+  },
 );
 
 exports.partnerOrderNavigationCountsSupplier = catchAsync(
@@ -1277,7 +1315,7 @@ exports.partnerOrderNavigationCountsSupplier = catchAsync(
         "orderStatus",
         [
           literal(
-            `(SELECT COUNT(id) FROM partnerOrders WHERE partnerOrders.statusId = statuses.id AND partnerOrders.supplierId = ${req.params?.id})`
+            `(SELECT COUNT(id) FROM partnerOrders WHERE partnerOrders.statusId = statuses.id AND partnerOrders.supplierId = ${req.params?.id})`,
           ),
           "count",
         ],
@@ -1290,7 +1328,7 @@ exports.partnerOrderNavigationCountsSupplier = catchAsync(
       status: "success",
       data: output,
     });
-  }
+  },
 );
 
 exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
@@ -1318,25 +1356,25 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
       "paymentStatus",
       [
         literal(
-          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "stripeCustomerId",
       ],
       [
         literal(
-          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT defaultBankAccount FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "defaultBankAccount",
       ],
       [
         literal(
-          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "srName",
       ],
       [
         literal(
-          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+          `(SELECT territoryName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
         ),
         "territoryName",
       ],
@@ -1351,8 +1389,8 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "This order has already been paid for and cannot be deleted.",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -1362,7 +1400,7 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
     console.log("🚀 ~ doc?.defaultBankAccount:", doc?.defaultBankAccount);
     if (!doc?.defaultBankAccount) {
       return next(
-        new AppError("Invalid Bank Account! Cannot collect payment. ", 404)
+        new AppError("Invalid Bank Account! Cannot collect payment. ", 404),
       );
     }
     const pullouts = await Stripe.pullAmountPaymentIntentFromBankAccount({
@@ -1376,7 +1414,7 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
 
     if (!pullouts) {
       return next(
-        new AppError("Invalid Bank Account cannot collect payment. ", 404)
+        new AppError("Invalid Bank Account cannot collect payment. ", 404),
       );
     }
     const data = {};
@@ -1388,6 +1426,20 @@ exports.pullPartnerOrderPayment = catchAsync(async (req, res, next) => {
     await partnerOrder.update(data, {
       where: { id: partnerOrderId },
     });
+
+    // [QBO-POLICY-2026] Disabled: no longer push pulloutIntentId to admin QBO after partner pullout.
+    // try {
+    //   await reconcilePulloutSyncStateForOrder({
+    //     orderId: partnerOrderId,
+    //     orderType: isPartnerOrder ? "local-partner" : "customer",
+    //   });
+    // } catch (stateErr) {
+    //   console.warn(
+    //     "[pullout-state] reconcile failed (partner pullout):",
+    //     stateErr?.message,
+    //   );
+    // }
+
     paidInvoiceAdminOrLocalPatnerEventAndCustomer({
       orderId: partnerOrderId,
       orderType: isPartnerOrder ? "local-partner" : "customer",

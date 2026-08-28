@@ -76,12 +76,38 @@ module.exports = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      verificationRequired: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      verificationContext: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+      },
+      verificationOtp: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      verificationOtpExpiresAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      loginVerificationDone: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       deleted: {
         type: DataTypes.BOOLEAN,
         allowNull: true,
         defaultValue: false,
       },
       verifiedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      approvedByAdmin: {
         type: DataTypes.DATE,
         allowNull: true,
       },
@@ -124,6 +150,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(32), // QBO Customer Id for Local Partners
         allowNull: true,
       },
+      stripeCustomerIdForPartner: {
+        type: DataTypes.STRING(255), // Stripe Customer Id on connected account (direct-partner)
+        allowNull: true,
+      },
       qboSyncToken: {
         type: DataTypes.STRING(16), // needed for UPDATEs
         allowNull: true,
@@ -154,7 +184,7 @@ module.exports = (sequelize) => {
           name: "email_index",
         },
       ],
-    }
+    },
   );
   // Hide fields in queries
   user.addHook("beforeFind", (options) => {
@@ -163,7 +193,7 @@ module.exports = (sequelize) => {
       ? options.attributes.exclude
       : [];
     options.attributes.exclude = Array.from(
-      new Set([...existing, "deletedAt", "updatedAt"])
+      new Set([...existing, "deletedAt", "updatedAt"]),
     );
   });
 

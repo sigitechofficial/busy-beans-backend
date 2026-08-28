@@ -28,5 +28,6 @@ module.exports = (sequelize) => {
     }
   );
 
+ 
   return salesFromPatners;
 };

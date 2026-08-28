@@ -16,6 +16,7 @@ const {
   partnerOrderItem,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
+const AppError = require("../../utils/appError");
 
 const { Op, literal, where, fn, col } = require("sequelize");
 
@@ -170,13 +171,13 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`
+          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`,
         ),
         "paymentPending",
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`
+          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`,
         ),
         "paymentDone",
       ],
@@ -209,13 +210,13 @@ exports.adminDashboard = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`
+          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`,
         ),
         "paymentPending",
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`
+          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`,
         ),
         "paymentDone",
       ],
@@ -343,13 +344,13 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`
+          `SUM(CASE WHEN paymentStatus = 'pending' AND statusId < 6 THEN 1 ELSE 0 END)`,
         ),
         "paymentPending",
       ],
       [
         literal(
-          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`
+          `SUM(CASE WHEN paymentStatus = 'done' AND statusId < 6 THEN 1 ELSE 0 END)`,
         ),
         "paymentDone",
       ],
@@ -373,37 +374,37 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
     attributes: [
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id)`
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id)`,
         ),
         "totalOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 2)`
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 2)`,
         ),
         "dispatchedToSupplierOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 3)`
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 3)`,
         ),
         "acknowledgedOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 4)`
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 4)`,
         ),
         "shippedOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 5)`
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 5)`,
         ),
         "deliveredOrders",
       ],
       [
         literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 6)`
+          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 6)`,
         ),
         "cancelledOrders",
       ],
@@ -416,7 +417,7 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
       "productId",
       [
         literal(
-          `(SELECT products.name FROM products WHERE products.id = item.productId)`
+          `(SELECT products.name FROM products WHERE products.id = item.productId)`,
         ),
         "productName",
       ],
@@ -454,7 +455,7 @@ exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
            FROM orders
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
-           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`
+           ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
       ],
@@ -551,7 +552,7 @@ exports.employeeDashboardlocalPartner = catchAsync(async (req, res, next) => {
           `(SELECT COUNT(orders.id) 
              FROM orders 
              WHERE orders.statusId = statuses.id 
-             ${employeeFilterLiteral})`
+             ${employeeFilterLiteral})`,
         ),
         "count",
       ],
@@ -1095,7 +1096,7 @@ exports.getLocalPartnerSalesDashboard = catchAsync(async (req, res, next) => {
   const lastMonthMTDEnd = new Date(
     currentYear,
     currentMonth - 1,
-    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate())
+    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate()),
   );
   const lastMonthMTDStartStr = lastMonthMTDStart.toISOString().split("T")[0];
   const lastMonthMTDEndStr = lastMonthMTDEnd.toISOString().split("T")[0];
@@ -1215,7 +1216,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   const lastMonthEnd = new Date(
     currentYear,
     currentMonth - 1,
-    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate())
+    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate()),
   );
 
   // Format dates for SQL (YYYY-MM-DD) - Use query parameters if provided, otherwise use calculated dates
@@ -1232,11 +1233,12 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   console.log("🚀 ~ getSalesDashboardAllEntities ~ mtdEndStr:", mtdEndStr);
   console.log(
     "🚀 ~ getSalesDashboardAllEntities ~ req.user.entity:",
-    req.user.entity
+    req.user.entity,
   );
 
   // Build entity-based filters
   // IMPORTANT: Admin users see ALL data - no entity filtering applied
+  // EXCEPTION: If req.query.salesRepId is provided, admin will see data for that local partner only
   let entityFilter = "";
   let salesRepIdFilter = "";
   let employeeIdFilter = "";
@@ -1246,15 +1248,52 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   const isLocalPartner =
     req.user.entity === "localPartner" || req.user.entity === "partnerEmployee";
 
+  // Validate: Only admin can use salesRepId query parameter to view specific local partner dashboard
+  if (req.query.salesRepId && !isAdmin) {
+    return next(
+      new AppError(
+        "Only admin users can view specific local partner dashboards",
+        403,
+      ),
+    );
+  }
+
+  // Check if admin is requesting a specific local partner's dashboard
+  const requestedSalesRepId = req.query.salesRepId
+    ? parseInt(req.query.salesRepId)
+    : null;
+  const isAdminViewingLocalPartner = isAdmin && requestedSalesRepId;
+
+  // Check if admin wants to see only direct admin orders (salesRepId IS NULL)
+  // Uses req.query.userType === 'admin' to filter to admin-only orders
+  const isAdminOnlyCondition = isAdmin && req.query.userType === "admin";
+
   // Only apply filters if NOT admin (admin sees all data)
-  if (!isAdmin) {
+  // OR if admin is viewing a specific local partner's dashboard
+  // OR if admin wants to see only direct admin orders (userType=admin)
+  if (!isAdmin || isAdminViewingLocalPartner || isAdminOnlyCondition) {
     // For local partners: filter by salesRepId
     if (isLocalPartner && req.user.localPartnerId) {
       const salesRepId = req.user.localPartnerId;
       salesRepIdFilter = `AND orders.salesRepId = ${salesRepId}`;
       console.log(
         "🚀 ~ getSalesDashboard ~ Applied salesRepId filter:",
-        salesRepId
+        salesRepId,
+      );
+    }
+    // For admin viewing a specific local partner's dashboard
+    else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+      salesRepIdFilter = `AND orders.salesRepId = ${requestedSalesRepId}`;
+      console.log(
+        "🚀 ~ getSalesDashboard ~ Admin viewing local partner dashboard, salesRepId filter:",
+        requestedSalesRepId,
+      );
+    }
+    // For admin-only condition (userType=admin): show only direct admin orders (salesRepId IS NULL)
+    else if (isAdminOnlyCondition) {
+      salesRepIdFilter = `AND orders.salesRepId IS NULL`;
+      console.log(
+        "🚀 ~ getSalesDashboard ~ Admin-only (userType=admin): showing only direct admin orders (salesRepId IS NULL)",
       );
     }
 
@@ -1267,7 +1306,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       employeeIdFilter = `AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
       console.log(
         "🚀 ~ getSalesDashboard ~ Applied employeeId filter:",
-        employeeId
+        employeeId,
       );
     }
 
@@ -1279,7 +1318,9 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         : `AND ${entityFilter}`;
     }
   } else {
-    console.log("🚀 ~ getSalesDashboard ~ Admin user - No entity filters applied");
+    console.log(
+      "🚀 ~ getSalesDashboard ~ Admin user - No entity filters applied",
+    );
   }
 
   // Month-to-Date Sales Summary - Using same approach as customerSalesSummary report
@@ -1299,7 +1340,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         AND orders.statusId != 6 ${entityFilter}`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
   const mtdSalesSummary = mtdSalesSummaryResult?.[0] || {
     totalSales: 0,
@@ -1319,7 +1360,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         AND orders.statusId != 6 ${entityFilter}`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
   const lastMonthSalesSummary = lastMonthSalesSummaryResult?.[0] || {
     totalSales: 0,
@@ -1330,13 +1371,13 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   // Calculate percentage change vs last month (MTD)
   const mtdTotalSales = parseFloat(mtdSalesSummary?.totalSales || 0);
   const lastMonthTotalSales = parseFloat(
-    lastMonthSalesSummary?.totalSales || 0
+    lastMonthSalesSummary?.totalSales || 0,
   );
   const lastMonthMTDStart = new Date(currentYear, currentMonth - 1, 1);
   const lastMonthMTDEnd = new Date(
     currentYear,
     currentMonth - 1,
-    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate())
+    Math.min(currentDay, new Date(currentYear, currentMonth, 0).getDate()),
   );
   const lastMonthMTDStartStr = lastMonthMTDStart.toISOString().split("T")[0];
   const lastMonthMTDEndStr = lastMonthMTDEnd.toISOString().split("T")[0];
@@ -1349,7 +1390,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         AND orders.statusId != 6 ${entityFilter}`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
 
   const lastMonthMTDTotalSales = parseFloat(lastMonthMTDSales?.totalSales || 0);
@@ -1362,10 +1403,21 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   // MTD Sales by Franchisee - Only orders with salesRepId (franchisee orders)
   // Build entity filter for franchisee query
   // IMPORTANT: Admin users see ALL franchisee data - no filtering
+  // EXCEPTION: If req.query.salesRepId is provided, admin will see data for that local partner only
+  // EXCEPTION: If admin-only condition (userType=admin), franchisee data will be empty (query has salesRepId IS NOT NULL,
+  //            but filter adds salesRepId IS NULL, resulting in no matches - which is correct)
   let franchiseeEntityFilter = "";
-  if (!isAdmin) {
+  if (!isAdmin || isAdminViewingLocalPartner || isAdminOnlyCondition) {
     if (isLocalPartner && req.user.localPartnerId) {
       franchiseeEntityFilter = `AND orders.salesRepId = ${req.user.localPartnerId}`;
+    }
+    // For admin viewing a specific local partner's dashboard
+    else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+      franchiseeEntityFilter = `AND orders.salesRepId = ${requestedSalesRepId}`;
+    }
+    // For admin-only condition (userType=admin): exclude franchisee orders (only showing salesRepId IS NULL)
+    else if (isAdminOnlyCondition) {
+      franchiseeEntityFilter = `AND orders.salesRepId IS NULL`;
     }
     if (
       req.user.entity === "adminEmployee" ||
@@ -1394,7 +1446,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
     LIMIT 5`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
 
   // YTD Sales by Franchisee - Only orders with salesRepId (franchisee orders)
@@ -1405,13 +1457,20 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
 
   // Reuse the same entity filter logic for YTD
   // IMPORTANT: Admin users see ALL franchisee data - no filtering
+  // EXCEPTION: If req.query.salesRepId is provided, admin will see data for that local partner only
+  // EXCEPTION: If admin-only condition (userType=admin), franchisee data should be empty (only showing salesRepId IS NULL orders)
   let ytdFranchiseeEntityFilter = "";
-  if (isAdmin) {
-    // Admin sees all franchisee data - no filter
-    ytdFranchiseeEntityFilter = "";
-  } else {
+  if (!isAdmin || isAdminViewingLocalPartner || isAdminOnlyCondition) {
     if (isLocalPartner && req.user.localPartnerId) {
       ytdFranchiseeEntityFilter = `AND orders.salesRepId = ${req.user.localPartnerId}`;
+    }
+    // For admin viewing a specific local partner's dashboard
+    else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+      ytdFranchiseeEntityFilter = `AND orders.salesRepId = ${requestedSalesRepId}`;
+    }
+    // For admin-only condition (userType=admin): exclude franchisee orders (only showing salesRepId IS NULL)
+    else if (isAdminOnlyCondition) {
+      ytdFranchiseeEntityFilter = `AND orders.salesRepId IS NULL`;
     }
     if (
       req.user.entity === "adminEmployee" ||
@@ -1440,7 +1499,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
     LIMIT 5`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
 
   // MTD Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
@@ -1458,7 +1517,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       LIMIT 5`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
 
   // Last Month Sales by Customer (Top 5) - Using same approach as customerSalesSummary report
@@ -1476,24 +1535,63 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       LIMIT 5`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
 
   // MTD Products (Top 5) - Products sold month-to-date
   // Combine data from items (customer orders) and partnerOrderItems (partner orders)
   // Build entity filter for partner orders
   // IMPORTANT: Admin users see ALL data - no filtering
+  // EXCEPTION: If req.query.salesRepId is provided, admin will see data for that local partner only
+  // EXCEPTION: If admin-only condition (userType=admin), exclude partner orders (only showing admin direct orders)
   let mtdPartnerOrderEntityFilter = "";
-  if (!isAdmin && isLocalPartner && req.user.localPartnerId) {
-    mtdPartnerOrderEntityFilter = `AND partnerOrders.salesRepId = ${req.user.localPartnerId}`;
+  if (!isAdmin || isAdminViewingLocalPartner) {
+    if (isLocalPartner && req.user.localPartnerId) {
+      mtdPartnerOrderEntityFilter = `AND partnerOrders.salesRepId = ${req.user.localPartnerId}`;
+    }
+    // For admin viewing a specific local partner's dashboard
+    else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+      mtdPartnerOrderEntityFilter = `AND partnerOrders.salesRepId = ${requestedSalesRepId}`;
+    }
   }
+  // Note: For admin-only condition (userType=admin), partner orders are excluded (mtdPartnerOrderEntityFilter remains empty)
+  // This means the UNION ALL will include partner orders, but they'll be filtered out by the WHERE clause
+  // Actually, we should exclude partner orders entirely in the UNION when admin-only condition (userType=admin) is active
   // Note: partnerOrders don't have employeeId filtering like customer orders
 
   const mtdProductsEntityFilter = entityFilter || "";
-  console.log("🚀 ~ MTD Products Query Date Range:", mtdStartStr, "to", mtdEndStr);
+  console.log(
+    "🚀 ~ MTD Products Query Date Range:",
+    mtdStartStr,
+    "to",
+    mtdEndStr,
+  );
   console.log("🚀 ~ MTD Products Entity Filter:", mtdProductsEntityFilter);
-  console.log("🚀 ~ MTD Partner Order Entity Filter:", mtdPartnerOrderEntityFilter);
-  
+  console.log(
+    "🚀 ~ MTD Partner Order Entity Filter:",
+    mtdPartnerOrderEntityFilter,
+  );
+
+  // For admin-only condition (userType=admin), exclude partner orders (only show admin direct orders)
+  const partnerOrdersUnion = isAdminOnlyCondition
+    ? ""
+    : `
+        UNION ALL
+        
+        SELECT 
+          partnerOrderItems.productId,
+          COALESCE(products.name, partnerOrderItems.productName, 'Unknown Product') as productName,
+          partnerOrderItems.qty,
+          partnerOrderItems.price
+        FROM partnerOrderItems
+        INNER JOIN partnerOrders ON partnerOrders.id = partnerOrderItems.partnerOrderId
+        LEFT JOIN products ON products.id = partnerOrderItems.productId
+        WHERE partnerOrders.on >= '${mtdStartStr}' AND partnerOrders.on <= '${mtdEndStr}'
+          AND partnerOrders.statusId != 6
+          AND partnerOrderItems.deleted = 0
+          AND partnerOrderItems.type = 'product'
+          ${mtdPartnerOrderEntityFilter}`;
+
   const mtdSalesByProduct = await order.sequelize.query(
     `SELECT 
         productId,
@@ -1514,7 +1612,49 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
           AND items.deleted = 0
           AND items.type = 'product'
           ${mtdProductsEntityFilter}
-        
+        ${partnerOrdersUnion}
+      ) AS combined_products
+      GROUP BY productId
+      ORDER BY totalSales DESC
+      LIMIT 5`,
+    {
+      type: order.sequelize.QueryTypes.SELECT,
+    },
+  );
+
+  console.log("🚀 ~ MTD Products Result Count:", mtdSalesByProduct.length);
+  if (mtdSalesByProduct.length > 0) {
+    console.log(
+      "🚀 ~ MTD Products Sample:",
+      JSON.stringify(mtdSalesByProduct[0], null, 2),
+    );
+  }
+
+  // YTD Products (Top 5) - Products sold year-to-date
+  // Combine data from items (customer orders) and partnerOrderItems (partner orders)
+  // Build entity filter for partner orders
+  // IMPORTANT: Admin users see ALL data - no filtering
+  // EXCEPTION: If req.query.salesRepId is provided, admin will see data for that local partner only
+  // EXCEPTION: If admin-only condition (userType=admin), exclude partner orders (only showing admin direct orders)
+  let ytdPartnerOrderEntityFilter = "";
+  if (!isAdmin || isAdminViewingLocalPartner) {
+    if (isLocalPartner && req.user.localPartnerId) {
+      ytdPartnerOrderEntityFilter = `AND partnerOrders.salesRepId = ${req.user.localPartnerId}`;
+    }
+    // For admin viewing a specific local partner's dashboard
+    else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+      ytdPartnerOrderEntityFilter = `AND partnerOrders.salesRepId = ${requestedSalesRepId}`;
+    }
+  }
+  // Note: For admin-only condition (userType=admin), partner orders are excluded (ytdPartnerOrderEntityFilter remains empty)
+  // Note: partnerOrders don't have employeeId filtering like customer orders
+
+  const ytdProductsEntityFilter = entityFilter || "";
+
+  // For admin-only condition (userType=admin), exclude partner orders (only show admin direct orders)
+  const ytdPartnerOrdersUnion = isAdminOnlyCondition
+    ? ""
+    : `
         UNION ALL
         
         SELECT 
@@ -1525,36 +1665,12 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         FROM partnerOrderItems
         INNER JOIN partnerOrders ON partnerOrders.id = partnerOrderItems.partnerOrderId
         LEFT JOIN products ON products.id = partnerOrderItems.productId
-        WHERE partnerOrders.on >= '${mtdStartStr}' AND partnerOrders.on <= '${mtdEndStr}'
+        WHERE partnerOrders.on >= '${ytdStartStr}' AND partnerOrders.on <= '${ytdEndStr}'
           AND partnerOrders.statusId != 6
           AND partnerOrderItems.deleted = 0
           AND partnerOrderItems.type = 'product'
-          ${mtdPartnerOrderEntityFilter}
-      ) AS combined_products
-      GROUP BY productId
-      ORDER BY totalSales DESC
-      LIMIT 5`,
-    {
-      type: order.sequelize.QueryTypes.SELECT,
-    }
-  );
-  
-  console.log("🚀 ~ MTD Products Result Count:", mtdSalesByProduct.length);
-  if (mtdSalesByProduct.length > 0) {
-    console.log("🚀 ~ MTD Products Sample:", JSON.stringify(mtdSalesByProduct[0], null, 2));
-  }
+          ${ytdPartnerOrderEntityFilter}`;
 
-  // YTD Products (Top 5) - Products sold year-to-date
-  // Combine data from items (customer orders) and partnerOrderItems (partner orders)
-  // Build entity filter for partner orders
-  // IMPORTANT: Admin users see ALL data - no filtering
-  let ytdPartnerOrderEntityFilter = "";
-  if (!isAdmin && isLocalPartner && req.user.localPartnerId) {
-    ytdPartnerOrderEntityFilter = `AND partnerOrders.salesRepId = ${req.user.localPartnerId}`;
-  }
-  // Note: partnerOrders don't have employeeId filtering like customer orders
-
-  const ytdProductsEntityFilter = entityFilter || "";
   const ytdSalesByProduct = await order.sequelize.query(
     `SELECT 
         productId,
@@ -1575,29 +1691,14 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
           AND items.deleted = 0
           AND items.type = 'product'
           ${ytdProductsEntityFilter}
-        
-        UNION ALL
-        
-        SELECT 
-          partnerOrderItems.productId,
-          COALESCE(products.name, partnerOrderItems.productName, 'Unknown Product') as productName,
-          partnerOrderItems.qty,
-          partnerOrderItems.price
-        FROM partnerOrderItems
-        INNER JOIN partnerOrders ON partnerOrders.id = partnerOrderItems.partnerOrderId
-        LEFT JOIN products ON products.id = partnerOrderItems.productId
-        WHERE partnerOrders.on >= '${ytdStartStr}' AND partnerOrders.on <= '${ytdEndStr}'
-          AND partnerOrders.statusId != 6
-          AND partnerOrderItems.deleted = 0
-          AND partnerOrderItems.type = 'product'
-          ${ytdPartnerOrderEntityFilter}
+        ${ytdPartnerOrdersUnion}
       ) AS combined_products
       GROUP BY productId
       ORDER BY totalSales DESC
       LIMIT 5`,
     {
       type: order.sequelize.QueryTypes.SELECT,
-    }
+    },
   );
 
   // MTD Sales by Employee (Top 5) - Only for admin users
@@ -1606,43 +1707,45 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   if (req.user.entity === "admin") {
     mtdSalesByEmployee = await order.sequelize.query(
       `SELECT 
-          orders.employeeId,
+          users.employeeId,
           COALESCE(employees.name, 'Unknown Employee') as employeeName,
           COALESCE(employees.email, '') as employeeEmail,
           COUNT(*) as totalOrders,
           SUM(orders.totalBill) as totalSales
         FROM orders
-        LEFT JOIN employees ON employees.id = orders.employeeId
+        INNER JOIN users ON users.id = orders.userId
+        LEFT JOIN employees ON employees.id = users.employeeId
         WHERE orders.on >= '${mtdStartStr}' AND orders.on <= '${mtdEndStr}'
           AND orders.statusId != 6
-          AND orders.employeeId IS NOT NULL
-        GROUP BY orders.employeeId, employees.name, employees.email
+          AND users.employeeId IS NOT NULL
+        GROUP BY users.employeeId, employees.name, employees.email
         ORDER BY totalSales DESC
         LIMIT 5`,
       {
         type: order.sequelize.QueryTypes.SELECT,
-      }
+      },
     );
 
     // YTD Sales by Employee (Top 5) - Only for admin users
     ytdSalesByEmployee = await order.sequelize.query(
       `SELECT 
-          orders.employeeId,
+          users.employeeId,
           COALESCE(employees.name, 'Unknown Employee') as employeeName,
           COALESCE(employees.email, '') as employeeEmail,
           COUNT(*) as totalOrders,
           SUM(orders.totalBill) as totalSales
         FROM orders
-        LEFT JOIN employees ON employees.id = orders.employeeId
+        INNER JOIN users ON users.id = orders.userId
+        LEFT JOIN employees ON employees.id = users.employeeId
         WHERE orders.on >= '${ytdStartStr}' AND orders.on <= '${ytdEndStr}'
           AND orders.statusId != 6
-          AND orders.employeeId IS NOT NULL
-        GROUP BY orders.employeeId, employees.name, employees.email
+          AND users.employeeId IS NOT NULL
+        GROUP BY users.employeeId, employees.name, employees.email
         ORDER BY totalSales DESC
         LIMIT 5`,
       {
         type: order.sequelize.QueryTypes.SELECT,
-      }
+      },
     );
   }
 
@@ -1672,6 +1775,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         totalSales: parseFloat(customer.totalSales || 0),
       })),
       // Only include franchisee data for admin and adminEmployee users
+      // When admin views a local partner's dashboard (salesRepId provided), franchisee data will be filtered to that local partner
       ...((req.user.entity === "admin" ||
         req.user.entity === "adminEmployee") && {
         mtdSalesByFranchisee: mtdSalesByFranchisee.map((franchisee) => ({
@@ -1704,22 +1808,24 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
         totalSales: parseFloat(product.totalSales || 0),
       })),
       // Only include employee sales data for admin users
-      ...(req.user.entity === "admin" && {
-        mtdSalesByEmployee: mtdSalesByEmployee.map((employee) => ({
-          employeeId: employee.employeeId,
-          employeeName: employee.employeeName,
-          employeeEmail: employee.employeeEmail,
-          totalOrders: parseInt(employee.totalOrders || 0),
-          totalSales: parseFloat(employee.totalSales || 0),
-        })),
-        ytdSalesByEmployee: ytdSalesByEmployee.map((employee) => ({
-          employeeId: employee.employeeId,
-          employeeName: employee.employeeName,
-          employeeEmail: employee.employeeEmail,
-          totalOrders: parseInt(employee.totalOrders || 0),
-          totalSales: parseFloat(employee.totalSales || 0),
-        })),
-      }),
+      // Exclude when admin is viewing a local partner's dashboard (salesRepId provided)
+      ...(req.user.entity === "admin" &&
+        !isAdminViewingLocalPartner && {
+          mtdSalesByEmployee: mtdSalesByEmployee.map((employee) => ({
+            employeeId: employee.employeeId,
+            employeeName: employee.employeeName,
+            employeeEmail: employee.employeeEmail,
+            totalOrders: parseInt(employee.totalOrders || 0),
+            totalSales: parseFloat(employee.totalSales || 0),
+          })),
+          ytdSalesByEmployee: ytdSalesByEmployee.map((employee) => ({
+            employeeId: employee.employeeId,
+            employeeName: employee.employeeName,
+            employeeEmail: employee.employeeEmail,
+            totalOrders: parseInt(employee.totalOrders || 0),
+            totalSales: parseFloat(employee.totalSales || 0),
+          })),
+        }),
     },
   });
 });

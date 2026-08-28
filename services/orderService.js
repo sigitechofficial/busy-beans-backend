@@ -42,13 +42,13 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
             "id",
             [
               literal(
-                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "product",
             ],
             [
               literal(
-                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "singleUnitWeight",
             ],
@@ -60,6 +60,7 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
             "orderId",
             "productId",
             "wholesalePrice",
+            "salerCommission",
             "type",
           ],
         },
@@ -68,45 +69,52 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "id",
         [
           literal(
-            `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "name",
         ],
         [
           literal(
-            `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "companyName",
         ],
         [
           literal(
-            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "qboCustomerId",
         ],
         [
           literal(
-            `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "salesRepName",
         ],
         [
           literal(
-            `(SELECT salesReps.territoryName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.territoryName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "territoryName",
         ],
         [
           literal(
-            `(SELECT salesReps.currentRealmId FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.currentRealmId FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "partnerCurrentRealmId",
         ],
         [
           literal(
-            `(SELECT salesReps.partnerType FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.partnerType FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "partnerType",
+        ],
+        [
+          literal(`COALESCE(
+               (SELECT SUM(salerCommission)
+                FROM items
+                WHERE items.orderId = order.id ), 0)`),
+          "localPatnerCommission",
         ],
         "quickBooksInvoiceIdPartner",
         "quickBooksPaymentIdPartner",
@@ -117,6 +125,7 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "shippingCharges",
         "invoiceNumber",
         "quickBooksInvoiceId",
+        "quickBooksPaymentId",
         "paymentMethod",
         "paymentIntentId",
         "paymentStatus",
@@ -124,13 +133,18 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "invoiceDate",
         "shippingCompany",
         "termDays",
+        "type",
         "note",
         "trackingNumber",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
+        "adminReceivableStatus",
         [
           literal(
-            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
+            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`,
           ),
           "shippingDate",
         ],
@@ -153,13 +167,13 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
             "id",
             [
               literal(
-                `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+                `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
               ),
               "product",
             ],
             [
               literal(
-                `(SELECT products.weight FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+                `(SELECT products.weight FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
               ),
               "singleUnitWeight",
             ],
@@ -177,13 +191,13 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "id",
         [
           literal(
-            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "companyName",
         ],
         [
           literal(
-            `(SELECT qboCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT qboCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "qboCustomerId",
         ],
@@ -192,6 +206,7 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "shippingCharges",
         "invoiceNumber",
         "quickBooksInvoiceId",
+        "quickBooksPaymentId",
         "paymentMethod",
         "paymentIntentId",
         "paymentStatus",
@@ -204,9 +219,12 @@ async function getOrderWithAssociations({ orderId, orderType = "customer" }) {
         "salesRepId",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
         [
           literal(
-            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`
+            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`,
           ),
           "shippingDate",
         ],
@@ -279,13 +297,13 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
             "id",
             [
               literal(
-                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "product",
             ],
             [
               literal(
-                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`
+                `(SELECT products.weight FROM products WHERE products.id = items.productId LIMIT 1)`,
               ),
               "singleUnitWeight",
             ],
@@ -297,6 +315,7 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
             "orderId",
             "productId",
             "wholesalePrice",
+            "salerCommission",
             "type",
           ],
         },
@@ -305,39 +324,52 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "id",
         [
           literal(
-            `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "name",
         ],
         [
           literal(
-            `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "companyName",
         ],
         [
           literal(
-            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "qboCustomerId",
         ],
         [
           literal(
-            `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.srName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "salesRepName",
         ],
         [
           literal(
-            `(SELECT salesReps.currentRealmId FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.territoryName FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
+          ),
+          "territoryName",
+        ],
+        [
+          literal(
+            `(SELECT salesReps.currentRealmId FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "partnerCurrentRealmId",
         ],
         [
           literal(
-            `(SELECT salesReps.partnerType FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`
+            `(SELECT salesReps.partnerType FROM salesReps WHERE order.salesRepId = salesReps.id LIMIT 1)`,
           ),
           "partnerType",
+        ],
+        [
+          literal(`COALESCE(
+               (SELECT SUM(salerCommission)
+                FROM items
+                WHERE items.orderId = order.id ), 0)`),
+          "localPatnerCommission",
         ],
         "quickBooksInvoiceIdPartner",
         "quickBooksPaymentIdPartner",
@@ -348,6 +380,7 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "shippingCharges",
         "invoiceNumber",
         "quickBooksInvoiceId",
+        "quickBooksPaymentId",
         "paymentMethod",
         "paymentIntentId",
         "paymentStatus",
@@ -355,13 +388,18 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "invoiceDate",
         "shippingCompany",
         "termDays",
+        "type",
         "note",
         "trackingNumber",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
+        "adminReceivableStatus",
         [
           literal(
-            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`
+            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.orderId = order.id LIMIT 1)`,
           ),
           "shippingDate",
         ],
@@ -384,13 +422,13 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
             "id",
             [
               literal(
-                `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+                `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
               ),
               "product",
             ],
             [
               literal(
-                `(SELECT products.weight FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+                `(SELECT products.weight FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
               ),
               "singleUnitWeight",
             ],
@@ -408,13 +446,13 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "id",
         [
           literal(
-            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "companyName",
         ],
         [
           literal(
-            `(SELECT qboCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT qboCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "qboCustomerId",
         ],
@@ -423,6 +461,7 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "shippingCharges",
         "invoiceNumber",
         "quickBooksInvoiceId",
+        "quickBooksPaymentId",
         "paymentMethod",
         "paymentIntentId",
         "paymentStatus",
@@ -435,9 +474,12 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
         "salesRepId",
         "partnerRealmId",
         "adminRealmId",
+        "pulloutIntentId",
+        "pulloutIntentIdSynced",
+        "pulloutDate",
         [
           literal(
-            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`
+            `(SELECT createdAt FROM orderHistories WHERE orderHistories.statusId = 4 AND orderHistories.partnerOrderId = partnerOrder.id LIMIT 1)`,
           ),
           "shippingDate",
         ],
@@ -469,7 +511,7 @@ async function getOrdersWithAssociations({ orderIds, orderType = "customer" }) {
     });
 
     console.log(
-      `🚀 ~ getOrdersWithAssociations ~ fetched ${orders.length} orders`
+      `🚀 ~ getOrdersWithAssociations ~ fetched ${orders.length} orders`,
     );
     return orders;
   } catch (err) {

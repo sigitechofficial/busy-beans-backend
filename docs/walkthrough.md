@@ -606,6 +606,7 @@ graph TD
 **Lambda Functions:**
 - Pending pullout payments: `POST /api/v1/admin/lambda-function/pending-pullout-fromlocal-patner-banks`
 - Create upcoming orders: `POST /api/v1/admin/lambda-function/create-upcomming-orders`
+- Daily EOD digests: `POST /api/v1/admin/lambda-function/send-daily-eod-digests` (idempotent per recipient/day; run migration `20260722_create_daily_digest_sends.sql`)
 
 ---
 

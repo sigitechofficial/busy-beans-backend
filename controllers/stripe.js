@@ -7,9 +7,42 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
   // beta: ["financial_connections_sessions_beta"] // ✅ Add this line
 });
 
-const { billingAddress } = require("../models");
+const { billingAddress, user } = require("../models");
 
 const AppError = require("../utils/appError");
+
+/**
+ * Get or create Stripe customer on connected account for direct-partner.
+ * If order has stripeCustomerIdForPartner (or user has it), return it — do not create new.
+ * If not, create on connected account and update user.
+ */
+async function getOrCreateConnectedCustomerForDirectPartner(order) {
+  const existingId =
+    order.stripeCustomerIdForPartner || order.user?.stripeCustomerIdForPartner;
+  if (existingId) {
+    return existingId;
+  }
+  const connectAccountId = order.connectAccountId;
+  const name = order.customerName || order.name || "Customer";
+  const email = order.email;
+  if (!connectAccountId || !email) {
+    throw new Error(
+      "connectAccountId and email are required to create customer on connected account.",
+    );
+  }
+  const customerId = await addCustomerOnConnectedAccount({
+    connectAccountId,
+    name,
+    email,
+  });
+  if (order.userId) {
+    await user.update(
+      { stripeCustomerIdForPartner: customerId },
+      { where: { id: order.userId } },
+    );
+  }
+  return customerId;
+}
 
 function estimateStripeFeeFromDollars(amountInDollars) {
   const parsed = parseFloat(amountInDollars);
@@ -25,6 +58,43 @@ function convertToCents(amount) {
 function convertToDollars(cents) {
   return cents / 100;
 }
+
+/**
+ * Stripe Checkout charges unit_amount (integer minor units) × quantity per row.
+ * Using (lineTotal/qty).toFixed(2) as the unit can make unit_cents × qty ≠ round(lineTotal*100).
+ * When recomposed matches the saved line, keep unit × qty; otherwise charge exact line as qty 1.
+ */
+function checkoutLineItemFromOrderItem(item, currency) {
+  const qty = Number(item.qty);
+  const lineTotal = Number(item.price);
+  const baseName = item.product || item.productName || "Item";
+  const lineCents = convertToCents(lineTotal);
+  const unitDollarsTwoDp = Number((lineTotal / qty).toFixed(2));
+  const unitCentsFromRoundedUnit = convertToCents(unitDollarsTwoDp);
+  const recomposedCents = unitCentsFromRoundedUnit * qty;
+
+  if (qty > 0 && recomposedCents === lineCents) {
+    return {
+      price_data: {
+        currency,
+        product_data: { name: baseName },
+        unit_amount: unitCentsFromRoundedUnit,
+      },
+      quantity: qty,
+    };
+  }
+
+  const name = qty > 1 ? `${baseName} (Qty ${qty})` : baseName;
+  return {
+    price_data: {
+      currency,
+      product_data: { name },
+      unit_amount: lineCents,
+    },
+    quantity: 1,
+  };
+}
+
 /*
  *  1:  Create Customer ________________________
  */
@@ -42,6 +112,36 @@ async function addCustomer({ name, email }) {
   } catch (error) {
     console.error(error);
     throw new AppError(`${error.message} `, 200);
+  }
+}
+
+/**
+ * Create a customer on a connected Stripe account.
+ * @param {string} connectAccountId - The Stripe Connect account ID (acct_xxx)
+ * @param {{ name: string, email: string }} customer - Customer data (name, email)
+ * @returns {Promise<string>} The created customer ID on the connected account
+ */
+async function addCustomerOnConnectedAccount({
+  connectAccountId,
+  name,
+  email,
+}) {
+  try {
+    const customer = await stripe.customers.create(
+      {
+        name,
+        email,
+        address: {
+          country: "US",
+        },
+      },
+      { stripeAccount: connectAccountId },
+    );
+    console.log("🚀 ~ addCustomerOnConnectedAccount ~ customer:", customer.id);
+    return customer.id;
+  } catch (error) {
+    console.error(error);
+    throw new AppError(`${error.message}`, 200);
   }
 }
 
@@ -73,7 +173,7 @@ async function attachBankAccountPaymentMethod({ paymentMethodId, customerId }) {
   try {
     if (!paymentMethodId) {
       throw new Error(
-        "No payment method found on SetupIntent. Did the user finish connecting the bank?"
+        "No payment method found on SetupIntent. Did the user finish connecting the bank?",
       );
     }
 
@@ -107,6 +207,8 @@ async function createPaymentIntent({
   hasLocalPatner,
   paymentMethodId = null,
   stripeCustomer = null,
+  connectedCustomerForPartner = null,
+  partnerType = null,
   metadata = null,
 }) {
   try {
@@ -126,8 +228,76 @@ async function createPaymentIntent({
         hasLocalPatner,
         paymentMethodId,
         stripeCustomer,
-      }
+        connectedCustomerForPartner,
+        partnerType,
+      },
     );
+
+    // Direct-partner saved-card flow:
+    // charge is created on connected account (not destination charge from platform).
+    if (paymentMethodId && partnerType === "direct-partner") {
+      if (!localPartnerAccountId) {
+        return {
+          status: false,
+          message:
+            "Connect account id is required for direct-partner payment capture.",
+        };
+      }
+
+      const customerOnConnectedAccount =
+        connectedCustomerForPartner || stripeCustomer;
+
+      if (!customerOnConnectedAccount) {
+        return {
+          status: false,
+          message:
+            "Connected account customer is required for direct-partner payment capture.",
+        };
+      }
+
+      const directInput = {
+        amount: convertToCents(adminReceivableAmount),
+        currency: "usd",
+        customer: customerOnConnectedAccount,
+        payment_method: paymentMethodId,
+        confirm: true,
+        off_session: true,
+        capture_method: "automatic",
+        description: `Payment captured for invoice ${metadata?.invoiceNumber || ""} using card on file.`,
+        metadata: {
+          platform: "Busy Beans Coffee inc.",
+          type: "saved-card-direct-partner",
+          ...metadata,
+        },
+      };
+
+      console.log("🚀 ~ createPaymentIntent ~ directInput:", directInput);
+
+      const directPaymentIntent = await stripe.paymentIntents.create(
+        directInput,
+        {
+          stripeAccount: localPartnerAccountId,
+        },
+      );
+
+      return {
+        status: true,
+        hasLocalPatner,
+        data: {
+          proportionalStripeFee: 0,
+          localPatnerCommission: localPatnerCommission || 0,
+          adminReceivableAmount: 0,
+          adminReceivableStatus: false,
+          paymentStatus: "done",
+          invoicePaidDate: new Date(),
+          pulloutDate: Date.now(),
+          paymentMethod: "card",
+          paymentMethodId: paymentMethodId,
+          paymentIntentId: directPaymentIntent?.id,
+        },
+      };
+    }
+
     const input = {
       amount: convertToCents(adminReceivableAmount),
       currency: "usd",
@@ -289,6 +459,7 @@ async function createStandardConnectAccount({ email, returnUrl }) {
     throw new AppError(`${error.message}`, 200);
   }
 }
+
 async function createCheckoutSession(line_items, accountId, applicationFee) {
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
@@ -652,21 +823,12 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
   const { items, shippingCharges, vat } = order;
   const line_items = [];
 
-  // Build line items (item.price assumed as LINE TOTAL; unit = price/qty)
+  // Build line items (item.price is DB line total; cent-safe for Stripe — checkoutLineItemFromOrderItem)
   for (const item of items) {
     const qty = Number(item.qty);
     const lineTotal = Number(item.price);
     if (!qty || !lineTotal) throw new Error("Each item needs qty and price.");
-    const unit = lineTotal / qty;
-
-    line_items.push({
-      price_data: {
-        currency,
-        product_data: { name: item.product || item.productName || "Item" },
-        unit_amount: convertToCents(unit, currency), // must be integer
-      },
-      quantity: qty,
-    });
+    line_items.push(checkoutLineItemFromOrderItem(item, currency));
   }
 
   if (shippingCharges && Number(shippingCharges) > 0) {
@@ -717,18 +879,16 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
     // ====== BRANCH 1: DIRECT PARTNER (session on connected account; no platform/customer/fees) ======
     if (order.partnerType === "direct-partner") {
       if (!order.connectAccountId) {
-        throw new Error("connectAccountId is required for direct-partner.");
+        throw new Error("Connect account id is required for direct-partner.");
       }
 
       const directParams = { ...base };
 
-      // DO NOT pass platform customer here:
-      // If you *do* have a customer that actually exists on the connected account, put it in order.connectedCustomerId
-      if (order.connectedCustomerId) {
-        //! directParams.customer = order.connectedCustomerId;
-        // Optional: save for off_session on that connected account
-        directParams.payment_intent_data.setup_future_usage = "off_session";
-      }
+      // Use stripeCustomerIdForPartner if present; else create on connected account and save
+      const connectedCustomerId =
+        await getOrCreateConnectedCustomerForDirectPartner(order);
+      directParams.customer = connectedCustomerId;
+      directParams.payment_intent_data.setup_future_usage = "off_session";
 
       // No application_fee_amount, no transfer_data — it’s a direct charge on the connected account
       delete directParams.payment_intent_data.application_fee_amount;
@@ -737,7 +897,7 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
       // Create the Checkout Session **on** the connected account
       const session = await stripe.checkout.sessions.create(
         directParams,
-        { stripeAccount: order.connectAccountId } // key line: header `Stripe-Account`
+        { stripeAccount: order.connectAccountId }, // key line: header `Stripe-Account`
       );
 
       return {
@@ -752,7 +912,7 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
     // Your original logic stays here
     const platformFeeInCents = convertToCents(
       order.adminReceivableAmount || 0,
-      currency
+      currency,
     );
     const stripeFee = estimateStripeFeeFromDollars(order.totalBill || 0);
     const stripeFeeInCents = convertToCents(stripeFee, currency);
@@ -844,7 +1004,9 @@ async function paymentIntentForWebsitePayments({ order, currency = "usd" }) {
       }
 
       // Calculate Stripe fee (admin only receives this)
-      const stripeFee = estimateStripeFeeFromDollars(order.totalBill || totalAmount);
+      const stripeFee = estimateStripeFeeFromDollars(
+        order.totalBill || totalAmount,
+      );
       const stripeFeeInCents = convertToCents(stripeFee);
 
       const directParams = {
@@ -956,19 +1118,19 @@ async function transferToLocalPatners({
 
     // Step 4: Retrieve the balance transaction to get Stripe fee
     const balanceTransaction = await stripe.balanceTransactions.retrieve(
-      charge.balance_transaction
+      charge.balance_transaction,
     );
 
     // Step 5: Stripe values are in cents
     const totalAmountCents = balanceTransaction.amount;
     console.log(
       "🚀 ~ transferToLocalPatners ~ totalAmountCents:",
-      totalAmountCents
+      totalAmountCents,
     );
     const stripeFeeCents = balanceTransaction.fee;
     console.log(
       "🚀 ~ transferToLocalPatners ~ stripeFeeCents:",
-      stripeFeeCents
+      stripeFeeCents,
     );
 
     // Step 6: Convert commission amount to cents
@@ -976,21 +1138,21 @@ async function transferToLocalPatners({
     console.log("🚀 ~ transferToLocalPatners ~ amount:", amount);
     console.log(
       "🚀 ~ transferToLocalPatners ~ commissionCents:",
-      commissionCents
+      commissionCents,
     );
 
     // Step 7: Calculate proportional Stripe fee
     const proportionalStripeFee = stripeFeeCents;
     console.log(
       "🚀 ~ transferToLocalPatners ~ proportionalStripeFee:",
-      proportionalStripeFee
+      proportionalStripeFee,
     );
 
     // Step 8: Calculate net partner amount
     const netPartnerAmount = commissionCents - proportionalStripeFee;
     console.log(
       "🚀 ~ transferToLocalPatners ~ netPartnerAmount:",
-      netPartnerAmount
+      netPartnerAmount,
     );
 
     // Step 9: Create description for audit/debug
@@ -1041,14 +1203,14 @@ async function transferToEmployee({
         // If invoice retrieval fails, use paymentIntentId directly
         console.log(
           "🚀 ~ transferToEmployee ~ Invoice retrieval failed, using paymentIntentId:",
-          error.message
+          error.message,
         );
         piId = paymentIntentId;
       }
     } else if (invoiceId && invoiceId.startsWith("cs_")) {
       // It's a checkout session ID, not an invoice - skip invoice retrieval
       console.log(
-        "🚀 ~ transferToEmployee ~ invoiceId is a checkout session, skipping invoice retrieval"
+        "🚀 ~ transferToEmployee ~ invoiceId is a checkout session, skipping invoice retrieval",
       );
       piId = paymentIntentId;
     }
@@ -1074,14 +1236,14 @@ async function transferToEmployee({
 
     // Step 4: Retrieve the balance transaction to get Stripe fee
     const balanceTransaction = await stripe.balanceTransactions.retrieve(
-      charge.balance_transaction
+      charge.balance_transaction,
     );
 
     // Step 5: Stripe values are in cents
     const totalAmountCents = balanceTransaction.amount;
     console.log(
       "🚀 ~ transferToEmployee ~ totalAmountCents:",
-      totalAmountCents
+      totalAmountCents,
     );
     const stripeFeeCents = balanceTransaction.fee;
     console.log("🚀 ~ transferToEmployee ~ stripeFeeCents:", stripeFeeCents);
@@ -1098,10 +1260,10 @@ async function transferToEmployee({
     console.log(
       "🚀 ~ transferToEmployee ~ employeeCommissionCents:",
       employeeCommissionCents,
-      "cents ($" + (employeeCommissionCents / 100).toFixed(2) + ")"
+      "cents ($" + (employeeCommissionCents / 100).toFixed(2) + ")",
     );
     console.log(
-      "🚀 ~ transferToEmployee ~ Note: Commission is calculated on net amount (after Stripe fee), so full amount is transferred"
+      "🚀 ~ transferToEmployee ~ Note: Commission is calculated on net amount (after Stripe fee), so full amount is transferred",
     );
 
     // Step 8: Create description with invoice information
@@ -1119,7 +1281,7 @@ async function transferToEmployee({
     }
 
     descriptionParts.push(
-      `- Employee Commission: $${(employeeCommissionCents / 100).toFixed(2)}`
+      `- Employee Commission: $${(employeeCommissionCents / 100).toFixed(2)}`,
     );
 
     const description = descriptionParts.join(" ");
@@ -1187,7 +1349,7 @@ async function retrieveConnectAccount({ accountId }) {
     ) {
       throw new AppError(
         "There are pending verification or requirements errors.",
-        400
+        400,
       );
     }
 
@@ -1222,7 +1384,7 @@ async function pullAmountPaymentIntentFromBankAccount({
     const cents = convertToCents(amount);
     console.log(
       "🚀 ~ pullAmountPaymentIntentFromBankAccount ~ amount:",
-      amount
+      amount,
     );
 
     const metadata = {
@@ -1236,7 +1398,7 @@ async function pullAmountPaymentIntentFromBankAccount({
     };
     console.log(
       "🚀 ~ pullAmountPaymentIntentFromBankAccount ~ metadata:",
-      metadata
+      metadata,
     );
 
     const paymentIntent = await stripe.paymentIntents.create({
@@ -1303,11 +1465,30 @@ async function cards(customerId) {
   try {
     const paymentMethods = await stripe.customers.listPaymentMethods(
       customerId,
-      { type: "card" }
+      { type: "card" },
     );
     return paymentMethods;
   } catch (error) {
     throw new AppError(`${error.message} `, 200);
+  }
+}
+
+/**
+ * List card payment methods for a customer on a Stripe connected account (e.g. direct-partner).
+ * @param {string} customerId - Stripe customer ID on the connected account
+ * @param {string} connectAccountId - Stripe Connect account ID (acct_xxx)
+ * @returns {Promise<Stripe.ApiList<Stripe.PaymentMethod>>}
+ */
+async function cardsOnConnectedAccount(customerId, connectAccountId) {
+  try {
+    const paymentMethods = await stripe.customers.listPaymentMethods(
+      customerId,
+      { type: "card" },
+      { stripeAccount: connectAccountId },
+    );
+    return paymentMethods;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
   }
 }
 
@@ -1319,17 +1500,149 @@ async function deleteConnectAccount(connectAccountId) {
     throw new AppError(`${error.message} `, 200);
   }
 }
+
+/**
+ * Attach an external bank account token to a connected account (for payouts).
+ */
+async function attachExternalBankAccountToConnectedAccount({
+  accountId,
+  externalAccountToken,
+}) {
+  try {
+    if (!accountId) throw new Error("Connected account id is required.");
+    if (!externalAccountToken)
+      throw new Error("External account token is required.");
+
+    const bankAccount = await stripe.accounts.createExternalAccount(accountId, {
+      external_account: externalAccountToken,
+    });
+
+    return bankAccount;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Retrieve a specific external bank account from a connected account.
+ */
+async function retrieveExternalBankAccountFromConnectedAccount({
+  accountId,
+  externalAccountId,
+}) {
+  try {
+    if (!accountId) throw new Error("Connected account id is required.");
+    if (!externalAccountId) throw new Error("External account id is required.");
+
+    const bankAccount = await stripe.accounts.retrieveExternalAccount(
+      accountId,
+      externalAccountId,
+    );
+    return bankAccount;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Delete an external bank account from a connected account.
+ */
+async function deleteExternalBankAccountFromConnectedAccount({
+  accountId,
+  externalAccountId,
+}) {
+  try {
+    if (!accountId) throw new Error("Connected account id is required.");
+    if (!externalAccountId) throw new Error("External account id is required.");
+
+    const deleted = await stripe.accounts.deleteExternalAccount(
+      accountId,
+      externalAccountId,
+    );
+    return deleted;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Create payout from connected account balance to an external account.
+ */
+async function createConnectedAccountPayout({
+  connectedAccountId,
+  amount,
+  destinationExternalAccountId,
+  currency = "usd",
+  metadata = {},
+  idempotencyKey = null,
+}) {
+  try {
+    if (!connectedAccountId)
+      throw new Error("Connected account id is required.");
+    if (!amount || Number(amount) <= 0)
+      throw new Error("Valid amount is required.");
+    if (!destinationExternalAccountId) {
+      throw new Error("Destination external account id is required.");
+    }
+
+    const requestOptions = { stripeAccount: connectedAccountId };
+    if (idempotencyKey) requestOptions.idempotencyKey = idempotencyKey;
+
+    const payout = await stripe.payouts.create(
+      {
+        amount: convertToCents(Number(amount)),
+        currency,
+        destination: destinationExternalAccountId,
+        metadata,
+      },
+      requestOptions,
+    );
+
+    return payout;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
+
+/**
+ * Retrieve payout details from a connected account.
+ */
+async function retrieveConnectedAccountPayout({
+  connectedAccountId,
+  payoutId,
+}) {
+  try {
+    if (!connectedAccountId)
+      throw new Error("Connected account id is required.");
+    if (!payoutId) throw new Error("Payout id is required.");
+
+    const payout = await stripe.payouts.retrieve(payoutId, {
+      stripeAccount: connectedAccountId,
+    });
+
+    return payout;
+  } catch (error) {
+    throw new AppError(`${error.message}`, 200);
+  }
+}
 module.exports = {
   deleteConnectAccount,
+  deleteExternalBankAccountFromConnectedAccount,
   blockCheckoutSession,
   cards,
+  cardsOnConnectedAccount,
+  createConnectedAccountPayout,
+  retrieveExternalBankAccountFromConnectedAccount,
+  retrieveConnectedAccountPayout,
   checkCheckoutSessionStatus,
+  attachExternalBankAccountToConnectedAccount,
   pullAmountPaymentIntentFromBankAccount,
   attachBankAccountPaymentMethod,
   createStripeLoginLink,
   retrieveConnectAccount,
   createPaymentIntent,
   addCustomer,
+  addCustomerOnConnectedAccount,
   financialConnectionsSession,
   createConnectAccount,
   createCheckoutSession,

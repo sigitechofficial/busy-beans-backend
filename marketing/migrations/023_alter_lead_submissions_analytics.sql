@@ -1,0 +1,15 @@
+ALTER TABLE `lead_submissions`
+  ADD COLUMN `landing_page_slug` VARCHAR(200) NULL AFTER `landing_page_id`,
+  ADD COLUMN `visitor_id` VARCHAR(64) NULL AFTER `landing_page_slug`,
+  ADD COLUMN `session_id` VARCHAR(64) NULL AFTER `visitor_id`,
+  ADD COLUMN `attribution` JSON NULL AFTER `session_id`,
+  ADD COLUMN `device` JSON NULL AFTER `attribution`,
+  ADD COLUMN `conversion_status` ENUM('new','contacted','qualified','won','lost') NOT NULL DEFAULT 'new' AFTER `device`,
+  ADD COLUMN `revenue` DECIMAL(20, 2) NULL AFTER `conversion_status`,
+  ADD COLUMN `profit` DECIMAL(20, 2) NULL AFTER `revenue`,
+  ADD COLUMN `notes` TEXT NULL AFTER `profit`,
+  ADD COLUMN `submit_status` ENUM('success','failed') NOT NULL DEFAULT 'success' AFTER `notes`,
+  ADD COLUMN `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER `submit_status`,
+  ADD COLUMN `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`,
+  ADD KEY `lead_submissions_visitor_idx` (`visitor_id`),
+  ADD KEY `lead_submissions_session_idx` (`session_id`);

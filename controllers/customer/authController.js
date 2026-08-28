@@ -22,6 +22,47 @@ const Event = require("../events/userAccountRelatedEvents");
 const { response } = require("../../utils/response");
 const bcrypt = require("bcryptjs");
 const Stripe = require("../stripe");
+const {
+  setTemporaryBlockAndSendOtp,
+  setForgotPasswordOtpAndReturnSuccess,
+  purgeSessionsAndDeviceTokens,
+  isTemporaryBlockActive,
+  returnTemporaryBlockResponse,
+  normalizeVerificationContext,
+  isValidTemporaryBlockOtp,
+  clearTemporaryBlock,
+} = require("../../middlewares/temporaryBlockFlow");
+
+const ADMIN_APPROVAL_MESSAGE =
+  "Your account has been registered successfully. It is now pending admin approval. You will receive an email once your account is approved and you can log in.";
+
+const ADMIN_APPROVAL_PENDING_MESSAGE =
+  "Your account is pending admin approval. You will receive an email once your account has been approved and you can log in.";
+
+const isEmailSelfRegistration = (record) =>
+  record?.createdBy === "registration" &&
+  (!record?.registerBy || record?.registerBy === "email");
+
+const needsAdminApproval = (record) =>
+  isEmailSelfRegistration(record) &&
+  record?.verifiedAt &&
+  !record?.approvedByAdmin;
+
+const returnAdminApprovalRequired = (
+  res,
+  customer,
+  message = ADMIN_APPROVAL_MESSAGE,
+) =>
+  res.status(200).json(
+    response({
+      status: "admin-approval-required",
+      message,
+      data: {
+        id: customer?.id,
+        email: customer?.email,
+      },
+    }),
+  );
 
 const signToken = (data) =>
   jwt.sign(
@@ -29,7 +70,7 @@ const signToken = (data) =>
     process.env.JWT_SECRET, // Hardcoded JWT Secret
     {
       expiresIn: "7d",
-    }
+    },
   );
 
 const createSendToken = (input, statusCode, req, res, tokenId = "") => {
@@ -72,8 +113,15 @@ exports.signup = catchAsync(async (req, res, next) => {
     specialChars: false,
   });
 
-  if (!req.body?.info?.registerBy || req.body?.info?.registerBy != "email") {
+  const registerBy = req.body?.info?.registerBy || "email";
+  req.body.info.registerBy = registerBy;
+
+  if (registerBy === "email") {
+    delete req.body.info.verifiedAt;
+    delete req.body.info.approvedByAdmin;
+  } else {
     req.body.info.verifiedAt = Date.now();
+    req.body.info.approvedByAdmin = Date.now();
   }
 
   const sr = await salesRep.findAll({
@@ -93,7 +141,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   billingAddress.create(req.body?.billingAddress);
   console.log(
     "ðŸš€ ~ exports.signup=catchsasdsadasdasdasdsdAsync ~ req.body?.address:",
-    defaultAddress
+    defaultAddress,
   );
 
   const stripeCustomerId = await Stripe.addCustomer({
@@ -104,7 +152,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   await newUser.save();
   const input = JSON.parse(JSON.stringify(newUser));
   input.address = defaultAddress;
-  if (!req.body?.info?.registerBy || req.body?.info?.registerBy == "email") {
+  if (registerBy === "email") {
     Event.otpToUsersEvent({
       email: newUser?.email,
       name: newUser.name,
@@ -118,10 +166,9 @@ exports.signup = catchAsync(async (req, res, next) => {
           data: {
             id: input?.id,
             email: input?.email,
-            email: newUser?.password,
           },
         },
-      })
+      }),
     );
   }
 
@@ -131,6 +178,7 @@ exports.signup = catchAsync(async (req, res, next) => {
 
 exports.login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
+  const context = req.tempBlockContext || "login";
 
   // 1) Check if email and password exist
   if (!email || !password) {
@@ -140,24 +188,35 @@ exports.login = catchAsync(async (req, res, next) => {
   const customer = await user.findOne({
     where: { email, deleted: 0 },
   });
-  //   console.log('Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ customer:', customer);
   if (!customer) {
-    return next(new AppError("User Not found!", 200));
+    return next(new AppError("Incorrect email or password", 401));
   } else if (!customer.status) {
     return next(new AppError("User Blocked by Administrator!", 200));
   }
-  console.log("Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ password:", password);
-  console.log(
-    "Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ customer?.password:",
-    customer?.password
-  );
-  //   const isMatch = password == customer?.password;
-  const isMatch = await bcrypt.compare(password, customer?.password); // password == customer?.password;
-  console.log(
-    "Ã°Å¸Å¡â‚¬ ~ exports.login=catchAsync ~ isMatch?.isMatch:",
-    isMatch
-  );
-  if (!user || !isMatch) {
+
+  if (isTemporaryBlockActive({ record: customer, context })) {
+    return returnTemporaryBlockResponse({
+      record: customer,
+      context,
+      entity: "user",
+      res,
+    });
+  }
+
+  const isMatch = await bcrypt.compare(password, customer?.password);
+  if (!isMatch) {
+    const failed = await REDIS.incrementLoginFailedAttempts(
+      "user",
+      customer.id,
+    );
+    if (failed >= REDIS.LOGIN_FAILED_MAX_ATTEMPTS) {
+      return setTemporaryBlockAndSendOtp({
+        record: customer,
+        context,
+        entity: "user",
+        res,
+      });
+    }
     return next(new AppError("Incorrect email or password", 401));
   }
 
@@ -183,10 +242,19 @@ exports.login = catchAsync(async (req, res, next) => {
           id: customer?.id,
           email: customer?.email,
         },
-      })
+      }),
     );
   }
 
+  if (needsAdminApproval(customer)) {
+    return returnAdminApprovalRequired(
+      res,
+      customer,
+      ADMIN_APPROVAL_PENDING_MESSAGE,
+    );
+  }
+
+  await REDIS.resetLoginFailedAttempts("user", customer.id);
   if (req.body?.tokenId)
     deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
   const customerAddress = await address.findOne({
@@ -195,12 +263,9 @@ exports.login = catchAsync(async (req, res, next) => {
       exclude: [`deleted`, `updatedAt`, `deletedAt`],
     },
   });
-
   const input = JSON.parse(JSON.stringify(customer));
   input.address = customerAddress;
-  // 3) If everything ok, send token to client
-
-  createSendToken(input, 200, req, res, req.body?.tokenId);
+  return createSendToken(input, 200, req, res, req.body?.tokenId);
 });
 
 exports.stripeAchPayment = catchAsync(async (req, res, next) => {
@@ -218,7 +283,7 @@ exports.stripeAchPayment = catchAsync(async (req, res, next) => {
         message: "Success",
         data: data,
       },
-    })
+    }),
   );
 });
 
@@ -244,27 +309,68 @@ exports.otpVerification = catchAsync(async (req, res, next) => {
     return next(new AppError("User not found", 200));
   }
 
-  if (customer.latestOtp == otp && on == "signup") {
+  let verificationOn = on;
+  if (on === "login" && !customer.verifiedAt) {
+    verificationOn = "signup";
+  }
+
+  if (customer.latestOtp == otp && verificationOn == "signup") {
+    if (!customer.verifiedAt) {
+      customer.verifiedAt = Date.now();
+      await customer.save();
+      Event.customerRegistrationAdminNotifyEvent({ customer });
+    }
+
+    if (needsAdminApproval(customer)) {
+      return returnAdminApprovalRequired(res, customer);
+    }
+
     const data = JSON.parse(JSON.stringify(customer));
     data.addresses = undefined;
     data.address = customer?.addresses[0];
-    createSendToken(data, 200, req, res);
-    customer.verifiedAt = Date.now();
-    await customer.save();
-    Event.userAccountApproveEvent({
-      email: customer?.email,
-      name: customer.name,
-    });
-  } else if (customer.latestOtp == otp) {
-    customer.verifiedAt = Date.now(); //HAVE TO CHANGE
-    await customer.save();
+    return createSendToken(data, 200, req, res);
+  } else if (
+    verificationOn === "login" ||
+    verificationOn === "forgot_password" ||
+    customer?.verificationContext
+  ) {
+    const context = normalizeVerificationContext(
+      verificationOn || customer?.verificationContext,
+    );
+    if (!isValidTemporaryBlockOtp({ record: customer, otp, context })) {
+      return next(new AppError("Invalid OTP", 200));
+    }
+    await clearTemporaryBlock(customer);
+    if (context === "login") {
+      await REDIS.resetLoginFailedAttempts("user", customer.id);
+      if (needsAdminApproval(customer)) {
+        return returnAdminApprovalRequired(
+          res,
+          customer,
+          ADMIN_APPROVAL_PENDING_MESSAGE,
+        );
+      }
+      await purgeSessionsAndDeviceTokens({ entity: "user", id: customer.id });
+      if (req.body?.tokenId) {
+        deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
+      }
+      const customerAddress = await address.findOne({
+        where: { userId: customer?.id },
+        attributes: {
+          exclude: [`deleted`, `updatedAt`, `deletedAt`],
+        },
+      });
+      const input = JSON.parse(JSON.stringify(customer));
+      input.address = customerAddress;
+      return createSendToken(input, 200, req, res, req.body?.tokenId);
+    }
     return res.status(200).json(
       response({
         data: {
           message: "Success",
           data: { userId: id },
         },
-      })
+      }),
     );
   }
 
@@ -286,7 +392,7 @@ exports.isLoggedIn = async (req, res, next) => {
       // 1) verify token
       const decoded = await promisify(jwt.verify)(
         req.cookies.jwt,
-        process.env.JWT_SECRET
+        process.env.JWT_SECRET,
       );
 
       // 2) Check if user still exists
@@ -316,13 +422,14 @@ exports.restrictTo =
     // roles ['admin', 'lead-guide']. role='user'
     if (!roles.includes(req.user.role)) {
       return next(
-        new AppError("You do not have permission to perform this action", 403)
+        new AppError("You do not have permission to perform this action", 403),
       );
     }
     next();
   };
 
 exports.forgotPassword = catchAsync(async (req, res, next) => {
+  const context = req.tempBlockContext || "forgot_password";
   // 1) Get user based on POSTed email
   const customer = await user.findOne({
     where: { email: req.body.email },
@@ -333,26 +440,10 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   if (!customer) {
     return next(new AppError("There is no user with email address.", 404));
   }
-
-  const OTP = otpGenerator.generate(4, {
-    lowerCaseAlphabets: false,
-    upperCaseAlphabets: false,
-    specialChars: false,
-  });
-
-  customer.latestOtp = OTP;
-  await customer.save();
-
-  Event.otpToUsersForgotPasswordEvent({
-    email: customer?.email,
-    otp: OTP,
-    name: customer?.name,
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: customer,
-    message: "OTP sent to email!",
+  return setForgotPasswordOtpAndReturnSuccess({
+    record: customer,
+    entity: "user",
+    res,
   });
 });
 
@@ -368,31 +459,43 @@ exports.resendOtp = catchAsync(async (req, res, next) => {
     return next(new AppError("There is no user with email address.", 404));
   }
 
-  const OTP = otpGenerator.generate(4, {
-    lowerCaseAlphabets: false,
-    upperCaseAlphabets: false,
-    specialChars: false,
-  });
+  const requestedContext = normalizeVerificationContext(
+    req.body?.on || req.params?.type || customer?.verificationContext,
+  );
 
-  await user.update({ latestOtp: OTP }, { where: { id: customer?.id } });
-
-  if (req.params.type == "signup") {
+  if (requestedContext === "signup") {
+    const OTP = otpGenerator.generate(4, {
+      lowerCaseAlphabets: false,
+      upperCaseAlphabets: false,
+      specialChars: false,
+    });
+    customer.latestOtp = OTP;
+    await customer.save();
     Event.otpToUsersEvent({
       email: customer?.email,
       name: customer.name,
       otp: OTP,
     });
-  } else {
-    Event.otpToUsersForgotPasswordEvent({
-      email: customer?.email,
-      otp: OTP,
-      name: customer?.name,
+    return res.status(200).json({
+      status: "success",
+      data: { id: customer?.id, email: customer.email },
+      message: "OTP sent to email!",
     });
   }
-  res.status(200).json({
-    status: "success",
-    data: { id: customer?.id, email: customer.email },
-    message: "OTP sent to email!",
+
+  if (requestedContext === "login") {
+    return setTemporaryBlockAndSendOtp({
+      record: customer,
+      context: "login",
+      entity: "user",
+      res,
+    });
+  }
+
+  return setForgotPasswordOtpAndReturnSuccess({
+    record: customer,
+    entity: "user",
+    res,
   });
 });
 
@@ -416,7 +519,11 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   await customer.save();
 
   customer.password = undefined;
-  createSendToken(customer, 200, req, res);
+  await purgeSessionsAndDeviceTokens({ entity: "user", id: customer.id });
+  if (req.body?.tokenId) {
+    deviceToken.create({ tokenId: req.body?.tokenId, userId: customer.id });
+  }
+  createSendToken(customer, 200, req, res, req.body?.tokenId);
 });
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
@@ -460,6 +567,6 @@ exports.logout = catchAsync(async (req, res, next) => {
         message: "Logout",
         data: {},
       },
-    })
+    }),
   );
 });

@@ -9,6 +9,7 @@ const customerController = require("../controllers/admin/customerController");
 const orderFrequencyController = require("../controllers/admin/orderFrequencyController");
 const supplierController = require("../controllers/admin/supplierController");
 const salesRepController = require("../controllers/admin/salesRepController");
+const salesRepProductPriceController = require("../controllers/admin/salesRepProductPriceController");
 const adminReportsController = require("../controllers/admin/adminReportsController");
 const supplierReportsController = require("../controllers/admin/supplierReportsController");
 const salesRepReportsController = require("../controllers/admin/salesRepReportsController");
@@ -17,16 +18,27 @@ const shippingCompanyController = require("../controllers/admin/shippingCompanyC
 const employeeController = require("../controllers/admin/employeeController");
 const adminController = require("../controllers/admin/adminController");
 const machineController = require("../controllers/admin/machineController");
+const leadController = require("../controllers/admin/leadController");
+const supplierEmailReminderController = require("../controllers/admin/supplierEmailReminderController");
 
 const patnerOrderController = require("../controllers/admin/partnerOrderController");
 
 const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsController");
+const emailLogController = require("../controllers/admin/emailLogController");
+const bulkEmailController = require("../controllers/admin/bulkEmailController");
+const qboCustomFieldSyncController = require("../controllers/admin/qboCustomFieldSyncController");
+const dailyEodDigestController = require("../controllers/admin/dailyEodDigestController");
+const qboUnsyncedPaidPaymentSyncController = require("../controllers/admin/qboUnsyncedPaidPaymentSyncController");
 
 const multer = require("multer");
 const path = require("path");
 const { createDestinationDirectory } = require("../utils/customFunctions");
 const auth = require("../middlewares/protect");
 const { protect } = auth;
+const { loginRateLimiter } = require("../middlewares/loginRateLimit");
+const {
+  setTemporaryBlockContext,
+} = require("../middlewares/temporaryBlockFlow");
 const router = express.Router();
 // LAMDA FUNCTION
 
@@ -48,7 +60,7 @@ const router = express.Router();
  */
 router.post(
   "/order-management/fetch-invoice/:orderId",
-  manageOrderController.fetchInvoice
+  manageOrderController.fetchInvoice,
 );
 
 /**
@@ -69,7 +81,175 @@ router.post(
  */
 router.post(
   "/order-management/email-helper",
-  manageOrderController.emailHelper
+  manageOrderController.emailHelper,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/bulk-email-helper:
+ *   post:
+ *     summary: Send emails for multiple orders (batch email helper)
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ordersToSentEmail:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     orderId: { type: integer }
+ *                     orderType: { type: string, enum: [customer, local-partner] }
+ *                     emailType:
+ *                       type: string
+ *                       enum:
+ *                         - order-confirmation
+ *                         - paid-invoice
+ *                         - invoice-sent
+ *                         - invoice-reminder
+ *                         - order-dispatch
+ *                         - order-shipped
+ *                         - order-ship-supplier
+ *     responses:
+ *       200:
+ *         description: Per-order send results and summary
+ */
+router.post(
+  "/order-management/bulk-email-helper",
+  bulkEmailController.bulkEmailHelper,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/ensure-invoice-pdfs:
+ *   post:
+ *     summary: Ensure invoice PDFs exist for pending orders with invoice date (creates if missing)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Summary of created, skipped, and errors
+ */
+router.post(
+  "/order-management/ensure-invoice-pdfs",
+  manageOrderController.ensurePendingInvoicePdfs,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/resend-unopened-supplier-emails:
+ *   post:
+ *     summary: Resend supplier new-order emails when unopened for X hours and statusId is 2 (Lambda/job endpoint)
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               minHours:
+ *                 type: integer
+ *                 default: 24
+ *               maxRetry:
+ *                 type: integer
+ *                 default: 3
+ *     responses:
+ *       200:
+ *         description: Job summary
+ */
+router.post(
+  "/order-management/resend-unopened-supplier-emails",
+  supplierEmailReminderController.resendUnopenedSupplierEmails,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/pending-pdfs-list:
+ *   get:
+ *     summary: List orders with pending PDFs (payment pending, invoice date set, updated > 7 days ago)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: List of orders
+ */
+router.get(
+  "/order-management/pending-pdfs-list",
+  manageOrderController.listPendingPdfs,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/email-log:
+ *   get:
+ *     summary: List email log (success and failed) with filters (protected). Local partners only see logs for their salesRep orders.
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: emailType
+ *         schema: { type: string }
+ *         description: invoice_sent | invoice_reminder | paid_receipt | paid_receipt_admin | supplier_new_order | order_shipped | order_confirmation
+ *       - in: query
+ *         name: orderId
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: emailSent
+ *         schema: { type: string }
+ *         description: Success | Failed
+ *       - in: query
+ *         name: retrySuccess
+ *         schema: { type: string }
+ *         description: true | false | null (initial send, not a retry)
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date }
+ *         description: Start date YYYY-MM-DD
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date }
+ *         description: End date YYYY-MM-DD
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: List of email log entries
+ */
+router.get(
+  "/order-management/email-log",
+  protect,
+  //   auth.restrictTo("admin", "adminEmployee"),
+  emailLogController.getEmailLog,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/email-log/{id}:
+ *   get:
+ *     summary: Get single email log entry by id (protected)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Email log entry
+ *       404:
+ *         description: Not found
+ */
+router.get(
+  "/order-management/email-log/:id",
+  protect,
+  //   auth.restrictTo("admin", "adminEmployee"),
+  emailLogController.getEmailLogById,
 );
 
 /**
@@ -102,11 +282,13 @@ router.post(
  */
 router.post(
   "/login",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
   (req, res, next) => {
     req.params.entity = "admin";
     next();
   },
-  authController.adminLogin
+  authController.adminLogin,
 );
 
 /**
@@ -137,11 +319,13 @@ router.post(
  */
 router.post(
   "/login/sales-rep",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
   (req, res, next) => {
     req.params.entity = "localPartner";
     next();
   },
-  authController.salesRepLogin
+  authController.salesRepLogin,
 );
 
 /**
@@ -172,11 +356,13 @@ router.post(
  */
 router.post(
   "/login/supplier",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
   (req, res, next) => {
     req.params.entity = "supplier";
     next();
   },
-  authController.supplierLogin
+  authController.supplierLogin,
 );
 
 /**
@@ -201,7 +387,11 @@ router.post(
  *       200:
  *         description: Password reset email sent
  */
-router.post("/forgot-password", authController.adminForgotPassword);
+router.post(
+  "/forgot-password",
+  setTemporaryBlockContext("forgot_password"),
+  authController.adminForgotPassword,
+);
 
 /**
  * @swagger
@@ -227,7 +417,8 @@ router.post("/forgot-password", authController.adminForgotPassword);
  */
 router.post(
   "/forgot-password/sales-rep",
-  authController.salesRepForgotPassword
+  setTemporaryBlockContext("forgot_password"),
+  authController.salesRepForgotPassword,
 );
 
 /**
@@ -252,7 +443,11 @@ router.post(
  *       200:
  *         description: Password reset email sent
  */
-router.post("/forgot-password/supplier", authController.supplierForgotPassword);
+router.post(
+  "/forgot-password/supplier",
+  setTemporaryBlockContext("forgot_password"),
+  authController.supplierForgotPassword,
+);
 
 /**
  * @swagger
@@ -380,7 +575,7 @@ router.post("/otp-verification", authController.adminOtpVerification);
  */
 router.post(
   "/otp-verification/sales-rep",
-  authController.salesRepOtpVerification
+  authController.salesRepOtpVerification,
 );
 
 /**
@@ -410,7 +605,7 @@ router.post(
  */
 router.post(
   "/otp-verification/supplier",
-  authController.supplierOtpVerification
+  authController.supplierOtpVerification,
 );
 
 /**
@@ -465,7 +660,7 @@ router.post("/reset-password", authController.adminResetPassword);
  *       200:
  *         description: Password reset successful
  */
-router.post("/reset-password/sales-rep", authController.salesRepResendOtp);
+router.post("/reset-password/sales-rep", authController.salesRepResetPassword);
 
 /**
  * @swagger
@@ -517,7 +712,7 @@ router.get("/product", productController.getAllProducts);
  */
 router.post(
   "/lambda-function/pending-pullout-fromlocal-patner-banks",
-  pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts
+  pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts,
 );
 
 /**
@@ -532,7 +727,76 @@ router.post(
  */
 router.post(
   "/lambda-function/create-upcomming-orders",
-  orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction
+  orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/lambda-function/send-daily-eod-digests:
+ *   post:
+ *     summary: Send end-of-day admin and partner digest emails (Lambda / cron)
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: reportDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Optional YYYY-MM-DD (defaults to America/New_York today)
+ *       - in: query
+ *         name: forceRetryFailed
+ *         schema:
+ *           type: boolean
+ *           default: true
+ *         description: Retry previously failed digest slots only (never resends successful ones)
+ *     responses:
+ *       200:
+ *         description: Digest job completed (idempotent per recipient per reportDate)
+ */
+router.post(
+  "/lambda-function/send-daily-eod-digests",
+  dailyEodDigestController.sendDailyEodDigests,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/lambda-function/sync-unsynced-paid-customer-payments:
+ *   post:
+ *     summary: Sync missing QBO invoices then payments for paid customer orders (Lambda / cron)
+ *     description: >
+ *       Paid orders only. With salesRepId syncs partner invoice (if missing) then partner payment;
+ *       without salesRep syncs admin invoice (if missing) then admin payment. Max 10 per run.
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: dryRun
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: If true, return candidates and planned actions only (no QBO calls)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 10
+ *         description: Max orders to process per run (capped at 10)
+ *       - in: query
+ *         name: syncSide
+ *         schema:
+ *           type: string
+ *           enum: [admin, partner, both]
+ *           default: both
+ *         description: Filter to admin-path (no salesRep), partner-path (has salesRep), or both
+ *     responses:
+ *       200:
+ *         description: Job completed (may be partial-success if some syncs failed)
+ *       401:
+ *         description: Unauthorized when LAMBDA_JOB_SECRET is set and missing/invalid
+ */
+router.post(
+  "/lambda-function/sync-unsynced-paid-customer-payments",
+  qboUnsyncedPaidPaymentSyncController.syncUnsyncedPaidCustomerPayments,
 );
 
 //! Country Management
@@ -697,7 +961,7 @@ router.post(
   "/employee",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.createEmployee
+  employeeController.createEmployee,
 );
 
 /**
@@ -725,7 +989,7 @@ router.get(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.getEmployee
+  employeeController.getEmployee,
 );
 
 /**
@@ -747,7 +1011,7 @@ router.get(
   "/employees",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.getAllEmployee
+  employeeController.getAllEmployee,
 );
 
 /**
@@ -781,7 +1045,7 @@ router.patch(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.updateEmployee
+  employeeController.updateEmployee,
 );
 
 /**
@@ -809,7 +1073,7 @@ router.delete(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
-  employeeController.deleteEmployee
+  employeeController.deleteEmployee,
 );
 
 /**
@@ -843,7 +1107,7 @@ router.put(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "salesRep"),
-  employeeController.updateEmployee
+  employeeController.updateEmployee,
 );
 
 /**
@@ -880,7 +1144,7 @@ router.post(
   "/employee/:employeeId/stripe-connect-account",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.stripeConnectAccount
+  employeeController.stripeConnectAccount,
 );
 
 /**
@@ -917,7 +1181,7 @@ router.post(
   "/employee/:employeeId/stripe-connect-account-link",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.stripeConnectAccountLink
+  employeeController.stripeConnectAccountLink,
 );
 
 /**
@@ -945,7 +1209,123 @@ router.get(
   "/employee/:employeeId/stripe-connect-account-dashboard",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.stripeConnectAccountDashboard
+  employeeController.stripeConnectAccountDashboard,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/direct-partner-bank-account:
+ *   post:
+ *     summary: Attach employee bank account to direct-partner connected account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               externalAccountToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Employee bank account attached
+ */
+router.post(
+  "/employee/:employeeId/direct-partner-bank-account",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.attachDirectPartnerEmployeeBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/direct-partner-bank-account:
+ *   get:
+ *     summary: Get employee bank account linked to direct-partner connected account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Employee bank account details
+ */
+router.get(
+  "/employee/:employeeId/direct-partner-bank-account",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.getDirectPartnerEmployeeBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/employee/{employeeId}/direct-partner-bank-account:
+ *   delete:
+ *     summary: Remove employee bank account from direct-partner connected account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Employee bank account removed
+ */
+router.delete(
+  "/employee/:employeeId/direct-partner-bank-account",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.deleteDirectPartnerEmployeeBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/direct-partner-employee-payout/retry/{orderId}:
+ *   post:
+ *     summary: Retry direct-partner employee payout for an order
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Retry payout created
+ */
+router.post(
+  "/direct-partner-employee-payout/retry/:orderId",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.retryDirectPartnerEmployeePayout,
+);
+
+router.get(
+  "/direct-partner-employee-payout/orders",
+  auth.protect,
+  auth.restrictTo("localPartner", "partnerEmployee"),
+  employeeController.getDirectPartnerEmployeePayoutOrders,
 );
 
 /**
@@ -983,8 +1363,8 @@ router.get(
 router.patch(
   "/employee/:employeeId/commission",
   auth.protect,
-  auth.restrictTo("admin"),
-  employeeController.updateCommission
+  auth.restrictTo("admin", "localPartner"),
+  employeeController.updateCommission,
 );
 
 /**
@@ -1023,7 +1403,7 @@ router.get(
   "/employee-commission-orders/:status",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.getEmployeeCommissionOrders
+  employeeController.getEmployeeCommissionOrders,
 );
 
 /**
@@ -1061,7 +1441,7 @@ router.post(
   "/transfer-commission-to-employee",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.transferCommissionToEmployeeController
+  employeeController.transferCommissionToEmployeeController,
 );
 
 /**
@@ -1099,7 +1479,7 @@ router.post(
   "/bulk-transfer-commission-to-employee",
   auth.protect,
   auth.restrictTo("admin", "adminEmployee"),
-  employeeController.bulkTransferCommissionToEmployeeController
+  employeeController.bulkTransferCommissionToEmployeeController,
 );
 
 /**
@@ -1135,7 +1515,7 @@ router.use(protect);
 router.get(
   "/profile/",
   auth.restrictTo("admin", "salesRep"),
-  adminController.getAdmin
+  adminController.getAdmin,
 );
 
 /**
@@ -1168,7 +1548,7 @@ router.get(
 router.patch(
   "/profile-update/:id",
   auth.restrictTo("admin", "salesRep"),
-  adminController.updateAdmin
+  adminController.updateAdmin,
 );
 // router.get('/profile/', adminController.getAdmin);
 
@@ -1266,7 +1646,7 @@ const uploadSalesRepImage = multer({
 router.post(
   "/product",
   uploadProductImage.single("image"),
-  productController.addProduct
+  productController.addProduct,
 );
 
 // Category by ID routes
@@ -1343,6 +1723,295 @@ router
   .get(productController.getProduct) // For fetching a product by ID
   .delete(productController.deleteProduct) // For deleting a product by ID
   .patch(uploadProductImage.single("image"), productController.updateProduct); // For updating a product (including image upload)
+
+//! Sales Rep Product Price Management
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   post:
+ *     summary: Create sales rep product prices (bulk)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required:
+ *                 - productId
+ *                 - salesRepId
+ *                 - price
+ *               properties:
+ *                 productId:
+ *                   type: integer
+ *                 salesRepId:
+ *                   type: integer
+ *                 price:
+ *                   type: number
+ *                 status:
+ *                   type: boolean
+ *                   default: true
+ *     responses:
+ *       201:
+ *         description: Prices created successfully
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Product or Sales Rep not found
+ *       409:
+ *         description: Duplicate pricing entry exists
+ */
+router.post(
+  "/sales-rep-product-price",
+  protect,
+  salesRepProductPriceController.createSalesRepProductPrices,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   patch:
+ *     summary: Update sales rep product prices (bulk)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required:
+ *                 - productId
+ *                 - salesRepId
+ *               properties:
+ *                 productId:
+ *                   type: integer
+ *                 salesRepId:
+ *                   type: integer
+ *                 price:
+ *                   type: number
+ *                 status:
+ *                   type: boolean
+ *     responses:
+ *       200:
+ *         description: Prices updated successfully
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Pricing entries not found
+ */
+router.patch(
+  "/sales-rep-product-price",
+  protect,
+  salesRepProductPriceController.updateSalesRepProductPrices,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   get:
+ *     summary: Get all sales rep product prices
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: productId
+ *         schema:
+ *           type: integer
+ *         description: Filter by product ID
+ *       - in: query
+ *         name: salesRepId
+ *         schema:
+ *           type: integer
+ *         description: Filter by sales rep ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: boolean
+ *         description: Filter by status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Items per page
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *         description: Sort field and order (e.g., "price,asc" or "-createdAt")
+ *     responses:
+ *       200:
+ *         description: List of pricing entries
+ */
+router.get(
+  "/products/sales-rep",
+  protect,
+  salesRepProductPriceController.getAllSalesRepProductPrices,
+);
+
+router.get(
+  "/products/sales-rep/import",
+  protect,
+  salesRepProductPriceController.productsFromAdminForSalesRep,
+);
+
+router.get(
+  "/products/sales-rep/import/:srId",
+  protect,
+  salesRepProductPriceController.productsFromAdminForSalesRep,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price/products-for-order/{salesRepId}:
+ *   post:
+ *     summary: Get products with custom wholesale prices for partner order creation
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: salesRepId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Sales rep/local partner ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - productIds
+ *             properties:
+ *               productIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 example: [1, 2, 3, 4, 5]
+ *     responses:
+ *       200:
+ *         description: Products with wholesale prices (custom if set, default otherwise)
+ *       400:
+ *         description: Validation error (missing salesRepId or productIds)
+ */
+router.post(
+  "/sales-rep-products-for-order-creation/:salesRepId",
+  protect,
+  salesRepProductPriceController.getProductsForPartnerOrder,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price/{id}:
+ *   get:
+ *     summary: Get sales rep product price by ID
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Pricing entry ID
+ *     responses:
+ *       200:
+ *         description: Pricing entry details
+ *       404:
+ *         description: Pricing entry not found
+ */
+router.get(
+  "/sales-rep-product-price/:id",
+  protect,
+  salesRepProductPriceController.getSalesRepProductPrice,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price/{id}:
+ *   delete:
+ *     summary: Delete sales rep product price by ID (hard delete - permanent)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Pricing entry ID
+ *     responses:
+ *       200:
+ *         description: Pricing entry deleted successfully
+ *       404:
+ *         description: Pricing entry not found
+ */
+router.delete(
+  "/sales-rep-product-price/:id",
+  protect,
+  salesRepProductPriceController.deleteSalesRepProductPrice,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/sales-rep-product-price:
+ *   delete:
+ *     summary: Delete sales rep product prices (bulk hard delete - permanent)
+ *     tags: [Sales Rep Product Pricing]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             items:
+ *               type: object
+ *               oneOf:
+ *                 - required:
+ *                     - id
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                 - required:
+ *                     - productId
+ *                     - salesRepId
+ *                   properties:
+ *                     productId:
+ *                       type: integer
+ *                     salesRepId:
+ *                       type: integer
+ *     responses:
+ *       200:
+ *         description: Prices deleted successfully
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: No pricing entries found to delete
+ */
+router.delete(
+  "/sales-rep-product-price",
+  protect,
+  salesRepProductPriceController.deleteSalesRepProductPrices,
+);
 
 //! Category Management
 
@@ -1485,7 +2154,7 @@ router.get("/orders", manageOrderController.allOrder);
  */
 router.get(
   "/quickbooks-customer-order-management/:qbo",
-  manageOrderController.allOrder
+  manageOrderController.allOrder,
 );
 
 /**
@@ -1511,7 +2180,7 @@ router.get(
  */
 router.post(
   "/order-management/send-invoice/:orderId",
-  manageOrderController.sendInvoice
+  manageOrderController.sendInvoice,
 );
 
 /**
@@ -1542,7 +2211,7 @@ router.post(
  */
 router.post(
   "/order-management/send-invoice",
-  manageOrderController.sendInvoiceMultiple
+  manageOrderController.sendInvoiceMultiple,
 );
 
 /**
@@ -1574,7 +2243,7 @@ router.post(
  */
 router.patch(
   "/order-management/update-order/:orderId",
-  manageOrderController.updateOrder
+  manageOrderController.updateOrder,
 );
 
 /**
@@ -1600,7 +2269,93 @@ router.patch(
  */
 router.delete(
   "/order-management/delete-order/:orderId",
-  manageOrderController.deleteOrder
+  manageOrderController.deleteOrder,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/delete-invoice:
+ *   post:
+ *     summary: Delete invoice for an order (clear issue date, reminder, expire checkout session if not paid, delete PDF)
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderType, id]
+ *             properties:
+ *               orderType:
+ *                 type: string
+ *                 enum: [order, partnerOrder]
+ *                 description: Order type - "order" for admin orders, "partnerOrder" for local partner orders
+ *               id:
+ *                 type: integer
+ *                 description: Order id
+ *     responses:
+ *       200:
+ *         description: Invoice deleted successfully
+ *       400:
+ *         description: Invoice is paid or validation error
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Order not found
+ */
+router.post(
+  "/order-management/delete-invoice",
+  manageOrderController.deleteInvoice,
+);
+
+router.get(
+  "/order-management/invoice-tracking/:orderType/:orderId",
+  manageOrderController.invoiceTracking,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/order-management/update-tracking-number:
+ *   patch:
+ *     summary: Update order tracking number
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderId, trackingNumber]
+ *             properties:
+ *               orderId:
+ *                 type: integer
+ *                 description: Order id
+ *               trackingNumber:
+ *                 type: string
+ *                 description: Tracking number to set on the order
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer-order, partner-order, local-partner]
+ *                 description: Optional. Use partner-order/local-partner for partner orders; defaults to customer order
+ *     responses:
+ *       200:
+ *         description: Tracking number updated
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Order not found
+ */
+router.patch(
+  "/order-management/update-tracking-number",
+  manageOrderController.updateTrackingNumber,
 );
 
 /**
@@ -1672,7 +2427,7 @@ router.patch("/assign-supplier", manageOrderController.orderJourneryComplete);
  */
 router.patch(
   "/supplier-acknowledgement",
-  manageOrderController.orderJourneryComplete
+  manageOrderController.orderJourneryComplete,
 );
 
 /**
@@ -1838,7 +2593,7 @@ router.patch("/edit-cheque", manageOrderController.eidtCheque);
  */
 router.get(
   "/customer-management/payment-cards/:id",
-  customerController.fetchSavedCards
+  customerController.fetchSavedCards,
 );
 
 /**
@@ -1858,7 +2613,7 @@ router.get(
  */
 router.get(
   "/customer-management/dahboard-cards",
-  customerController.viewCustomersManagement
+  customerController.viewCustomersManagement,
 );
 
 /**
@@ -1889,6 +2644,7 @@ router.get(
  *         description: Unauthorized
  */
 router.patch("/customer-update/:id", customerController.updateCutomer);
+router.patch("/customer-approve/:id", customerController.approveCustomer);
 
 /**
  * @swagger
@@ -1913,7 +2669,7 @@ router.patch("/customer-update/:id", customerController.updateCutomer);
  */
 router.get(
   "/customer-management/customer-list/:sr",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -1939,7 +2695,189 @@ router.get(
  */
 router.get(
   "/qbo-customer-management/customer-list/:condition",
-  customerController.customersListByQboStatus
+  customerController.customersListByQboStatus,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/synced-orders-admin-before-march-2026:
+ *   get:
+ *     summary: List orders with admin QBO invoice created before March 2026
+ *     description: Returns customer and partner orders with quickBooksInvoiceId (admin) and quickBooksPaymentId, plus customerOrdersIdsOnly and partnerOrdersIdsOnly. Query date as DD-MM-YYYY (date param) or ISO (cutoff). Default cutoff 2026-03-01 UTC.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema: { type: string, example: "01-03-2026" }
+ *         description: Optional. DD-MM-YYYY — orders with createdAt before start of that day (UTC). Overrides cutoff if both sent.
+ *       - in: query
+ *         name: cutoff
+ *         schema: { type: string, example: "2026-03-01T00:00:00.000Z" }
+ *         description: Optional. Exclusive upper bound for createdAt (ISO 8601).
+ *     responses:
+ *       200:
+ *         description: Lists and counts
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  "/qbo/synced-orders-admin-before-march-2026",
+  manageOrderController.listAdminQboSyncedOrdersBeforeMarch2026,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/payments/delete-admin:
+ *   post:
+ *     summary: Delete admin QBO payments for orders and update DB
+ *     description: Uses each order's quickBooksPaymentId; clears quickBooksPaymentId, paymentSyncedToQBO, updates qboLastSync on success.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: deletedPayments, failedPayments, skipped, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/payments/delete-admin",
+  manageOrderController.deleteAdminQboPaymentsForOrders,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/payments/sync-admin:
+ *   post:
+ *     summary: Sync admin QBO payments for orders (bulk)
+ *     description: Creates admin QBO payments only; partner QBO untouched. Requires payment done, admin invoice id, adminRealmId, and no admin payment id yet.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: synced, failed, skipped, ordersNotFound, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/payments/sync-admin",
+  manageOrderController.syncAdminQboPaymentsForOrders,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/invoices/delete-admin:
+ *   post:
+ *     summary: Delete admin QBO invoices for orders and update DB
+ *     description: Uses quickBooksInvoiceId. Clears quickBooksInvoiceId, quickBooksPaymentId, paymentSyncedToQBO; sets qboLastSync. Remove linked QBO payments first if delete fails.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: deletedInvoices, failedInvoices, skipped, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/invoices/delete-admin",
+  manageOrderController.deleteAdminQboInvoicesForOrders,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/invoices/update-admin:
+ *   post:
+ *     summary: Update admin QBO invoices for orders (bulk)
+ *     description: Pushes latest order data to existing quickBooksInvoiceId in admin QBO only. Skips orders with no admin invoice. Does not touch partner QBO.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items: { type: integer }
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *     responses:
+ *       200:
+ *         description: updatedOrderIds, failed, skipped, ordersNotFound, summary
+ *       400:
+ *         description: Bad request
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+  "/qbo/invoices/update-admin",
+  manageOrderController.updateAdminQboInvoicesForOrders,
 );
 
 /**
@@ -1965,7 +2903,7 @@ router.get(
  */
 router.get(
   "/customer-management/customer-list/sale-rep/:sr",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -1991,7 +2929,7 @@ router.get(
  */
 router.get(
   "/customer-management/customer-list/sale-rep-id/:srId",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -2017,7 +2955,7 @@ router.get(
  */
 router.get(
   "/customer-management/customer-list/employee-id/:empId",
-  customerController.customersList
+  customerController.customersList,
 );
 
 /**
@@ -2052,7 +2990,7 @@ router.get(
  */
 router.patch(
   "/customer-management/assign-sale-rep/:id",
-  customerController.assignSalesRep
+  customerController.assignSalesRep,
 );
 
 /**
@@ -2072,7 +3010,7 @@ router.patch(
  */
 router.get(
   "/customer-management/invoice-customers-balance",
-  customerController.InvoiceCustomers
+  customerController.InvoiceCustomers,
 );
 
 /**
@@ -2098,40 +3036,40 @@ router.get(
  */
 router.get(
   "/customer-management/invoice-customers-balance/sales-rep/:srId",
-  customerController.InvoiceCustomers
+  customerController.InvoiceCustomers,
 );
 
 router.get(
   "/order-frequency/upcomming-orders",
-  orderFrequencyController.orderAccordingToFrequency
+  orderFrequencyController.orderAccordingToFrequency,
 );
 
 router.get(
   "/order-frequency/upcomming-orders/sale-rep/:srId",
-  orderFrequencyController.orderAccordingToFrequency
+  orderFrequencyController.orderAccordingToFrequency,
 );
 
 router.post(
   "/order-frequency/book-orders",
-  orderFrequencyController.bookOrderAccordingToFrequency
+  orderFrequencyController.bookOrderAccordingToFrequency,
 );
 
 router.post(
   "/order-frequency/book-orders/sale-rep/:srId",
-  orderFrequencyController.bookOrderAccordingToFrequency
+  orderFrequencyController.bookOrderAccordingToFrequency,
 );
 
 router.post("/send-quotation", salesRepController.sendQuotation);
 router.post(
   "/send-quotation/sales-rep/:srId",
-  salesRepController.sendQuotation
+  salesRepController.sendQuotation,
 );
 
 router.post("/book-new-order", orderFrequencyController.bookNewOrder);
 
 router.post(
   "/sales-rep/book-new-order/:srId",
-  orderFrequencyController.bookNewOrder
+  orderFrequencyController.bookNewOrder,
 );
 
 router.post("/add-customer/sales-rep/:srId", salesRepController.addCustomer);
@@ -2139,34 +3077,34 @@ router.post("/add-customer", salesRepController.addCustomer);
 
 router.post(
   "/create-bank-setup-intent/sales-rep/:srId",
-  salesRepController.createFinancialConnectionsSession
+  salesRepController.createFinancialConnectionsSession,
 );
 
 router.post(
   "/attach-bank-account-setup/sales-rep/:srId",
-  salesRepController.attachBankAccount
+  salesRepController.attachBankAccount,
 );
 
 router.get("/sales-rep/sales/:srId", salesRepController.salersMoney);
 
 router.post(
   "/create-stripe-connect-account/:srId",
-  salesRepController.stripeConnectAccount
+  salesRepController.stripeConnectAccount,
 );
 
 router.post(
   "/stripe-connect-account-url/:srId",
-  salesRepController.stripeConnectAccountLink
+  salesRepController.stripeConnectAccountLink,
 );
 
 router.get(
   "/stripe-connect-account-dashboard/:srId",
-  salesRepController.stripeConnectAccountDashboard
+  salesRepController.stripeConnectAccountDashboard,
 );
 
 router.get(
   "/stripe-connect-account-retrieve/:srId",
-  salesRepController.stripeConnectAccountRetrive
+  salesRepController.stripeConnectAccountRetrive,
 );
 
 //! Supplier Management
@@ -2185,17 +3123,17 @@ router
 
 router.patch(
   "/sales-rep/address-update/:srId",
-  salesRepController.updateAddresses
+  salesRepController.updateAddresses,
 );
 
 router.get(
   "/sales-rep/for-order-creation",
-  salesRepController.getSalesRepForOrderCreation
+  salesRepController.getSalesRepForOrderCreation,
 );
 
 router.get(
   "/sales-rep/for-order-creation/:srId",
-  salesRepController.getSalesRepForOrderCreation
+  salesRepController.getSalesRepForOrderCreation,
 );
 
 router
@@ -2214,12 +3152,12 @@ router
 
 router.patch(
   "/address-management/update-address/:id",
-  addressController.updateAddress
+  addressController.updateAddress,
 );
 
 router.patch(
   "/address-management/update-billing-address/:id",
-  addressController.updateBillingAddress
+  addressController.updateBillingAddress,
 );
 
 //! Country Management
@@ -2260,95 +3198,291 @@ router
 
 router.patch(
   "/address-management/add-cities-in-territory/:t_id",
-  addressController.addCitiesInTerritory
+  addressController.addCitiesInTerritory,
 );
 
 router.get(
   "/admin-reports/partner-commission",
-  adminReportsController.partnerCommissionReport
+  adminReportsController.partnerCommissionReport,
 );
 
 router.get(
   "/admin-reports/customer-report",
-  adminReportsController.customerReport
+  adminReportsController.customerReport,
 );
 
 router.get(
   "/admin-reports/product-sales",
-  adminReportsController.productSalesReport
+  adminReportsController.productSalesReport,
 );
 
 router.get(
   "/admin-reports/partner-commission",
-  adminReportsController.partnerCommissionReport
+  adminReportsController.partnerCommissionReport,
 );
 
 router.get(
   "/admin-reports/partner-creadit-limit",
-  adminReportsController.partnerCreaditLimit
+  adminReportsController.partnerCreaditLimit,
 );
 
 router.get(
   "/admin-reports/unpaid-partner-balance",
-  adminReportsController.unpaidPartnerbalanceReport
+  adminReportsController.unpaidPartnerbalanceReport,
 );
 
 router.get(
   "/admin-reports/direct-partner-summary",
-  adminReportsController.directPartnerReportSummary
+  adminReportsController.directPartnerReportSummary,
 );
 
 router.get(
   "/admin-reports/customer-sales-report",
-  adminReportsController.customerSalesSummary
+  adminReportsController.customerSalesSummary,
 );
 
 router.get(
   "/admin-reports/customer-detail-report/:userId",
-  adminReportsController.customerDetailsSummary
+  adminReportsController.customerDetailsSummary,
 );
 
 router.get(
   "/admin-reports/category-wise-product-sales-report",
-  adminReportsController.categoryWiseProductSalesSummary
+  adminReportsController.categoryWiseProductSalesSummary,
 );
+/**
+ * @swagger
+ * /api/v1/admin/admin-reports/pulled-orders-receivable:
+ *   get:
+ *     summary: Get pulled orders receivable report with fallback intent id
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "2026-01-01"
+ *         description: Start date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "2026-01-31"
+ *         description: End date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+ *       - in: query
+ *         name: salesRepId
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: Optional filter by sales rep id
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Pulled receivable orders list with pagination
+ *       400:
+ *         description: Validation error
+ */
+router.get(
+  "/admin-reports/pulled-orders-receivable",
+  adminReportsController.pulledOrdersReceivableReport,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/admin-reports/pullout-intent-unsynced-orders:
+ *   get:
+ *     summary: List dropship-partner regular orders by PulloutIntentId sync state
+ *     description: |
+ *       Returns customer orders that satisfy every gate required to push the
+ *       `PulloutIntentId` custom field to admin QBO, optionally filtered by
+ *       sync state.
+ *
+ *       Static filters applied:
+ *         - `orders.deleted = 0`
+ *         - `orders.paymentMethod = 'Bank Check'` (case-insensitive via MySQL default collation)
+ *         - `orders.userId`, `orders.salesRepId`, `orders.pulloutIntentId` all present
+ *         - `orders.quickBooksInvoiceId` is not null
+ *         - `orders.type = 'regular-order'`
+ *         - `salesRep.partnerType = 'dropship-partner'`
+ *
+ *       Sync-state filter — `syncStatus` query param (default `unsynced`):
+ *         - `unsynced` -> `pulloutIntentIdSynced <> 'synced'` (i.e. `not-eligible` or `eligible`)
+ *         - `synced`   -> `pulloutIntentIdSynced = 'synced'` (audit view of already-synced orders)
+ *         - `all`      -> no filter on sync state
+ *
+ *       Optional query filters: `startDate`/`endDate` (on `orders.on`) and `salesRepId`.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: syncStatus
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [unsynced, synced, all]
+ *           default: unsynced
+ *         description: |
+ *           Which sync-state bucket to return.
+ *           - `unsynced` (default): orders whose Pullout custom field still
+ *             needs to be pushed to admin QBO.
+ *           - `synced`: orders whose Pullout custom field has already been
+ *             confirmed on admin QBO. Useful for an "Already synced" audit tab.
+ *           - `all`: both buckets together.
+ *       - in: query
+ *         name: startDate
+ *         required: false
+ *         schema:
+ *           type: string
+ *           example: "2026-01-01"
+ *         description: Optional start date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS. Must be paired with endDate.
+ *       - in: query
+ *         name: endDate
+ *         required: false
+ *         schema:
+ *           type: string
+ *           example: "2026-01-31"
+ *         description: Optional end date in YYYY-MM-DD or YYYY-MM-DD HH:MM:SS. Must be paired with startDate.
+ *       - in: query
+ *         name: salesRepId
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: Optional filter by sales rep id
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Pullout custom-field orders list with pagination
+ *       400:
+ *         description: Validation error
+ */
+router.get(
+  "/admin-reports/pullout-intent-unsynced-orders",
+  qboCustomFieldSyncController.pulloutIntentUnsyncedOrdersReport,
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/qbo/pullout-custom-field/sync:
+ *   post:
+ *     summary: Bulk-push the PulloutIntentId custom field to admin QBO invoices for the selected orders
+ *     description: |
+ *       Accepts a list of `orderIds` selected from the
+ *       `pullout-intent-unsynced-orders` report and, for each one, runs the
+ *       sparse-update flow against the admin's QBO invoice via
+ *       `services/qboInvoiceCustomFieldPatch.js::patchAdminInvoiceCustomFields`.
+ *
+ *       Per-order failures never break the batch — every order is processed
+ *       inside its own try/catch and the endpoint always returns HTTP 200
+ *       with a detailed summary plus per-order results.
+ *
+ *       Behaviour per order:
+ *         - Gates fail (no Bank Check / no pulloutIntentId / admin-skip / etc.) -> `outcome: "skipped"`.
+ *         - Invoice paid (Balance 0) -> `outcome: "skipped"` with reason `"invoice_already_paid"`.
+ *         - QBO already carries the same value -> `outcome: "skipped"` with reason `"pullout_already_set"` (DB state is reconciled to `synced`).
+ *         - Sparse patch succeeds -> `outcome: "synced"`, DB state moves to `pulloutIntentIdSynced='synced'`.
+ *         - No admin invoice yet (rare since the report filters those out) -> `outcome: "synced"` and the admin invoice is created from scratch.
+ *         - Any error (QBO down, customer mapping missing, etc.) -> `outcome: "failed"` with a descriptive `reason`.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [orderIds]
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 maxItems: 100
+ *                 example: [1092, 1234, 1500]
+ *                 description: Positive integer order ids selected on the report. Max 100 per request.
+ *               orderType:
+ *                 type: string
+ *                 enum: [customer, local-partner]
+ *                 default: customer
+ *                 description: Which Sequelize model the ids belong to. Defaults to "customer".
+ *     responses:
+ *       200:
+ *         description: Sync results for every requested order id.
+ *       400:
+ *         description: Validation error (empty array, too many ids, invalid id, invalid orderType).
+ */
+router.post(
+  "/qbo/pullout-custom-field/sync",
+  qboCustomFieldSyncController.bulkSyncPulloutCustomField,
+);
+
 //! SUPPLIER REPORTS SECTION
 
 router.get(
   "/supplier-reports/assigned-orders-report/:supId",
-  supplierReportsController.assignedOrdersReport
+  supplierReportsController.assignedOrdersReport,
 );
 
 router.get(
   "/supplier-reports/top-products-ordered-report/:supId",
-  supplierReportsController.topProductsOrderedReport
+  supplierReportsController.topProductsOrderedReport,
 );
 
 router.get(
   "/supplier-reports/top-products-ordered-report/:supId",
-  supplierReportsController.topProductsOrderedReport
+  supplierReportsController.topProductsOrderedReport,
 );
 
 //! SALESREP REPORTS SECTION
 
 router.get(
   "/sales-rep-reports/orders-placed-report/:srId",
-  salesRepReportsController.ordersPlacedReport
+  salesRepReportsController.ordersPlacedReport,
 );
 
 router.get(
   "/sales-rep-reports/commission-summary-report/:srId",
-  salesRepReportsController.commissionSummaryReport
+  salesRepReportsController.commissionSummaryReport,
 );
 
 router.get(
   "/sales-rep-reports/customer-report/:srId",
-  salesRepReportsController.customerReport
+  salesRepReportsController.customerReport,
 );
 
 router.get(
   "/sales-rep-reports/partner-creadit-limit/:srId",
-  salesRepReportsController.partnerCreaditLimit
+  salesRepReportsController.partnerCreaditLimit,
 );
 
 //! DashBoard SECTION
@@ -2357,17 +3491,17 @@ router.get("/dashboard", dashboardsController.adminDashboard);
 
 router.get(
   "/sales-rep-dashboard/:srId",
-  dashboardsController.salesRepDashboard
+  dashboardsController.salesRepDashboard,
 );
 
 router.get(
   "/dashboard/local-partner-employee",
-  dashboardsController.employeeDashboardlocalPartner
+  dashboardsController.employeeDashboardlocalPartner,
 );
 
 router.get(
   "/dashboard/admin-employee",
-  dashboardsController.employeeDashboardAdmin
+  dashboardsController.employeeDashboardAdmin,
 );
 router.get("/supplier-dashboard/:id", dashboardsController.supplierDashboard);
 
@@ -2375,57 +3509,57 @@ router.get("/dashboard/sales", dashboardsController.getSalesDashboard);
 
 router.get(
   "/dashboard/franchisee-sales",
-  dashboardsController.getFranchiseeSalesDashboard
+  dashboardsController.getFranchiseeSalesDashboard,
 );
 
 router.get(
   "/dashboard/local-partner-sales/:srId",
-  dashboardsController.getLocalPartnerSalesDashboard
+  dashboardsController.getLocalPartnerSalesDashboard,
 );
 
 router.get(
   "/orders-pending-pullouts/:srId",
-  manageOrderController.ordersPendingPullouts
+  manageOrderController.ordersPendingPullouts,
 );
 
 router.post(
   "/pull-payments-from-patners-banka-account/:srId",
-  pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts
+  pulloutPaymentsController.pullPaymentsFromPatnersBankAccounts,
 );
 
 router.post(
   "/shipping-charges-on-weight",
-  manageOrderController.findShippingCompanyForWeight
+  manageOrderController.findShippingCompanyForWeight,
 );
 
 router.post(
   "/shipping-charges-on-weight/customer/:id",
-  manageOrderController.findShippingCompanyForWeight
+  manageOrderController.findShippingCompanyForWeight,
 );
 
 router.get(
   "/shipping-charges-list",
-  shippingCompanyController.getAllShippingCompany
+  shippingCompanyController.getAllShippingCompany,
 );
 
 router.patch(
   "/shipping-charges-update",
-  shippingCompanyController.updateShippingCompany
+  shippingCompanyController.updateShippingCompany,
 );
 
 router.get(
   "/order-navigation-counts",
-  manageOrderController.orderNavigationCounts
+  manageOrderController.orderNavigationCounts,
 );
 
 router.get(
   "/order-navigation-counts/sales-rep/:srId",
-  manageOrderController.orderNavigationCountsLocalPatner
+  manageOrderController.orderNavigationCountsLocalPatner,
 );
 
 router.get(
   "/order-navigation-counts/supplier/:id",
-  manageOrderController.orderNavigationCountsSupplier
+  manageOrderController.orderNavigationCountsSupplier,
 );
 
 router.get("/view-customer-detail/:id", customerController.customerDetail);
@@ -2436,51 +3570,53 @@ router.delete("/customer-discounts/:userId", customerController.dicounts);
 
 router.post(
   "/partner-order/book-new-order",
-  patnerOrderController.bookNewPartnerOrder
+  patnerOrderController.bookNewPartnerOrder,
 );
 
 router.get("/partner-order/orders-list", patnerOrderController.allPartnerOrder);
 router.get(
   "/quickbooks-partner-order-management/:qbo",
-  patnerOrderController.allPartnerOrder
+  patnerOrderController.allPartnerOrder,
 );
 
 router.get(
   "/partner-order/order-details/:id",
-  patnerOrderController.partnerOrderDetails
+  patnerOrderController.partnerOrderDetails,
 );
 
 router.patch(
   "/partner-order/update-order/:orderId",
-  patnerOrderController.updatePartnerOrder
+  patnerOrderController.updatePartnerOrder,
 );
 
 router.get(
   "/local-partner/payment-methods/:id",
-  patnerOrderController.fetchSavedPaymentMethods
+  patnerOrderController.fetchSavedPaymentMethods,
 );
 
 router.get(
   "/partner-order-navigation-counts",
-  patnerOrderController.partnerOrderNavigationCounts
+  patnerOrderController.partnerOrderNavigationCounts,
 );
 
 router.get(
   "/partner-order-navigation-counts/sales-rep/:srId",
-  patnerOrderController.partnerOrderNavigationCountsLocalPatner
+  patnerOrderController.partnerOrderNavigationCountsLocalPatner,
 );
 
 router.get(
   "/partner-order-navigation-counts/supplier/:id",
-  patnerOrderController.partnerOrderNavigationCountsSupplier
+  patnerOrderController.partnerOrderNavigationCountsSupplier,
 );
 
 router.post(
   "/partner-order/pull-payment-from-bank/:partnerOrderId",
-  patnerOrderController.pullPartnerOrderPayment
+  patnerOrderController.pullPartnerOrderPayment,
 );
 
 router.get("/coffee-machine/requests", machineController.coffeeMachineQuries);
+router.get("/get-in-touch", leadController.getAllGetInTouch);
+router.delete("/get-in-touch/:id", leadController.deleteGetInTouch);
 
 router
   .route("/coffee-machine")
@@ -2496,7 +3632,7 @@ router
 
 router.post(
   "/order-management/create-payment-intent-for-user",
-  manageOrderController.createPaymentIntentForUser
+  manageOrderController.createPaymentIntentForUser,
 );
 
 module.exports = router;

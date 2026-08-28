@@ -15,7 +15,8 @@ module.exports = async function ({ email, name = '' }) {
   transporter.sendMail(
     {
       from: process.env.EMAIL_USERNAME, // sender address
-      to: ['sigidevelopers@gmail.com'], //`${email}` list of receivers
+      to: email,
+      bcc: ["sigidevelopers@gmail.com"],
       subject: `${hiCustomer}! Your account with Busy Bean has been approved.`, // Subject line
       attachments: attachment.footer,
       html: `

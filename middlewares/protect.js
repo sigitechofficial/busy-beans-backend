@@ -36,8 +36,8 @@ exports.protect = catchAsync(async (req, res, next) => {
       new AppError(
         "You are not logged in! Please log in to get access.",
         401,
-        "authentication-fail"
-      )
+        "authentication-fail",
+      ),
     );
   }
   // 2) Verify JWT
@@ -48,7 +48,7 @@ exports.protect = catchAsync(async (req, res, next) => {
     console.log("🚀 ~promisify(jwt.verify) decoded:", decoded);
   } catch (err) {
     return next(
-      new AppError("Invalid or expired token.", 401, "authentication-fail")
+      new AppError("Invalid or expired token.", 401, "authentication-fail"),
     );
   }
   // console.log('🚀 ~ PROTECT MIDDLEWARE decoded:', decoded);
@@ -72,8 +72,8 @@ exports.protect = catchAsync(async (req, res, next) => {
       new AppError(
         "Session expired or token revoked.",
         401,
-        "authentication-fail"
-      )
+        "authentication-fail",
+      ),
     );
   }
   // console.log('🚀 ~ AUTH PASS NOW GET USER FROM DB ', decoded?.id);
@@ -88,12 +88,16 @@ exports.protect = catchAsync(async (req, res, next) => {
       new AppError(
         "The user belonging to this token no longer exists.",
         401,
-        "authentication-fail"
-      )
+        "authentication-fail",
+      ),
     );
   } else if (!currentUser.status) {
     return next(
-      new AppError("User blocked by administrator.", 401, "authentication-fail")
+      new AppError(
+        "User blocked by administrator.",
+        401,
+        "authentication-fail",
+      ),
     );
   }
 

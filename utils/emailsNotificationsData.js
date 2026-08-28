@@ -22,7 +22,7 @@ const customerOrder = async ({ orderId }) => {
       "id",
       [
         literal(
-          `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.name FROM products WHERE products.id = items.productId LIMIT 1)`,
         ),
         "product",
       ],
@@ -35,20 +35,20 @@ const customerOrder = async ({ orderId }) => {
       "productId",
       [
         literal(
-          `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
         ),
         "sku",
       ],
 
       [
         literal(
-          `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.sku FROM products WHERE products.id = items.productId LIMIT 1)`,
         ),
         "productCode",
       ],
       [
         literal(
-          `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`
+          `(SELECT products.grind FROM products WHERE products.id = items.productId LIMIT 1)`,
         ),
         "grind",
       ],
@@ -71,73 +71,85 @@ const customerOrder = async ({ orderId }) => {
         "id",
         [
           literal(
-            `(SELECT users.countryCode FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.countryCode FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "countryCountry",
         ],
         [
           literal(
-            `(SELECT users.phoneNumber FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.phoneNumber FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "phoneNumber",
         ],
         [
           literal(
-            `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "customerName",
         ],
         [
           literal(
-            `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "companyName",
         ],
         [
           literal(
-            `(SELECT users.qboCustomerIdForPartner FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.qboCustomerIdForPartner FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "qboCustomerIdForPartner",
         ],
         [
           literal(
-            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.qboCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "qboCustomerId",
         ],
         [
           literal(
-            `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "stripeCustomerId",
         ],
         [
           literal(
-            `(SELECT users.email FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.stripeCustomerIdForPartner FROM users WHERE users.id = order.userId LIMIT 1)`,
+          ),
+          "stripeCustomerIdForPartner",
+        ],
+        [
+          literal(
+            `(SELECT users.qboCustomerIdForPartner FROM users WHERE users.id = order.userId LIMIT 1)`,
+          ),
+          "qboCustomerIdForPartner",
+        ],
+        [
+          literal(
+            `(SELECT users.email FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "email",
         ],
         [
           literal(
-            `(SELECT users.billingAddress FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.billingAddress FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "billingAddress",
         ],
         [
           literal(
-            `(SELECT users.emailToSendInvoices FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.emailToSendInvoices FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "emailToSendInvoices",
         ],
         [
           literal(
-            `(SELECT users.dispatchEmail FROM users WHERE users.id = order.userId LIMIT 1)`
+            `(SELECT users.dispatchEmail FROM users WHERE users.id = order.userId LIMIT 1)`,
           ),
           "dispatchEmail",
         ],
         [
           literal(
-            `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`
+            `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
           ),
           "orderCurrentStatus",
         ],
@@ -160,37 +172,37 @@ const customerOrder = async ({ orderId }) => {
         ],
         [
           literal(
-            `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`
+            `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
           ),
           "supplierName",
         ],
         [
           literal(
-            `(SELECT supplier.email FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`
+            `(SELECT supplier.email FROM supplier WHERE supplier.id = order.supplierId LIMIT 1)`,
           ),
           "supplierEmail",
         ],
         [
           literal(
-            `(SELECT salesReps.srName FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+            `(SELECT salesReps.srName FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
           ),
           "srName",
         ],
         [
           literal(
-            `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+            `(SELECT salesReps.connectAccountId FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
           ),
           "connectAccountId",
         ],
         [
           literal(
-            `(SELECT salesReps.email FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+            `(SELECT salesReps.email FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
           ),
           "patnerEmail",
         ],
         [
           literal(
-            `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`
+            `(SELECT salesReps.partnerType FROM salesReps WHERE salesReps.id = order.salesRepId LIMIT 1)`,
           ),
           "partnerType",
         ],
@@ -312,7 +324,7 @@ const localPartnerOrder = async ({ orderId }) => {
       "id",
       [
         literal(
-          `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+          `(SELECT products.name FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
         ),
         "product",
       ],
@@ -325,19 +337,19 @@ const localPartnerOrder = async ({ orderId }) => {
       "productId",
       [
         literal(
-          `(SELECT products.sku FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+          `(SELECT products.sku FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
         ),
         "sku",
       ],
       [
         literal(
-          `(SELECT products.sku FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+          `(SELECT products.sku FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
         ),
         "productCode",
       ],
       [
         literal(
-          `(SELECT products.grind FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`
+          `(SELECT products.grind FROM products WHERE products.id = partnerOrderItems.productId LIMIT 1)`,
         ),
         "grind",
       ],
@@ -359,73 +371,73 @@ const localPartnerOrder = async ({ orderId }) => {
         "id",
         [
           literal(
-            `(SELECT countryCode FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT countryCode FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "countryCountry",
         ],
         [
           literal(
-            `(SELECT phoneNumber FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT phoneNumber FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "phoneNumber",
         ],
         [
           literal(
-            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "customerName",
         ],
         [
           literal(
-            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT srName FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "companyName",
         ],
         [
           literal(
-            `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT stripeCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "stripeCustomerId",
         ],
         [
           literal(
-            `(SELECT qboCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT qboCustomerId FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "qboCustomerId",
         ],
         [
           literal(
-            `(SELECT  email FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT  email FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "email",
         ],
         [
           literal(
-            `(SELECT email FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT email FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "emailToSendInvoices",
         ],
         [
           literal(
-            `(SELECT email FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`
+            `(SELECT email FROM salesReps WHERE salesReps.id = partnerOrder.salesRepId LIMIT 1)`,
           ),
           "dispatchEmail",
         ],
         [
           literal(
-            `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`
+            `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`,
           ),
           "orderCurrentStatus",
         ],
         [
           literal(
-            `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = partnerOrder.supplierId LIMIT 1)`
+            `(SELECT supplier.supplierName FROM supplier WHERE supplier.id = partnerOrder.supplierId LIMIT 1)`,
           ),
           "supplierName",
         ],
         [
           literal(
-            `(SELECT supplier.email FROM supplier WHERE supplier.id = partnerOrder.supplierId LIMIT 1)`
+            `(SELECT supplier.email FROM supplier WHERE supplier.id = partnerOrder.supplierId LIMIT 1)`,
           ),
           "supplierEmail",
         ],
@@ -516,7 +528,7 @@ const localPartnerOrder = async ({ orderId }) => {
         },
       ],
     });
-    console.log("🚀 ~ localPartnerOrder ~ doc:", doc.id);
+    console.log("🚀 ~ localPartnerOrder ~ doc:", doc?.id);
     const output = JSON.parse(JSON.stringify(doc));
     output.orderOf = "local-partner";
     return output;
@@ -527,7 +539,7 @@ const localPartnerOrder = async ({ orderId }) => {
 
 exports.dataForEmailAndNotifications = async (
   orderId,
-  orderType = "customer"
+  orderType = "customer",
 ) => {
   console.log("🚀 ~ orderId:", orderId);
   console.log("🚀 ~ orderType:", orderType);
@@ -544,7 +556,7 @@ exports.dataForEmailAndNotifications = async (
   }
   console.log(
     "ðŸš€ ~ exports.dataForEmailAndNotificati3333333333333333ons= ~ output:",
-    output
+    output,
   );
 
   const or = [{ accountId: 1 }];

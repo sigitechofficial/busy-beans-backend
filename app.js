@@ -21,10 +21,22 @@ const webhookRoute = require("./routes/webhooks");
 const qboRoutes = require("./routes/qboRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const subscriptionRouter = require("./routes/subscriptionRoutes");
+const { router: marketingRouter } = require("./marketing");
 
 app.use((req, res, next) => {
   console.log(`📥 Incoming Request: ${req.method} ${req.originalUrl}`);
-  console.log(`📥 Incoming Header: ${req.headers}`);
+  const safeHeaders = {
+    "content-type": req.headers["content-type"],
+    "user-agent": req.headers["user-agent"],
+    host: req.headers.host,
+    authorization: req.headers.authorization
+      ? `${req.headers.authorization.slice(0, 24)}...`
+      : undefined,
+    "x-zepto-webhook-secret": req.headers["x-zepto-webhook-secret"]
+      ? `${String(req.headers["x-zepto-webhook-secret"]).slice(0, 12)}...`
+      : undefined,
+  };
+  console.log(`📥 Incoming Header: ${JSON.stringify(safeHeaders)}`);
   next();
 });
 
@@ -40,7 +52,7 @@ app.use("/view", viewRoute);
 app.use(
   "/webhook/busy-beans-coffee",
   bodyParser.raw({ type: "application/json" }),
-  webhookRoute
+  webhookRoute,
 );
 
 // Meta webhook routes use JSON parser
@@ -66,7 +78,7 @@ app.use(
       return callback(null, true); // reflect the requested origin
     },
     credentials: true, // <-- REQUIRED to allow cookies
-  })
+  }),
 );
 app.use(cookieParser());
 // // Access-Control-Allow-Origin *
@@ -114,7 +126,7 @@ app.use(
   swaggerUi.setup(swaggerSpec, {
     customCss: ".swagger-ui .topbar { display: none }",
     customSiteTitle: "Busy Beans Coffee API Documentation",
-  })
+  }),
 );
 
 // Test middleware
@@ -130,6 +142,8 @@ app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/leads", leadRoutes);
 app.use("/qbo", qboRoutes);
 app.use("/api/v1/subscription", subscriptionRouter);
+// Page Builder module (marketing) — /api/auth, /api/admin/*, /api/public/*
+app.use("/api", marketingRouter);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });

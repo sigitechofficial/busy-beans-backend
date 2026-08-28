@@ -89,7 +89,7 @@ module.exports = (sequelize) => {
         "just-onces",
         "weekly",
         "every-two-weeks",
-        "every-four-weeks"
+        "every-four-weeks",
       ),
       allowNull: true,
       defaultValue: "just-onces",
@@ -114,6 +114,34 @@ module.exports = (sequelize) => {
     },
     invoicePdf: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    // Payment link (checkout session) tracking – when customer requests "pay online" URL
+    paymentLinkOpenCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    paymentLinkFirstOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    paymentLinkLastOpenedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    invoiceEmailSentCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    supplierEmailSendCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    supplierEmailLastSentAt: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     localPatnerCommission: {
@@ -178,6 +206,11 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    pulloutIntentIdSynced: {
+      type: DataTypes.ENUM("not-eligible", "eligible", "synced"),
+      allowNull: false,
+      defaultValue: "not-eligible",
+    },
     quickBooksInvoiceId: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -224,6 +257,10 @@ module.exports = (sequelize) => {
         key: "id",
       },
     },
+    employeeOf: {
+      type: DataTypes.ENUM("admin", "direct-partner"),
+      allowNull: true,
+    },
     AppliedEmployeeCommisionPercentage: {
       type: DataTypes.DECIMAL(5, 2),
       allowNull: true,
@@ -234,6 +271,49 @@ module.exports = (sequelize) => {
       defaultValue: 0,
     },
     employeeTransferId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutStatus: {
+      type: DataTypes.ENUM(
+        "pending",
+        "in_transit",
+        "paid",
+        "failed",
+        "canceled",
+      ),
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutFailureCode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutFailureMessage: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutCreatedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutPaidAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutAttemptCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    directPartnerEmployeePayoutLastAttemptAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    directPartnerEmployeePayoutLastTriggerSource: {
       type: DataTypes.STRING,
       allowNull: true,
     },
@@ -275,6 +355,9 @@ module.exports = (sequelize) => {
 
     order.hasOne(models.transfersToSalesRep);
     models.transfersToSalesRep.belongsTo(order);
+
+    order.hasMany(models.emailLog, { foreignKey: "orderId" });
+    models.emailLog.belongsTo(order, { foreignKey: "orderId" });
 
     order.belongsTo(models.employee, {
       foreignKey: "employeeId",

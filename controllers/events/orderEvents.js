@@ -90,13 +90,13 @@ exports.orderEventsToLocalPatnerOrAdmin = async ({
     });
 
     console.log(
-      "🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀"
+      "🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀",
     );
     return true;
   } catch (error) {
     console.log(
       "🚀 ~ exports.orderEventsToLocalPatnerOrAdmin= ~ error:",
-      error
+      error,
     );
   }
 };

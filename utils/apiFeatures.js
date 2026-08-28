@@ -44,11 +44,11 @@ class APIFeatures {
             const isSymbolUsed = keys.some((k) => typeof k === "symbol");
             if (!isSymbolUsed) {
               console.warn(
-                `❌ Sequelize operator [${op}] not applied as symbol for ${key}`
+                `❌ Sequelize operator [${op}] not applied as symbol for ${key}`,
               );
             } else {
               console.log(
-                `✅ Sequelize operator [${op}] correctly applied as symbol for ${key}`
+                `✅ Sequelize operator [${op}] correctly applied as symbol for ${key}`,
               );
               console.log(`→ Field keys:`, keys);
             }
@@ -77,7 +77,9 @@ class APIFeatures {
   _castValue(value) {
     if (value === "true") return true;
     if (value === "false") return false;
-    if (!isNaN(value) && value.trim() !== "") return Number(value);
+    if (value === "null") return null;
+    if (typeof value === "string" && value.trim() !== "" && !isNaN(value))
+      return Number(value);
     if (typeof value === "string" && value.includes(",")) {
       return value.split(",").map((v) => this._castValue(v));
     }

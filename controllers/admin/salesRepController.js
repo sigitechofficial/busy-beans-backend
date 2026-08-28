@@ -294,6 +294,7 @@ exports.deleteSalesRep = catchAsync(async (req, res, next) => {
 
 exports.addCustomer = catchAsync(async (req, res, next) => {
   req.body.info.verifiedAt = new Date();
+  req.body.info.approvedByAdmin = new Date();
   console.log("🚀 ~ exports.addCustomer=catchAsync ~ req.body:", req.body);
 
   // Handle based on user entity type
@@ -410,7 +411,9 @@ exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
 });
 
 exports.stripeConnectAccountRetrive = catchAsync(async (req, res, next) => {
+
   const sr = await salesRep.findOne({ where: { id: req.params.srId } });
+  
   if (!sr) {
     return next(new AppError("Data not Found!", 404));
   }

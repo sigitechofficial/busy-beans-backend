@@ -10,6 +10,13 @@ const { ensureItemByName, warmupQBOResources } = require("./qboItemService");
 const { order, partnerOrder, account, qboCustomerMap } = require("../models");
 const { handleQboError } = require("./qboErrorHandler");
 const { qboQuery } = require("./qboHelpers");
+// [QBO-POLICY-2026] Pullout custom field no longer pushed to admin QBO — imports kept commented for reference.
+// const {
+//   getPulloutCustomFieldEntry,
+//   isPulloutCustomFieldEligible,
+// } = require("./qboPulloutCustomField");
+
+console.log("🚀 ~ qboInvoice.js ~ process.env.QBO_ENV:", Number(19.8));
 
 const Order = order;
 const PartnerOrder = partnerOrder;
@@ -18,7 +25,9 @@ const BASE =
     ? "https://sandbox-quickbooks.api.intuit.com"
     : "https://quickbooks.api.intuit.com";
 const QBO = (realmId) => `${BASE}/v3/company/${realmId}`;
+
 const MINOR = 70;
+const MINOR_CUSTOM_FIELDS = 75;
 
 // ---- Generic helpers ----
 const headers = (token) => ({
@@ -26,6 +35,148 @@ const headers = (token) => ({
   Accept: "application/json",
   "Content-Type": "application/json",
 });
+
+/**
+ * Build a clear error message from an axios/QBO error so API responses show the real issue.
+ * Uses QBO Fault.Error[].Message and Detail when present, else status + err.message.
+ */
+function getQboErrorMessage(err) {
+  if (!err) return "Unknown error";
+  const status = err.response?.status;
+  const fault = err.response?.data?.Fault;
+  const first = fault?.Error?.[0];
+  if (first) {
+    const msg = first.Message || "";
+    const detail = first.Detail || "";
+    const code = first.code ? ` (code ${first.code})` : "";
+    const parts = [msg, detail].filter(Boolean);
+    return `QBO ${status || "error"}${code}: ${parts.join(" — ")}`.trim();
+  }
+  if (status) return `QBO ${status}: ${err.message || "Request failed"}`;
+  return err.message || "Unknown error";
+}
+
+/** QBO codes: invalid or deleted customer - mapping is stale and should be removed */
+const QBO_STALE_CUSTOMER_CODES = ["2500", "6250"];
+
+/**
+ * If QBO error is "invalid reference" or "deleted customer", delete the matching
+ * qboCustomerMaps row so the user can re-sync the customer.
+ */
+async function deleteStaleQboCustomerMappingIfNeeded(
+  err,
+  realmId,
+  qboCustomerId,
+) {
+  if (!err?.response?.data?.Fault?.Error?.[0] || !realmId || !qboCustomerId)
+    return;
+  const code = String(err.response.data.Fault.Error[0].code || "");
+  if (!QBO_STALE_CUSTOMER_CODES.includes(code)) return;
+  try {
+    const deleted = await qboCustomerMap.destroy({
+      where: { realmId, qboCustomerId: String(qboCustomerId) },
+    });
+    if (deleted) {
+      console.log(
+        `[QBO] Removed stale customer mapping: realmId=${realmId}, qboCustomerId=${qboCustomerId} (QBO ${code})`,
+      );
+    }
+  } catch (e) {
+    console.warn("[QBO] Failed to delete stale qboCustomerMap:", e?.message);
+  }
+}
+
+/**
+ * When customer is "not connected" (no valid mapping), delete any existing
+ * qboCustomerMaps row for this user in this realm so they can re-sync the customer.
+ */
+async function deleteQboCustomerMappingForUserInRealm(where) {
+  if (!where || !where.realmId) return;
+  try {
+    const deleted = await qboCustomerMap.destroy({ where });
+    if (deleted) {
+      console.log(
+        `[QBO] Removed not-connected customer mapping (re-sync customer):`,
+        where,
+      );
+    }
+  } catch (e) {
+    console.warn(
+      "[QBO] Failed to delete qboCustomerMap for re-connect:",
+      e?.message,
+    );
+  }
+}
+
+// [QBO-POLICY-2026] Admin QBO is for direct (no local partner) customer orders only.
+function shouldSkipAdminQboSync({ orderType, order }) {
+  return orderType === "customer" && !!order?.salesRepId;
+}
+
+/**
+ * Query QBO for Sales Rep custom field DefinitionId
+ * Uses GraphQL API to find custom field by name
+ */
+async function getSalesRepCustomFieldDefinitionId({ accessToken, realmId }) {
+  try {
+    // GraphQL endpoint for custom field definitions
+    const graphqlUrl = "https://qb.api.intuit.com/graphql";
+
+    const query = `
+      query {
+        appFoundationsCustomFieldDefinitions {
+          id
+          name
+          type
+          legacyIdV2
+        }
+      }
+    `;
+
+    const response = await axios.post(
+      graphqlUrl,
+      { query },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        validateStatus: () => true, // Don't throw on error
+      },
+    );
+
+    if (response?.data?.data?.appFoundationsCustomFieldDefinitions) {
+      const customFields =
+        response.data.data.appFoundationsCustomFieldDefinitions;
+
+      // Look for "Sales Rep" field (case-insensitive)
+      const salesRepField = customFields.find(
+        (field) =>
+          field.name &&
+          (field.name.toLowerCase() === "sales rep" ||
+            field.name.toLowerCase() === "salesrep" ||
+            field.name.toLowerCase() === "local partner"),
+      );
+
+      if (salesRepField?.legacyIdV2) {
+        console.log(
+          `✅ [QBO] Found Sales Rep custom field: ${salesRepField.name} (DefinitionId: ${salesRepField.legacyIdV2})`,
+        );
+        return salesRepField.legacyIdV2;
+      }
+    }
+
+    console.log("⚠️ [QBO] Sales Rep custom field not found via GraphQL query");
+    return null;
+  } catch (err) {
+    console.warn(
+      "⚠️ [QBO] Error querying custom field definitions:",
+      err.message,
+    );
+    // GraphQL might not be available or scopes missing - that's okay, we'll use fallback
+    return null;
+  }
+}
 
 // =========================
 // 🔹 Helpers
@@ -38,6 +189,9 @@ function mapPaymentMethodName(name = "") {
   name = name.toLowerCase();
 
   if (name.includes("card") && name.includes("credit")) return "Credit Card";
+  // "card" from Stripe etc. → Credit Card for QBO
+  if (name === "card" || (name.includes("card") && !name.includes("debit")))
+    return "Credit Card";
   if (name.includes("debit")) return "Debit Card";
   if (name.includes("cash")) return "Cash";
   if (name.includes("cheque") || name.includes("check")) return "Check";
@@ -65,13 +219,13 @@ async function getValidDepositAccount({ accessToken, realmId }) {
 
   // 1️⃣ Prefer Undeposited Funds
   const undeposited = accounts.find(
-    (a) => a.Name?.toLowerCase() === "undeposited funds"
+    (a) => a.Name?.toLowerCase() === "undeposited funds",
   );
   if (undeposited) return undeposited.Id;
 
   // 2️⃣ Otherwise pick any “Bank” account
   const bank = accounts.find(
-    (a) => a.AccountType && a.AccountType.toLowerCase() === "bank"
+    (a) => a.AccountType && a.AccountType.toLowerCase() === "bank",
   );
   if (bank) return bank.Id;
 
@@ -80,8 +234,8 @@ async function getValidDepositAccount({ accessToken, realmId }) {
     (a) =>
       a.AccountType &&
       ["other current assets", "accounts receivable"].includes(
-        a.AccountType.toLowerCase()
-      )
+        a.AccountType.toLowerCase(),
+      ),
   );
   if (asset) return asset.Id;
 
@@ -95,7 +249,7 @@ async function ensurePaymentMethod({ accessToken, realmId, name }) {
   try {
     // 1️⃣ Try to find existing method
     const query = encodeURIComponent(
-      `select * from PaymentMethod where Name='${name}'`
+      `select * from PaymentMethod where Name='${name}'`,
     );
     const res = await axios.get(`${QBO(realmId)}/query?query=${query}`, {
       headers: headers(accessToken),
@@ -107,9 +261,10 @@ async function ensurePaymentMethod({ accessToken, realmId, name }) {
     }
 
     // 2️⃣ Not found — create new one
+    // QBO only accepts Type: "CREDIT_CARD" | "NON_CREDIT_CARD" | null (no "OTHER")
     const payload = {
       Name: name,
-      Type: name === "Credit Card" ? "CREDIT_CARD" : "OTHER",
+      Type: name === "Credit Card" ? "CREDIT_CARD" : "NON_CREDIT_CARD",
       Active: true,
     };
     const createRes = await axios.post(
@@ -117,7 +272,7 @@ async function ensurePaymentMethod({ accessToken, realmId, name }) {
       payload,
       {
         headers: headers(accessToken),
-      }
+      },
     );
     const createdId = createRes.data?.PaymentMethod?.Id;
     console.log(`[QBO] Created new PaymentMethod: ${name} (${createdId})`);
@@ -134,6 +289,31 @@ async function ensurePaymentMethod({ accessToken, realmId, name }) {
 // 🔸 Main Function
 // =========================
 // ---- Payment creation ----
+/**
+ * Create (or reuse) a QBO Payment row linked to a given invoice.
+ *
+ * Order of operations (production-safe — prevents duplicate payments):
+ *   1. GET the invoice, validate it exists and belongs to the customer.
+ *   2. ALWAYS query QBO for an existing Payment whose LinkedTxn references
+ *      this invoice. If found → return it as `isExisting: true`. This
+ *      single check is the safety net that prevents duplicate payments
+ *      on already-paid / already-closed invoices.
+ *   3. If no existing linked Payment was found:
+ *        a. `Balance > 0`   → create a new Payment (normal path).
+ *        b. `Balance <= 0`  → invoice is closed with NO linked payment
+ *                             (a "zombie" / orphan row).
+ *           - If `allowRecovery=false` (default) → return
+ *             `{ skipped: true, reason: 'paid_no_linked_payment' }`.
+ *             Caller can retry with `allowRecovery=true` after manual
+ *             review.
+ *           - If `allowRecovery=true` → create a link-only "recovery"
+ *             payment using the invoice TotalAmt.
+ *
+ * @param {object} args
+ * @param {boolean} [args.allowRecovery=false]  When true, allow creation of
+ *   a recovery payment on a paid/closed invoice that has NO linked Payment.
+ *   Step (2) still runs first, so this can never cause a duplicate.
+ */
 async function createPaymentForInvoice({
   accessToken,
   realmId,
@@ -144,6 +324,7 @@ async function createPaymentForInvoice({
   refNumber,
   paidDate,
   invoiceNumber,
+  allowRecovery = false,
 }) {
   console.log("🚀 Creating QBO Payment:", {
     invoiceId,
@@ -154,15 +335,11 @@ async function createPaymentForInvoice({
     paidDate,
     realmId,
     invoiceNumber,
+    allowRecovery,
   });
 
   if (!accessToken || !realmId) throw new Error("Missing QBO credentials");
-  if (!invoiceId || !customerId)
-    throw new Error("Missing invoice or customer ID");
-
-  /* -----------------------------------------------------------
-   ✅ 1. Normalize amount + date
-  ----------------------------------------------------------- */
+  if (!invoiceId) throw new Error("Missing invoice ID");
 
   /* -----------------------------------------------------------
    Validate Invoice before creating payment
@@ -175,14 +352,26 @@ async function createPaymentForInvoice({
 
   if (!inv) {
     throw new Error(
-      `Invoice ${invoiceId} does not exist in QBO realm ${realmId}`
+      `Invoice ${invoiceId} does not exist in QBO realm ${realmId}`,
     );
   }
 
-  if (String(inv.CustomerRef?.value) !== String(customerId)) {
+  const invoiceCustomerId = String(inv.CustomerRef?.value || "").trim();
+  if (!invoiceCustomerId) {
     throw new Error(
-      `Invoice ${invoiceId} belongs to customer ${inv.CustomerRef.value}, not ${customerId}`
+      `Invoice ${invoiceId} has no CustomerRef in QBO realm ${realmId}`,
     );
+  }
+
+  let effectiveCustomerId =
+    customerId != null && customerId !== "" ? String(customerId).trim() : "";
+  if (!effectiveCustomerId) {
+    effectiveCustomerId = invoiceCustomerId;
+  } else if (effectiveCustomerId !== invoiceCustomerId) {
+    console.warn(
+      `[QBO] Payment: invoice ${invoiceId} belongs to customer ${invoiceCustomerId}, map/caller passed ${effectiveCustomerId}. Using invoice customer for payment.`,
+    );
+    effectiveCustomerId = invoiceCustomerId;
   }
 
   // Log invoice details for debugging
@@ -196,215 +385,257 @@ async function createPaymentForInvoice({
 
   const safeAmount = Number(amount) || 0.01;
   const safeDate = new Date(
-    paidDate && !isNaN(Date.parse(paidDate)) ? paidDate : Date.now()
+    paidDate && !isNaN(Date.parse(paidDate)) ? paidDate : Date.now(),
   )
     .toISOString()
     .slice(0, 10);
 
-  // Check if invoice is already paid - return existing payment ID if found
-  if (Number(inv.Balance) <= 0) {
-    console.log(
-      `⚠️ [QBO] Invoice ${invoiceId} is already paid or closed. Checking for existing payment...`
-    );
+  /* -----------------------------------------------------------
+   ✅ 1. SAFETY NET — always look for an existing linked payment first.
+   This runs regardless of invoice Balance, which fixes the duplicate-
+   payment bug where closed invoices used to bypass this check and go
+   straight to "recovery" payment creation.
 
-    // QBO doesn't support querying payments by LinkedTxn.TxnId directly
-    // Method: Query payments by customer, then filter in code by LinkedTxn
+   Helper is defined inline so the recovery branch can re-run the same
+   check (defense in depth against a transient pre-check failure).
+  ----------------------------------------------------------- */
+  async function findLinkedPaymentForThisInvoice() {
     try {
-      console.log("🔍 [QBO] Querying payments by customer...");
+      const safeCustomerId = String(effectiveCustomerId).replace(/'/g, "''");
 
-      // Query payments for this customer (QBO syntax: CustomerRef = 'customerId')
-      const query = `select Id, TotalAmt, TxnDate, LinkedTxn from Payment where CustomerRef = '${String(customerId)}'`;
-      const queryUrl = `${QBO(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR}`;
-      const queryRes = await axios.get(queryUrl, {
+      // QBO does not support filtering nested LinkedTxn arrays in its query language.
+      // Fetch payments for this customer, then inspect the links locally.
+      const q = `
+      select * from Payment
+      where CustomerRef = '${safeCustomerId}'
+      orderby MetaData.CreateTime desc
+      maxresults 1000
+    `
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const url =
+        `${QBO(realmId)}/query` +
+        `?query=${encodeURIComponent(q)}` +
+        `&minorversion=${MINOR}`;
+
+      const r = await axios.get(url, {
         headers: headers(accessToken),
         validateStatus: () => true,
       });
 
-      console.log("🔍 [QBO] Payment query response:", {
-        status: queryRes?.status,
-        hasData: !!queryRes?.data,
-        error: queryRes?.data?.Fault?.Error?.[0]?.Message,
-        errorDetail: queryRes?.data?.Fault?.Error?.[0]?.Detail,
-        payments: queryRes?.data?.QueryResponse?.Payment?.length || 0,
+      if (r.status !== 200) {
+        const fault = r.data?.Fault || r.data;
+
+        console.error(
+          `❌ [QBO] Existing-payment lookup failed for invoice ${invoiceId}:`,
+          {
+            status: r.status,
+            query: q,
+            fault,
+          },
+        );
+
+        return {
+          ok: false,
+          status: r.status,
+          fault,
+          payment: null,
+          allMatches: [],
+        };
+      }
+
+      const raw = r.data?.QueryResponse?.Payment;
+      const payments = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+      const verified = payments.filter((payment) => {
+        const lines = Array.isArray(payment?.Line)
+          ? payment.Line
+          : payment?.Line
+            ? [payment.Line]
+            : [];
+
+        return lines.some((line) => {
+          const linkedTransactions = Array.isArray(line?.LinkedTxn)
+            ? line.LinkedTxn
+            : line?.LinkedTxn
+              ? [line.LinkedTxn]
+              : [];
+
+          return linkedTransactions.some(
+            (linkedTransaction) =>
+              String(linkedTransaction?.TxnId) === String(invoiceId) &&
+              String(linkedTransaction?.TxnType).toLowerCase() === "invoice",
+          );
+        });
       });
 
-      // Check for errors
-      if (queryRes?.status === 400 || queryRes?.data?.Fault) {
-        console.warn(
-          "⚠️ [QBO] Payment query failed, cannot find existing payment"
-        );
-      } else if (queryRes?.data?.QueryResponse?.Payment) {
-        // Query succeeded - filter payments
-        const payments = Array.isArray(queryRes.data.QueryResponse.Payment)
-          ? queryRes.data.QueryResponse.Payment
-          : [queryRes.data.QueryResponse.Payment];
-
-        console.log(
-          `🔍 [QBO] Found ${payments.length} payments for customer, filtering by invoice ${invoiceId}...`
-        );
-
-        // Log all payments' LinkedTxn for debugging
-        payments.forEach((p, idx) => {
-          console.log(`🔍 [QBO] Payment ${idx + 1} (ID: ${p.Id}):`, {
-            totalAmt: p.TotalAmt,
-            txnDate: p.TxnDate,
-            linkedTxn: p.LinkedTxn,
-            linkedTxnType: typeof p.LinkedTxn,
-            linkedTxnIsArray: Array.isArray(p.LinkedTxn),
-          });
-        });
-
-        // Filter payments to find one linked to this invoice
-        const matchingPayment = payments.find((p) => {
-          if (!p.LinkedTxn) {
-            console.log(`⚠️ [QBO] Payment ${p.Id} has no LinkedTxn`);
-            return false;
-          }
-
-          // Handle different LinkedTxn structures
-          let linkedTxns = [];
-          if (Array.isArray(p.LinkedTxn)) {
-            linkedTxns = p.LinkedTxn;
-          } else if (p.LinkedTxn && typeof p.LinkedTxn === "object") {
-            // Might be a single object or wrapped differently
-            linkedTxns = [p.LinkedTxn];
-          }
-
-          console.log(
-            `🔍 [QBO] Checking payment ${p.Id}, linkedTxns:`,
-            JSON.stringify(linkedTxns, null, 2)
-          );
-
-          const matches = linkedTxns.some((lt) => {
-            // Try different possible field names
-            const txnId = String(
-              lt?.TxnId || lt?.TxnID || lt?.Id || lt?.value || ""
-            );
-            const txnType = String(lt?.TxnType || lt?.Type || "");
-            const matches =
-              txnId === String(invoiceId) && txnType === "Invoice";
-
-            if (matches) {
-              console.log(
-                `✅ [QBO] Found match! Payment ${p.Id} linked to invoice ${invoiceId}`
-              );
-            } else {
-              console.log(
-                `🔍 [QBO] Payment ${p.Id} - TxnId: ${txnId}, TxnType: ${txnType}, Looking for: ${invoiceId}`
-              );
-            }
-
-            return matches;
-          });
-
-          return matches;
-        });
-
-        if (matchingPayment?.Id) {
-          console.log(
-            `✅ [QBO] Found existing payment ${matchingPayment.Id} for invoice ${invoiceId}`
-          );
-          return {
-            id: matchingPayment.Id,
-            totalAmt: matchingPayment.TotalAmt,
-            txnDate: matchingPayment.TxnDate || safeDate,
-            raw: matchingPayment,
-            isExisting: true,
-          };
-        } else {
-          console.log(
-            `⚠️ [QBO] Found ${payments.length} payments for customer but none linked to invoice ${invoiceId}`
-          );
-          // Try alternative: check if any payment has matching amount and date
-          const amountMatch = payments.find(
-            (p) => Math.abs(Number(p.TotalAmt) - safeAmount) < 0.01
-          );
-          if (amountMatch) {
-            console.log(
-              `⚠️ [QBO] Found payment ${amountMatch.Id} with matching amount (${amountMatch.TotalAmt}) but LinkedTxn doesn't match invoice ${invoiceId}`
-            );
-            console.log(
-              `🔍 [QBO] This payment's LinkedTxn:`,
-              JSON.stringify(amountMatch.LinkedTxn, null, 2)
-            );
-          }
-        }
-      }
-    } catch (findErr) {
-      console.warn(
-        `⚠️ [QBO] Error in payment query:`,
-        findErr.message,
-        findErr.response?.data?.Fault?.Error?.[0]
+      return {
+        ok: true,
+        payment: verified[0] || null,
+        allMatches: verified,
+      };
+    } catch (error) {
+      console.error(
+        `❌ [QBO] Existing-payment lookup exception for invoice ${invoiceId}:`,
+        {
+          message: error?.message,
+          status: error?.response?.status,
+          data: error?.response?.data,
+        },
       );
-    }
 
-    // Method 3: Check if invoice has payment info in its response
-    // Sometimes QBO includes payment references in the invoice
-    if (inv?.PaymentRefNum || inv?.PaymentId) {
-      console.log(
-        `ℹ️ [QBO] Invoice has payment reference but couldn't query payment directly`
-      );
+      return {
+        ok: false,
+        status: error?.response?.status,
+        error: error?.message || String(error),
+        fault: error?.response?.data,
+        payment: null,
+        allMatches: [],
+      };
     }
+  }
 
-    // Invoice is paid but no payment found - return early without error
+  const preCheck = await findLinkedPaymentForThisInvoice();
+  if (!preCheck.ok) {
+    console.warn(
+      `⚠️ [QBO] Existing-payment pre-check failed for invoice ${invoiceId} (status=${preCheck.status ?? "n/a"}, err=${preCheck.error ?? "n/a"}). Will refuse recovery if Balance<=0; create path still protected by catch-block duplicate-detect.`,
+    );
+  } else if (preCheck.allMatches.length > 1) {
+    console.warn(
+      `⚠️ [QBO] Invoice ${invoiceId} already has ${preCheck.allMatches.length} linked payments on QBO (paymentIds=${preCheck.allMatches
+        .map((v) => v.Id)
+        .join(
+          ", ",
+        )}). Reusing the first one. Run \`npm run qbo:audit-duplicate-payments\` to investigate.`,
+    );
+  }
+
+  const existingLinkedPayment = preCheck.ok ? preCheck.payment : null;
+
+  if (existingLinkedPayment?.Id) {
     console.log(
-      `ℹ️ [QBO] Invoice ${invoiceId} is already paid, skipping payment creation`
+      `✅ [QBO] Linked payment already exists for invoice ${invoiceId}: ${existingLinkedPayment.Id} — reusing (no new Payment will be created).`,
     );
     return {
-      id: null,
-      totalAmt: 0,
-      txnDate: safeDate,
-      isExisting: false,
-      skipped: true,
+      id: existingLinkedPayment.Id,
+      totalAmt: existingLinkedPayment.TotalAmt,
+      txnDate: existingLinkedPayment.TxnDate || safeDate,
+      raw: existingLinkedPayment,
+      isExisting: true,
+      customerIdUsed: effectiveCustomerId,
     };
   }
 
   /* -----------------------------------------------------------
-   ✅ 2. Check for existing payment before creating (same method as above)
+   ✅ 2. No existing linked payment. Decide what to do based on balance.
   ----------------------------------------------------------- */
-  // Use same customer-based query method
-  try {
-    const query = `select Id, TotalAmt, TxnDate, LinkedTxn from Payment where CustomerRef = '${String(customerId)}'`;
-    const queryUrl = `${QBO(realmId)}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR}`;
-    const queryRes = await axios.get(queryUrl, {
-      headers: headers(accessToken),
-      validateStatus: () => true,
-    });
-
-    if (queryRes?.data?.QueryResponse?.Payment) {
-      const payments = Array.isArray(queryRes.data.QueryResponse.Payment)
-        ? queryRes.data.QueryResponse.Payment
-        : [queryRes.data.QueryResponse.Payment];
-
-      const existingPayment = payments.find((p) => {
-        if (!p.LinkedTxn) return false;
-        const linkedTxns = Array.isArray(p.LinkedTxn)
-          ? p.LinkedTxn
-          : [p.LinkedTxn];
-        return linkedTxns.some(
-          (lt) => lt?.TxnId === String(invoiceId) && lt?.TxnType === "Invoice"
-        );
-      });
-
-      if (existingPayment?.Id) {
-        console.log(
-          `✅ [QBO] Payment already exists for invoice ${invoiceId}: ${existingPayment.Id}`
-        );
-        return {
-          id: existingPayment.Id,
-          totalAmt: existingPayment.TotalAmt,
-          txnDate: existingPayment.TxnDate || safeDate,
-          raw: existingPayment,
-          isExisting: true,
-        };
-      }
+  if (Number(inv.Balance) <= 0) {
+    if (!allowRecovery) {
+      console.log(
+        `⏭️ [QBO] Invoice ${invoiceId} is closed (Balance=${inv.Balance}) with NO linked payment on QBO. Skipping creation to avoid duplicates. Pass allowRecovery=true (or force=true through createQboPayment) to create a recovery payment.`,
+      );
+      return {
+        skipped: true,
+        reason: "paid_no_linked_payment",
+        note: "Invoice is paid/closed but no linked QBO Payment exists. No payment created to avoid duplicates. Retry with allowRecovery=true to create a recovery payment.",
+        invoiceId,
+        customerIdUsed: effectiveCustomerId,
+      };
     }
-  } catch (preCheckErr) {
+
     console.warn(
-      `⚠️ [QBO] Pre-check for existing payment failed:`,
-      preCheckErr.message
+      `⚠️ [QBO] Invoice ${invoiceId} is closed but has no linked payment AND allowRecovery=true. Re-confirming before creating recovery payment...`,
     );
-    // Continue with payment creation
+
+    // Defense in depth: re-run the existing-payment query right before
+    // creating a recovery payment. If it now finds one (race / earlier
+    // network blip), reuse it. If the second check fails too, REFUSE
+    // recovery rather than risk a duplicate.
+    const reConfirm = await findLinkedPaymentForThisInvoice();
+    if (!reConfirm.ok) {
+      console.warn(
+        `⚠️ [QBO] Could not verify "no existing payment" before recovery for invoice ${invoiceId} (status=${reConfirm.status ?? "n/a"}, err=${reConfirm.error ?? "n/a"}). Refusing recovery to avoid duplicates.`,
+      );
+      return {
+        skipped: true,
+        reason: "precheck_unverified_refuse_recovery",
+        note: "Existing-payment verification failed twice; refusing to create recovery payment to avoid duplicates. Retry later or investigate QBO connectivity.",
+        invoiceId,
+        customerIdUsed: effectiveCustomerId,
+      };
+    }
+    if (reConfirm.payment?.Id) {
+      console.log(
+        `✅ [QBO] On re-confirm, linked payment was found for invoice ${invoiceId}: ${reConfirm.payment.Id} — reusing instead of recovering.`,
+      );
+      return {
+        id: reConfirm.payment.Id,
+        totalAmt: reConfirm.payment.TotalAmt,
+        txnDate: reConfirm.payment.TxnDate || safeDate,
+        raw: reConfirm.payment,
+        isExisting: true,
+        customerIdUsed: effectiveCustomerId,
+      };
+    }
+
+    // Force-create linking payment with original total
+    const recoveryAmount = Number(inv.TotalAmt || amount || 0);
+
+    if (recoveryAmount <= 0) {
+      throw new Error(
+        `Cannot recover payment for invoice ${invoiceId}: invalid amount`,
+      );
+    }
+
+    const recoveryPayload = {
+      CustomerRef: { value: String(effectiveCustomerId) },
+      TotalAmt: recoveryAmount,
+      TxnDate: safeDate,
+      PaymentRefNum: `REC-${invoiceId}`.substring(0, 21),
+      Line: [
+        {
+          Amount: recoveryAmount,
+          LinkedTxn: [{ TxnId: String(invoiceId), TxnType: "Invoice" }],
+        },
+      ],
+    };
+
+    console.log("🔁 [QBO] Creating recovery payment:", recoveryPayload);
+
+    try {
+      const recoveryRes = await axios.post(
+        `${QBO(realmId)}/payment?minorversion=${MINOR}`,
+        recoveryPayload,
+        { headers: headers(accessToken) },
+      );
+
+      const recoveryPay = recoveryRes?.data?.Payment;
+
+      if (!recoveryPay?.Id) {
+        throw new Error("Recovery payment returned no ID");
+      }
+
+      console.log(
+        `✅ [QBO] Recovery payment created: ${recoveryPay.Id} for invoice ${invoiceId}`,
+      );
+
+      return {
+        id: recoveryPay.Id,
+        totalAmt: recoveryPay.TotalAmt,
+        txnDate: recoveryPay.TxnDate,
+        raw: recoveryPay,
+        isExisting: false,
+        recovered: true,
+        customerIdUsed: effectiveCustomerId,
+      };
+    } catch (recoveryErr) {
+      console.error(
+        "❌ [QBO] Recovery payment failed:",
+        recoveryErr.response?.data || recoveryErr.message,
+      );
+      throw recoveryErr;
+    }
   }
 
   /* -----------------------------------------------------------
@@ -432,13 +663,13 @@ async function createPaymentForInvoice({
   let safeRefNumber = refNumber || `ref-${invoiceId}`;
   if (safeRefNumber.length > 21) {
     console.warn(
-      `⚠️ [QBO] PaymentRefNum too long (${safeRefNumber.length} chars), truncating to 21 characters`
+      `⚠️ [QBO] PaymentRefNum too long (${safeRefNumber.length} chars), truncating to 21 characters`,
     );
     safeRefNumber = safeRefNumber.substring(0, 21);
   }
 
   const payload = {
-    CustomerRef: { value: String(customerId) },
+    CustomerRef: { value: String(effectiveCustomerId) },
     TotalAmt: safeAmount,
     TxnDate: safeDate,
     PaymentRefNum: safeRefNumber,
@@ -467,11 +698,12 @@ async function createPaymentForInvoice({
   /* -----------------------------------------------------------
    ✅ 6. Send Request to QBO
   ----------------------------------------------------------- */
+
   try {
     const res = await axios.post(
       `${QBO(realmId)}/payment?minorversion=${MINOR}`,
       payload,
-      { headers: headers(accessToken) }
+      { headers: headers(accessToken) },
     );
 
     const payment = res.data?.Payment;
@@ -490,6 +722,7 @@ async function createPaymentForInvoice({
       txnDate: payment.TxnDate,
       raw: payment,
       isExisting: false,
+      customerIdUsed: effectiveCustomerId,
     };
   } catch (error) {
     // Handle duplicate payment or validation errors
@@ -512,37 +745,48 @@ async function createPaymentForInvoice({
       errorDetail.includes("already")
     ) {
       console.log(
-        "⚠️ [QBO] Duplicate payment detected, finding existing payment..."
+        "⚠️ [QBO] Duplicate payment detected, finding existing payment...",
       );
 
       try {
-        // Query QBO to find existing payment for this invoice
-        const query = encodeURIComponent(
-          `select Id, TotalAmt from Payment where Any(LinkedTxn.TxnId) = '${String(invoiceId)}' and Any(LinkedTxn.TxnType) = 'Invoice'`
-        );
-        const queryUrl = `${QBO(realmId)}/query?query=${query}&minorversion=${MINOR}`;
-        const queryRes = await axios.get(queryUrl, {
-          headers: headers(accessToken),
-          validateStatus: () => true,
-        });
+        // Reuse the same helper used throughout this function
+        const existingCheck = await findLinkedPaymentForThisInvoice();
 
-        const existingPayment = queryRes?.data?.QueryResponse?.Payment?.[0];
-        if (existingPayment?.Id) {
+        if (existingCheck.ok && existingCheck.payment?.Id) {
+          const existingPayment = existingCheck.payment;
+
           console.log(
-            `✅ [QBO] Found existing payment ${existingPayment.Id} for invoice ${invoiceId}`
+            `✅ [QBO] Found existing payment ${existingPayment.Id} for invoice ${invoiceId}`,
           );
+
           return {
             id: existingPayment.Id,
             totalAmt: existingPayment.TotalAmt,
-            txnDate: safeDate,
+            txnDate: existingPayment.TxnDate || safeDate,
             raw: existingPayment,
             isExisting: true,
+            customerIdUsed: effectiveCustomerId,
           };
+        }
+
+        if (!existingCheck.ok) {
+          console.warn(
+            `⚠️ [QBO] Could not verify existing payment after duplicate error for invoice ${invoiceId}`,
+            {
+              status: existingCheck.status,
+              error: existingCheck.error,
+              fault: existingCheck.fault,
+            },
+          );
+        } else {
+          console.warn(
+            `⚠️ [QBO] QBO reported a duplicate payment, but no linked payment was found for invoice ${invoiceId}`,
+          );
         }
       } catch (findErr) {
         console.error(
           "❌ [QBO] Error while trying to find existing payment:",
-          findErr.message
+          findErr?.response?.data || findErr.message,
         );
       }
     }
@@ -554,54 +798,97 @@ async function createPaymentForInvoice({
     throw error; // keep error bubbling
   }
 }
-
+/**
+ * Wraps `createPaymentForInvoice` for the sync pipelines.
+ *
+ * @param {object} args
+ * @param {boolean} [args.force=false]  When true, forwarded as
+ *   `allowRecovery=true` to `createPaymentForInvoice`. Used by the
+ *   retry-on-skipped path in `paymentSyncService.js`. The duplicate-
+ *   payment safety net in `createPaymentForInvoice` (step 1 — query
+ *   existing linked payments) still runs even with `force=true`, so
+ *   this can never produce a duplicate payment.
+ */
 async function createQboPayment({
   order,
   invoiceId,
   accessToken,
   realmId,
   qboCustomerId = null,
+  subtractLocalPartnerCommission = false,
+  force = false,
 }) {
   try {
-    console.log("⚡ [QBO] Creating Payment for invoice:", invoiceId);
+    console.log("⚡ [QBO] Creating Payment for invoice:", invoiceId, {
+      force,
+    });
+
+    // For admin + customer only: payment amount = totalBill - localPatnerCommission
+    const rawTotal = Number(order.totalBill) || 0;
+    const commission = Number(order.localPatnerCommission) || 0;
+    const amount =
+      subtractLocalPartnerCommission && commission > 0
+        ? Math.max(0, rawTotal - commission)
+        : rawTotal;
 
     const paymentRes = await createPaymentForInvoice({
       accessToken,
       realmId,
       invoiceId,
       customerId: qboCustomerId || order.qboCustomerId,
-      amount: order.totalBill,
+      amount,
       paymentMethodName: order.paymentMethod,
       refNumber: order.paymentIntentId || order.invoiceId,
       paidDate: order.invoicePaidDate,
       invoiceNumber: order.invoiceNumber,
+      allowRecovery: !!force,
     });
 
     const paymentId = paymentRes?.id;
 
     // Handle different scenarios
     if (paymentRes?.skipped) {
-      // Invoice is already paid but payment not found - this is unusual
+      // Invoice is already paid but no linked payment found on QBO. We refuse
+      // to create a "recovery" payment here to avoid duplicates. The caller
+      // (e.g. paymentSyncService) may retry with `force: true` after manual
+      // review, which will activate the recovery path inside
+      // createPaymentForInvoice (still gated by the duplicate-payment check).
       console.log(
-        `ℹ️ [QBO] Payment skipped - invoice already paid but payment not found: ${paymentRes.note || ""}`
+        `ℹ️ [QBO] Payment skipped (reason=${paymentRes.reason || "unknown"}): ${paymentRes.note || ""}`,
       );
-      // Return null so caller can handle (don't update DB)
-      return { paymentId: null, skipped: true };
+      return {
+        paymentId: null,
+        skipped: true,
+        reason: paymentRes.reason || "skipped",
+        note: paymentRes.note,
+        customerIdUsed: paymentRes.customerIdUsed,
+      };
     }
 
     if (paymentRes?.isExisting) {
       // Found existing payment - return it so DB can be updated
       console.log(`✅ [QBO] Using existing payment: ${paymentId}`);
-      return { paymentId, isExisting: true };
+      return {
+        paymentId,
+        isExisting: true,
+        customerIdUsed: paymentRes.customerIdUsed,
+      };
     }
 
     if (!paymentId) {
       throw new Error("QBO Payment creation failed - no payment ID returned.");
     }
 
-    console.log("✅ [QBO] Payment Created:", paymentId);
+    console.log("✅ [QBO] Payment Created:", paymentId, {
+      recovered: !!paymentRes?.recovered,
+    });
 
-    return { paymentId, isExisting: false };
+    return {
+      paymentId,
+      isExisting: false,
+      recovered: !!paymentRes?.recovered,
+      customerIdUsed: paymentRes.customerIdUsed,
+    };
   } catch (err) {
     handleQboError({
       err: err,
@@ -611,7 +898,12 @@ async function createQboPayment({
   }
 }
 
-async function createQboInvoice({ order, accessToken, realmId }) {
+async function createQboInvoice({
+  order,
+  accessToken,
+  realmId,
+  subtractSalerCommission = false,
+}) {
   // Define payload outside try block so it's accessible in catch block
   let payload = null;
 
@@ -640,8 +932,13 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       let amount;
       let unitPrice;
 
-      // Get the line total from DB (this is the actual charged amount after discounts)
-      const totalNum = Number(it.total || it.price || 0);
+      // Get the line total from DB (this is the actual charged amount after discounts). Use it.total (line total) first, not it.price (often unit price).
+      let totalNum = Number(it.total || it.price || 0);
+      const salerCommission = Number(it.salerCommission || 0);
+      // Only subtract saler commission for admin sync when orderType is customer (not for local partner sync)
+      if (subtractSalerCommission && salerCommission > 0) {
+        totalNum = totalNum - salerCommission;
+      }
 
       // CRITICAL: Always prioritize DB total (it.total or it.price) as it's the actual charged amount
       // Use wholesalePrice only if DB total is not available
@@ -675,12 +972,10 @@ async function createQboInvoice({ order, accessToken, realmId }) {
             note: "Using calculated amount to satisfy QBO validation (Amount = UnitPrice * Qty)",
           });
         }
-      } else if (it.wholesalePrice && qty > 0) {
-        // Fallback: If DB total not available, use wholesalePrice as unit price
+      } else if (it.wholesalePrice && qty > 0 && !subtractSalerCommission) {
+        // Fallback: use wholesalePrice only when NOT subtracting commission (otherwise we'd send retail as unit price)
         unitPrice = Number(it.wholesalePrice);
-        // Calculate amount from unitPrice to ensure exact match
         amount = Math.round(unitPrice * qty * 100) / 100;
-        // Round unitPrice to 8 decimal places
         unitPrice = Math.round(unitPrice * 100000000) / 100000000;
       } else {
         amount = 0;
@@ -745,18 +1040,71 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       });
     }
 
-    // Build PrivateNote - include Local Partner info if both userId and salesRepId exist
-    let privateNote = order.note || "";
+    // Build PrivateNote (keep original note only, no local partner info)
+    const privateNote = order.note || undefined;
+
+    // Build Local Partner info as separate field
+    // Try to use existing "Sales Rep" custom field, or add as custom field
+    let localPartnerValue = null;
     if (order.userId && order.salesRepId) {
       const salesRepName = order.salesRepName || "";
       const territoryName = order.territoryName || "";
-      const localPartnerInfo = `Local Partner: ${salesRepName}${territoryName ? ` (${territoryName})` : ""}`;
-      if (privateNote) {
-        privateNote = `${privateNote}\n${localPartnerInfo}`;
-      } else {
-        privateNote = localPartnerInfo;
+      localPartnerValue = `${salesRepName}${territoryName ? ` (${territoryName})` : ""}`;
+    }
+
+    // Try to get Sales Rep custom field DefinitionId
+    let salesRepDefinitionId = null;
+
+    // Option 1: Check environment variable first (fastest, recommended)
+    salesRepDefinitionId =
+      process.env.QBO_SALES_REP_CUSTOM_FIELD_ID ||
+      process.env.QBO_LOCAL_PARTNER_CUSTOM_FIELD_ID ||
+      null;
+
+    // Option 2: If not in env, try to query for it via GraphQL
+    if (!salesRepDefinitionId && localPartnerValue) {
+      try {
+        const foundDefinitionId = await getSalesRepCustomFieldDefinitionId({
+          accessToken,
+          realmId,
+        });
+        if (foundDefinitionId) {
+          salesRepDefinitionId = foundDefinitionId;
+          console.log(
+            `✅ [QBO] Auto-detected Sales Rep CustomField DefinitionId: ${salesRepDefinitionId}`,
+          );
+        }
+      } catch (queryErr) {
+        console.warn(
+          "⚠️ [QBO] Could not query for Sales Rep custom field:",
+          queryErr.message,
+        );
       }
     }
+
+    let customFields = [];
+    if (localPartnerValue && salesRepDefinitionId) {
+      customFields.push({
+        DefinitionId: salesRepDefinitionId,
+        StringValue: localPartnerValue,
+      });
+      console.log(
+        `✅ [QBO] Adding Local Partner to Sales Rep CustomField: ${localPartnerValue}`,
+      );
+    } else if (localPartnerValue) {
+      console.log(
+        `⚠️ [QBO] Sales Rep CustomField not found. Using fallback method...`,
+      );
+    }
+
+    // [QBO-POLICY-2026] PulloutIntentId is stored on the order only — not written to admin QBO.
+    // const pulloutCf = getPulloutCustomFieldEntry(order);
+    // if (pulloutCf) {
+    //   customFields.push(pulloutCf);
+    //   console.log(
+    //     `✅ [QBO] Adding Pullout CustomField (pulloutIntentId=${pulloutCf.StringValue})`,
+    //   );
+    // }
 
     payload = {
       CustomerRef: { value: String(order.qboCustomerId) },
@@ -766,21 +1114,30 @@ async function createQboInvoice({ order, accessToken, realmId }) {
         .slice(0, 10),
       DueDate: new Date(
         new Date(order.invoiceDate || Date.now()).getTime() +
-          (order.termDays || 30) * 86400000
+          (order.termDays || 30) * 86400000,
       )
         .toISOString()
         .slice(0, 10),
       DocNumber: order.invoiceNumber || undefined,
-      PrivateNote: privateNote || undefined,
+      PrivateNote: privateNote,
+      // Add CustomField for Sales Rep if DefinitionId is configured
+      ...(customFields.length > 0 ? { CustomField: customFields } : {}),
+      // Fallback: Add Local Partner as PONumber field if CustomField not configured
+      // This appears as separate column in QBO and doesn't require setup
+      ...(localPartnerValue && !salesRepDefinitionId
+        ? { PONumber: `Local Partner: ${localPartnerValue}` }
+        : {}),
     };
 
     console.log("⚡ [QBO] Invoice Payload:", payload);
 
-    const invRes = await axios.post(
-      `${QBO(realmId)}/invoice?minorversion=${MINOR}`,
-      payload,
-      { headers: headers(accessToken) }
-    );
+    const hasCustomFields = customFields.length > 0;
+    const invoiceUrl = hasCustomFields
+      ? `${QBO(realmId)}/invoice?minorversion=${MINOR_CUSTOM_FIELDS}&include=enhancedAllCustomFields`
+      : `${QBO(realmId)}/invoice?minorversion=${MINOR}`;
+    const invRes = await axios.post(invoiceUrl, payload, {
+      headers: headers(accessToken),
+    });
     console.log("🚀 ~ createQboInvoice ~ invRes:", true);
 
     const invoiceId = invRes?.data?.Invoice?.Id;
@@ -806,13 +1163,13 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       errorMessage.includes("Duplicate Document Number")
     ) {
       console.log(
-        "⚠️ [QBO] Duplicate document number detected, finding existing invoice..."
+        "⚠️ [QBO] Duplicate document number detected, finding existing invoice...",
       );
 
       const docNumber = order.invoiceNumber;
       if (!docNumber) {
         console.error(
-          "❌ [QBO] Cannot find duplicate invoice - no DocNumber provided"
+          "❌ [QBO] Cannot find duplicate invoice - no DocNumber provided",
         );
         handleQboError({
           err: err,
@@ -832,10 +1189,10 @@ async function createQboInvoice({ order, accessToken, realmId }) {
         // If not found in error message, query QBO to find invoice by DocNumber
         if (!existingInvoiceId) {
           console.log(
-            "🔍 [QBO] TxnId not in error message, querying QBO by DocNumber..."
+            "🔍 [QBO] TxnId not in error message, querying QBO by DocNumber...",
           );
           const query = encodeURIComponent(
-            `select Id, DocNumber from Invoice where DocNumber='${docNumber.replace(/'/g, "''")}'`
+            `select Id, DocNumber from Invoice where DocNumber='${docNumber.replace(/'/g, "''")}'`,
           );
           const queryUrl = `${QBO(realmId)}/query?query=${query}&minorversion=${MINOR}`;
 
@@ -855,7 +1212,7 @@ async function createQboInvoice({ order, accessToken, realmId }) {
 
         if (existingInvoiceId) {
           console.log(
-            `✅ [QBO] Found existing invoice with DocNumber ${docNumber}: ${existingInvoiceId}`
+            `✅ [QBO] Found existing invoice with DocNumber ${docNumber}: ${existingInvoiceId}`,
           );
           // Return the existing invoice ID instead of throwing error
           return {
@@ -865,7 +1222,7 @@ async function createQboInvoice({ order, accessToken, realmId }) {
           };
         } else {
           console.error(
-            `❌ [QBO] Duplicate DocNumber error but could not find existing invoice: ${docNumber}`
+            `❌ [QBO] Duplicate DocNumber error but could not find existing invoice: ${docNumber}`,
           );
           handleQboError({
             err: err,
@@ -876,7 +1233,7 @@ async function createQboInvoice({ order, accessToken, realmId }) {
       } catch (findErr) {
         console.error(
           "❌ [QBO] Error while trying to find existing invoice:",
-          findErr.message
+          findErr.message,
         );
         handleQboError({
           err: err,
@@ -899,7 +1256,7 @@ async function updateOrderRecord({ orderId, input = {}, MODEL = Order }) {
   try {
     await MODEL.update(
       { ...input, qboLastSync: new Date() },
-      { where: { id: orderId } }
+      { where: { id: orderId } },
     );
 
     console.log(`[QBO][OrderUpdate] Updated order ${orderId}:`, input);
@@ -913,6 +1270,7 @@ async function updateOrderRecord({ orderId, input = {}, MODEL = Order }) {
 }
 
 // HANDLES INVOICE SYN and PAyment sync On ADMIN QBO
+// Returns { saved: boolean, reason?: string } so bulk sync can report real success/failure
 async function handleAdminQboSync({
   order,
   orderType,
@@ -930,104 +1288,164 @@ async function handleAdminQboSync({
       DBMODEL,
       updateRequest,
     });
-    if (ADMIN?.currentRealmId) {
-      const adminQboCondition = {
-        realmId: ADMIN?.currentRealmId,
-        accountId: ADMIN.id,
-      };
-
-      const customerOrPartnerCondition = { ...adminQboCondition };
-      if (orderType == "customer") {
-        customerOrPartnerCondition.userId = order.userId;
-      } else if (orderType == "local-partner") {
-        customerOrPartnerCondition.salesRepId = order.salesRepId;
-      }
-
-      const qboCustomerOnAdmin = await qboCustomerMap.findOne({
-        where: customerOrPartnerCondition,
-      });
+    // [QBO-POLICY-2026] Customer orders with a local partner sync to partner QBO only, not admin.
+    if (shouldSkipAdminQboSync({ orderType, order })) {
       console.log(
-        "🚀 ~ handleAdminQboSync ~ qboCustomerOnAdmin:",
-        qboCustomerOnAdmin?.qboCustomerId
+        "[QBO] Skipping admin sync — customer order has local partner (salesRepId)",
       );
-      if (qboCustomerOnAdmin?.qboCustomerId) {
-        order.qboCustomerId = qboCustomerOnAdmin.qboCustomerId;
+      return {
+        saved: true,
+        reason: "skipped_admin_sync_local_partner_customer_order",
+      };
+    }
+    if (!ADMIN?.currentRealmId) {
+      console.log(
+        "🚀 ~ handlePartnerQboSync ~ LOCAL ADMIN NOT CONNECTED OR  ORDER ALREADY ON QUICK BOOKS:",
+      );
+      return { saved: false, reason: "admin_qbo_not_connected" };
+    }
 
-        const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
-          condition: adminQboCondition,
+    const adminQboCondition = {
+      realmId: ADMIN?.currentRealmId,
+      accountId: ADMIN.id,
+    };
+
+    const customerOrPartnerCondition = { ...adminQboCondition };
+    if (orderType == "customer") {
+      customerOrPartnerCondition.userId = order.userId;
+    } else if (orderType == "local-partner") {
+      customerOrPartnerCondition.salesRepId = order.salesRepId;
+    }
+
+    const qboCustomerOnAdmin = await qboCustomerMap.findOne({
+      where: customerOrPartnerCondition,
+    });
+    console.log(
+      "🚀 ~ handleAdminQboSync ~ qboCustomerOnAdmin:",
+      qboCustomerOnAdmin?.qboCustomerId,
+    );
+    if (!qboCustomerOnAdmin?.qboCustomerId) {
+      console.log("🚀 ~ ADMIN QBO CUSTOMER NOT CONNECTED");
+      await deleteQboCustomerMappingForUserInRealm({
+        realmId: ADMIN?.currentRealmId,
+        accountId: ADMIN?.id,
+        userId: order?.userId,
+      });
+      return { saved: false, reason: "admin_qbo_customer_not_connected" };
+    }
+
+    order.qboCustomerId = qboCustomerOnAdmin.qboCustomerId;
+
+    const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
+      condition: adminQboCondition,
+    });
+
+    // Skip admin sync if invoice already exists (unless update requested)
+    if (order?.quickBooksInvoiceId && !updateRequest) {
+      console.log(
+        `[QBO] Admin invoice already exists (${order.quickBooksInvoiceId}), skipping admin sync`,
+      );
+      return { saved: true, reason: "admin_invoice_already_exists" };
+    }
+    if (accessToken && realmId && !order?.quickBooksInvoiceId) {
+      // Create admin invoice only if it doesn't exist
+      const adminQboInvoice = await createQboInvoice({
+        order,
+        accessToken,
+        realmId,
+        subtractSalerCommission:
+          orderType === "customer" && !!order?.salesRepId,
+      });
+
+      const adminUpdateInput = {
+        quickBooksInvoiceId: adminQboInvoice?.invoiceId,
+        adminRealmId: realmId,
+      };
+      // [QBO-POLICY-2026] Pullout custom field no longer synced to admin QBO — do not flip pulloutIntentIdSynced here.
+      // if (
+      //   isPulloutCustomFieldEligible(order) &&
+      //   order?.pulloutIntentIdSynced !== "synced"
+      // ) {
+      //   adminUpdateInput.pulloutIntentIdSynced = "synced";
+      // }
+
+      updateOrderRecord({
+        orderId,
+        input: adminUpdateInput,
+        MODEL: DBMODEL,
+      });
+
+      if (order?.paymentStatus == "done") {
+        const adminQboPayment = await createQboPayment({
+          order,
+          invoiceId: adminQboInvoice?.invoiceId,
+          accessToken,
+          realmId,
+          qboCustomerId: qboCustomerOnAdmin?.qboCustomerId,
+          subtractLocalPartnerCommission:
+            orderType === "customer" && !!order?.salesRepId,
         });
 
-        // Skip admin sync if invoice already exists (unless update requested)
-        if (order?.quickBooksInvoiceId && !updateRequest) {
-          console.log(
-            `[QBO] Admin invoice already exists (${order.quickBooksInvoiceId}), skipping admin sync`
-          );
-        } else if (accessToken && realmId && !order?.quickBooksInvoiceId) {
-          // Create admin invoice only if it doesn't exist
-          const adminQboInvoice = await createQboInvoice({
-            order,
-            accessToken,
-            realmId,
-          });
-
-          updateOrderRecord({
-            orderId,
-            input: {
-              quickBooksInvoiceId: adminQboInvoice?.invoiceId,
-              adminRealmId: realmId,
-            },
-            MODEL: DBMODEL,
-          });
-
-          if (order?.paymentStatus == "done") {
-            const adminQboPayment = await createQboPayment({
-              order,
-              invoiceId: adminQboInvoice?.invoiceId,
-              accessToken,
-              realmId,
-              qboCustomerId: qboCustomerOnAdmin?.qboCustomerId,
-            });
-
-            updateOrderRecord({
-              orderId,
-              input: { quickBooksPaymentId: adminQboPayment?.paymentId },
-              MODEL: DBMODEL,
-            });
-          }
-        } else if (
-          accessToken &&
-          realmId &&
-          order?.quickBooksInvoiceId &&
-          updateRequest
-        ) {
-          console.log("🚀 ~ ADMIN QBO UPDATE ORDER", orderId);
-
-          updateInvoiceInQuickBooks({
-            accessToken,
-            realmId,
-            order,
-            qboInvoiceId: order?.quickBooksInvoiceId,
-            MODEL: DBMODEL,
-          });
-          console.log("🚀 ~ ADMIN QBO ACCOUNT NOT CONNECTED");
-        }
-      } else {
-        console.log("🚀 ~ ADMIN QBO CUSTOMER NOT CONNECTED");
+        updateOrderRecord({
+          orderId,
+          input: { quickBooksPaymentId: adminQboPayment?.paymentId },
+          MODEL: DBMODEL,
+        });
       }
-    } else {
-      console.log(
-        "🚀 ~ handlePartnerQboSync ~ LOCAL ADMIN NOT CONNECTED OR  ORDER ALREADY ON QUICK BOOKS:"
-      );
+      return { saved: true, reason: "admin_invoice_created" };
     }
+    if (accessToken && realmId && order?.quickBooksInvoiceId && updateRequest) {
+      console.log("🚀 ~ ADMIN QBO UPDATE ORDER", orderId);
+
+      await updateInvoiceInQuickBooks({
+        accessToken,
+        realmId,
+        order,
+        qboInvoiceId: order?.quickBooksInvoiceId,
+        MODEL: DBMODEL,
+        subtractSalerCommission:
+          orderType === "customer" && !!order?.salesRepId,
+      });
+
+      // [QBO-POLICY-2026] Pullout custom field no longer synced to admin QBO — do not flip pulloutIntentIdSynced on update.
+      // if (
+      //   isPulloutCustomFieldEligible(order) &&
+      //   order?.pulloutIntentIdSynced !== "synced"
+      // ) {
+      //   try {
+      //     await DBMODEL.update(
+      //       { pulloutIntentIdSynced: "synced" },
+      //       { where: { id: orderId } },
+      //     );
+      //   } catch (flipErr) {
+      //     console.warn(
+      //       `[QBO] Could not flip pulloutIntentIdSynced=synced for order ${orderId}:`,
+      //       flipErr?.message,
+      //     );
+      //   }
+      // }
+      return { saved: true, reason: "admin_invoice_updated" };
+    }
+    return { saved: false, reason: "admin_qbo_token_or_realm_missing" };
   } catch (err) {
     handleQboError({
       err: err,
       context: `🔥 ERROR in handleAdminQboSync:`,
     });
+    await deleteStaleQboCustomerMappingIfNeeded(
+      err,
+      ADMIN?.currentRealmId,
+      order?.qboCustomerId,
+    );
+    return {
+      saved: false,
+      reason: getQboErrorMessage(err) || "admin_sync_error",
+    };
   }
 }
 
 // HANDLES INVOICE SYN and PAyment sync On local Partner QBO
+// Returns { saved: boolean, reason?: string } so bulk sync can report real success/failure
 async function handlePartnerQboSync({
   order,
   orderType,
@@ -1036,108 +1454,133 @@ async function handlePartnerQboSync({
   updateRequest = false,
 }) {
   try {
+    // No local partner → skip partner QBO sync; only admin sync will run
+    if (orderType === "customer" && !order?.salesRepId) {
+      console.log(
+        "🚀 ~ handlePartnerQboSync ~ No local partner (no salesRepId), skipping partner QBO sync",
+      );
+      return { saved: true, reason: "no_local_partner" };
+    }
+
     const quickBooksInvoiceIdPartner = order?.quickBooksInvoiceIdPartner;
     console.log(
       "🚀 ~ handlePartnerQboSync ~ quickBooksInvoiceIdPartner:",
-      quickBooksInvoiceIdPartner
+      quickBooksInvoiceIdPartner,
     );
 
     console.log(
       "🚀 ~ handlePartnerQboSync ~ order?.partnerCurrentRealmId:",
-      order?.partnerCurrentRealmId
+      order?.partnerCurrentRealmId,
     );
-    if (orderType == "customer" && order?.partnerCurrentRealmId) {
-      const partnerQboCondition = {
+    if (!(orderType == "customer" && order?.partnerCurrentRealmId)) {
+      console.log(
+        "🚀 ~ handlePartnerQboSync ~ ORDER IS ALREADY PARTNER ACCOUNT:",
+      );
+      return { saved: true, reason: "no_partner_realm" };
+    }
+
+    const partnerQboCondition = {
+      realmId: order?.partnerCurrentRealmId,
+      salesRepId: order.salesRepId,
+    };
+
+    const customerCondition = {
+      ...partnerQboCondition,
+      userId: order?.userId,
+    };
+
+    const qboCustomerOnPartner = await qboCustomerMap.findOne({
+      where: customerCondition,
+    });
+
+    if (!qboCustomerOnPartner?.qboCustomerId) {
+      console.log("🚀 ~ LOCAL PARTNER QBO CUSTOMER NOT CONNECTED");
+      await deleteQboCustomerMappingForUserInRealm({
         realmId: order?.partnerCurrentRealmId,
-        salesRepId: order.salesRepId,
-      };
-
-      const customerCondition = {
-        ...partnerQboCondition,
+        salesRepId: order?.salesRepId,
         userId: order?.userId,
-      };
+      });
+      return { saved: false, reason: "partner_qbo_customer_not_connected" };
+    }
 
-      const qboCustomerOnPartner = await qboCustomerMap.findOne({
-        where: customerCondition,
+    order.qboCustomerId = qboCustomerOnPartner?.qboCustomerId;
+
+    const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
+      condition: partnerQboCondition,
+    });
+    console.log("🚀 ~ handlePartnerQboSync ~ accessToken:", accessToken);
+    console.log("🚀 ~ handlePartnerQboSync ~ realmId:", realmId);
+    console.log(
+      "🚀 ~ handlePartnerQboSync ~ quickBooksInvoiceIdPartner:",
+      quickBooksInvoiceIdPartner,
+    );
+    if (accessToken && realmId && !quickBooksInvoiceIdPartner) {
+      const partnerQboInvoice = await createQboInvoice({
+        order,
+        accessToken,
+        realmId,
+        subtractSalerCommission: false,
       });
 
-      if (qboCustomerOnPartner?.qboCustomerId) {
-        order.qboCustomerId = qboCustomerOnPartner?.qboCustomerId;
+      updateOrderRecord({
+        orderId,
+        input: {
+          quickBooksInvoiceIdPartner: partnerQboInvoice?.invoiceId,
+          partnerRealmId: realmId,
+        },
+        MODEL: DBMODEL,
+      });
 
-        const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
-          condition: partnerQboCondition,
+      if (!order.quickBooksPaymentIdPartner && order?.paymentStatus == "done") {
+        const partnerQboPayment = await createQboPayment({
+          order,
+          invoiceId: partnerQboInvoice?.invoiceId,
+          accessToken,
+          realmId,
+          qboCustomerId: qboCustomerOnPartner?.qboCustomerId,
+          subtractLocalPartnerCommission: false,
         });
-        console.log("🚀 ~ handlePartnerQboSync ~ accessToken:", accessToken);
 
-        console.log("🚀 ~ handlePartnerQboSync ~ realmId:", realmId);
-        console.log(
-          "🚀 ~ handlePartnerQboSync ~ quickBooksInvoiceIdPartner:",
-          quickBooksInvoiceIdPartner
-        );
-        if (accessToken && realmId && !quickBooksInvoiceIdPartner) {
-          const partnerQboInvoice = await createQboInvoice({
-            order,
-            accessToken,
-            realmId,
-          });
-
-          updateOrderRecord({
-            orderId,
-            input: {
-              quickBooksInvoiceIdPartner: partnerQboInvoice?.invoiceId,
-              partnerRealmId: realmId,
-            },
-            MODEL: DBMODEL,
-          });
-
-          if (
-            !order.quickBooksPaymentIdPartner &&
-            order?.paymentStatus == "done"
-          ) {
-            const partnerQboPayment = await createQboPayment({
-              order,
-              invoiceId: partnerQboInvoice?.invoiceId,
-              accessToken,
-              realmId,
-              qboCustomerId: qboCustomerOnPartner?.qboCustomerId,
-            });
-
-            updateOrderRecord({
-              orderId,
-              input: {
-                quickBooksPaymentIdPartner: partnerQboPayment?.paymentId,
-              },
-              MODEL: DBMODEL,
-            });
-          }
-        } else if (
-          accessToken &&
-          realmId &&
-          quickBooksInvoiceIdPartner &&
-          updateRequest
-        ) {
-          console.log("🚀 ~ LOCAL PARTNER QBO UPDATE ORDER", orderId);
-          updateInvoiceInQuickBooks({
-            accessToken,
-            realmId,
-            order,
-            qboInvoiceId: quickBooksInvoiceIdPartner,
-            MODEL: DBMODEL,
-          });
-        }
-      } else {
-        console.log("🚀 ~ LOCAL PARTNER QBO CUSTOMER NOT CONNECTED");
+        updateOrderRecord({
+          orderId,
+          input: {
+            quickBooksPaymentIdPartner: partnerQboPayment?.paymentId,
+          },
+          MODEL: DBMODEL,
+        });
       }
-    } else {
-      console.log(
-        "🚀 ~ handlePartnerQboSync ~ ORDER IS ALREADY PARTNER ACCOUNT:"
-      );
+      return { saved: true, reason: "partner_invoice_created" };
     }
+    if (accessToken && realmId && quickBooksInvoiceIdPartner && updateRequest) {
+      console.log("🚀 ~ LOCAL PARTNER QBO UPDATE ORDER", orderId);
+      await updateInvoiceInQuickBooks({
+        accessToken,
+        realmId,
+        order,
+        qboInvoiceId: quickBooksInvoiceIdPartner,
+        MODEL: DBMODEL,
+        subtractSalerCommission: false,
+      });
+      return { saved: true, reason: "partner_invoice_updated" };
+    }
+    if (quickBooksInvoiceIdPartner) {
+      return { saved: true, reason: "partner_invoice_already_exists" };
+    }
+    return { saved: false, reason: "partner_qbo_token_or_realm_missing" };
   } catch (err) {
     handleQboError({
       err: err,
       context: `🔥 ERROR in handlePartnerQboSync:`,
     });
+    await deleteStaleQboCustomerMappingIfNeeded(
+      err,
+      order?.partnerCurrentRealmId,
+      order?.qboCustomerId,
+    );
+    return {
+      saved: false,
+      reason: getQboErrorMessage(err) || "partner_sync_error",
+    };
   }
 }
 
@@ -1158,7 +1601,7 @@ async function createInvoiceFromOrder({
   // -------------------------------
   // 🔹 ADMIN SYNC
   // -------------------------------
-  await handleAdminQboSync({
+  const adminResult = await handleAdminQboSync({
     order,
     orderType,
     orderId,
@@ -1170,7 +1613,7 @@ async function createInvoiceFromOrder({
   // -------------------------------
   // 🔹 PARTNER SYNC
   // -------------------------------
-  await handlePartnerQboSync({
+  const partnerResult = await handlePartnerQboSync({
     order,
     orderType,
     orderId,
@@ -1178,8 +1621,119 @@ async function createInvoiceFromOrder({
     updateRequest,
   });
 
+  const neededAdminSync =
+    orderType === "customer" &&
+    !order.quickBooksInvoiceId &&
+    ADMIN?.currentRealmId &&
+    !shouldSkipAdminQboSync({ orderType, order });
+  const neededPartnerSync =
+    orderType === "customer" &&
+    order?.partnerCurrentRealmId &&
+    !order?.quickBooksInvoiceIdPartner;
+  const adminFailed = neededAdminSync && !adminResult.saved;
+  const partnerFailed = neededPartnerSync && !partnerResult.saved;
+
+  if (adminFailed || partnerFailed) {
+    const reasons = [];
+    if (adminFailed) reasons.push(adminResult.reason || "admin sync failed");
+    if (partnerFailed)
+      reasons.push(partnerResult.reason || "partner sync failed");
+    throw new Error(`No QuickBooks ID saved: ${reasons.join("; ")}`);
+  }
+
   return {
     message: `Quickbooks inovice sync success for order #${orderId}`,
+  };
+}
+
+/**
+ * Update existing **admin** QBO invoices only (no partner QBO, no create).
+ * Orders without `quickBooksInvoiceId` are skipped.
+ *
+ * @param {Object} opts
+ * @param {number[]} opts.orderIds
+ * @param {'customer'|'local-partner'} [opts.orderType='customer']
+ */
+async function updateAdminQboInvoicesForOrders({
+  orderIds,
+  orderType = "customer",
+} = {}) {
+  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+    throw new Error("orderIds must be a non-empty array");
+  }
+
+  const numericIds = [
+    ...new Set(
+      orderIds.map((id) => Number(id)).filter((n) => !Number.isNaN(n) && n > 0),
+    ),
+  ];
+  if (numericIds.length === 0) {
+    throw new Error("orderIds must contain valid numeric ids");
+  }
+
+  const DBMODEL = orderType === "local-partner" ? PartnerOrder : Order;
+  const ADMIN = await account.findOne({});
+
+  const orders = await getOrdersWithAssociations({
+    orderIds: numericIds,
+    orderType,
+  });
+  const foundIdSet = new Set(orders.map((o) => o.id));
+  const ordersNotFound = numericIds.filter((id) => !foundIdSet.has(id));
+
+  const updatedOrderIds = [];
+  const failed = [];
+  const skipped = [];
+
+  for (const ord of orders) {
+    if (
+      !ord.quickBooksInvoiceId ||
+      String(ord.quickBooksInvoiceId).trim() === ""
+    ) {
+      skipped.push({ orderId: ord.id, reason: "no_admin_invoice" });
+      await new Promise((r) => setTimeout(r, 300));
+      continue;
+    }
+
+    const adminResult = await handleAdminQboSync({
+      order: ord,
+      orderType,
+      orderId: ord.id,
+      ADMIN,
+      DBMODEL,
+      updateRequest: true,
+    });
+
+    if (adminResult.saved && adminResult.reason === "admin_invoice_updated") {
+      updatedOrderIds.push(ord.id);
+    } else if (adminResult.saved) {
+      skipped.push({
+        orderId: ord.id,
+        reason: adminResult.reason || "skipped",
+      });
+    } else {
+      failed.push({
+        orderId: ord.id,
+        reason: adminResult.reason || "admin_update_failed",
+      });
+    }
+
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  return {
+    orderType,
+    updatedOrderIds,
+    failed,
+    skipped,
+    ordersNotFound,
+    summary: {
+      updated: updatedOrderIds.length,
+      failed: failed.length,
+      skipped: skipped.length,
+      ordersNotFound: ordersNotFound.length,
+      totalRequested: numericIds.length,
+    },
   };
 }
 
@@ -1223,7 +1777,7 @@ async function createMultipleInvoicesFromOrders({
       // -------------------------------
       // 🔹 ADMIN SYNC
       // -------------------------------
-      await handleAdminQboSync({
+      const adminResult = await handleAdminQboSync({
         order,
         orderType,
         orderId: order.id,
@@ -1235,7 +1789,7 @@ async function createMultipleInvoicesFromOrders({
       // -------------------------------
       // 🔹 PARTNER SYNC
       // -------------------------------
-      await handlePartnerQboSync({
+      const partnerResult = await handlePartnerQboSync({
         order,
         orderType,
         orderId: order.id,
@@ -1243,14 +1797,47 @@ async function createMultipleInvoicesFromOrders({
         updateRequest,
       });
 
-      // Success
-      results.push({
-        orderId: order.id,
-        status: "success",
-        message: `QuickBooks invoice sync successful for order #${order.id}`,
-      });
-      successCount++;
-      console.log(`✅ Order #${order.id} processed successfully`);
+      // Only count as success if we actually saved an ID (or already had one)
+      const neededAdminSync =
+        orderType === "customer" &&
+        !order.quickBooksInvoiceId &&
+        ADMIN?.currentRealmId &&
+        !shouldSkipAdminQboSync({ orderType, order });
+      const neededPartnerSync =
+        orderType === "customer" &&
+        order?.partnerCurrentRealmId &&
+        !order?.quickBooksInvoiceIdPartner;
+
+      const adminFailed = neededAdminSync && !adminResult.saved;
+      const partnerFailed = neededPartnerSync && !partnerResult.saved;
+
+      if (adminFailed || partnerFailed) {
+        const reasons = [];
+        if (adminFailed)
+          reasons.push(adminResult.reason || "admin sync failed");
+        if (partnerFailed)
+          reasons.push(partnerResult.reason || "partner sync failed");
+        const failMessage =
+          reasons.length > 0
+            ? `No QuickBooks ID saved: ${reasons.join("; ")}`
+            : `Failed to sync order #${order.id}`;
+        console.error(`❌ Order #${order.id} failed:`, failMessage);
+        results.push({
+          orderId: order.id,
+          status: "failed",
+          message: failMessage,
+          error: adminResult.reason || partnerResult.reason,
+        });
+        failureCount++;
+      } else {
+        results.push({
+          orderId: order.id,
+          status: "success",
+          message: `QuickBooks invoice sync successful for order #${order.id}`,
+        });
+        successCount++;
+        console.log(`✅ Order #${order.id} processed successfully`);
+      }
     } catch (error) {
       // Failure - log error but continue processing other orders
       console.error(`❌ Order #${order.id} failed:`, error.message);
@@ -1280,6 +1867,7 @@ async function createMultipleInvoicesFromOrders({
 module.exports = {
   createInvoiceFromOrder,
   createMultipleInvoicesFromOrders,
+  updateAdminQboInvoicesForOrders,
   createPaymentForInvoice,
   mapPaymentMethodName,
   createQboPayment,

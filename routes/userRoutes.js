@@ -10,7 +10,17 @@ const machineSubController = require("../controllers/customer/machineSubControll
 const leadController = require("../controllers/admin/leadController");
 const subscriptionController = require("../controllers/admin/subscriptionController");
 const categoryController = require("../controllers/admin/categoriesController");
+const userController = require("../controllers/userController");
+const multiInvoiceCheckoutController = require("../controllers/customer/multiInvoiceCheckoutController");
 const Authorization = require("../middlewares/protect");
+const {
+  signupRateLimiter,
+  loginRateLimiter,
+  forgotPasswordRateLimiter,
+} = require("../middlewares/loginRateLimit");
+const {
+  setTemporaryBlockContext,
+} = require("../middlewares/temporaryBlockFlow");
 const router = express.Router();
 
 /**
@@ -89,7 +99,7 @@ const router = express.Router();
  *       400:
  *         description: Bad request - validation error
  */
-router.post("/signup", authController.signup);
+router.post("/signup", signupRateLimiter, authController.signup);
 
 /**
  * @swagger
@@ -137,7 +147,7 @@ router.get("/subscription/:id", subscriptionController.getSubscription);
  */
 router.get(
   "/subscription/:id/create-payment-intent/:userId",
-  subscriptionController.createPaymentIntent
+  subscriptionController.createPaymentIntent,
 );
 
 /**
@@ -165,7 +175,7 @@ router.get(
  */
 router.post(
   "/subscription/:id/create-payment-intent/:userId",
-  subscriptionController.createPaymentIntent
+  subscriptionController.createPaymentIntent,
 );
 
 /**
@@ -196,7 +206,7 @@ router.post(
  */
 router.post(
   "/subscription/:id/confirm-payment",
-  subscriptionController.confirmSubscriptionPayment
+  subscriptionController.confirmSubscriptionPayment,
 );
 /**
  * @swagger
@@ -246,7 +256,12 @@ router.post(
  *       401:
  *         description: Invalid credentials
  */
-router.post("/login", authController.login);
+router.post(
+  "/login",
+  loginRateLimiter,
+  setTemporaryBlockContext("login"),
+  authController.login,
+);
 
 /**
  * @swagger
@@ -311,8 +326,12 @@ router.post("/otp/verfication", authController.otpVerification);
  *       200:
  *         description: Password reset email sent
  */
-router.post("/forgot-password", authController.forgotPassword);
-router.get(`/product`, productController.getAllProducts);
+router.post(
+  "/forgot-password",
+  forgotPasswordRateLimiter,
+  setTemporaryBlockContext("forgot_password"),
+  authController.forgotPassword,
+);
 
 /**
  * @swagger
@@ -391,7 +410,7 @@ router.post("/resend-otp/:type", authController.resendOtp);
  */
 router.post(
   "/financial-connections-session/:id",
-  authController.stripeAchPayment
+  authController.stripeAchPayment,
 );
 
 /**
@@ -450,7 +469,6 @@ router.post("/sheet-upload", orderController.SheetUplod);
  *       200:
  *         description: List of all products
  */
-router.get(`/product`, productController.getAllProducts);
 
 /**
  * @swagger
@@ -477,7 +495,7 @@ router.get(`/product`, productController.getAllProducts);
  */
 router.post(
   "/coffee-machine/contact",
-  machineSubController.coffeeMachineContact
+  machineSubController.coffeeMachineContact,
 );
 
 /**
@@ -534,6 +552,43 @@ router.get("/coffee-machine/:id", machineController.getMachines);
  *         description: Lead created successfully
  */
 router.post("/create-lead", leadController.createLead);
+
+/**
+ * @swagger
+ * /api/v1/users/get-in-touch:
+ *   post:
+ *     summary: Submit Get in Touch form (public)
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               company:
+ *                 type: string
+ *               teamSize:
+ *                 type: string
+ *               date:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Submission saved and notification sent
+ */
+router.post("/get-in-touch", userController.getInTouch);
 
 /**
  * @swagger
@@ -837,7 +892,7 @@ router.get("/address/view-all", profileController.getAllAddress);
  *         description: Unauthorized
  */
 router.get(`/product/:userId`, productController.getAllProductsUser);
-
+router.get(`/product`, productController.getAllProductsUser);
 router.get("/category", categoryController.getAllCatagories);
 
 /**
@@ -886,7 +941,7 @@ router.get("/view-customer-detail/:id", customerController.customerDetail);
  */
 router.post(
   "/invoices/:orderId/create-payment-intent",
-  manageOrderController.createPaymentIntentForUser
+  manageOrderController.createPaymentIntentForUser,
 );
 
 /**
@@ -921,7 +976,42 @@ router.post(
  */
 router.post(
   "/invoices/:orderId/confirm-payment",
-  manageOrderController.confirmPaymentForInvoiceIntent
+  manageOrderController.confirmPaymentForInvoiceIntent,
+);
+
+/**
+ * @swagger
+ * /api/v1/users/multi-invoice-checkout/fetch:
+ *   post:
+ *     summary: Create combined Stripe checkout for multiple unpaid invoices
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orderIds
+ *             properties:
+ *               orderIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: Checkout session created or reused
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/multi-invoice-checkout/fetch",
+  multiInvoiceCheckoutController.fetchMultiInvoiceCheckout,
 );
 
 /**
@@ -964,7 +1054,7 @@ router.get("/subscriptions", subscriptionController.listSubscriptions);
  */
 router.post(
   "/subscriptions/:id/cancel",
-  subscriptionController.cancelSubscription
+  subscriptionController.cancelSubscription,
 );
 
 /**
@@ -990,7 +1080,7 @@ router.post(
  */
 router.post(
   "/subscriptions/:id/reactivate",
-  subscriptionController.reactivateSubscription
+  subscriptionController.reactivateSubscription,
 );
 
 module.exports = router;

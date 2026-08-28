@@ -3,12 +3,15 @@ dotenv.config({ path: "../.env" });
 
 const { attachments } = require("./attactments");
 const attachment = attachments();
-const { transporter } = require("./transpoter");
+const { sendMailPromise } = require("./transpoter");
 let Footer = require("./footer");
+const { logEmailSuccess, logEmailOutcome } = require("../utils/emailLogOnSuccess");
+const { order, partnerOrder } = require("../models");
 const generateFooterHtml = require("./footerLocalpatner");
 const { emailDateFormate } = require("../utils/emailDateFormate");
+const { header } = require("./header");
 
-module.exports = async function ({ email, data }) {
+module.exports = async function ({ email, data, isRetry = false }) {
   let footer = await Footer();
 
   let hiSupplierName = `Hi ${data.supplierName}`;
@@ -75,10 +78,9 @@ module.exports = async function ({ email, data }) {
   ${on ? `<span style="margin-top: 20px; color:black;">Dispatched on ${on}</span>` : ""}
 `;
 
-  transporter.sendMail(
-    {
-      from: process.env.EMAIL_USERNAME, // sender address
-      to: [email], // main recipient(s)
+  const mailOptions = {
+    from: process.env.EMAIL_USERNAME, // sender address
+    to: [email], // main recipient(s)
       bcc: ["sigidevelopers@gmail.com"], // hidden recipient(s)
       subject: `${hiSupplierName}, You’ve Received a New Order #${data.id} to Fulfill`, // Subject line
       attachments: attachment.footer,
@@ -114,13 +116,7 @@ module.exports = async function ({ email, data }) {
     >
       <tr>
         <td align="center" style="padding: 20px 0">
-          <img
-                  src="cid:logo"
-                  alt="Image"
-                  width="250"
-                  height="100"
-                  style="border-radius: 16px"
-                />
+          ${header}
         </td>
       </tr>
       <tr>
@@ -215,13 +211,36 @@ module.exports = async function ({ email, data }) {
       </tr>
        ${footer}
       `,
-    },
-    function (error, info) {
-      if (error) {
-        console.log(error);
-      } else {
-        console.log(info);
-      }
-    }
-  );
+  };
+  try {
+    const info = await sendMailPromise(mailOptions);
+    const isLocalPartner = (data?.orderOf || "customer") === "local-partner";
+    const model = isLocalPartner ? partnerOrder : order;
+    await model.increment("supplierEmailSendCount", { where: { id: data?.id } });
+    await model.update(
+      { supplierEmailLastSentAt: new Date() },
+      { where: { id: data?.id } },
+    );
+    await logEmailSuccess({
+      emailType: "supplier_new_order",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      metadata: { subject: mailOptions.subject },
+      zeptoRequestId: info?.request_id,
+      retrySuccess: isRetry ? true : null,
+    });
+  } catch (error) {
+    console.log(error);
+    await logEmailOutcome({
+      emailType: "supplier_new_order",
+      orderId: data?.id,
+      orderType: data?.orderOf || "customer",
+      recipients: email,
+      emailSent: "Failed",
+      errorMessage: error?.message || String(error),
+      metadata: { subject: mailOptions.subject },
+      retrySuccess: isRetry ? false : null,
+    });
+  }
 };

@@ -6,13 +6,13 @@ A comprehensive webhook handler has been created to manage Stripe subscription e
 
 ## Files Created/Modified
 
-### 1. New File: `controllers/Webhook/subscriptionWebhookController.js`
+### 1. New File: `controllers/webhook/subscriptionWebhookController.js`
 
 - Handles all subscription-related Stripe webhook events
 - Updates subscription status, periods, and cancellation dates
 - Manages subscription lifecycle events
 
-### 2. Modified: `controllers/Webhook/webhookController.js`
+### 2. Modified: `controllers/webhook/webhookController.js`
 
 - Integrated subscription webhook handling
 - Routes subscription events to the new handler

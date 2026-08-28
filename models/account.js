@@ -23,6 +23,28 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      verificationRequired: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      verificationContext: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+      },
+      verificationOtp: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      verificationOtpExpiresAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      loginVerificationDone: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       deleted: {
         type: DataTypes.BOOLEAN,
         allowNull: true,

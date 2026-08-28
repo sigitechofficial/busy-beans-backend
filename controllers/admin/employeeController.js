@@ -22,8 +22,66 @@ const {
   transferEmployeeCommission,
   bulkTransferEmployeeCommission,
 } = require("../../utils/employeeCommissionUtils");
+const {
+  ACTIVE_PAYOUT_STATUSES,
+  calculateAndPayoutDirectPartnerEmployeeCommission,
+} = require("../../utils/directPartnerEmployeePayoutUtils");
+const bcrypt = require("bcryptjs");
 
 console.log("🚀 ~ literal:", process.env.BASE_URL);
+
+const resolveDirectPartnerContextForEmployee = async ({
+  employeeId,
+  localPartnerId,
+}) => {
+  const emp = await employee.findOne({
+    where: {
+      id: employeeId,
+      salesRepId: localPartnerId,
+      employeeOf: "Local Partner",
+    },
+    attributes: [
+      "id",
+      "name",
+      "email",
+      "salesRepId",
+      "employeeOf",
+      "directPartnerExternalAccountId",
+    ],
+  });
+
+  if (!emp) {
+    throw new AppError(
+      "Employee not found for this local partner or employee type mismatch.",
+      404,
+    );
+  }
+
+  const partner = await salesRep.findOne({
+    where: { id: localPartnerId },
+    attributes: ["id", "partnerType", "connectAccountId"],
+  });
+
+  if (!partner) {
+    throw new AppError("Local partner not found.", 404);
+  }
+
+  if (partner.partnerType !== "direct-partner") {
+    throw new AppError(
+      "This API is available only for direct-partner accounts.",
+      400,
+    );
+  }
+
+  if (!partner.connectAccountId) {
+    throw new AppError(
+      "Direct partner Stripe account is not connected yet.",
+      400,
+    );
+  }
+
+  return { emp, partner };
+};
 
 exports.createEmployee = catchAsync(async (req, res, next) => {
   // Only allow admin or salesRep to create an employee
@@ -58,7 +116,7 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
             .map(([key]) => ({
               key: `${f.feature}_${key}`,
               employeeId: newEmployee?.id,
-            }))
+            })),
         )
       : [];
 
@@ -70,8 +128,10 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
 
 exports.getAllEmployee = async (req, res, next) => {
   const condition = {};
-  if (req.user.entity == "admin") {
+  if (req.user.entity == "admin" && !req.query.salesRepId) {
     condition.accountId = req.user?.id;
+  } else if (req.user.entity == "admin" && req.query.salesRepId) {
+    condition.salesRepId = req.query.salesRepId;
   }
   if (req.user.entity == "localPartner") {
     condition.salesRepId = req.user.id;
@@ -98,6 +158,7 @@ exports.getEmployee = async (req, res, next) => {
 
 exports.updateEmployee = async (req, res, next) => {
   const { employeeId } = req.params;
+
   let exist = req.body?.email
     ? await account.findOne({ where: { email: req.body?.email } })
     : null;
@@ -110,7 +171,18 @@ exports.updateEmployee = async (req, res, next) => {
   if (exist) {
     return next(new AppError("User with this email already exists.", 404));
   }
-  await employee.update(req.body, { where: { id: employeeId } });
+
+  const updateData = { ...req.body };
+  console.log("🚀 ~ updateData:", updateData);
+  if (updateData.password) {
+    updateData.password = bcrypt.hashSync(updateData.password, 12);
+  }
+
+  console.log("🚀 ~ updateData after hash`:", updateData);
+
+  await employee.update(updateData, {
+    where: { id: employeeId },
+  });
 
   const { features } = req.body;
   const permissions =
@@ -121,7 +193,7 @@ exports.updateEmployee = async (req, res, next) => {
             .map(([key]) => ({
               key: `${f.feature}_${key}`,
               employeeId: employeeId,
-            }))
+            })),
         )
       : [];
 
@@ -184,7 +256,7 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
 
   if (!emp) {
     return next(
-      new AppError("Employee not found or not an admin employee!", 404)
+      new AppError("Employee not found or not an admin employee!", 404),
     );
   }
 
@@ -211,7 +283,7 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
       // Account exists but not active - need to complete onboarding
       console.log(
         "🚀 ~ Account exists but not active, getting onboarding link:",
-        error.message
+        error.message,
       );
 
       try {
@@ -234,7 +306,7 @@ exports.stripeConnectAccount = catchAsync(async (req, res, next) => {
         // If getting link fails, create new account
         console.log(
           "🚀 ~ Error getting link, creating new account:",
-          linkError.message
+          linkError.message,
         );
       }
     }
@@ -272,7 +344,7 @@ exports.stripeConnectAccountLink = catchAsync(async (req, res, next) => {
 
   if (!emp) {
     return next(
-      new AppError("Employee not found or Stripe account not created!", 404)
+      new AppError("Employee not found or Stripe account not created!", 404),
     );
   }
 
@@ -302,7 +374,7 @@ exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
 
   if (!emp) {
     return next(
-      new AppError("Employee not found or Stripe account not created!", 404)
+      new AppError("Employee not found or Stripe account not created!", 404),
     );
   }
 
@@ -319,6 +391,323 @@ exports.stripeConnectAccountDashboard = catchAsync(async (req, res, next) => {
   });
 });
 
+// Attach employee bank account under direct-partner connected account
+exports.attachDirectPartnerEmployeeBankAccount = catchAsync(
+  async (req, res, next) => {
+    const localPartnerId = req.user?.localPartnerId || req.user?.id;
+    const { employeeId } = req.params;
+    const { externalAccountToken } = req.body;
+
+    if (!externalAccountToken) {
+      return next(new AppError("externalAccountToken is required.", 400));
+    }
+
+    const { emp, partner } = await resolveDirectPartnerContextForEmployee({
+      employeeId,
+      localPartnerId,
+    });
+
+    // Optional replace flow: remove old linked external account first.
+    if (emp.directPartnerExternalAccountId) {
+      try {
+        await Stripe.deleteExternalBankAccountFromConnectedAccount({
+          accountId: partner.connectAccountId,
+          externalAccountId: emp.directPartnerExternalAccountId,
+        });
+      } catch (error) {
+        console.log(
+          "⚠️ Could not delete existing external account before replace:",
+          error?.message || error,
+        );
+      }
+    }
+
+    const bankAccount =
+      await Stripe.attachExternalBankAccountToConnectedAccount({
+        accountId: partner.connectAccountId,
+        externalAccountToken,
+      });
+
+    emp.directPartnerExternalAccountId = bankAccount?.id || null;
+    await emp.save();
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        employeeId: emp.id,
+        externalAccountId: bankAccount?.id || null,
+        bankName: bankAccount?.bank_name || null,
+        last4: bankAccount?.last4 || null,
+        currency: bankAccount?.currency || null,
+        country: bankAccount?.country || null,
+        status: bankAccount?.status || null,
+      },
+    });
+  },
+);
+
+// Get employee bank account under direct-partner connected account
+exports.getDirectPartnerEmployeeBankAccount = catchAsync(
+  async (req, res, next) => {
+    const localPartnerId = req.user?.localPartnerId || req.user?.id;
+    const { employeeId } = req.params;
+
+    const { emp, partner } = await resolveDirectPartnerContextForEmployee({
+      employeeId,
+      localPartnerId,
+    });
+
+    if (!emp.directPartnerExternalAccountId) {
+      return res.status(200).json({
+        status: "success",
+        data: {
+          employeeId: emp.id,
+          externalAccountId: null,
+          bankAccount: null,
+        },
+      });
+    }
+
+    try {
+      const bankAccount =
+        await Stripe.retrieveExternalBankAccountFromConnectedAccount({
+          accountId: partner.connectAccountId,
+          externalAccountId: emp.directPartnerExternalAccountId,
+        });
+
+      return res.status(200).json({
+        status: "success",
+        data: {
+          employeeId: emp.id,
+          externalAccountId: emp.directPartnerExternalAccountId,
+          bankAccount: {
+            id: bankAccount?.id || null,
+            bankName: bankAccount?.bank_name || null,
+            last4: bankAccount?.last4 || null,
+            currency: bankAccount?.currency || null,
+            country: bankAccount?.country || null,
+            status: bankAccount?.status || null,
+          },
+        },
+      });
+    } catch (error) {
+      // If account was removed in Stripe, clean local reference.
+      if (error?.message?.includes("No such external account")) {
+        emp.directPartnerExternalAccountId = null;
+        await emp.save();
+        return res.status(200).json({
+          status: "success",
+          data: {
+            employeeId: emp.id,
+            externalAccountId: null,
+            bankAccount: null,
+          },
+        });
+      }
+      throw error;
+    }
+  },
+);
+
+// Delete employee bank account under direct-partner connected account
+exports.deleteDirectPartnerEmployeeBankAccount = catchAsync(
+  async (req, res, next) => {
+    const localPartnerId = req.user?.localPartnerId || req.user?.id;
+    const { employeeId } = req.params;
+
+    const { emp, partner } = await resolveDirectPartnerContextForEmployee({
+      employeeId,
+      localPartnerId,
+    });
+
+    if (emp.directPartnerExternalAccountId) {
+      await Stripe.deleteExternalBankAccountFromConnectedAccount({
+        accountId: partner.connectAccountId,
+        externalAccountId: emp.directPartnerExternalAccountId,
+      });
+    }
+
+    emp.directPartnerExternalAccountId = null;
+    await emp.save();
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        employeeId: emp.id,
+        externalAccountId: null,
+      },
+    });
+  },
+);
+
+// Retry direct-partner employee payout for an order
+exports.retryDirectPartnerEmployeePayout = catchAsync(
+  async (req, res, next) => {
+    const localPartnerId = req.user?.localPartnerId || req.user?.id;
+    const orderId = Number(req.params.orderId || req.body?.orderId);
+
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return next(
+        new AppError(
+          "Valid orderId is required. [reasonCode=INVALID_ORDER_ID]",
+          400,
+        ),
+      );
+    }
+
+    const partner = await salesRep.findOne({
+      where: { id: localPartnerId },
+      attributes: ["id", "partnerType"],
+    });
+
+    if (!partner || partner.partnerType !== "direct-partner") {
+      return next(
+        new AppError(
+          "This retry API is available only for direct-partner accounts. [reasonCode=INVALID_PARTNER_CONTEXT]",
+          400,
+        ),
+      );
+    }
+
+    const orderRow = await order.findOne({
+      where: { id: orderId, salesRepId: localPartnerId },
+      attributes: [
+        "id",
+        "salesRepId",
+        "employeeOf",
+        "directPartnerEmployeePayoutId",
+        "directPartnerEmployeePayoutStatus",
+      ],
+    });
+
+    if (!orderRow) {
+      return next(
+        new AppError(
+          "Order not found for this direct-partner. [reasonCode=ORDER_NOT_FOUND]",
+          404,
+        ),
+      );
+    }
+
+    if (
+      orderRow.directPartnerEmployeePayoutId &&
+      ACTIVE_PAYOUT_STATUSES.includes(
+        orderRow.directPartnerEmployeePayoutStatus,
+      )
+    ) {
+      return next(
+        new AppError(
+          "Payout is already active or completed for this order. [reasonCode=PAYOUT_ALREADY_ACTIVE]",
+          409,
+        ),
+      );
+    }
+
+    const result = await calculateAndPayoutDirectPartnerEmployeeCommission({
+      orderId,
+      forceRetry: true,
+      triggerSource: "retry-api",
+    });
+
+    if (!result || !result.success) {
+      const reasonCode =
+        result?.reasonCode || "DIRECT_PARTNER_PAYOUT_RETRY_FAILED";
+      const message =
+        result?.message ||
+        "Retry payout was not created. Check current payout status or logs.";
+      return next(new AppError(`${message} [reasonCode=${reasonCode}]`, 400));
+    }
+
+    res.status(200).json({
+      status: "success",
+      data: result,
+    });
+  },
+);
+
+// List direct-partner employee payout orders for current local partner
+exports.getDirectPartnerEmployeePayoutOrders = catchAsync(
+  async (req, res, next) => {
+    const localPartnerId = req.user?.localPartnerId || req.user?.id;
+
+    const partner = await salesRep.findOne({
+      where: { id: localPartnerId },
+      attributes: ["id", "partnerType"],
+    });
+
+    if (!partner || partner.partnerType !== "direct-partner") {
+      return next(
+        new AppError(
+          "This payout listing API is available only for direct-partner accounts.",
+          400,
+        ),
+      );
+    }
+
+    const { payoutStatus } = req.query;
+    const condition = {
+      salesRepId: localPartnerId,
+      employeeOf: "direct-partner",
+    };
+
+    if (payoutStatus) {
+      condition.directPartnerEmployeePayoutStatus = payoutStatus;
+    }
+
+    const sanitizedQuery = { ...req.query };
+    delete sanitizedQuery.payoutStatus;
+
+    const features = new APIFeatures(order, sanitizedQuery)
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+
+    const queryOptions = features.getQuery();
+
+    if (queryOptions.where) {
+      queryOptions.where = { [Op.and]: [queryOptions.where, condition] };
+    } else {
+      queryOptions.where = condition;
+    }
+
+    queryOptions.attributes = [
+      "id",
+      "invoiceNumber",
+      "paymentStatus",
+      "subTotal",
+      "employeeId",
+      "employeeOf",
+      "AppliedEmployeeCommisionPercentage",
+      "employeeCommisionAmount",
+      "directPartnerEmployeePayoutId",
+      "directPartnerEmployeePayoutStatus",
+      "directPartnerEmployeePayoutFailureCode",
+      "directPartnerEmployeePayoutFailureMessage",
+      "directPartnerEmployeePayoutAttemptCount",
+      "directPartnerEmployeePayoutLastAttemptAt",
+      "directPartnerEmployeePayoutLastTriggerSource",
+      "directPartnerEmployeePayoutCreatedAt",
+      "directPartnerEmployeePayoutPaidAt",
+      "createdAt",
+    ];
+
+    const pagination = await features.getPaginationMetadata(order, {
+      where: queryOptions.where,
+      include: queryOptions.include,
+    });
+
+    const rows = await order.findAll(queryOptions);
+
+    res.status(200).json({
+      status: "success",
+      results: rows.length,
+      pagination,
+      data: { data: rows },
+    });
+  },
+);
+
 // Update Commission Percentage
 exports.updateCommission = catchAsync(async (req, res, next) => {
   const { employeeId } = req.params;
@@ -327,7 +716,7 @@ exports.updateCommission = catchAsync(async (req, res, next) => {
   if (commissionPercentage !== undefined) {
     if (commissionPercentage < 0 || commissionPercentage > 100) {
       return next(
-        new AppError("Commission percentage must be between 0 and 100", 400)
+        new AppError("Commission percentage must be between 0 and 100", 400),
       );
     }
   }
@@ -339,7 +728,7 @@ exports.updateCommission = catchAsync(async (req, res, next) => {
 
   await employee.update(
     { commissionPercentage },
-    { where: { id: employeeId } }
+    { where: { id: employeeId } },
   );
 
   res.status(200).json({
@@ -357,8 +746,8 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Only admin and admin employees can access this endpoint",
-        403
-      )
+        403,
+      ),
     );
   }
   const { status } = req.params; // "transferred" or "not-transferred"
@@ -367,8 +756,8 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
     return next(
       new AppError(
         "Status parameter is required and must be 'transferred' or 'not-transferred'",
-        400
-      )
+        400,
+      ),
     );
   }
 
@@ -376,6 +765,7 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
   const condition = {
     employeeId:
       req.user.entity == "adminEmployee" ? req?.user?.id : { [Op.ne]: null }, // Must have employee commission data
+    employeeOf: { [Op.or]: ["admin", null] }, // Keep admin flow isolated; include legacy rows
     employeeCommisionAmount: { [Op.gt]: 0 }, // Commission amount must be > 0
   };
 
@@ -384,7 +774,7 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
   } else {
     // not-transferred
     condition.employeeTransferId = { [Op.is]: null }; // No transfer ID
-    condition.paymentStatus = "Done"; // Payment status should be 'Done'
+    condition.paymentStatus = "done"; // Payment status should be 'done'
   }
 
   // Use APIFeatures for pagination, sorting, etc.
@@ -419,19 +809,19 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
     // Add employee name and user company name via Sequelize literal
     [
       literal(
-        `(SELECT employees.name FROM employees WHERE employees.id = order.employeeId LIMIT 1)`
+        `(SELECT employees.name FROM employees WHERE employees.id = order.employeeId LIMIT 1)`,
       ),
       "employeeName",
     ],
     [
       literal(
-        `(SELECT employees.stripeConnectAccountId FROM employees WHERE employees.id = order.employeeId LIMIT 1)`
+        `(SELECT employees.stripeConnectAccountId FROM employees WHERE employees.id = order.employeeId LIMIT 1)`,
       ),
       "stripeConnectAccountId",
     ],
     [
       literal(
-        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`
+        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
       ),
       "companyName",
     ],
@@ -440,6 +830,7 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
     "paymentStatus",
     "paymentIntentId",
     "employeeId",
+    "employeeOf",
     "AppliedEmployeeCommisionPercentage",
     "employeeCommisionAmount",
     "employeeTransferId",
@@ -475,8 +866,8 @@ exports.transferCommissionToEmployeeController = catchAsync(
       return next(
         new AppError(
           "Only admin and admin employees can access this endpoint",
-          403
-        )
+          403,
+        ),
       );
     }
 
@@ -485,25 +876,25 @@ exports.transferCommissionToEmployeeController = catchAsync(
     // Validate input
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return next(
-        new AppError("orderIds is required and must be a non-empty array", 400)
+        new AppError("orderIds is required and must be a non-empty array", 400),
       );
     }
 
     // Validate all IDs are numbers
     const invalidIds = orderIds.filter(
-      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id))
+      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id)),
     );
     if (invalidIds.length > 0) {
       return next(
         new AppError(
           `Invalid order IDs: ${invalidIds.join(", ")}. All IDs must be numbers.`,
-          400
-        )
+          400,
+        ),
       );
     }
 
     console.log(
-      `🚀 ~ transferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`
+      `🚀 ~ transferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`,
     );
 
     // Process transfers for each order
@@ -515,6 +906,7 @@ exports.transferCommissionToEmployeeController = catchAsync(
       try {
         const transferResult = await transferEmployeeCommission({
           orderId: Number(orderId),
+          employeeOf: "admin",
         });
 
         if (transferResult && transferResult.success) {
@@ -544,7 +936,7 @@ exports.transferCommissionToEmployeeController = catchAsync(
       } catch (error) {
         console.error(
           `❌ Error transferring commission for order ${orderId}:`,
-          error.message
+          error.message,
         );
         failed.push({
           orderId: Number(orderId),
@@ -559,7 +951,7 @@ exports.transferCommissionToEmployeeController = catchAsync(
     }
 
     console.log(
-      `✅ Transfer summary: ${successful.length} successful, ${failed.length} failed`
+      `✅ Transfer summary: ${successful.length} successful, ${failed.length} failed`,
     );
 
     res.status(200).json({
@@ -575,7 +967,7 @@ exports.transferCommissionToEmployeeController = catchAsync(
         },
       },
     });
-  }
+  },
 );
 
 // Bulk transfer commission to employees - sums all commissions per employee and transfers once
@@ -586,8 +978,8 @@ exports.bulkTransferCommissionToEmployeeController = catchAsync(
       return next(
         new AppError(
           "Only admin and admin employees can access this endpoint",
-          403
-        )
+          403,
+        ),
       );
     }
 
@@ -596,33 +988,36 @@ exports.bulkTransferCommissionToEmployeeController = catchAsync(
     // Validate input
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return next(
-        new AppError("orderIds is required and must be a non-empty array", 400)
+        new AppError("orderIds is required and must be a non-empty array", 400),
       );
     }
 
     // Validate all IDs are numbers
     const invalidIds = orderIds.filter(
-      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id))
+      (id) => !Number.isInteger(id) && !Number.isInteger(Number(id)),
     );
     if (invalidIds.length > 0) {
       return next(
         new AppError(
           `Invalid order IDs: ${invalidIds.join(", ")}. All IDs must be numbers.`,
-          400
-        )
+          400,
+        ),
       );
     }
 
     console.log(
-      `🚀 ~ bulkTransferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`
+      `🚀 ~ bulkTransferCommissionToEmployeeController ~ Processing ${orderIds.length} orders`,
     );
 
     // Call bulk transfer function
-    const result = await bulkTransferEmployeeCommission({ orderIds });
+    const result = await bulkTransferEmployeeCommission({
+      orderIds,
+      employeeOf: "admin",
+    });
 
     if (!result) {
       return next(
-        new AppError("Bulk transfer failed. Check logs for details.", 500)
+        new AppError("Bulk transfer failed. Check logs for details.", 500),
       );
     }
 
@@ -630,5 +1025,5 @@ exports.bulkTransferCommissionToEmployeeController = catchAsync(
       status: "success",
       data: result,
     });
-  }
+  },
 );
