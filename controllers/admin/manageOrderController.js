@@ -585,7 +585,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   console.log("🚀 ~ condition:", req.query);
 
   if (req?.params?.qbo == "not-synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
       condition[Op.and] = [
         literal(
@@ -601,13 +601,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       { paymentStatus: "done" },
     ];
   } else if (req?.params?.qbo == "synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceIdPartner = { [Op.ne]: null };
     }
   } else if (req.params.qbo == "unsynced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       console.log("🚀 ~ exports.allOrder ~ req.params.qbo:");
       condition.quickBooksInvoiceId = { [Op.ne]: null };
       condition.quickBooksPaymentId = null;
@@ -617,7 +617,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     }
     condition.paymentStatus = "done";
   } else if (req?.params?.qbo == "synced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksPaymentIdPartner = { [Op.ne]: null };
@@ -2608,7 +2608,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
 
 exports.listAdminQboSyncedOrdersBeforeMarch2026 = catchAsync(
   async (req, res, next) => {
-    if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       return next(
         new AppError("You do not have permission to perform this action.", 403),
       );
@@ -2640,7 +2640,7 @@ exports.listAdminQboSyncedOrdersBeforeMarch2026 = catchAsync(
  * Deletes admin QBO payment for each order and clears quickBooksPaymentId in DB.
  */
 exports.deleteAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );
@@ -2690,7 +2690,7 @@ exports.deleteAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
  * Deletes admin QBO invoice per order; clears quickBooksInvoiceId, quickBooksPaymentId, paymentSyncedToQBO.
  */
 exports.deleteAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );
@@ -2741,7 +2741,7 @@ exports.deleteAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
  * Updates existing **admin** QBO invoices only (partner QBO untouched).
  */
 exports.updateAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );
@@ -2787,7 +2787,7 @@ exports.updateAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
  * Creates/links **admin** QBO payment only (partner QBO untouched).
  */
 exports.syncAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );

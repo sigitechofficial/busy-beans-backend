@@ -17,6 +17,7 @@ const {
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
+const { isHqOperator } = require("../../utils/hqOperator");
 
 const { Op, literal, where, fn, col } = require("sequelize");
 
@@ -1243,7 +1244,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   let salesRepIdFilter = "";
   let employeeIdFilter = "";
 
-  const isAdmin = req.user.entity === "admin";
+  const isAdmin = isHqOperator(req.user.entity);
   const isAdminEmployee = req.user.entity === "adminEmployee";
   const isLocalPartner =
     req.user.entity === "localPartner" || req.user.entity === "partnerEmployee";
@@ -1704,7 +1705,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   // MTD Sales by Employee (Top 5) - Only for admin users
   let mtdSalesByEmployee = [];
   let ytdSalesByEmployee = [];
-  if (req.user.entity === "admin") {
+  if (isHqOperator(req.user.entity)) {
     mtdSalesByEmployee = await order.sequelize.query(
       `SELECT 
           users.employeeId,
@@ -1776,7 +1777,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       })),
       // Only include franchisee data for admin and adminEmployee users
       // When admin views a local partner's dashboard (salesRepId provided), franchisee data will be filtered to that local partner
-      ...((req.user.entity === "admin" ||
+      ...((isHqOperator(req.user.entity) ||
         req.user.entity === "adminEmployee") && {
         mtdSalesByFranchisee: mtdSalesByFranchisee.map((franchisee) => ({
           franchiseeId: franchisee.franchiseeId,
@@ -1809,7 +1810,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       })),
       // Only include employee sales data for admin users
       // Exclude when admin is viewing a local partner's dashboard (salesRepId provided)
-      ...(req.user.entity === "admin" &&
+      ...(isHqOperator(req.user.entity) &&
         !isAdminViewingLocalPartner && {
           mtdSalesByEmployee: mtdSalesByEmployee.map((employee) => ({
             employeeId: employee.employeeId,

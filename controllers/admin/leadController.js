@@ -8,6 +8,7 @@
     } = require("../../models");
     const catchAsync = require("../../utils/catchAsync");
     const AppError = require("../../utils/appError");
+    const { isHqOperator } = require("../../utils/hqOperator");
     const { Op } = require("sequelize");
     const sendCustomerEmail = require("../../helper/coffeeMachineQuotation");
     const sendAdminEmail = require("../../helper/coffeeMachineQuotationAdmin");
@@ -121,7 +122,7 @@
         const where = {};
 
         // Admin sees all leads
-        if (req.user?.entity === "admin") {
+        if (isHqOperator(req.user?.entity)) {
         // No filter needed - admin sees all
         } else if (req.user?.entity === "localPartner") {
         // Local partner sees leads assigned to them
@@ -724,7 +725,7 @@
             updateData.salesRepId = salesRepId;
         } else if (employeeId !== undefined) {
             // If employeeId is provided but salesRepId is not:
-            if (req.user?.entity === "admin") {
+            if (isHqOperator(req.user?.entity)) {
             // Admin assigning employee: clear salesRepId
             updateData.salesRepId = null;
             } else if (req.user?.entity === "localPartner" && lead.salesRepId) {

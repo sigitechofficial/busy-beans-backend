@@ -225,7 +225,9 @@ exports.customersListByQboStatus = catchAsync(async (req, res, next) => {
 
   // Determine if user is admin or local partner
   const isAdmin =
-    req.user.entity === "admin" || req.user.entity === "adminEmployee";
+    req.user.entity === "admin" ||
+    req.user.entity === "adminEmployee" ||
+    req.user.entity === "subAdmin";
   const isLocalPartner =
     req.user.entity === "localPartner" || req.user.entity === "partnerEmployee";
 

@@ -16,6 +16,7 @@ const salesRepReportsController = require("../controllers/admin/salesRepReportsC
 const dashboardsController = require("../controllers/admin/dashboardsController");
 const shippingCompanyController = require("../controllers/admin/shippingCompanyController");
 const employeeController = require("../controllers/admin/employeeController");
+const subAdminController = require("../controllers/admin/subAdminController");
 const adminController = require("../controllers/admin/adminController");
 const machineController = require("../controllers/admin/machineController");
 const leadController = require("../controllers/admin/leadController");
@@ -960,7 +961,7 @@ router.get("/address-management/territory/:id", addressController.getTerritory);
 router.post(
   "/employee",
   auth.protect,
-  auth.restrictTo("admin", "localPartner"),
+  auth.restrictTo("admin", "localPartner", "subAdmin"),
   employeeController.createEmployee,
 );
 
@@ -988,7 +989,7 @@ router.post(
 router.get(
   "/employee/:employeeId",
   auth.protect,
-  auth.restrictTo("admin", "localPartner"),
+  auth.restrictTo("admin", "localPartner", "subAdmin"),
   employeeController.getEmployee,
 );
 
@@ -1010,7 +1011,7 @@ router.get(
 router.get(
   "/employees",
   auth.protect,
-  auth.restrictTo("admin", "localPartner"),
+  auth.restrictTo("admin", "localPartner", "subAdmin"),
   employeeController.getAllEmployee,
 );
 
@@ -1044,7 +1045,7 @@ router.get(
 router.patch(
   "/employee/:employeeId",
   auth.protect,
-  auth.restrictTo("admin", "localPartner"),
+  auth.restrictTo("admin", "localPartner", "subAdmin"),
   employeeController.updateEmployee,
 );
 
@@ -1072,8 +1073,51 @@ router.patch(
 router.delete(
   "/employee/:employeeId",
   auth.protect,
-  auth.restrictTo("admin", "localPartner"),
+  auth.restrictTo("admin", "localPartner", "subAdmin"),
   employeeController.deleteEmployee,
+);
+
+router.post(
+  "/sub-admin",
+  auth.protect,
+  auth.restrictTo("admin", "subAdmin"),
+  subAdminController.createSubAdmin,
+);
+router.get(
+  "/sub-admins",
+  auth.protect,
+  auth.restrictTo("admin", "subAdmin"),
+  subAdminController.getAllSubAdmins,
+);
+router.get(
+  "/sub-admin/me",
+  auth.protect,
+  auth.restrictTo("subAdmin"),
+  subAdminController.getMyProfile,
+);
+router.patch(
+  "/sub-admin/me",
+  auth.protect,
+  auth.restrictTo("subAdmin"),
+  subAdminController.updateMyProfile,
+);
+router.get(
+  "/sub-admin/:id",
+  auth.protect,
+  auth.restrictTo("admin", "subAdmin"),
+  subAdminController.getSubAdmin,
+);
+router.patch(
+  "/sub-admin/:id",
+  auth.protect,
+  auth.restrictTo("admin", "subAdmin"),
+  subAdminController.updateSubAdmin,
+);
+router.delete(
+  "/sub-admin/:id",
+  auth.protect,
+  auth.restrictTo("admin", "subAdmin"),
+  subAdminController.deleteSubAdmin,
 );
 
 /**
@@ -1106,7 +1150,7 @@ router.delete(
 router.put(
   "/employee/:employeeId",
   auth.protect,
-  auth.restrictTo("admin", "salesRep"),
+  auth.restrictTo("admin", "salesRep", "subAdmin"),
   employeeController.updateEmployee,
 );
 

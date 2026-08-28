@@ -18,6 +18,7 @@ function getDeviceTokenWhereByEntity(entity, id) {
   if (entity === "supplier") return { supplierId: id };
   if (entity === "adminEmployee" || entity === "partnerEmployee")
     return { employeeId: id };
+  if (entity === "subAdmin") return null;
   return null;
 }
 

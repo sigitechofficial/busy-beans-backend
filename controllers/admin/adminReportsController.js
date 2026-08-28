@@ -9,6 +9,7 @@ const {
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
+const { isHqOperator } = require("../../utils/hqOperator");
 
 const { Op, literal, where, fn } = require("sequelize");
 
@@ -644,7 +645,7 @@ exports.customerSalesSummary = catchAsync(async (req, res, next) => {
   }
 
   // Build entity-based filters
-  const isAdmin = req.user?.entity === "admin";
+  const isAdmin = isHqOperator(req.user?.entity);
   const isAdminEmployee = req.user?.entity === "adminEmployee";
   const isLocalPartner =
     req.user?.entity === "localPartner" ||
@@ -949,7 +950,7 @@ exports.customerDetailsSummary = catchAsync(async (req, res, next) => {
   }
 
   // Build entity-based filters
-  const isAdmin = req.user?.entity === "admin";
+  const isAdmin = isHqOperator(req.user?.entity);
   const isAdminEmployee = req.user?.entity === "adminEmployee";
   const isLocalPartner =
     req.user?.entity === "localPartner" ||
@@ -1121,7 +1122,7 @@ exports.categoryWiseProductSalesSummary = catchAsync(async (req, res, next) => {
   }
 
   // Build entity-based filters
-  const isAdmin = req.user?.entity === "admin";
+  const isAdmin = isHqOperator(req.user?.entity);
   const isAdminEmployee = req.user?.entity === "adminEmployee";
   const isLocalPartner =
     req.user?.entity === "localPartner" ||
