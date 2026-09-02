@@ -10,7 +10,15 @@ const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const bcrypt = require("bcryptjs");
 const { Op } = require("sequelize");
-const { hasPermissionKey } = require("../../utils/hqOperator");
+const {
+  hasPermissionKey,
+  SCOPED_FEATURES,
+  FEATURE_ACTIONS,
+} = require("../../utils/hqOperator");
+const REDIS = require("../../utils/redisHandling");
+
+const revokeSubAdminSessions = (id) =>
+  REDIS.revokeAllTokensForUser(`subAdmin${id}`);
 
 const failPermission = (next) =>
   next(
@@ -56,14 +64,25 @@ const emailTaken = async (email, excludeId) => {
 
 const featuresToRows = (features, subAdminId) => {
   if (!features || features.length === 0) return [];
-  return features.flatMap((f) =>
-    Object.entries(f)
+  return features.flatMap((f) => {
+    const entries = { ...f };
+    const feature = entries.feature;
+    if (SCOPED_FEATURES.includes(feature)) {
+      const hasAction = FEATURE_ACTIONS.some((action) => entries[action] === true);
+      const hasScope =
+        entries.scope_customer === true || entries.scope_partner === true;
+      if (hasAction && !hasScope) {
+        entries.scope_customer = true;
+        entries.scope_partner = true;
+      }
+    }
+    return Object.entries(entries)
       .filter(([key, value]) => key !== "feature" && value === true)
       .map(([key]) => ({
-        key: `${f.feature}_${key}`,
+        key: `${feature}_${key}`,
         subAdminId,
-      })),
-  );
+      }));
+  });
 };
 
 exports.createSubAdmin = catchAsync(async (req, res, next) => {
@@ -139,6 +158,8 @@ exports.updateSubAdmin = catchAsync(async (req, res, next) => {
     const rows = featuresToRows(req.body.features, id);
     if (rows.length > 0) await permission.bulkCreate(rows);
   }
+
+  await revokeSubAdminSessions(id);
 
   res.status(200).json({ status: "success", data: {} });
 });
@@ -280,6 +301,7 @@ exports.deleteSubAdmin = catchAsync(async (req, res, next) => {
   await permission.destroy({ where: { subAdminId: id } });
   await row.update({ deleted: true, status: false });
   await row.destroy();
+  await revokeSubAdminSessions(id);
 
   res.status(200).json({ status: "success", data: {} });
 });

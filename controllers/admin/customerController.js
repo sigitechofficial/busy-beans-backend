@@ -549,10 +549,11 @@ exports.InvoiceCustomers = catchAsync(async (req, res, next) => {
     // if (filters.salesRepId) delete filters.salesRepId;
   }
 
-  console.log("🚀 ~ filters:", filters);
-  console.log("🚀 ~ filters:", filters);
-  console.log("🚀 ~ filters:", filters);
-  console.log("🚀 ~ filters:", filters);
+  if (req.query?.owner === "admin") {
+    filters.salesRepId = { [Op.is]: null };
+  } else if (req.query?.owner === "partner") {
+    filters.salesRepId = { [Op.ne]: null };
+  }
   const data = await user.findAll({
     where: filters,
     attributes: [

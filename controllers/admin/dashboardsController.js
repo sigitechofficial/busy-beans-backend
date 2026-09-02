@@ -369,76 +369,230 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.supplierDashboard = catchAsync(async (req, res, next) => {
-  const dashboard = await supplier.findOne({
-    where: { id: req.params.id },
-    attributes: [
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id)`,
-        ),
-        "totalOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 2)`,
-        ),
-        "dispatchedToSupplierOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 3)`,
-        ),
-        "acknowledgedOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 4)`,
-        ),
-        "shippedOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 5)`,
-        ),
-        "deliveredOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 6)`,
-        ),
-        "cancelledOrders",
-      ],
-    ],
-    raw: true,
-  });
+const SUPPLIER_NEW_SLA_HOURS = 24;
+const SUPPLIER_ACK_SLA_HOURS = 48;
+const SUPPLIER_READY_TO_SHIP_LIMIT = 8;
 
-  const topProducts = await item.findAll({
-    attributes: [
-      "productId",
-      [
-        literal(
-          `(SELECT products.name FROM products WHERE products.id = item.productId)`,
-        ),
-        "productName",
-      ],
-      [fn("SUM", col("qty")), "totalSold"],
+const supplierPartnerDetailPath = (statusId, id) => {
+  const sid = Number(statusId);
+  if (sid === 2) return `/supplier/partner/new-orders/${id}`;
+  if (sid === 3) return `/supplier/partner/acknowledged-orders/${id}`;
+  return `/supplier/partner/shipped-orders/${id}`;
+};
+
+const supplierAgeHours = (statusAt) => {
+  if (!statusAt) return 0;
+  const then = new Date(statusAt).getTime();
+  if (Number.isNaN(then)) return 0;
+  return Math.max(0, Math.round((Date.now() - then) / 36e5));
+};
+
+const mapSupplierDashboardRow = (row, ownerType) => {
+  const id = row.id;
+  const statusId = Number(row.statusId);
+  const companyName =
+    ownerType === "partner"
+      ? row.salesRepName || row.companyName || ""
+      : row.companyName || row.customerName || "";
+  return {
+    id,
+    ownerType,
+    type: ownerType === "partner" ? "Partner" : "Customer",
+    companyName,
+    itemCount: Number(row.itemCount) || 0,
+    statusId,
+    status: row.orderCurrentStatus || "",
+    ageHours: supplierAgeHours(row.statusAt || row.createdAt),
+    createdAt: row.createdAt,
+    detailPath:
+      ownerType === "partner"
+        ? supplierPartnerDetailPath(statusId, id)
+        : `/supplier/order-detail/${id}`,
+  };
+};
+
+const supplierAttentionReason = (statusId) => {
+  if (statusId === 2) return "New sitting too long";
+  if (statusId === 3) return "Acknowledged not shipped";
+  if (statusId === 4) return "Mid-ship hang";
+  return "";
+};
+
+exports.supplierDashboard = catchAsync(async (req, res, next) => {
+  const supplierId = Number(
+    req.user?.entity === "supplier" ? req.user.id : req.params.id,
+  );
+
+  if (!supplierId) {
+    return next(new AppError("Supplier id is required", 400));
+  }
+
+  const customerListAttributes = [
+    "id",
+    "statusId",
+    "createdAt",
+    [
+      literal(
+        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+      ),
+      "companyName",
     ],
-    group: ["productId"],
-    order: [[fn("SUM", col("qty")), "DESC"]],
-    limit: 5,
-    include: [
+    [
+      literal(
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+      ),
+      "customerName",
+    ],
+    [
+      literal(
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+      ),
+      "orderCurrentStatus",
+    ],
+    [
+      literal(
+        `COALESCE((SELECT SUM(qty) FROM items WHERE items.orderId = order.id), 0)`,
+      ),
+      "itemCount",
+    ],
+    [
+      literal(
+        `COALESCE(
+          (SELECT createdAt FROM orderHistories
+           WHERE orderHistories.orderId = order.id
+             AND orderHistories.statusId = order.statusId
+           LIMIT 1),
+          order.createdAt
+        )`,
+      ),
+      "statusAt",
+    ],
+  ];
+
+  const partnerListAttributes = [
+    "id",
+    "statusId",
+    "createdAt",
+    [
+      literal(
+        `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`,
+      ),
+      "salesRepName",
+    ],
+    [
+      literal(
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`,
+      ),
+      "orderCurrentStatus",
+    ],
+    [
+      literal(
+        `COALESCE((SELECT SUM(qty) FROM partnerOrderItems WHERE partnerOrderItems.partnerOrderId = partnerOrder.id), 0)`,
+      ),
+      "itemCount",
+    ],
+    [
+      literal(
+        `COALESCE(
+          (SELECT createdAt FROM orderHistories
+           WHERE orderHistories.partnerOrderId = partnerOrder.id
+             AND orderHistories.statusId = partnerOrder.statusId
+           LIMIT 1),
+          partnerOrder.createdAt
+        )`,
+      ),
+      "statusAt",
+    ],
+  ];
+
+  const shippedLast7DaysSql = (tableName, historyFk) =>
+    `SELECT COUNT(*) AS count
+     FROM ${tableName}
+     WHERE ${tableName}.supplierId = :supplierId
+       AND ${tableName}.statusId = 5
+       AND COALESCE(
+         (SELECT createdAt FROM orderHistories
+          WHERE orderHistories.${historyFk} = ${tableName}.id
+            AND orderHistories.statusId = 5
+          LIMIT 1),
+         ${tableName}.updatedAt
+       ) >= DATE_SUB(NOW(), INTERVAL 7 DAY)`;
+
+  const [
+    newCustomer,
+    newPartner,
+    acknowledgedCustomer,
+    acknowledgedPartner,
+    shippedCustomerRows,
+    shippedPartnerRows,
+    customerOpen,
+    partnerOpen,
+  ] = await Promise.all([
+    order.count({ where: { supplierId, statusId: 2 } }),
+    partnerOrder.count({ where: { supplierId, statusId: 2 } }),
+    order.count({ where: { supplierId, statusId: 3 } }),
+    partnerOrder.count({ where: { supplierId, statusId: 3 } }),
+    order.sequelize.query(shippedLast7DaysSql("orders", "orderId"), {
+      replacements: { supplierId },
+      type: order.sequelize.QueryTypes.SELECT,
+    }),
+    partnerOrder.sequelize.query(
+      shippedLast7DaysSql("partnerOrders", "partnerOrderId"),
       {
-        model: order,
-        where: { supplierId: req.params?.id },
-        attributes: [],
+        replacements: { supplierId },
+        type: partnerOrder.sequelize.QueryTypes.SELECT,
       },
-    ],
-  });
+    ),
+    order.findAll({
+      where: { supplierId, statusId: { [Op.in]: [2, 3, 4] } },
+      attributes: customerListAttributes,
+      raw: true,
+    }),
+    partnerOrder.findAll({
+      where: { supplierId, statusId: { [Op.in]: [2, 3, 4] } },
+      attributes: partnerListAttributes,
+      raw: true,
+    }),
+  ]);
+
+  const openRows = [
+    ...(customerOpen || []).map((row) => mapSupplierDashboardRow(row, "customer")),
+    ...(partnerOpen || []).map((row) => mapSupplierDashboardRow(row, "partner")),
+  ];
+
+  const needsAttention = openRows
+    .filter((row) => {
+      if (row.statusId === 2) return row.ageHours > SUPPLIER_NEW_SLA_HOURS;
+      if (row.statusId === 3) return row.ageHours > SUPPLIER_ACK_SLA_HOURS;
+      return row.statusId === 4;
+    })
+    .sort((a, b) => b.ageHours - a.ageHours || Number(b.id) - Number(a.id))
+    .map((row) => ({
+      ...row,
+      reason: supplierAttentionReason(row.statusId),
+    }));
+
+  const readyToShip = openRows
+    .filter((row) => row.statusId === 3)
+    .sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateB !== dateA) return dateB - dateA;
+      return Number(b.id) - Number(a.id);
+    })
+    .slice(0, SUPPLIER_READY_TO_SHIP_LIMIT);
 
   res.status(200).json({
     status: "success",
-    data: { dashboard, topProducts },
+    data: {
+      newCount: (newCustomer || 0) + (newPartner || 0),
+      acknowledgedCount: (acknowledgedCustomer || 0) + (acknowledgedPartner || 0),
+      shippedLast7Days:
+        Number(shippedCustomerRows?.[0]?.count || 0) +
+        Number(shippedPartnerRows?.[0]?.count || 0),
+      needsAttention,
+      readyToShip,
+    },
   });
 });
 
@@ -1202,6 +1356,12 @@ exports.getLocalPartnerSalesDashboard = catchAsync(async (req, res, next) => {
 });
 
 exports.getSalesDashboard = catchAsync(async (req, res, next) => {
+  if (req.user?.entity === "supplier") {
+    return next(
+      new AppError("You do not have permission to access this resource", 403),
+    );
+  }
+
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
