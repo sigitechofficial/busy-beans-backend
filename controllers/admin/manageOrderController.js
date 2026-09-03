@@ -663,6 +663,15 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   // Get the base query options (where, limit, offset, order, etc.)
   const queryOptions = features.getQuery();
 
+  APIFeatures.appendSearchOrConditions(
+    queryOptions,
+    APIFeatures.relatedNameSearchConditions(order.sequelize, req.query?.search, {
+      tableAlias: "order",
+      companyName: true,
+      orderType: true,
+    }),
+  );
+
   // Merge manual filter conditions with existing where conditions
   // Handle both simple object merge and Op.and structure
   if (Object.keys(condition).length > 0) {

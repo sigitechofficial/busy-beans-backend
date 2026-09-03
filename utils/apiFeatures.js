@@ -1,4 +1,4 @@
-const { Op } = require("sequelize");
+const { Op, literal } = require("sequelize");
 const operatorMap = {
   eq: Op.eq,
   ne: Op.ne,
@@ -217,5 +217,84 @@ class APIFeatures {
     };
   }
 }
+
+/**
+ * Merge extra OR search predicates into an APIFeatures where clause.
+ */
+function appendSearchOrConditions(queryOptions, extraConditions) {
+  if (!queryOptions || !extraConditions?.length) return queryOptions;
+
+  if (queryOptions.where && queryOptions.where[Op.and]) {
+    const andConditions = queryOptions.where[Op.and];
+    const searchConditionIndex = andConditions.findIndex(
+      (cond) => cond && cond[Op.or],
+    );
+
+    if (searchConditionIndex !== -1) {
+      andConditions[searchConditionIndex][Op.or].push(...extraConditions);
+    } else {
+      andConditions.push({ [Op.or]: extraConditions });
+    }
+  } else if (queryOptions.where && queryOptions.where[Op.or]) {
+    queryOptions.where[Op.or].push(...extraConditions);
+  } else if (queryOptions.where) {
+    queryOptions.where = {
+      [Op.and]: [queryOptions.where, { [Op.or]: extraConditions }],
+    };
+  } else {
+    queryOptions.where = { [Op.or]: extraConditions };
+  }
+
+  return queryOptions;
+}
+
+/**
+ * Search related display fields that are not columns on the order row:
+ * company name (users), partner name (salesReps), Admin/Partner order type.
+ */
+function relatedNameSearchConditions(sequelize, searchTerm, options = {}) {
+  const term = String(searchTerm || "").trim();
+  if (!term || !sequelize) return [];
+
+  const table = String(options.tableAlias || "order").replace(
+    /[^a-zA-Z0-9_]/g,
+    "",
+  );
+  const userIdCol = options.userIdColumn || `${table}.userId`;
+  const salesRepIdCol = options.salesRepIdColumn || `${table}.salesRepId`;
+  const escaped = sequelize.escape(`%${term}%`);
+  const conditions = [];
+
+  if (options.companyName) {
+    conditions.push(
+      literal(
+        `EXISTS (SELECT 1 FROM users WHERE users.id = ${userIdCol} AND users.companyName LIKE ${escaped})`,
+      ),
+    );
+  }
+
+  if (options.salesRepName) {
+    conditions.push(
+      literal(
+        `EXISTS (SELECT 1 FROM salesReps WHERE salesReps.id = ${salesRepIdCol} AND salesReps.srName LIKE ${escaped})`,
+      ),
+    );
+  }
+
+  if (options.orderType) {
+    const normalized = term.toLowerCase();
+    if (normalized.length >= 3 && "admin".startsWith(normalized)) {
+      conditions.push(literal(`${salesRepIdCol} IS NULL`));
+    }
+    if (normalized.length >= 3 && "partner".startsWith(normalized)) {
+      conditions.push(literal(`${salesRepIdCol} IS NOT NULL`));
+    }
+  }
+
+  return conditions;
+}
+
+APIFeatures.appendSearchOrConditions = appendSearchOrConditions;
+APIFeatures.relatedNameSearchConditions = relatedNameSearchConditions;
 
 module.exports = APIFeatures;

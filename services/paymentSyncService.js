@@ -68,12 +68,20 @@ async function syncAdminPaymentToQBO({ ord, ADMIN, MODEL, orderType }) {
     throw new Error("QBO customer not found for admin");
   }
 
-  const { accessToken } = await refreshAccessTokenIfNeeded({
-    condition: adminCondition,
-  });
+  let accessToken;
+  try {
+    ({ accessToken } = await refreshAccessTokenIfNeeded({
+      condition: adminCondition,
+    }));
+  } catch (err) {
+    if (/No QuickBooks token record found/i.test(err.message || "")) {
+      throw new Error(adminQboTokenMissingMessage({ ord, ADMIN }));
+    }
+    throw err;
+  }
 
   if (!accessToken) {
-    throw new Error("Admin QBO token missing");
+    throw new Error(adminQboTokenMissingMessage({ ord, ADMIN }));
   }
 
   // First attempt
@@ -400,7 +408,11 @@ function resolvePaymentSyncSideFromEntity(entity) {
   if (entity === "localPartner" || entity === "partnerEmployee") {
     return "partner";
   }
-  if (entity === "admin" || entity === "adminEmployee") {
+  if (
+    entity === "admin" ||
+    entity === "adminEmployee" ||
+    entity === "subAdmin"
+  ) {
     return "admin";
   }
   return "both";
@@ -425,17 +437,47 @@ function partnerPaymentSyncSkipReason(ord, orderType) {
   return null;
 }
 
+function adminQboTokenMissingMessage({ ord, ADMIN }) {
+  const orderRealm = String(ord?.adminRealmId || "").trim();
+  const currentRealm = String(ADMIN?.currentRealmId || "").trim();
+  if (orderRealm && currentRealm && orderRealm !== currentRealm) {
+    return (
+      `Invoice is on a disconnected QuickBooks company (realm ${orderRealm}). ` +
+      `Admin is currently connected to a different company (realm ${currentRealm}). ` +
+      `Reconnect the original company or re-sync the invoice to the connected company.`
+    );
+  }
+  return "No QuickBooks token record found. Reconnect Admin QuickBooks and try again.";
+}
+
 function formatBulkPaymentSyncSummaryMessage({
   successCount,
   partialCount,
   failureCount,
   total,
+  results = [],
 }) {
-  let msg = `Bulk payment sync completed: ${successCount} succeeded`;
+  const allFailed =
+    failureCount > 0 && successCount === 0 && (partialCount || 0) === 0;
+  let msg = allFailed
+    ? `Payment sync failed: ${successCount} succeeded`
+    : `Bulk payment sync completed: ${successCount} succeeded`;
   if (partialCount > 0) {
     msg += `, ${partialCount} partial`;
   }
   msg += `, ${failureCount} failed out of ${total} total orders`;
+
+  const failedRows = results.filter((r) => r.status === "failed" && r.message);
+  if (failedRows.length) {
+    const details = failedRows
+      .slice(0, 3)
+      .map((r) => `Order ${r.orderId}: ${r.message}`)
+      .join("; ");
+    msg += `. ${details}`;
+    if (failedRows.length > 3) {
+      msg += ` (and ${failedRows.length - 3} more)`;
+    }
+  }
   return msg;
 }
 
@@ -762,6 +804,7 @@ async function syncMultiplePaymentsToQuickBooks({
         partialCount,
         failureCount,
         total: orders.length,
+        results,
       }),
     };
 

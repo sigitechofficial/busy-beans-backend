@@ -147,6 +147,18 @@ exports.orderAccordingToFrequency = catchAsync(async (req, res, next) => {
   // Get the base query options
   const queryOptions = features.getQuery();
 
+  APIFeatures.appendSearchOrConditions(
+    queryOptions,
+    APIFeatures.relatedNameSearchConditions(
+      orderFrequency.sequelize,
+      req.query?.search,
+      {
+        tableAlias: "orderFrequency",
+        companyName: true,
+      },
+    ),
+  );
+
   // Add the complex nextOrderDate condition to condition object first
   const nextOrderDateCondition = {
     nextOrderDate: {

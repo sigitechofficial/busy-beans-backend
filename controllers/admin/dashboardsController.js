@@ -17,7 +17,7 @@ const {
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
-const { isHqOperator } = require("../../utils/hqOperator");
+const { isHqOperator, hasFeatureScope } = require("../../utils/hqOperator");
 
 const { Op, literal, where, fn, col } = require("sequelize");
 
@@ -1409,6 +1409,17 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   const isLocalPartner =
     req.user.entity === "localPartner" || req.user.entity === "partnerEmployee";
 
+  // Customer/admin-only sub-admins: omitted userType is Admin, not unfiltered HQ.
+  // HQ admin and both-scope / legacy sub-admins stay unfiltered.
+  if (
+    req.user?.entity === "subAdmin" &&
+    hasFeatureScope(req, "dashboard", "customer") &&
+    !hasFeatureScope(req, "dashboard", "partner") &&
+    !req.query.userType
+  ) {
+    req.query.userType = "admin";
+  }
+
   // Validate: Only admin can use salesRepId query parameter to view specific local partner dashboard
   if (req.query.salesRepId && !isAdmin) {
     return next(
@@ -1429,10 +1440,25 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   // Uses req.query.userType === 'admin' to filter to admin-only orders
   const isAdminOnlyCondition = isAdmin && req.query.userType === "admin";
 
+  // All local partners (userType=salesRep or salesRep[ne]=null, no specific id)
+  const salesRepNeRaw = req.query["salesRep[ne]"];
+  const isAllPartnersCondition =
+    isAdmin &&
+    !requestedSalesRepId &&
+    (req.query.userType === "salesRep" ||
+      salesRepNeRaw === "null" ||
+      salesRepNeRaw === "");
+
   // Only apply filters if NOT admin (admin sees all data)
   // OR if admin is viewing a specific local partner's dashboard
   // OR if admin wants to see only direct admin orders (userType=admin)
-  if (!isAdmin || isAdminViewingLocalPartner || isAdminOnlyCondition) {
+  // OR if admin wants all partner-attributed orders (userType=salesRep)
+  if (
+    !isAdmin ||
+    isAdminViewingLocalPartner ||
+    isAdminOnlyCondition ||
+    isAllPartnersCondition
+  ) {
     // For local partners: filter by salesRepId
     if (isLocalPartner && req.user.localPartnerId) {
       const salesRepId = req.user.localPartnerId;
@@ -1448,6 +1474,12 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       console.log(
         "🚀 ~ getSalesDashboard ~ Admin viewing local partner dashboard, salesRepId filter:",
         requestedSalesRepId,
+      );
+    }
+    else if (isAllPartnersCondition) {
+      salesRepIdFilter = `AND orders.salesRepId IS NOT NULL`;
+      console.log(
+        "🚀 ~ getSalesDashboard ~ All local partners (userType=salesRep): salesRepId IS NOT NULL",
       );
     }
     // For admin-only condition (userType=admin): show only direct admin orders (salesRepId IS NULL)

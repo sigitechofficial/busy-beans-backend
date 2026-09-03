@@ -360,8 +360,20 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   // Get the base query options (where, limit, offset, order, etc.)
   const queryOptions = features.getQuery();
 
+  APIFeatures.appendSearchOrConditions(
+    queryOptions,
+    APIFeatures.relatedNameSearchConditions(
+      partnerOrder.sequelize,
+      req.query?.search,
+      {
+        tableAlias: "partnerOrder",
+        salesRepName: true,
+      },
+    ),
+  );
+
   if (req?.params?.qbo == "not-synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
     }
     condition[Op.or] = [
@@ -369,17 +381,17 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
       { paymentStatus: "done" },
     ];
   } else if (req?.params?.qbo == "synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
     }
   } else if (req?.params?.qbo == "unsynced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
       condition.quickBooksPaymentId = { [Op.or]: [null, ""] };
     }
     condition.paymentStatus = "done";
   } else if (req?.params?.qbo == "synced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     }
   } else {

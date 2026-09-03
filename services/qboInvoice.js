@@ -1369,7 +1369,7 @@ async function handleAdminQboSync({
       //   adminUpdateInput.pulloutIntentIdSynced = "synced";
       // }
 
-      updateOrderRecord({
+      await updateOrderRecord({
         orderId,
         input: adminUpdateInput,
         MODEL: DBMODEL,
@@ -1386,7 +1386,7 @@ async function handleAdminQboSync({
             orderType === "customer" && !!order?.salesRepId,
         });
 
-        updateOrderRecord({
+        await updateOrderRecord({
           orderId,
           input: { quickBooksPaymentId: adminQboPayment?.paymentId },
           MODEL: DBMODEL,
@@ -1522,7 +1522,7 @@ async function handlePartnerQboSync({
         subtractSalerCommission: false,
       });
 
-      updateOrderRecord({
+      await updateOrderRecord({
         orderId,
         input: {
           quickBooksInvoiceIdPartner: partnerQboInvoice?.invoiceId,
@@ -1541,7 +1541,7 @@ async function handlePartnerQboSync({
           subtractLocalPartnerCommission: false,
         });
 
-        updateOrderRecord({
+        await updateOrderRecord({
           orderId,
           input: {
             quickBooksPaymentIdPartner: partnerQboPayment?.paymentId,
@@ -1622,7 +1622,6 @@ async function createInvoiceFromOrder({
   });
 
   const neededAdminSync =
-    orderType === "customer" &&
     !order.quickBooksInvoiceId &&
     ADMIN?.currentRealmId &&
     !shouldSkipAdminQboSync({ orderType, order });
@@ -1799,7 +1798,6 @@ async function createMultipleInvoicesFromOrders({
 
       // Only count as success if we actually saved an ID (or already had one)
       const neededAdminSync =
-        orderType === "customer" &&
         !order.quickBooksInvoiceId &&
         ADMIN?.currentRealmId &&
         !shouldSkipAdminQboSync({ orderType, order });

@@ -24,9 +24,19 @@ const READ_LIKE_POST = [
   /navigation-counts/i,
   /orders-list/i,
   /kanban/i,
+  /shipping-charges-on-weight/i,
 ];
 
+const isPulloutIntentQboSyncUrl = (url) =>
+  /\/admin-reports\/pullout-intent-unsynced-orders/i.test(url) ||
+  /\/qbo\/pullout-custom-field/i.test(url);
+
 const DOMAIN_RULES = [
+  {
+    test: /\/admin-reports\/pullout-intent-unsynced-orders/i,
+    domain: "quickbooks-invoices",
+  },
+  { test: /\/qbo\/pullout-custom-field/i, domain: "quickbooks-invoices" },
   { test: /\/admin-reports/i, domain: "report" },
   { test: /\/qbo-customer/i, domain: "quickbooks" },
   { test: /\/quickbooks-/i, domain: "quickbooks-invoices" },
@@ -36,6 +46,8 @@ const DOMAIN_RULES = [
   { test: /\/inventory/i, domain: "product" },
   { test: /\/sku/i, domain: "product" },
   { test: /\/category/i, domain: "category" },
+  { test: /\/assign-supplier/i, domain: "orders" },
+  { test: /\/supplier-acknowledgement/i, domain: "orders" },
   { test: /\/supplier/i, domain: "supplier" },
   { test: /\/sales-rep/i, domain: "local-partner" },
   { test: /\/sales_rep/i, domain: "local-partner" },
@@ -93,9 +105,31 @@ const urlIndicatesPartnerSide = (url) =>
 const PARTNER_REPORT_PATHS =
   /\/admin-reports\/(partner-commission|partner-creadit-limit|unpaid-partner-balance|direct-partner|pulled-orders-receivable)/i;
 const CUSTOMER_REPORT_PATHS =
-  /\/admin-reports\/customer-report(?:\/|$|\?)/i;
+  /\/admin-reports\/(customer-report|customer-detail-report|product-sales|category-wise-product-sales-report)(?:\/|$|\?)/i;
+const SALES_BY_CUSTOMER_SUMMARY_PATH =
+  /\/admin-reports\/customer-sales-report(?:\/|$|\?)/i;
+const reportQueryWantsPartner = (url) =>
+  /[?&]userType=salesRep(?:&|$)/i.test(url) ||
+  /salesRepId=/i.test(url) ||
+  /salesRep(?:\[|%5B)ne(?:\]|%5D)/i.test(url);
 
 const resolveRequiredScope = (req, url) => {
+  // Customer-order PulloutIntent QBO sync lives under /admin-reports and /qbo/pullout
+  // but is a Quickbooks Invoices page, not Report Management / Payment Pullouts.
+  if (isPulloutIntentQboSyncUrl(url)) {
+    return { feature: "quickbooks-invoices", scope: "customer" };
+  }
+
+  if (/\/qbo\/order-(invoice|payment)/i.test(url)) {
+    const orderType = String(req.body?.orderType || "");
+    if (orderType === "local-partner") {
+      return { feature: "quickbooks-invoices", scope: "partner" };
+    }
+    if (orderType === "customer") {
+      return { feature: "quickbooks-invoices", scope: "customer" };
+    }
+  }
+
   if (/\/quickbooks-partner-order-management/i.test(url)) {
     return { feature: "quickbooks-invoices", scope: "partner" };
   }
@@ -113,31 +147,24 @@ const resolveRequiredScope = (req, url) => {
   if (PARTNER_REPORT_PATHS.test(url)) {
     return { feature: "report", scope: "partner" };
   }
+  // Sales by Customer Summary has an Admin / Local Partner filter.
+  // Partner-only may fetch salesRep / salesRep[ne] data; HQ totals
+  // (userType=admin or untyped) still require customer/admin scope.
+  if (SALES_BY_CUSTOMER_SUMMARY_PATH.test(url)) {
+    return {
+      feature: "report",
+      scope: reportQueryWantsPartner(url) ? "partner" : "customer",
+    };
+  }
   if (CUSTOMER_REPORT_PATHS.test(url)) {
     return { feature: "report", scope: "customer" };
   }
   if (/\/admin-reports/i.test(url)) {
-    const q = `${url}`;
-    const wantsPartner =
-      /[?&]userType=salesRep(?:&|$)/i.test(q) ||
-      /salesRepId=/i.test(q) ||
-      /salesRep\[ne\]/i.test(q);
-    const wantsCustomer = /[?&]userType=admin(?:&|$)/i.test(q);
-    if (wantsPartner) return { feature: "report", scope: "partner" };
-    if (wantsCustomer) return { feature: "report", scope: "customer" };
-    if (userHasFeatureKeys(req, "report")) {
-      const both =
-        hasFeatureScope(req, "report", "customer") &&
-        hasFeatureScope(req, "report", "partner");
-      if (!both) {
-        return {
-          feature: "report",
-          scope: hasFeatureScope(req, "report", "customer")
-            ? "partner"
-            : "customer",
-        };
-      }
-    }
+    if (reportQueryWantsPartner(url)) return { feature: "report", scope: "partner" };
+    // HQ / customer reports (typed admin or untyped) need customer/admin
+    // scope. Do not invent the opposite (partner) scope — that 403s
+    // customer-only accounts and shows an empty "No Data Found" table.
+    return { feature: "report", scope: "customer" };
   }
 
   if (
@@ -216,7 +243,27 @@ const resolveRequiredScope = (req, url) => {
     }
   }
 
-  if (/\/admin\/sales-rep\/?$/i.test(url)) {
+  if (
+    /\/admin\/sales-rep\/?$/i.test(url) ||
+    /\/sales-rep\/for-order-creation/i.test(url) ||
+    /\/sales-rep-products-for-order-creation/i.test(url)
+  ) {
+    // Pullout-intent sync filters customer orders by dropship partner. Listing
+    // sales reps is not Local Partner module access.
+    if (
+      /\/admin\/sales-rep\/?$/i.test(url) &&
+      userHasFeatureKeys(req, "quickbooks-invoices")
+    ) {
+      return null;
+    }
+    // Dashboard Filters partner picker is not Local Partner management.
+    if (
+      /\/admin\/sales-rep\/?$/i.test(url) &&
+      userHasFeatureKeys(req, "dashboard") &&
+      hasFeatureScope(req, "dashboard", "partner")
+    ) {
+      return { feature: "dashboard", scope: "partner" };
+    }
     if (
       userHasFeatureKeys(req, "invoice") &&
       !hasPermissionKey(req, "local-partner_view")
@@ -229,6 +276,13 @@ const resolveRequiredScope = (req, url) => {
     ) {
       return { feature: "orders", scope: "partner" };
     }
+  }
+
+  if (/\/dashboard\/sales/i.test(url)) {
+    return {
+      feature: "dashboard",
+      scope: reportQueryWantsPartner(url) ? "partner" : "customer",
+    };
   }
 
   return null;
@@ -255,6 +309,7 @@ const resolveAction = (method, url) => {
   if (m === "DELETE") return "delete";
   if (m === "PATCH" || m === "PUT") return "update";
   if (m === "POST") {
+    if (/\/qbo\/pullout-custom-field/i.test(url)) return "update";
     if (READ_LIKE_POST.some((re) => re.test(url))) return "view";
     return "create";
   }
@@ -296,9 +351,17 @@ exports.enforceSubAdminAcl = (req, res, next) => {
 
   const isPartnerWorkPath =
     /\/admin\/sales-rep\/?$/i.test(url) ||
+    /\/sales-rep\/for-order-creation/i.test(url) ||
+    /\/sales-rep-products-for-order-creation/i.test(url) ||
     /\/customer-list\/sale-rep-id\//i.test(rawUrl) ||
     /\/products\/sales-rep/i.test(url);
   if (isPartnerWorkPath) {
+    if (userHasFeatureKeys(req, "quickbooks-invoices")) {
+      effectiveDomains = [...effectiveDomains, "quickbooks-invoices"];
+    }
+    if (userHasFeatureKeys(req, "dashboard") && hasFeatureScope(req, "dashboard", "partner")) {
+      effectiveDomains = [...effectiveDomains, "dashboard"];
+    }
     if (userHasFeatureKeys(req, "invoice") && hasFeatureScope(req, "invoice", "partner")) {
       effectiveDomains = [...effectiveDomains, "invoice"];
     }
@@ -337,10 +400,47 @@ exports.enforceSubAdminAcl = (req, res, next) => {
     effectiveDomains = [...effectiveDomains, "invoice"];
   }
 
+  if (/\/qbo\/order-(invoice|payment)/i.test(url)) {
+    if (userHasFeatureKeys(req, "quickbooks-invoices")) {
+      effectiveDomains = [...effectiveDomains, "quickbooks-invoices"];
+    }
+  }
+
+  if (/shipping-charges-on-weight/i.test(url)) {
+    if (userHasFeatureKeys(req, "invoice")) {
+      effectiveDomains = [...effectiveDomains, "invoice"];
+    }
+    if (userHasFeatureKeys(req, "orders")) {
+      effectiveDomains = [...effectiveDomains, "orders"];
+    }
+  }
+
+  // Dispatch / cancel / edit / deliver share one controller. Body says which track.
+  // Partner Orders CRUD must be enough for partnerOrderId; do not require Order Management.
+  if (
+    /\/assign-supplier|\/supplier-acknowledgement|\/order-dispatch|\/order-deliver|\/order-cancel|\/edit-order/i.test(
+      url,
+    )
+  ) {
+    const isPartnerJourney = !!req.body?.partnerOrderId;
+    effectiveDomains = isPartnerJourney
+      ? ["orders", "partner-orders"]
+      : ["orders", "customer-orders"];
+  }
+
   const action = resolveAction(req.method, url);
-  const allowed = effectiveDomains.some((domain) =>
-    hasPermissionKey(req, `${domain}_${action}`),
-  );
+  const allowed = effectiveDomains.some((domain) => {
+    if (hasPermissionKey(req, `${domain}_${action}`)) return true;
+    // Update on Quickbooks Invoices is enough to list pullout-intent rows.
+    if (
+      action === "view" &&
+      isPulloutIntentQboSyncUrl(url) &&
+      hasPermissionKey(req, `${domain}_update`)
+    ) {
+      return true;
+    }
+    return false;
+  });
   if (!allowed) {
     const key = `${effectiveDomains[0]}_${action}`;
     if (

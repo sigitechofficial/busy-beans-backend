@@ -325,7 +325,21 @@ exports.syncMultipleOrderPayments = async (req, res) => {
       syncSide,
     });
 
-    return httpSuccess(res, result, result.message);
+    const successCount = result.successCount || 0;
+    const failureCount = result.failureCount || 0;
+    const partialCount = result.partialCount || 0;
+    let status = "success";
+    if (failureCount > 0 && successCount === 0 && partialCount === 0) {
+      status = "failed";
+    } else if (failureCount > 0 || partialCount > 0) {
+      status = "partial-success";
+    }
+
+    return res.status(200).json({
+      status,
+      message: result.message,
+      data: result,
+    });
   } catch (err) {
     console.error("[QBO][syncMultipleOrderPayments] Error:", err);
     return httpError(res, 500, err.message);

@@ -19,6 +19,7 @@ const hasPermissionKey = (req, key) => {
 };
 
 const SCOPED_FEATURES = [
+  "dashboard",
   "orders",
   "quickbooks-invoices",
   "invoice",
