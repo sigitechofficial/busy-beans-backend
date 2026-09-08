@@ -36,6 +36,8 @@ const {
 const {
   calculateAndPayoutDirectPartnerEmployeeCommission,
 } = require("../../utils/directPartnerEmployeePayoutUtils");
+const { applyInvoiceException } = require("../../utils/invoiceExceptionFilter");
+const { applyOpsOrderDateFloor, opsOrderOnSql } = require("../../utils/opsOrderDateFloor");
 
 const {
   dataForEmailAndNotifications,
@@ -652,6 +654,9 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   // Extract and remove employee filter so it's not applied as Order column (handled via include below)
   const employeeFilter = req.query?.employee;
   if (req.query?.employee !== undefined) delete req.query.employee;
+
+  applyOpsOrderDateFloor(req, condition);
+  applyInvoiceException(req, condition, "order");
 
   const features = new APIFeatures(order, req.query)
     .filter()
@@ -2389,6 +2394,7 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
            AND orders.type = 'regular-order'
+           ${opsOrderOnSql("orders")}
            ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
@@ -2474,6 +2480,7 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
             `(SELECT COUNT(orders.id) 
              FROM orders 
              WHERE orders.statusId = statuses.id 
+             ${opsOrderOnSql("orders")}
              ${employeeFilterLiteral})`,
           ),
           "count",
@@ -2527,7 +2534,7 @@ exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
       "orderStatus",
       [
         literal(
-          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id})`,
+          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id} ${opsOrderOnSql("orders")})`,
         ),
         "count",
       ],

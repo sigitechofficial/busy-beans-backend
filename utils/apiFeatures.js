@@ -21,14 +21,28 @@ class APIFeatures {
 
   filter() {
     const queryObj = { ...this.queryString };
-    const excludedFields = ["page", "sort", "limit", "fields", "search"];
+    const excludedFields = [
+      "page",
+      "sort",
+      "limit",
+      "fields",
+      "search",
+      "invoiceException",
+    ];
     excludedFields.forEach((field) => delete queryObj[field]);
 
     const filterConditions = {
       deleted: 0,
     };
 
+    const allowedColumns = this.query?.rawAttributes
+      ? new Set([...Object.keys(this.query.rawAttributes), "deleted"])
+      : null;
+
     Object.keys(queryObj).forEach((key) => {
+      if (allowedColumns && !allowedColumns.has(key)) {
+        return;
+      }
       const value = queryObj[key];
 
       // ✅ Handle advanced filtering like: statusId: { ne: '6' }
@@ -67,6 +81,7 @@ class APIFeatures {
     delete filterConditions.limit;
     delete filterConditions.page;
     delete filterConditions.fields;
+    delete filterConditions.invoiceException;
     this.queryOptions.where = filterConditions;
     console.dir(filterConditions, { depth: null });
     return this;

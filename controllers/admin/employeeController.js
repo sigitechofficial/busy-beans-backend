@@ -18,6 +18,7 @@ const {
 const factory = require("../handlerFactory");
 const APIFeatures = require("../../utils/apiFeatures");
 const { Op, literal, where, fn, col } = require("sequelize");
+const { clampOpsOnQuery } = require("../../utils/opsOrderDateFloor");
 const Stripe = require("../stripe");
 const {
   transferEmployeeCommission,
@@ -718,6 +719,7 @@ exports.getDirectPartnerEmployeePayoutOrders = catchAsync(
 
     const sanitizedQuery = { ...req.query };
     delete sanitizedQuery.payoutStatus;
+    clampOpsOnQuery(sanitizedQuery);
 
     const features = new APIFeatures(order, sanitizedQuery)
       .filter()
@@ -840,6 +842,7 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
   }
 
   // Use APIFeatures for pagination, sorting, etc.
+  clampOpsOnQuery(req.query);
   const features = new APIFeatures(order, req.query)
     .filter()
     .sort()

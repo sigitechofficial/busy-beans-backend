@@ -18,6 +18,11 @@ const {
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
 const { isHqOperator, hasFeatureScope } = require("../../utils/hqOperator");
+const { invoiceExceptionWhere } = require("../../utils/invoiceExceptionFilter");
+const {
+  mergeOpsOnWhere,
+  opsOrderOnSql,
+} = require("../../utils/opsOrderDateFloor");
 
 const { Op, literal, where, fn, col } = require("sequelize");
 
@@ -540,6 +545,22 @@ const emptyHqFulfillment = () => ({
   readyToShip: [],
 });
 
+const getHqInvoiceExceptionCounts = async (orderWhere) => {
+  const [overdueShipped, shippedNotInvoiced] = await Promise.all([
+    order.count({
+      where: invoiceExceptionWhere("overdueShipped", "order", orderWhere),
+    }),
+    order.count({
+      where: invoiceExceptionWhere("shippedNotInvoiced", "order", orderWhere),
+    }),
+  ]);
+
+  return {
+    overdueShipped: overdueShipped || 0,
+    shippedNotInvoiced: shippedNotInvoiced || 0,
+  };
+};
+
 const getHqFulfillmentPayload = async ({
   includeCustomerOrders,
   includePartnerOrders,
@@ -551,6 +572,11 @@ const getHqFulfillmentPayload = async ({
   if (!includeCustomerOrders && !includePartnerOrders) {
     return emptyHqFulfillment();
   }
+
+  customerWhere = mergeOpsOnWhere(customerWhere);
+  partnerWhere = mergeOpsOnWhere(partnerWhere);
+  customerSqlFilter = `${customerSqlFilter || ""} ${opsOrderOnSql("orders")}`;
+  partnerSqlFilter = `${partnerSqlFilter || ""} ${opsOrderOnSql("partnerOrders")}`;
 
   const customerCountWhere = (statusId) =>
     includeCustomerOrders ? { ...customerWhere, statusId } : null;
@@ -739,6 +765,7 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
      FROM ${tableName}
      WHERE ${tableName}.supplierId = :supplierId
        AND ${tableName}.statusId = 5
+       ${opsOrderOnSql(tableName)}
        AND COALESCE(
          (SELECT createdAt FROM orderHistories
           WHERE orderHistories.${historyFk} = ${tableName}.id
@@ -757,10 +784,10 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
     customerOpen,
     partnerOpen,
   ] = await Promise.all([
-    order.count({ where: { supplierId, statusId: 2 } }),
-    partnerOrder.count({ where: { supplierId, statusId: 2 } }),
-    order.count({ where: { supplierId, statusId: 3 } }),
-    partnerOrder.count({ where: { supplierId, statusId: 3 } }),
+    order.count({ where: mergeOpsOnWhere({ supplierId, statusId: 2 }) }),
+    partnerOrder.count({ where: mergeOpsOnWhere({ supplierId, statusId: 2 }) }),
+    order.count({ where: mergeOpsOnWhere({ supplierId, statusId: 3 }) }),
+    partnerOrder.count({ where: mergeOpsOnWhere({ supplierId, statusId: 3 }) }),
     order.sequelize.query(shippedLast7DaysSql("orders", "orderId"), {
       replacements: { supplierId },
       type: order.sequelize.QueryTypes.SELECT,
@@ -773,12 +800,12 @@ exports.supplierDashboard = catchAsync(async (req, res, next) => {
       },
     ),
     order.findAll({
-      where: { supplierId, statusId: { [Op.in]: [2, 3, 4] } },
+      where: mergeOpsOnWhere({ supplierId, statusId: { [Op.in]: [2, 3, 4] } }),
       attributes: customerListAttributes,
       raw: true,
     }),
     partnerOrder.findAll({
-      where: { supplierId, statusId: { [Op.in]: [2, 3, 4] } },
+      where: mergeOpsOnWhere({ supplierId, statusId: { [Op.in]: [2, 3, 4] } }),
       attributes: partnerListAttributes,
       raw: true,
     }),
@@ -837,6 +864,7 @@ exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
            FROM orders
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
+           ${opsOrderOnSql("orders")}
            ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
@@ -1795,14 +1823,22 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
     partnerSqlFilter = `AND partnerOrders.salesRepId = ${requestedSalesRepId}`;
   }
 
-  const fulfillment = await getHqFulfillmentPayload({
-    includeCustomerOrders,
-    includePartnerOrders,
-    customerWhere,
-    partnerWhere,
-    customerSqlFilter,
-    partnerSqlFilter,
+  const invoiceOrderWhere = mergeOpsOnWhere({
+    ...customerWhere,
+    ...(isAllPartnersCondition ? { salesRepId: { [Op.ne]: null } } : {}),
   });
+
+  const [fulfillment, invoiceExceptions] = await Promise.all([
+    getHqFulfillmentPayload({
+      includeCustomerOrders,
+      includePartnerOrders,
+      customerWhere,
+      partnerWhere,
+      customerSqlFilter,
+      partnerSqlFilter,
+    }),
+    getHqInvoiceExceptionCounts(invoiceOrderWhere),
+  ]);
 
   // Month-to-Date Sales Summary - Using same approach as customerSalesSummary report
   // Note: Report uses 'orders.on >= startDate AND orders.on <= endDate' (inclusive on both ends)
@@ -2308,6 +2344,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
           })),
         }),
       fulfillment,
+      invoiceExceptions,
     },
   });
 });
