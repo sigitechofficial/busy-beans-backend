@@ -77,8 +77,9 @@ exports.bulkEmailHelper = catchAsync(async (req, res, next) => {
         orderId: orderId != null ? Number(orderId) : null,
         orderType: orderType || null,
         emailType: emailType || null,
-        success: outcome.success,
-        error: outcome.error || null,
+        success: outcome.success && !outcome.skipped,
+        skipped: Boolean(outcome.skipped),
+        error: outcome.error || (outcome.skipped ? "disabled_by_settings" : null),
       });
     } catch (err) {
       results.push({
@@ -96,7 +97,8 @@ exports.bulkEmailHelper = catchAsync(async (req, res, next) => {
     totalProcessed: results.length,
     duplicatesRemoved: removedDuplicates.length,
     success: results.filter((r) => r.success).length,
-    failed: results.filter((r) => r.success === false).length,
+    skipped: results.filter((r) => r.skipped).length,
+    failed: results.filter((r) => r.success === false && !r.skipped).length,
   };
 
   const output = response({

@@ -1,13 +1,9 @@
 const subscriptionCancellationEmail = require("../../helper/subscriptionCancellationEmail");
+const {
+  sendIfAllowed,
+  lookupUserIdByEmail,
+} = require("../../utils/emailSendGate");
 
-/**
- * Send subscription cancellation email
- * @param {Object} params
- * @param {string} params.customerEmail - Customer email
- * @param {string} [params.userName] - Customer name
- * @param {Date|string} [params.periodEnd] - When access ends (for cancel at period end)
- * @param {boolean} [params.cancelAtPeriodEnd] - If true, access until periodEnd; else already ended
- */
 exports.subscriptionCancellationEmailEvent = async ({
   customerEmail,
   userName,
@@ -19,12 +15,21 @@ exports.subscriptionCancellationEmailEvent = async ({
       console.warn("⚠️ subscriptionCancellationEmailEvent: customerEmail required");
       return false;
     }
-    await subscriptionCancellationEmail({
-      data: {
-        customerEmail,
-        userName: userName || "Valued Customer",
-        periodEnd,
-        cancelAtPeriodEnd,
+    const userId = await lookupUserIdByEmail(customerEmail);
+    await sendIfAllowed({
+      recipientType: "customer",
+      recipientId: userId,
+      emailType: "subscription_cancellation",
+      recipients: customerEmail,
+      send: async () => {
+        await subscriptionCancellationEmail({
+          data: {
+            customerEmail,
+            userName: userName || "Valued Customer",
+            periodEnd,
+            cancelAtPeriodEnd,
+          },
+        });
       },
     });
     return true;

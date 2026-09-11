@@ -100,6 +100,13 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
     return next(new AppError(outcome.error, statusCode));
   }
 
+  if (outcome.skipped) {
+    return res.status(200).json({
+      status: "success",
+      skipped: true,
+    });
+  }
+
   res.status(200).json({
     status: "success",
     data: {},

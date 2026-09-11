@@ -90,6 +90,11 @@ module.exports = (sequelize) => {
         allowNull: true,
         defaultValue: true,
       },
+      isDefaultSupplier: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       deleted: {
         type: DataTypes.BOOLEAN,
         allowNull: true,

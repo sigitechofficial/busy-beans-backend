@@ -26,6 +26,7 @@ const patnerOrderController = require("../controllers/admin/partnerOrderControll
 
 const pulloutPaymentsController = require("../controllers/admin/pulloutPaymentsController");
 const emailLogController = require("../controllers/admin/emailLogController");
+const emailSettingsController = require("../controllers/admin/emailSettingsController");
 const bulkEmailController = require("../controllers/admin/bulkEmailController");
 const qboCustomFieldSyncController = require("../controllers/admin/qboCustomFieldSyncController");
 const dailyEodDigestController = require("../controllers/admin/dailyEodDigestController");
@@ -251,6 +252,30 @@ router.get(
   protect,
   //   auth.restrictTo("admin", "adminEmployee"),
   emailLogController.getEmailLogById,
+);
+
+router.get(
+  "/email-settings/catalog",
+  protect,
+  emailSettingsController.getCatalog,
+);
+
+router.get(
+  "/email-settings",
+  protect,
+  emailSettingsController.getSettings,
+);
+
+router.patch(
+  "/email-settings/default-supplier",
+  protect,
+  emailSettingsController.setDefaultSupplier,
+);
+
+router.patch(
+  "/email-settings",
+  protect,
+  emailSettingsController.updateSetting,
 );
 
 /**

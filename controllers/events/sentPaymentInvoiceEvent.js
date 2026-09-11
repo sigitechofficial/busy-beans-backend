@@ -3,23 +3,21 @@ const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
 const { order, partnerOrder } = require("../../models");
+const {
+  sendIfAllowed,
+  orderPerson,
+} = require("../../utils/emailSendGate");
 
 exports.sentPaymentInvoiceEvent = async ({
   orderId,
   orderType = "customer",
 }) => {
-  console.log("🚀 ~ orderId:", orderId);
-  console.log("🚀 ~ ordeType:", orderType);
   try {
     const { details, email } = await dataForEmailAndNotifications(
       orderId,
       orderType,
     );
 
-    console.log(
-      "🚀 ~ details?.emailToSendInvoices: before",
-      details?.emailToSendInvoices,
-    );
     let to = [];
     to.push(email);
     if (email) {
@@ -29,19 +27,34 @@ exports.sentPaymentInvoiceEvent = async ({
       ) {
         const emailArray = details?.emailToSendInvoices
           ? details?.emailToSendInvoices.split(/\s*,\s*/)
-          : []; // This will split by commas with or without spaces
+          : [];
         to = to.concat(emailArray);
-        // to.push(details?.emailToSendInvoices);
       }
     }
 
     to = [...new Set(to)];
-    console.log("🚀 ~ to:", JSON.stringify(to));
-    await sentInvoiceEmail({ email: to, data: details });
-    const model = orderType === "local-partner" ? partnerOrder : order;
-    await model.increment({ invoiceEmailSentCount: 1 }, { where: { id: orderId } });
-    console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
-    return true;
+    const person = orderPerson(details, orderType);
+    const emailType = details?.invoiceReminder
+      ? "invoice_reminder"
+      : "invoice_sent";
+    const sent = await sendIfAllowed({
+      ...person,
+      emailType,
+      orderId,
+      orderType,
+      recipients: to,
+      send: async () => {
+        await sentInvoiceEmail({ email: to, data: details });
+      },
+    });
+    if (sent) {
+      const model = orderType === "local-partner" ? partnerOrder : order;
+      await model.increment(
+        { invoiceEmailSentCount: 1 },
+        { where: { id: orderId } },
+      );
+    }
+    return { sent };
   } catch (error) {
     console.log("🚀 ~ exports.sendQuotation = ~ error:", error);
   }

@@ -14,6 +14,11 @@
     const sendAdminEmail = require("../../helper/coffeeMachineQuotationAdmin");
     const sendLeadQuotation = require("../../helper/leadQuotation");
     const {
+    sendIfAllowed,
+    leadPerson,
+    hqPerson,
+    } = require("../../utils/emailSendGate");
+    const {
     createLeadLog,
     formatLogDetails,
     extractEntityInfo,
@@ -265,8 +270,18 @@
 
         // Send email notifications
 
-        sendCustomerEmail({ data: req.body });
-        sendAdminEmail({ data: req.body });
+        await sendIfAllowed({
+            ...leadPerson(),
+            emailType: "coffee_machine_customer",
+            recipients: req.body?.contactEmail || req.body?.email,
+            send: async () => sendCustomerEmail({ data: req.body }),
+        });
+        await sendIfAllowed({
+            ...hqPerson(),
+            emailType: "coffee_machine_admin",
+            recipients: "sigidevelopers@gmail.com",
+            send: async () => sendAdminEmail({ data: req.body }),
+        });
 
         res.status(201).json({
             success: true,
@@ -441,7 +456,13 @@
         await transaction.commit();
 
         // Send quotation email
-        sendLeadQuotation({ lead: lead.toJSON(), quotationAmount: amount });
+        await sendIfAllowed({
+            ...leadPerson(),
+            emailType: "lead_quotation",
+            recipients: lead.contactEmail || lead.email,
+            send: async () =>
+            sendLeadQuotation({ lead: lead.toJSON(), quotationAmount: amount }),
+        });
 
         res.status(200).json({
             success: true,

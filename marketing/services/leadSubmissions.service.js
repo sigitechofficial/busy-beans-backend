@@ -1,4 +1,5 @@
 const { sendMailPromise } = require("../../helper/transpoter");
+const { sendIfAllowed, hqPerson } = require("../../utils/emailSendGate");
 const { getLeadSubmissionModel } = require("../models/leadSubmission");
 const { getLandingPageModel } = require("../models/landingPage");
 const {
@@ -208,12 +209,19 @@ async function submitLead(payload) {
     const from = process.env.LEAD_NOTIFICATION_FROM;
     if (to && from) {
       const html = buildLeadEmailHtml(fields, pageUrl, submittedAt);
-      await sendMailPromise({
-        to,
-        from,
-        subject: "New Landing Page Lead",
-        html,
-        text: `New lead received for ${pageUrl}`,
+      await sendIfAllowed({
+        ...hqPerson(),
+        emailType: "landing_page_lead",
+        recipients: to,
+        send: async () => {
+          await sendMailPromise({
+            to,
+            from,
+            subject: "New Landing Page Lead",
+            html,
+            text: `New lead received for ${pageUrl}`,
+          });
+        },
       });
     }
   }

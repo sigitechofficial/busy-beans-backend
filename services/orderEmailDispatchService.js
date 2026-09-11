@@ -67,10 +67,14 @@ async function dispatchOrderEmail({ orderId, orderType, emailType }) {
     }
   }
 
+  let result;
   if (emailType === "order-confirmation") {
-    orderEvents({ orderId: numericOrderId, orderType: normalizedOrderType });
+    result = await orderEvents({
+      orderId: numericOrderId,
+      orderType: normalizedOrderType,
+    });
   } else if (emailType === "paid-invoice") {
-    paidInvoiceAdminOrLocalPatnerEventAndCustomer({
+    result = await paidInvoiceAdminOrLocalPatnerEventAndCustomer({
       orderId: numericOrderId,
       orderType: normalizedOrderType,
     });
@@ -79,27 +83,30 @@ async function dispatchOrderEmail({ orderId, orderType, emailType }) {
     if (!orderData.invoiceDate) input.invoiceDate = new Date();
     if (orderData.invoiceDate) input.invoiceReminder = new Date();
     await model.update(input, { where: { id: numericOrderId } });
-    sentPaymentInvoiceEvent({
+    result = await sentPaymentInvoiceEvent({
       orderId: numericOrderId,
       orderType: normalizedOrderType,
     });
   } else if (emailType === "order-dispatch") {
-    orderDispatchEvent({
+    result = await orderDispatchEvent({
       orderId: numericOrderId,
       orderType: normalizedOrderType,
     });
   } else if (emailType === "order-shipped") {
-    orderShippedEvent({
+    result = await orderShippedEvent({
       orderId: numericOrderId,
       orderType: normalizedOrderType,
     });
   } else if (emailType === "order-ship-supplier") {
-    supplierNewOrderEvent({
+    result = await supplierNewOrderEvent({
       orderId: numericOrderId,
       orderType: normalizedOrderType,
     });
   }
 
+  if (result && result.sent === false) {
+    return { success: true, skipped: true };
+  }
   return { success: true };
 }
 

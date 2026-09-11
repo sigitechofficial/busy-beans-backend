@@ -12,6 +12,7 @@ const { response } = require("../utils/response");
 const account = require("../models/account");
 const { GetInTouch } = require("../models");
 const sendGetInTouchEmail = require("../helper/getInTouchEmail");
+const { sendIfAllowed, hqPerson } = require("../utils/emailSendGate");
 
 const signToken = (userId) =>
   jwt.sign({ id: userId || 1 }, process.env.JWT_SECRET, {
@@ -198,15 +199,22 @@ exports.getInTouch = catchAsync(async (req, res, next) => {
     notes: notes || null,
   });
 
-  sendGetInTouchEmail({
-    data: {
-      name,
-      email,
-      phone,
-      company,
-      teamSize,
-      preferredDate: date,
-      notes,
+  await sendIfAllowed({
+    ...hqPerson(),
+    emailType: "get_in_touch",
+    recipients: process.env.ADMIN_NOTIFY_EMAIL,
+    send: async () => {
+      await sendGetInTouchEmail({
+        data: {
+          name,
+          email,
+          phone,
+          company,
+          teamSize,
+          preferredDate: date,
+          notes,
+        },
+      });
     },
   });
 
