@@ -3,7 +3,7 @@ require("dotenv").config();
 require("./redis_connect");
 const server = require("./app");
 
-const serverPort = 8013;
+const serverPort = 8012;
 const serverHost = process.env.HOST || "127.0.0.1"; // Accept connections from anywhere
 
 // const serverHost = "192.168.18.21";
