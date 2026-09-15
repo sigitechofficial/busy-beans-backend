@@ -1,3 +1,5 @@
+# This file must also exist on main (default branch) so GitHub lists the workflow.
+# It only deploys staging: push/dispatch ref must be testing. Never production / PM2 bb.
 name: Deploy testing (SSH)
 
 on:
