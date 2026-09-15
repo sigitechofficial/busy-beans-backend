@@ -1,15 +1,18 @@
-# This file must also exist on main (default branch) so GitHub lists the workflow.
-# It only deploys staging: push/dispatch ref must be testing. Never production / PM2 bb.
-name: Deploy testing (SSH)
+# Must exist on main (default branch) so GitHub lists workflow_dispatch.
+# Branch picks the server. No environment dropdown.
+# testing → testingbb + testbb
+# main → backendbb + bb, only if .github/production-go-live is exactly "true"
+name: Deploy BusyBeans (SSH)
 
 on:
   push:
     branches:
       - testing
+      - main
   workflow_dispatch:
 
 concurrency:
-  group: busybeans-testing
+  group: busybeans-${{ github.ref == 'refs/heads/main' && 'production' || 'testing' }}
   cancel-in-progress: false
 
 permissions:
@@ -17,25 +20,59 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy to testingbb
+    name: Deploy (${{ github.ref_name }})
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/testing'
+    if: github.ref == 'refs/heads/testing' || github.ref == 'refs/heads/main'
 
     env:
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_PORT: "22"
       VPS_USER: trimworldwide
-      LIVE_PATH: /home/trimworldwide/testingbb.trimworldwide.com
-      APP_URL: https://testingbb.trimworldwide.com/
-      PM2_APP_NAME: testbb
-      DEPLOY_ROOT: /home/trimworldwide/deployments/busybeans-testing
       SSH_OPTS: -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=120 -o TCPKeepAlive=yes -o ConnectTimeout=30
 
     steps:
       - name: Checkout backend
         uses: actions/checkout@v4
 
+      - name: Resolve target from branch
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" = "refs/heads/testing" ]; then
+            {
+              echo "DEPLOY=true"
+              echo "TARGET=staging"
+              echo "LIVE_PATH=/home/trimworldwide/testingbb.trimworldwide.com"
+              echo "APP_URL=https://testingbb.trimworldwide.com/"
+              echo "PM2_APP_NAME=testbb"
+              echo "ENTRY_JS=testbb.js"
+              echo "DEPLOY_ROOT=/home/trimworldwide/deployments/busybeans-testing"
+            } >> "$GITHUB_ENV"
+            echo "Target: staging (testingbb / testbb)"
+          elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            FLAG="$(tr -d '[:space:]' < .github/production-go-live 2>/dev/null || true)"
+            echo "production-go-live=${FLAG}"
+            if [ "${FLAG}" != "true" ]; then
+              echo "DEPLOY=false" >> "$GITHUB_ENV"
+              echo "Skipping production deploy. Set .github/production-go-live to true (then push main) to go live."
+              exit 0
+            fi
+            {
+              echo "DEPLOY=true"
+              echo "TARGET=production"
+              echo "LIVE_PATH=/home/trimworldwide/backendbb.trimworldwide.com"
+              echo "APP_URL=https://backendbb.trimworldwide.com/"
+              echo "PM2_APP_NAME=bb"
+              echo "ENTRY_JS=bb.js"
+              echo "DEPLOY_ROOT=/home/trimworldwide/deployments/busybeans-production"
+            } >> "$GITHUB_ENV"
+            echo "Target: production (backendbb / bb)"
+          else
+            echo "Ref ${GITHUB_REF} is not allowed."
+            exit 1
+          fi
+
       - name: Configure SSH
+        if: env.DEPLOY == 'true'
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
@@ -56,6 +93,7 @@ jobs:
           fi
 
       - name: Verify SSH and protected files
+        if: env.DEPLOY == 'true'
         run: |
           set -euo pipefail
           VPS_PORT="${VPS_PORT:-22}"
@@ -63,8 +101,9 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" $SSH_OPTS "$VPS_USER@$VPS_HOST" bash -s <<REMOTE
           set -euo pipefail
           LIVE_PATH="$LIVE_PATH"
+          ENTRY_JS="$ENTRY_JS"
           ls -ld "\$LIVE_PATH"
-          for f in .env config/config.json firebase.json .htaccess testbb.js package.json package-lock.json; do
+          for f in .env config/config.json firebase.json .htaccess "\$ENTRY_JS" package.json package-lock.json; do
             if [ ! -e "\$LIVE_PATH/\$f" ]; then
               echo "Missing required file: \$LIVE_PATH/\$f"
               exit 1
@@ -74,6 +113,7 @@ jobs:
           REMOTE
 
       - name: Prepare backup folder and snapshot live code
+        if: env.DEPLOY == 'true'
         run: |
           set -euo pipefail
           VPS_PORT="${VPS_PORT:-22}"
@@ -101,7 +141,8 @@ jobs:
           ls -1t "\$DEPLOY_ROOT/backups"/*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
           REMOTE
 
-      - name: Rsync code to staging (leave server secrets in place)
+      - name: Rsync code (leave server secrets in place)
+        if: env.DEPLOY == 'true'
         run: |
           set -euo pipefail
           VPS_PORT="${VPS_PORT:-22}"
@@ -127,7 +168,8 @@ jobs:
             ./ \
             "$VPS_USER@$VPS_HOST:$LIVE_PATH/"
 
-      - name: Install, migrate, reload PM2
+      - name: Install, migrate, restart PM2
+        if: env.DEPLOY == 'true'
         run: |
           set -euo pipefail
           VPS_PORT="${VPS_PORT:-22}"
@@ -138,12 +180,13 @@ jobs:
           PM2_APP_NAME="$PM2_APP_NAME"
           DEPLOY_ROOT="$DEPLOY_ROOT"
 
-          # Use /bin node+pm2 (v18.20.8). nvm 18.20.4's pm2 is missing ProcessContainerFork.js.
           export PATH="/bin:/usr/local/bin:/usr/bin"
           hash -r 2>/dev/null || true
 
           echo "node: \$(command -v node) \$(node -v)"
           echo "npm: \$(command -v npm) \$(npm -v)"
+          echo "pm2 app: \$PM2_APP_NAME"
+          echo "live path: \$LIVE_PATH"
 
           NODE_MAJOR="\$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)"
           if [ "\$NODE_MAJOR" -lt 18 ]; then
@@ -176,14 +219,15 @@ jobs:
           echo "Remote deploy steps completed."
           REMOTE
 
-      - name: Smoke check staging URL
+      - name: Smoke check
+        if: env.DEPLOY == 'true'
         run: |
           set -euo pipefail
           HTTP_CODE="000"
           ATTEMPT=1
           MAX_ATTEMPTS=12
           while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
-            echo "Smoke check attempt $ATTEMPT of $MAX_ATTEMPTS..."
+            echo "Smoke check $APP_URL attempt $ATTEMPT of $MAX_ATTEMPTS..."
             HTTP_CODE="$(curl -sS -L -I --max-time 20 "$APP_URL" | awk 'NR==1 {print $2}' || echo 000)"
             if [ -z "$HTTP_CODE" ]; then
               HTTP_CODE="000"
