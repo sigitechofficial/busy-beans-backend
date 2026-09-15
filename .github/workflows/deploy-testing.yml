@@ -153,6 +153,8 @@ jobs:
           cd "\$LIVE_PATH"
 
           echo "Installing dependencies..."
+          export PUPPETEER_SKIP_DOWNLOAD=true
+          export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
           npm ci
 
           echo "Running pending app migrations..."
