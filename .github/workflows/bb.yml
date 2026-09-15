@@ -1,9 +1,7 @@
 name: CI/CD Workflow
 
 on:
-  push:
-    branches:
-      - testing
+  # Staging SSH deploy lives in deploy-testing.yml. This file is production FTP only.
   workflow_dispatch:
     branches:
       - main
@@ -76,58 +74,5 @@ jobs:
         run: |
           echo "Triggering npm install via PHP script..."
           curl -X GET "https://backendbb.trimworldwide.com/trigger.php"
-        env:
-          HOME: /home/trimworldwide
-
-  deploy_testing:
-    needs: build
-    if: github.ref == 'refs/heads/testing'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 🚚 Get latest code
-        uses: actions/checkout@v2
-
-      - name: Create .env file dynamically
-        run: |
-          echo "Creating .env file..."
-          echo "${{ secrets.ENV_FILE_CONTENT_STAGE }}" > .env
-
-      - name: Create config folder and files
-        run: |
-          echo "Creating config folder..."
-          mkdir -p config
-          echo "${{ secrets.CONFIG_JSON_CONTENT_STAGE }}" > config/config.json
-
-      - name: Create .htaccess file
-        run: |
-          echo "Creating .htaccess_stage file..."
-          echo "${{ secrets.HTACCESS_CONTENT_STAGE }}" > .htaccess
-
-      - name: Creating firebase.json file
-        run: |
-          echo "Creating firebase.json..."
-          echo "${{ secrets.FIREBASE_CONTENT_STAGE }}" > firebase.json
-
-      - name: 📂 Sync files to development
-        uses: SamKirkland/FTP-Deploy-Action@v4.2.0
-        continue-on-error: true
-        with:
-          server: ${{ secrets.STAGE_FTP_HOST }}
-          username: ${{ secrets.STAGE_FTP_USERNAME }}
-          password: ${{ secrets.STAGE_FTP_PASSWORD }}
-          timeout: 560
-          dangerous-clean-slate: false
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
-            controllers/Webhook/**
-            controllers/Webhook
-
-      - name: Trigger npm install on server
-        run: |
-          echo "Triggering npm install and pm2 start via PHP script..."
-          curl -X GET "https://testingbb.trimworldwide.com/trigger.php"
         env:
           HOME: /home/trimworldwide
