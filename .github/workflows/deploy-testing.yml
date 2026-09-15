@@ -23,8 +23,8 @@ jobs:
 
     env:
       VPS_HOST: ${{ secrets.VPS_HOST }}
-      VPS_PORT: ${{ secrets.VPS_PORT }}
-      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: "22"
+      VPS_USER: trimworldwide
       LIVE_PATH: /home/trimworldwide/testingbb.trimworldwide.com
       APP_URL: https://testingbb.trimworldwide.com/
       PM2_APP_NAME: testbb
