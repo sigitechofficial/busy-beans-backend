@@ -25,6 +25,7 @@ const { Lead, sequelize } = require("../../models");
 const sendCustomerEmail = require("../../helper/coffeeMachineQuotation");
 const sendAdminEmail = require("../../helper/coffeeMachineQuotationAdmin");
 const { createLeadLog, formatLogDetails } = require("../../utils/leadLogger");
+const { sendIfAllowed, leadPerson, hqPerson } = require("../../utils/emailSendGate");
 
 // Meta webhook verification token - should match what's configured in Meta App settings
 const META_VERIFY_TOKEN =
@@ -251,8 +252,18 @@ const processMetaLead = async (leadData) => {
     // Send email notifications (only if email is available)
     if (emailData.contactEmail) {
       try {
-        sendCustomerEmail({ data: emailData });
-        sendAdminEmail({ data: emailData });
+        await sendIfAllowed({
+          ...leadPerson(),
+          emailType: "coffee_machine_customer",
+          recipients: emailData.contactEmail,
+          send: async () => sendCustomerEmail({ data: emailData }),
+        });
+        await sendIfAllowed({
+          ...hqPerson(),
+          emailType: "coffee_machine_admin",
+          recipients: "sigidevelopers@gmail.com",
+          send: async () => sendAdminEmail({ data: emailData }),
+        });
       } catch (emailError) {
         console.error("⚠️ Error sending emails:", emailError);
         // Don't fail the webhook if email fails

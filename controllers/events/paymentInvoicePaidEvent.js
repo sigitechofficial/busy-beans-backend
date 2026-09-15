@@ -5,6 +5,11 @@ const paidInvoiceEmailAdminOrLocalPatner = require("../../helper/paidInvoiceEmai
 const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
+const {
+  sendIfAllowed,
+  orderPerson,
+  partnerOrHq,
+} = require("../../utils/emailSendGate");
 // exports.paidInvoiceEmailEvent = async ({ orderId }) => {
 //   try {
 //     const orderData = await dataForEmailAndNotifications(orderId);
@@ -84,54 +89,53 @@ exports.paidInvoiceAdminOrLocalPatnerEventAndCustomer = async ({
     const { details, email } = orderData;
 
     const adminEmail = details?.patnerEmail || "info@busybeancoffee.com";
+    const partnerPerson = partnerOrHq(details);
+    const customerPerson = orderPerson(details, orderType);
 
-    // Send admin/partner first, then customer (original order). Sequential to avoid PDF race.
-    console.log(
-      "[PAID-INVOICE-EVENT] orderId=%s orderType=%s → sending BOTH (1.admin/partner 2.customer)",
-      orderId,
-      orderType,
-    );
+    let adminSent = false;
+    let customerSent = false;
     try {
-      console.log(
-        "[PAID-INVOICE-EVENT] (1/2) Admin/partner block START → to:",
-        adminEmail,
-      );
-      await paidInvoiceEmailAdminOrLocalPatner({
-        email: adminEmail,
-        data: details,
-        invoice: null,
+      adminSent = await sendIfAllowed({
+        ...partnerPerson,
+        emailType: "paid_receipt_admin",
+        orderId,
+        orderType,
+        recipients: adminEmail,
+        send: async () => {
+          await paidInvoiceEmailAdminOrLocalPatner({
+            email: adminEmail,
+            data: details,
+            invoice: null,
+          });
+        },
       });
-      console.log("[PAID-INVOICE-EVENT] (1/2) Admin/partner email sent OK");
     } catch (adminError) {
       console.error(
         "[PAID-INVOICE-EVENT] (1/2) Admin/partner email FAILED:",
         adminError?.message || adminError,
       );
-      if (adminError?.stack)
-        console.error("[PAID-INVOICE-EVENT] admin stack:", adminError.stack);
     }
 
     try {
-      console.log(
-        "[PAID-INVOICE-EVENT] (2/2) Customer block START → to:",
-        email,
-      );
-      await paidInvoiceEmail({ email: email, data: details, invoice: null });
-      console.log("[PAID-INVOICE-EVENT] (2/2) Customer email sent OK");
+      customerSent = await sendIfAllowed({
+        ...customerPerson,
+        emailType: "paid_receipt",
+        orderId,
+        orderType,
+        recipients: email,
+        send: async () => {
+          await paidInvoiceEmail({ email: email, data: details, invoice: null });
+        },
+      });
     } catch (customerError) {
       console.error(
         "[PAID-INVOICE-EVENT] (2/2) Customer email FAILED:",
         customerError?.message || customerError,
       );
-      if (customerError?.stack)
-        console.error(
-          "[PAID-INVOICE-EVENT] customer stack:",
-          customerError.stack,
-        );
     }
 
     console.log("🚀 ~~~~~ eventDrivenCommunication sendQuotation~~~~~~~ 🚀");
-    return true;
+    return { sent: Boolean(adminSent || customerSent) };
   } catch (error) {
     console.log("🚀 ~ exports.sendQuotation = ~ error:", error);
     return false;

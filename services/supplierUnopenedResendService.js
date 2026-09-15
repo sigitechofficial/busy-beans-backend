@@ -5,6 +5,7 @@ const {
   dataForEmailAndNotifications,
 } = require("../utils/emailsNotificationsData");
 const supplierNewOrder = require("../helper/supplierNewOrder");
+const { sendIfAllowed, supplierPerson } = require("../utils/emailSendGate");
 
 async function getLatestSupplierLog({ orderId, orderType }) {
   const where = {
@@ -63,11 +64,24 @@ async function processCandidate({ orderId, orderType, minHours }) {
     return { action: "skipped", reason: "less_than_required_hours" };
   }
 
-  await supplierNewOrder({
-    email: details.supplierEmail,
-    data: details,
-    isRetry: true,
+  const person = supplierPerson(details);
+  const allowed = await sendIfAllowed({
+    ...person,
+    emailType: "supplier_new_order",
+    orderId,
+    orderType,
+    recipients: details.supplierEmail,
+    send: async () => {
+      await supplierNewOrder({
+        email: details.supplierEmail,
+        data: details,
+        isRetry: true,
+      });
+    },
   });
+  if (!allowed) {
+    return { action: "skipped", reason: "disabled_by_settings" };
+  }
   return { action: "resent" };
 }
 

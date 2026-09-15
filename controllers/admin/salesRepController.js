@@ -23,7 +23,16 @@ const {
   deleteDeviceTokenSingle,
 } = require("../../utils/deviceTokenDelete");
 
-exports.getAllSalesRep = factory.getAll(salesRep);
+const getAllSalesRepHandler = factory.getAll(salesRep);
+
+exports.getAllSalesRep = (req, res, next) => {
+  if (req.user?.entity === "supplier") {
+    return next(
+      new AppError("You do not have permission to access this resource", 403),
+    );
+  }
+  return getAllSalesRepHandler(req, res, next);
+};
 
 exports.getSalesRepForOrderCreation = catchAsync(async (req, res, next) => {
   const condition = { deleted: 0 };

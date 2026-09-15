@@ -15,6 +15,7 @@ const {
   deviceToken,
   employee,
   permission,
+  subAdmin,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
@@ -40,6 +41,24 @@ const MODEL = {
   localPartner: salesRep,
   adminEmployee: employee,
   partnerEmployee: employee,
+  subAdmin: subAdmin,
+};
+
+const permissionInclude = { model: permission, attributes: ["id", "key"] };
+
+const hintedEntityFrom = (req) =>
+  req.body?.entity || req.body?.loginOtpEntity || "";
+
+const assignDeviceTokenFields = (entity, id, tokenId) => {
+  if (!tokenId) return;
+  const input = { tokenId };
+  if (entity === "localPartner") input.salesRepId = id;
+  else if (entity === "supplier") input.supplierId = id;
+  else if (entity === "admin") input.accountId = id;
+  else if (entity === "adminEmployee" || entity === "partnerEmployee")
+    input.employeeId = id;
+  else return;
+  deviceToken.create(input);
 };
 
 const { response } = require("../../utils/response");
@@ -54,7 +73,6 @@ const signToken = (data) =>
   );
 
 const createSendToken = (input, statusCode, req, res, tokenId, entity) => {
-  // console.log('🚀 ~ createSendToken ~ input:', input);
   const token = signToken({
     id: input.id,
     name: input.name,
@@ -69,18 +87,24 @@ const createSendToken = (input, statusCode, req, res, tokenId, entity) => {
     secure: req.secure || req.headers["x-forwarded-proto"] === "https",
   });
 
-  // Remove password from output
-  input.password = undefined;
-  input.updatedAt = undefined;
-  input.deletedAt = undefined;
-  input.deleted = undefined;
+  const user =
+    input && typeof input.toJSON === "function"
+      ? input.toJSON()
+      : JSON.parse(JSON.stringify(input || {}));
+  user.password = undefined;
+  user.updatedAt = undefined;
+  user.deletedAt = undefined;
+  user.deleted = undefined;
+  user.entity = entity;
+  user.isSubAdmin = entity === "subAdmin";
+
   REDIS.storeAccessToken(`${entity}${input.id}`, token);
 
   res.status(statusCode).json({
     status: "success",
     data: {
       token,
-      user: input,
+      user,
     },
   });
 };
@@ -129,13 +153,20 @@ const login = (Model) => {
     });
 
     if (!data) {
-      if (entity === "admin" || entity === "localPartner") {
+      if (entity === "admin") {
+        data = await subAdmin.findOne({
+          where: { email, deleted: 0 },
+          include: permissionInclude,
+        });
+        if (data) entity = "subAdmin";
+      }
+      if (!data && (entity === "admin" || entity === "localPartner")) {
         const condition = { email, deleted: 0 };
         if (entity === "admin") condition.salesRepId = { [Op.is]: null };
         else condition.accountId = { [Op.is]: null };
         data = await employee.findOne({
           where: condition,
-          include: { model: permission, attributes: ["id", "key"] },
+          include: permissionInclude,
         });
         if (data) {
           entity = data.accountId ? "adminEmployee" : "partnerEmployee";
@@ -177,12 +208,7 @@ const login = (Model) => {
     await REDIS.resetLoginFailedAttempts(entity, data.id);
 
     if (req.body?.tokenId) {
-      const input = { tokenId: req.body?.tokenId };
-      if (entity === "localPartner") input.salesRepId = data?.id;
-      else if (entity === "supplier") input.supplierId = data?.id;
-      else if (entity === "admin") input.accountId = data?.id;
-      else input.employeeId = data?.id;
-      deviceToken.create(input);
+      assignDeviceTokenFields(entity, data?.id, req.body?.tokenId);
     }
 
     return createSendToken(data, 200, req, res, req.body?.tokenId, entity);
@@ -199,6 +225,12 @@ const forgotPassword = (Model, entity) =>
       },
     });
     let resolvedEntity = entity;
+    if (!data && entity === "admin") {
+      data = await subAdmin.findOne({
+        where: { email: req.body.email, deleted: 0 },
+      });
+      if (data) resolvedEntity = "subAdmin";
+    }
     if (!data && (entity === "admin" || entity === "localPartner")) {
       data = await employee.findOne({
         where: { email: req.body.email, deleted: 0 },
@@ -227,6 +259,12 @@ const resendOtp = (Model, entity) =>
       },
     });
     let resolvedEntity = entity;
+    if (!data && entity === "admin") {
+      data = await subAdmin.findOne({
+        where: { email: req.body.email, deleted: 0 },
+      });
+      if (data) resolvedEntity = "subAdmin";
+    }
     if (!data && (entity === "admin" || entity === "localPartner")) {
       data = await employee.findOne({
         where: { email: req.body.email, deleted: 0 },
@@ -238,8 +276,6 @@ const resendOtp = (Model, entity) =>
     if (!data) {
       return next(new AppError("There is no user with email address.", 404));
     }
-
-    // Resend should refresh active verification OTP/expiry for current flow contexts.
     const requestedContext = normalizeVerificationContext(
       req.body?.on || req.params?.type || data?.verificationContext,
     );
@@ -294,12 +330,22 @@ const otpVerification = (Model, entity) =>
     });
 
     if (!data && (entity === "admin" || entity === "localPartner")) {
-      data = await employee.findOne({
-        where: { id, deleted: 0 },
-        include: { model: permission, attributes: ["id", "key"] },
-      });
-      if (data) {
-        resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
+      const hinted = hintedEntityFrom(req);
+      if (entity === "admin" && hinted === "subAdmin") {
+        data = await subAdmin.findOne({
+          where: { id, deleted: 0 },
+          include: permissionInclude,
+        });
+        if (data) resolvedEntity = "subAdmin";
+      }
+      if (!data) {
+        data = await employee.findOne({
+          where: { id, deleted: 0 },
+          include: permissionInclude,
+        });
+        if (data) {
+          resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
+        }
       }
     }
 
@@ -323,12 +369,11 @@ const otpVerification = (Model, entity) =>
         id: data.id,
       });
       if (req.body?.tokenId) {
-        const input = { tokenId: req.body?.tokenId };
-        if (resolvedEntity === "localPartner") input.salesRepId = data?.id;
-        else if (resolvedEntity === "supplier") input.supplierId = data?.id;
-        else if (resolvedEntity === "admin") input.accountId = data?.id;
-        else input.employeeId = data?.id;
-        deviceToken.create(input);
+        assignDeviceTokenFields(
+          resolvedEntity,
+          data?.id,
+          req.body?.tokenId,
+        );
       }
       return createSendToken(
         data,
@@ -360,12 +405,20 @@ const resetPassword = (Model, entity) =>
       },
     });
     if (!data && (entity == "admin" || entity == "localPartner")) {
-      data = await employee.findOne({
-        where: { id: req.body?.id, deleted: 0 },
-      });
-      console.log("🚀 ~ login ~ data:", data);
-      if (data) {
-        resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
+      const hinted = hintedEntityFrom(req);
+      if (entity == "admin" && hinted === "subAdmin") {
+        data = await subAdmin.findOne({
+          where: { id: req.body?.id, deleted: 0 },
+        });
+        if (data) resolvedEntity = "subAdmin";
+      }
+      if (!data) {
+        data = await employee.findOne({
+          where: { id: req.body?.id, deleted: 0 },
+        });
+        if (data) {
+          resolvedEntity = data.accountId ? "adminEmployee" : "partnerEmployee";
+        }
       }
     }
     // 2) If token has not expired, and there is user, set the new password
@@ -381,12 +434,11 @@ const resetPassword = (Model, entity) =>
     data.password = undefined;
     await purgeSessionsAndDeviceTokens({ entity: resolvedEntity, id: data.id });
     if (req.body?.tokenId) {
-      const input = { tokenId: req.body?.tokenId };
-      if (resolvedEntity === "localPartner") input.salesRepId = data?.id;
-      else if (resolvedEntity === "supplier") input.supplierId = data?.id;
-      else if (resolvedEntity === "admin") input.accountId = data?.id;
-      else input.employeeId = data?.id;
-      deviceToken.create(input);
+      assignDeviceTokenFields(
+        resolvedEntity,
+        data?.id,
+        req.body?.tokenId,
+      );
     }
     createSendToken(data, 200, req, res, req.body?.tokenId, resolvedEntity);
   });

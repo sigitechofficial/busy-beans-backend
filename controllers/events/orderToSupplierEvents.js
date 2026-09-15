@@ -3,28 +3,33 @@ const {
   dataForEmailAndNotifications,
 } = require("../../utils/emailsNotificationsData");
 const ThrowNotification = require("../../utils/throwNotification");
+const {
+  sendIfAllowed,
+  supplierPerson,
+} = require("../../utils/emailSendGate");
 
 exports.supplierNewOrderEvent = async ({ orderId, orderType = "customer" }) => {
   try {
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
-    console.log("🚀 ~ orderType:", orderType);
     console.log("🚀 ~ orderType:", orderType);
     const orderData = await dataForEmailAndNotifications(orderId, orderType);
     if (!orderData) return false;
     const { details } = orderData;
     console.log("🚀 ~ details:", details);
 
-    await supplierNewOrder({
-      email: details?.supplierEmail,
-      data: details,
-      stage: "Confirmed",
+    const person = supplierPerson(details);
+    const sent = await sendIfAllowed({
+      ...person,
+      emailType: "supplier_new_order",
+      orderId,
+      orderType,
+      recipients: details?.supplierEmail,
+      send: async () => {
+        await supplierNewOrder({
+          email: details?.supplierEmail,
+          data: details,
+          stage: "Confirmed",
+        });
+      },
     });
 
     const supplierNotification = {
@@ -47,7 +52,7 @@ exports.supplierNewOrderEvent = async ({ orderId, orderType = "customer" }) => {
 
     console.log("🚀 ~ exports.supplierNewOrder= :");
 
-    return true;
+    return { sent };
   } catch (error) {
     console.log("🚀 ~ exports.supplierNewOrder= ~ error:", error);
   }

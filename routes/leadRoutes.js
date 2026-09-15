@@ -14,7 +14,8 @@ router.use(
     "salesRep",
     "localPartner",
     "adminEmployee",
-    "partnerEmployee"
+    "partnerEmployee",
+    "subAdmin"
   )
 );
 

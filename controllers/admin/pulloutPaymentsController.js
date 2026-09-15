@@ -13,6 +13,7 @@ const { Op, literal, where, fn } = require("sequelize");
 const APIFeatures = require("../../utils/apiFeatures");
 const Stripe = require("../stripe");
 const sendPaymentPulloutEmail = require("../../helper/paymentPulloutEmail");
+const { sendIfAllowed } = require("../../utils/emailSendGate");
 // [QBO-POLICY-2026] Post-pullout QBO reconcile disabled — pulloutIntentId stays in DB only, not pushed to admin QBO.
 // const {
 //   reconcilePulloutSyncStateForOrders,
@@ -99,12 +100,20 @@ exports.pullPaymentsFromPatnersBankAccounts = catchAsync(
       // Send email notification to partner about payment pullout
       if (patner?.email) {
         try {
-          await sendPaymentPulloutEmail({
-            partnerEmail: patner.email,
-            partner: patner,
-            amount: amount,
-            orderList: orderList,
-            dateAndTime,
+          await sendIfAllowed({
+            recipientType: "partner",
+            recipientId: patner.id,
+            emailType: "payment_pullout",
+            recipients: patner.email,
+            send: async () => {
+              await sendPaymentPulloutEmail({
+                partnerEmail: patner.email,
+                partner: patner,
+                amount: amount,
+                orderList: orderList,
+                dateAndTime,
+              });
+            },
           });
           console.log(
             "✅ Payment pullout notification email sent to:",
@@ -196,12 +205,20 @@ const pullPaymentsFromPartnersBank = async ({ amount, orderList, patner }) => {
       // Send email notification to partner about payment pullout
       if (patner?.email) {
         try {
-          await sendPaymentPulloutEmail({
-            partnerEmail: patner.email,
-            partner: patner,
-            amount: amount,
-            orderList: orderList,
-            dateAndTime: pulloutDateTime,
+          await sendIfAllowed({
+            recipientType: "partner",
+            recipientId: patner.id,
+            emailType: "payment_pullout",
+            recipients: patner.email,
+            send: async () => {
+              await sendPaymentPulloutEmail({
+                partnerEmail: patner.email,
+                partner: patner,
+                amount: amount,
+                orderList: orderList,
+                dateAndTime: pulloutDateTime,
+              });
+            },
           });
           console.log(
             "✅ Automated pullout notification email sent to:",

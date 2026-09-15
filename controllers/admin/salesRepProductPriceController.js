@@ -17,7 +17,9 @@ exports.getAllSalesRepProductPrices = catchAsync(async (req, res, next) => {
     req.user?.entity === "localPartner" ||
     req.user?.entity === "partnerEmployee";
   const isAdminOrEmployee =
-    req.user?.entity === "admin" || req.user?.entity === "adminEmployee";
+    req.user?.entity === "admin" ||
+    req.user?.entity === "adminEmployee" ||
+    req.user?.entity === "subAdmin";
 
   // Determine salesRepId based on user type
   let salesRepId;
@@ -149,7 +151,9 @@ exports.productsFromAdminForSalesRep = catchAsync(async (req, res, next) => {
     req.user?.entity === "localPartner" ||
     req.user?.entity === "partnerEmployee";
   const isAdminOrEmployee =
-    req.user?.entity === "admin" || req.user?.entity === "adminEmployee";
+    req.user?.entity === "admin" ||
+    req.user?.entity === "adminEmployee" ||
+    req.user?.entity === "subAdmin";
 
   // Determine salesRepId based on user type
   let salesRepId;

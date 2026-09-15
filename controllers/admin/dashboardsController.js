@@ -17,6 +17,12 @@ const {
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
+const { isHqOperator, hasFeatureScope } = require("../../utils/hqOperator");
+const { invoiceExceptionWhere } = require("../../utils/invoiceExceptionFilter");
+const {
+  mergeOpsOnWhere,
+  opsOrderOnSql,
+} = require("../../utils/opsOrderDateFloor");
 
 const { Op, literal, where, fn, col } = require("sequelize");
 
@@ -368,76 +374,479 @@ exports.salesRepDashboard = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.supplierDashboard = catchAsync(async (req, res, next) => {
-  const dashboard = await supplier.findOne({
-    where: { id: req.params.id },
-    attributes: [
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id)`,
-        ),
-        "totalOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 2)`,
-        ),
-        "dispatchedToSupplierOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 3)`,
-        ),
-        "acknowledgedOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 4)`,
-        ),
-        "shippedOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 5)`,
-        ),
-        "deliveredOrders",
-      ],
-      [
-        literal(
-          `(SELECT COUNT(*) FROM orders WHERE orders.supplierId = supplier.id AND orders.statusId = 6)`,
-        ),
-        "cancelledOrders",
-      ],
-    ],
-    raw: true,
-  });
+const SUPPLIER_NEW_SLA_HOURS = 24;
+const SUPPLIER_ACK_SLA_HOURS = 48;
+const FULFILLMENT_LIST_LIMIT = 10;
 
-  const topProducts = await item.findAll({
-    attributes: [
-      "productId",
-      [
-        literal(
-          `(SELECT products.name FROM products WHERE products.id = item.productId)`,
-        ),
-        "productName",
-      ],
-      [fn("SUM", col("qty")), "totalSold"],
+const limitFulfillmentLists = (needsAttention, readyToShip) => ({
+  needsAttentionCount: needsAttention.length,
+  readyToShipCount: readyToShip.length,
+  needsAttention: needsAttention.slice(0, FULFILLMENT_LIST_LIMIT),
+  readyToShip: readyToShip.slice(0, FULFILLMENT_LIST_LIMIT),
+});
+
+const supplierPartnerDetailPath = (statusId, id) => {
+  const sid = Number(statusId);
+  if (sid === 2) return `/supplier/partner/new-orders/${id}`;
+  if (sid === 3) return `/supplier/partner/acknowledged-orders/${id}`;
+  return `/supplier/partner/shipped-orders/${id}`;
+};
+
+const supplierAgeHours = (statusAt) => {
+  if (!statusAt) return 0;
+  const then = new Date(statusAt).getTime();
+  if (Number.isNaN(then)) return 0;
+  return Math.max(0, Math.round((Date.now() - then) / 36e5));
+};
+
+const mapSupplierDashboardRow = (row, ownerType) => {
+  const id = row.id;
+  const statusId = Number(row.statusId);
+  const companyName =
+    ownerType === "partner"
+      ? row.salesRepName || row.companyName || ""
+      : row.companyName || row.customerName || "";
+  return {
+    id,
+    ownerType,
+    type: ownerType === "partner" ? "Partner" : "Customer",
+    companyName,
+    itemCount: Number(row.itemCount) || 0,
+    statusId,
+    status: row.orderCurrentStatus || "",
+    ageHours: supplierAgeHours(row.statusAt || row.createdAt),
+    createdAt: row.createdAt,
+    detailPath:
+      ownerType === "partner"
+        ? supplierPartnerDetailPath(statusId, id)
+        : `/supplier/order-detail/${id}`,
+  };
+};
+
+const supplierAttentionReason = (statusId) => {
+  if (statusId === 2) return "New sitting too long";
+  if (statusId === 3) return "Acknowledged not shipped";
+  if (statusId === 4) return "Mid-ship hang";
+  return "";
+};
+
+const hqCustomerDetailPath = (id) => `/orders/detail/${id}`;
+const hqPartnerDetailPath = (id) => `/orders/partnerOrders/detail/${id}`;
+
+const mapHqFulfillmentRow = (row, ownerType) => {
+  const mapped = mapSupplierDashboardRow(row, ownerType);
+  return {
+    ...mapped,
+    detailPath:
+      ownerType === "partner"
+        ? hqPartnerDetailPath(mapped.id)
+        : hqCustomerDetailPath(mapped.id),
+  };
+};
+
+const hqFulfillmentCustomerAttributes = [
+  "id",
+  "statusId",
+  "createdAt",
+  [
+    literal(
+      `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+    ),
+    "companyName",
+  ],
+  [
+    literal(
+      `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+    ),
+    "customerName",
+  ],
+  [
+    literal(
+      `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+    ),
+    "orderCurrentStatus",
+  ],
+  [
+    literal(
+      `COALESCE((SELECT SUM(qty) FROM items WHERE items.orderId = order.id), 0)`,
+    ),
+    "itemCount",
+  ],
+  [
+    literal(
+      `COALESCE(
+          (SELECT createdAt FROM orderHistories
+           WHERE orderHistories.orderId = order.id
+             AND orderHistories.statusId = order.statusId
+           LIMIT 1),
+          order.createdAt
+        )`,
+    ),
+    "statusAt",
+  ],
+];
+
+const hqFulfillmentPartnerAttributes = [
+  "id",
+  "statusId",
+  "createdAt",
+  [
+    literal(
+      `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`,
+    ),
+    "salesRepName",
+  ],
+  [
+    literal(
+      `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`,
+    ),
+    "orderCurrentStatus",
+  ],
+  [
+    literal(
+      `COALESCE((SELECT SUM(qty) FROM partnerOrderItems WHERE partnerOrderItems.partnerOrderId = partnerOrder.id), 0)`,
+    ),
+    "itemCount",
+  ],
+  [
+    literal(
+      `COALESCE(
+          (SELECT createdAt FROM orderHistories
+           WHERE orderHistories.partnerOrderId = partnerOrder.id
+             AND orderHistories.statusId = partnerOrder.statusId
+           LIMIT 1),
+          partnerOrder.createdAt
+        )`,
+    ),
+    "statusAt",
+  ],
+];
+
+const hqShippedLast7DaysSql = (tableName, historyFk, extraWhere) =>
+  `SELECT COUNT(*) AS count
+     FROM ${tableName}
+     WHERE ${tableName}.statusId = 5
+       ${extraWhere || ""}
+       AND COALESCE(
+         (SELECT createdAt FROM orderHistories
+          WHERE orderHistories.${historyFk} = ${tableName}.id
+            AND orderHistories.statusId = 5
+          LIMIT 1),
+         ${tableName}.updatedAt
+       ) >= DATE_SUB(NOW(), INTERVAL 7 DAY)`;
+
+const emptyHqFulfillment = () => ({
+  newCount: 0,
+  acknowledgedCount: 0,
+  shippedLast7Days: 0,
+  needsAttentionCount: 0,
+  readyToShipCount: 0,
+  needsAttention: [],
+  readyToShip: [],
+});
+
+const getHqInvoiceExceptionCounts = async (orderWhere) => {
+  const [overdueShipped, shippedNotInvoiced] = await Promise.all([
+    order.count({
+      where: invoiceExceptionWhere("overdueShipped", "order", orderWhere),
+    }),
+    order.count({
+      where: invoiceExceptionWhere("shippedNotInvoiced", "order", orderWhere),
+    }),
+  ]);
+
+  return {
+    overdueShipped: overdueShipped || 0,
+    shippedNotInvoiced: shippedNotInvoiced || 0,
+  };
+};
+
+const getHqFulfillmentPayload = async ({
+  includeCustomerOrders,
+  includePartnerOrders,
+  customerWhere,
+  partnerWhere,
+  customerSqlFilter,
+  partnerSqlFilter,
+}) => {
+  if (!includeCustomerOrders && !includePartnerOrders) {
+    return emptyHqFulfillment();
+  }
+
+  customerWhere = mergeOpsOnWhere(customerWhere);
+  partnerWhere = mergeOpsOnWhere(partnerWhere);
+  customerSqlFilter = `${customerSqlFilter || ""} ${opsOrderOnSql("orders")}`;
+  partnerSqlFilter = `${partnerSqlFilter || ""} ${opsOrderOnSql("partnerOrders")}`;
+
+  const customerCountWhere = (statusId) =>
+    includeCustomerOrders ? { ...customerWhere, statusId } : null;
+  const partnerCountWhere = (statusId) =>
+    includePartnerOrders ? { ...partnerWhere, statusId } : null;
+
+  const [
+    newCustomer,
+    newPartner,
+    acknowledgedCustomer,
+    acknowledgedPartner,
+    shippedCustomerRows,
+    shippedPartnerRows,
+    customerOpen,
+    partnerOpen,
+  ] = await Promise.all([
+    includeCustomerOrders
+      ? order.count({ where: customerCountWhere(2) })
+      : 0,
+    includePartnerOrders
+      ? partnerOrder.count({ where: partnerCountWhere(2) })
+      : 0,
+    includeCustomerOrders
+      ? order.count({ where: customerCountWhere(3) })
+      : 0,
+    includePartnerOrders
+      ? partnerOrder.count({ where: partnerCountWhere(3) })
+      : 0,
+    includeCustomerOrders
+      ? order.sequelize.query(
+          hqShippedLast7DaysSql("orders", "orderId", customerSqlFilter),
+          { type: order.sequelize.QueryTypes.SELECT },
+        )
+      : [{ count: 0 }],
+    includePartnerOrders
+      ? partnerOrder.sequelize.query(
+          hqShippedLast7DaysSql(
+            "partnerOrders",
+            "partnerOrderId",
+            partnerSqlFilter,
+          ),
+          { type: partnerOrder.sequelize.QueryTypes.SELECT },
+        )
+      : [{ count: 0 }],
+    includeCustomerOrders
+      ? order.findAll({
+          where: { ...customerWhere, statusId: { [Op.in]: [2, 3, 4] } },
+          attributes: hqFulfillmentCustomerAttributes,
+          raw: true,
+        })
+      : [],
+    includePartnerOrders
+      ? partnerOrder.findAll({
+          where: { ...partnerWhere, statusId: { [Op.in]: [2, 3, 4] } },
+          attributes: hqFulfillmentPartnerAttributes,
+          raw: true,
+        })
+      : [],
+  ]);
+
+  const openRows = [
+    ...(customerOpen || []).map((row) => mapHqFulfillmentRow(row, "customer")),
+    ...(partnerOpen || []).map((row) => mapHqFulfillmentRow(row, "partner")),
+  ];
+
+  const needsAttention = openRows
+    .filter((row) => {
+      if (row.statusId === 2) return row.ageHours > SUPPLIER_NEW_SLA_HOURS;
+      if (row.statusId === 3) return row.ageHours > SUPPLIER_ACK_SLA_HOURS;
+      return row.statusId === 4;
+    })
+    .sort((a, b) => b.ageHours - a.ageHours || Number(b.id) - Number(a.id))
+    .map((row) => ({
+      ...row,
+      reason: supplierAttentionReason(row.statusId),
+    }));
+
+  const readyToShip = openRows
+    .filter((row) => row.statusId === 3)
+    .sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateB !== dateA) return dateB - dateA;
+      return Number(b.id) - Number(a.id);
+    });
+
+  return {
+    newCount: (newCustomer || 0) + (newPartner || 0),
+    acknowledgedCount: (acknowledgedCustomer || 0) + (acknowledgedPartner || 0),
+    shippedLast7Days:
+      Number(shippedCustomerRows?.[0]?.count || 0) +
+      Number(shippedPartnerRows?.[0]?.count || 0),
+    ...limitFulfillmentLists(needsAttention, readyToShip),
+  };
+};
+
+exports.supplierDashboard = catchAsync(async (req, res, next) => {
+  const supplierId = Number(
+    req.user?.entity === "supplier" ? req.user.id : req.params.id,
+  );
+
+  if (!supplierId) {
+    return next(new AppError("Supplier id is required", 400));
+  }
+
+  const customerListAttributes = [
+    "id",
+    "statusId",
+    "createdAt",
+    [
+      literal(
+        `(SELECT users.companyName FROM users WHERE users.id = order.userId LIMIT 1)`,
+      ),
+      "companyName",
     ],
-    group: ["productId"],
-    order: [[fn("SUM", col("qty")), "DESC"]],
-    limit: 5,
-    include: [
+    [
+      literal(
+        `(SELECT users.name FROM users WHERE users.id = order.userId LIMIT 1)`,
+      ),
+      "customerName",
+    ],
+    [
+      literal(
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = order.statusId LIMIT 1)`,
+      ),
+      "orderCurrentStatus",
+    ],
+    [
+      literal(
+        `COALESCE((SELECT SUM(qty) FROM items WHERE items.orderId = order.id), 0)`,
+      ),
+      "itemCount",
+    ],
+    [
+      literal(
+        `COALESCE(
+          (SELECT createdAt FROM orderHistories
+           WHERE orderHistories.orderId = order.id
+             AND orderHistories.statusId = order.statusId
+           LIMIT 1),
+          order.createdAt
+        )`,
+      ),
+      "statusAt",
+    ],
+  ];
+
+  const partnerListAttributes = [
+    "id",
+    "statusId",
+    "createdAt",
+    [
+      literal(
+        `(SELECT salesReps.srName FROM salesReps WHERE partnerOrder.salesRepId = salesReps.id LIMIT 1)`,
+      ),
+      "salesRepName",
+    ],
+    [
+      literal(
+        `(SELECT statuses.orderStatus FROM statuses WHERE statuses.id = partnerOrder.statusId LIMIT 1)`,
+      ),
+      "orderCurrentStatus",
+    ],
+    [
+      literal(
+        `COALESCE((SELECT SUM(qty) FROM partnerOrderItems WHERE partnerOrderItems.partnerOrderId = partnerOrder.id), 0)`,
+      ),
+      "itemCount",
+    ],
+    [
+      literal(
+        `COALESCE(
+          (SELECT createdAt FROM orderHistories
+           WHERE orderHistories.partnerOrderId = partnerOrder.id
+             AND orderHistories.statusId = partnerOrder.statusId
+           LIMIT 1),
+          partnerOrder.createdAt
+        )`,
+      ),
+      "statusAt",
+    ],
+  ];
+
+  const shippedLast7DaysSql = (tableName, historyFk) =>
+    `SELECT COUNT(*) AS count
+     FROM ${tableName}
+     WHERE ${tableName}.supplierId = :supplierId
+       AND ${tableName}.statusId = 5
+       ${opsOrderOnSql(tableName)}
+       AND COALESCE(
+         (SELECT createdAt FROM orderHistories
+          WHERE orderHistories.${historyFk} = ${tableName}.id
+            AND orderHistories.statusId = 5
+          LIMIT 1),
+         ${tableName}.updatedAt
+       ) >= DATE_SUB(NOW(), INTERVAL 7 DAY)`;
+
+  const [
+    newCustomer,
+    newPartner,
+    acknowledgedCustomer,
+    acknowledgedPartner,
+    shippedCustomerRows,
+    shippedPartnerRows,
+    customerOpen,
+    partnerOpen,
+  ] = await Promise.all([
+    order.count({ where: mergeOpsOnWhere({ supplierId, statusId: 2 }) }),
+    partnerOrder.count({ where: mergeOpsOnWhere({ supplierId, statusId: 2 }) }),
+    order.count({ where: mergeOpsOnWhere({ supplierId, statusId: 3 }) }),
+    partnerOrder.count({ where: mergeOpsOnWhere({ supplierId, statusId: 3 }) }),
+    order.sequelize.query(shippedLast7DaysSql("orders", "orderId"), {
+      replacements: { supplierId },
+      type: order.sequelize.QueryTypes.SELECT,
+    }),
+    partnerOrder.sequelize.query(
+      shippedLast7DaysSql("partnerOrders", "partnerOrderId"),
       {
-        model: order,
-        where: { supplierId: req.params?.id },
-        attributes: [],
+        replacements: { supplierId },
+        type: partnerOrder.sequelize.QueryTypes.SELECT,
       },
-    ],
-  });
+    ),
+    order.findAll({
+      where: mergeOpsOnWhere({ supplierId, statusId: { [Op.in]: [2, 3, 4] } }),
+      attributes: customerListAttributes,
+      raw: true,
+    }),
+    partnerOrder.findAll({
+      where: mergeOpsOnWhere({ supplierId, statusId: { [Op.in]: [2, 3, 4] } }),
+      attributes: partnerListAttributes,
+      raw: true,
+    }),
+  ]);
+
+  const openRows = [
+    ...(customerOpen || []).map((row) => mapSupplierDashboardRow(row, "customer")),
+    ...(partnerOpen || []).map((row) => mapSupplierDashboardRow(row, "partner")),
+  ];
+
+  const needsAttention = openRows
+    .filter((row) => {
+      if (row.statusId === 2) return row.ageHours > SUPPLIER_NEW_SLA_HOURS;
+      if (row.statusId === 3) return row.ageHours > SUPPLIER_ACK_SLA_HOURS;
+      return row.statusId === 4;
+    })
+    .sort((a, b) => b.ageHours - a.ageHours || Number(b.id) - Number(a.id))
+    .map((row) => ({
+      ...row,
+      reason: supplierAttentionReason(row.statusId),
+    }));
+
+  const readyToShip = openRows
+    .filter((row) => row.statusId === 3)
+    .sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateB !== dateA) return dateB - dateA;
+      return Number(b.id) - Number(a.id);
+    });
 
   res.status(200).json({
     status: "success",
-    data: { dashboard, topProducts },
+    data: {
+      newCount: (newCustomer || 0) + (newPartner || 0),
+      acknowledgedCount: (acknowledgedCustomer || 0) + (acknowledgedPartner || 0),
+      shippedLast7Days:
+        Number(shippedCustomerRows?.[0]?.count || 0) +
+        Number(shippedPartnerRows?.[0]?.count || 0),
+      ...limitFulfillmentLists(needsAttention, readyToShip),
+    },
   });
 });
 
@@ -455,6 +864,7 @@ exports.employeeDashboardAdmin = catchAsync(async (req, res, next) => {
            FROM orders
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
+           ${opsOrderOnSql("orders")}
            ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
@@ -1201,6 +1611,12 @@ exports.getLocalPartnerSalesDashboard = catchAsync(async (req, res, next) => {
 });
 
 exports.getSalesDashboard = catchAsync(async (req, res, next) => {
+  if (req.user?.entity === "supplier") {
+    return next(
+      new AppError("You do not have permission to access this resource", 403),
+    );
+  }
+
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
@@ -1243,10 +1659,30 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   let salesRepIdFilter = "";
   let employeeIdFilter = "";
 
-  const isAdmin = req.user.entity === "admin";
+  const isAdmin = isHqOperator(req.user.entity);
   const isAdminEmployee = req.user.entity === "adminEmployee";
   const isLocalPartner =
     req.user.entity === "localPartner" || req.user.entity === "partnerEmployee";
+
+  // Customer/admin-only sub-admins: omitted userType is Admin, not unfiltered HQ.
+  // Partner-only sub-admins: omitted userType is Local Partner, not unfiltered HQ.
+  // HQ admin and both-scope / legacy sub-admins stay unfiltered.
+  if (
+    req.user?.entity === "subAdmin" &&
+    hasFeatureScope(req, "dashboard", "customer") &&
+    !hasFeatureScope(req, "dashboard", "partner") &&
+    !req.query.userType
+  ) {
+    req.query.userType = "admin";
+  }
+  if (
+    req.user?.entity === "subAdmin" &&
+    hasFeatureScope(req, "dashboard", "partner") &&
+    !hasFeatureScope(req, "dashboard", "customer") &&
+    !req.query.userType
+  ) {
+    req.query.userType = "salesRep";
+  }
 
   // Validate: Only admin can use salesRepId query parameter to view specific local partner dashboard
   if (req.query.salesRepId && !isAdmin) {
@@ -1268,10 +1704,25 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   // Uses req.query.userType === 'admin' to filter to admin-only orders
   const isAdminOnlyCondition = isAdmin && req.query.userType === "admin";
 
+  // All local partners (userType=salesRep or salesRep[ne]=null, no specific id)
+  const salesRepNeRaw = req.query["salesRep[ne]"];
+  const isAllPartnersCondition =
+    isAdmin &&
+    !requestedSalesRepId &&
+    (req.query.userType === "salesRep" ||
+      salesRepNeRaw === "null" ||
+      salesRepNeRaw === "");
+
   // Only apply filters if NOT admin (admin sees all data)
   // OR if admin is viewing a specific local partner's dashboard
   // OR if admin wants to see only direct admin orders (userType=admin)
-  if (!isAdmin || isAdminViewingLocalPartner || isAdminOnlyCondition) {
+  // OR if admin wants all partner-attributed orders (userType=salesRep)
+  if (
+    !isAdmin ||
+    isAdminViewingLocalPartner ||
+    isAdminOnlyCondition ||
+    isAllPartnersCondition
+  ) {
     // For local partners: filter by salesRepId
     if (isLocalPartner && req.user.localPartnerId) {
       const salesRepId = req.user.localPartnerId;
@@ -1287,6 +1738,12 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       console.log(
         "🚀 ~ getSalesDashboard ~ Admin viewing local partner dashboard, salesRepId filter:",
         requestedSalesRepId,
+      );
+    }
+    else if (isAllPartnersCondition) {
+      salesRepIdFilter = `AND orders.salesRepId IS NOT NULL`;
+      console.log(
+        "🚀 ~ getSalesDashboard ~ All local partners (userType=salesRep): salesRepId IS NOT NULL",
       );
     }
     // For admin-only condition (userType=admin): show only direct admin orders (salesRepId IS NULL)
@@ -1322,6 +1779,66 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       "🚀 ~ getSalesDashboard ~ Admin user - No entity filters applied",
     );
   }
+
+  // HQ/partner fulfillment: same userType / salesRepId / entity split as sales.
+  // Admin-only = customer/admin orders. Partner filter = partnerOrders.
+  // Unfiltered HQ = merge both. Local partner = their customer + partner orders.
+  const includeCustomerOrders =
+    isLocalPartner ||
+    (!isAllPartnersCondition && !isAdminViewingLocalPartner);
+  const includePartnerOrders = !isAdminOnlyCondition;
+
+  const customerWhere = {};
+  let customerSqlFilter = "";
+  if (isLocalPartner && req.user.localPartnerId) {
+    customerWhere.salesRepId = req.user.localPartnerId;
+    customerSqlFilter = `AND orders.salesRepId = ${req.user.localPartnerId}`;
+  } else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+    customerWhere.salesRepId = requestedSalesRepId;
+    customerSqlFilter = `AND orders.salesRepId = ${requestedSalesRepId}`;
+  } else if (isAdminOnlyCondition) {
+    customerWhere.salesRepId = null;
+    customerSqlFilter = "AND orders.salesRepId IS NULL";
+  }
+  if (
+    req.user.entity === "adminEmployee" ||
+    req.user.entity === "partnerEmployee"
+  ) {
+    const employeeId = req.user.employeeId || req.user.id;
+    customerWhere.userId = {
+      [Op.in]: literal(
+        `(SELECT id FROM users WHERE users.employeeId = ${employeeId})`,
+      ),
+    };
+    customerSqlFilter += ` AND orders.userId IN (SELECT id FROM users WHERE users.employeeId = ${employeeId})`;
+  }
+
+  const partnerWhere = {};
+  let partnerSqlFilter = "";
+  if (isLocalPartner && req.user.localPartnerId) {
+    partnerWhere.salesRepId = req.user.localPartnerId;
+    partnerSqlFilter = `AND partnerOrders.salesRepId = ${req.user.localPartnerId}`;
+  } else if (isAdminViewingLocalPartner && requestedSalesRepId) {
+    partnerWhere.salesRepId = requestedSalesRepId;
+    partnerSqlFilter = `AND partnerOrders.salesRepId = ${requestedSalesRepId}`;
+  }
+
+  const invoiceOrderWhere = mergeOpsOnWhere({
+    ...customerWhere,
+    ...(isAllPartnersCondition ? { salesRepId: { [Op.ne]: null } } : {}),
+  });
+
+  const [fulfillment, invoiceExceptions] = await Promise.all([
+    getHqFulfillmentPayload({
+      includeCustomerOrders,
+      includePartnerOrders,
+      customerWhere,
+      partnerWhere,
+      customerSqlFilter,
+      partnerSqlFilter,
+    }),
+    getHqInvoiceExceptionCounts(invoiceOrderWhere),
+  ]);
 
   // Month-to-Date Sales Summary - Using same approach as customerSalesSummary report
   // Note: Report uses 'orders.on >= startDate AND orders.on <= endDate' (inclusive on both ends)
@@ -1704,7 +2221,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
   // MTD Sales by Employee (Top 5) - Only for admin users
   let mtdSalesByEmployee = [];
   let ytdSalesByEmployee = [];
-  if (req.user.entity === "admin") {
+  if (isHqOperator(req.user.entity)) {
     mtdSalesByEmployee = await order.sequelize.query(
       `SELECT 
           users.employeeId,
@@ -1776,7 +2293,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       })),
       // Only include franchisee data for admin and adminEmployee users
       // When admin views a local partner's dashboard (salesRepId provided), franchisee data will be filtered to that local partner
-      ...((req.user.entity === "admin" ||
+      ...((isHqOperator(req.user.entity) ||
         req.user.entity === "adminEmployee") && {
         mtdSalesByFranchisee: mtdSalesByFranchisee.map((franchisee) => ({
           franchiseeId: franchisee.franchiseeId,
@@ -1809,7 +2326,7 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
       })),
       // Only include employee sales data for admin users
       // Exclude when admin is viewing a local partner's dashboard (salesRepId provided)
-      ...(req.user.entity === "admin" &&
+      ...(isHqOperator(req.user.entity) &&
         !isAdminViewingLocalPartner && {
           mtdSalesByEmployee: mtdSalesByEmployee.map((employee) => ({
             employeeId: employee.employeeId,
@@ -1826,6 +2343,8 @@ exports.getSalesDashboard = catchAsync(async (req, res, next) => {
             totalSales: parseFloat(employee.totalSales || 0),
           })),
         }),
+      fulfillment,
+      invoiceExceptions,
     },
   });
 });

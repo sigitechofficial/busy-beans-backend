@@ -12,6 +12,11 @@ const ThrowNotification = require("../../utils/throwNotification");
 const {
   importCustomersToQuickBooks,
 } = require("../../services/qboCustomerService");
+const {
+  sendIfAllowed,
+  orderPerson,
+  partnerOrHq,
+} = require("../../utils/emailSendGate");
 exports.orderEvents = async ({ orderId, orderType = "customer" }) => {
   try {
     const orderData = await dataForEmailAndNotifications(orderId, orderType);
@@ -20,38 +25,27 @@ exports.orderEvents = async ({ orderId, orderType = "customer" }) => {
     let to = email ? [email] : [];
     let invoice = null;
 
-    // if (orderType == "customer") {
-    //   if (
-    //     details.partnerType === "direct-partner" &&
-    //     !details.qboCustomerIdForPartner
-    //   ) {
-    //     importCustomersToQuickBooks({
-    //       limitIds: [details.userId],
-    //       userType: "customer",
-    //     });
-    //   } else if (details.partnerType === "drop" && !details.qboCustomerId) {
-    //     importCustomersToQuickBooks({
-    //       limitIds: [details.userId],
-    //       userType: "customer",
-    //     });
-    //   }
-    // } else if (orderType == "local-partner") {
-    //   importCustomersToQuickBooks({
-    //     limitIds: [details.salesRepId],
-    //     userType: "local-partner",
-    //   });
-    // }
-
+    let sent = true;
     if (details?.email) {
       if (details?.dispatchEmail && email != details?.dispatchEmail) {
         to.push(details?.dispatchEmail);
       }
 
-      orderEmailtoCustomer({
-        email: to,
-        data: details,
-        stage: "Confirmed",
-        invoice,
+      const person = orderPerson(details, orderType);
+      sent = await sendIfAllowed({
+        ...person,
+        emailType: "order_confirmation",
+        orderId,
+        orderType,
+        recipients: to,
+        send: async () => {
+          await orderEmailtoCustomer({
+            email: to,
+            data: details,
+            stage: "Confirmed",
+            invoice,
+          });
+        },
       });
     }
 
@@ -69,7 +63,7 @@ exports.orderEvents = async ({ orderId, orderType = "customer" }) => {
     });
 
     console.log("🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀");
-    return true;
+    return { sent };
   } catch (error) {
     console.log("🚀 ~ exports.orderEvents= ~ error:", error);
   }
@@ -83,16 +77,26 @@ exports.orderEventsToLocalPatnerOrAdmin = async ({
     const orderData = await dataForEmailAndNotifications(orderId, orderType);
     if (!orderData) return false;
     const { details, email } = orderData;
-    orderEmailtoLocalPatner({
-      email: details?.patnerEmail || "info@busybeancoffee.com",
-      data: details,
-      stage: "Confirmed",
+    const person = partnerOrHq(details);
+    const sent = await sendIfAllowed({
+      ...person,
+      emailType: "partner_new_order",
+      orderId,
+      orderType,
+      recipients: details?.patnerEmail || "info@busybeancoffee.com",
+      send: async () => {
+        await orderEmailtoLocalPatner({
+          email: details?.patnerEmail || "info@busybeancoffee.com",
+          data: details,
+          stage: "Confirmed",
+        });
+      },
     });
 
     console.log(
       "🚀 ~~~~~ orderEventsToLocalPatnerOrAdmin eventDrivenCommunication ~~~~~~~ 🚀",
     );
-    return true;
+    return { sent };
   } catch (error) {
     console.log(
       "🚀 ~ exports.orderEventsToLocalPatnerOrAdmin= ~ error:",

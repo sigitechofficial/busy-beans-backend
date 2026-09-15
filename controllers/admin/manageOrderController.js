@@ -36,6 +36,8 @@ const {
 const {
   calculateAndPayoutDirectPartnerEmployeeCommission,
 } = require("../../utils/directPartnerEmployeePayoutUtils");
+const { applyInvoiceException } = require("../../utils/invoiceExceptionFilter");
+const { applyOpsOrderDateFloor, opsOrderOnSql } = require("../../utils/opsOrderDateFloor");
 
 const {
   dataForEmailAndNotifications,
@@ -96,6 +98,13 @@ exports.emailHelper = catchAsync(async (req, res, next) => {
   if (!outcome.success) {
     const statusCode = outcome.error === "Order not found" ? 404 : 400;
     return next(new AppError(outcome.error, statusCode));
+  }
+
+  if (outcome.skipped) {
+    return res.status(200).json({
+      status: "success",
+      skipped: true,
+    });
   }
 
   res.status(200).json({
@@ -585,7 +594,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   console.log("🚀 ~ condition:", req.query);
 
   if (req?.params?.qbo == "not-synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
       condition[Op.and] = [
         literal(
@@ -601,13 +610,13 @@ exports.allOrder = catchAsync(async (req, res, next) => {
       { paymentStatus: "done" },
     ];
   } else if (req?.params?.qbo == "synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceIdPartner = { [Op.ne]: null };
     }
   } else if (req.params.qbo == "unsynced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       console.log("🚀 ~ exports.allOrder ~ req.params.qbo:");
       condition.quickBooksInvoiceId = { [Op.ne]: null };
       condition.quickBooksPaymentId = null;
@@ -617,7 +626,7 @@ exports.allOrder = catchAsync(async (req, res, next) => {
     }
     condition.paymentStatus = "done";
   } else if (req?.params?.qbo == "synced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     } else if (["localPartner", "partnerEmployee"].includes(req.user?.entity)) {
       condition.quickBooksPaymentIdPartner = { [Op.ne]: null };
@@ -653,6 +662,9 @@ exports.allOrder = catchAsync(async (req, res, next) => {
   const employeeFilter = req.query?.employee;
   if (req.query?.employee !== undefined) delete req.query.employee;
 
+  applyOpsOrderDateFloor(req, condition);
+  applyInvoiceException(req, condition, "order");
+
   const features = new APIFeatures(order, req.query)
     .filter()
     .search(searchableFields) // Add search functionality
@@ -662,6 +674,15 @@ exports.allOrder = catchAsync(async (req, res, next) => {
 
   // Get the base query options (where, limit, offset, order, etc.)
   const queryOptions = features.getQuery();
+
+  APIFeatures.appendSearchOrConditions(
+    queryOptions,
+    APIFeatures.relatedNameSearchConditions(order.sequelize, req.query?.search, {
+      tableAlias: "order",
+      companyName: true,
+      orderType: true,
+    }),
+  );
 
   // Merge manual filter conditions with existing where conditions
   // Handle both simple object merge and Op.and structure
@@ -2380,6 +2401,7 @@ exports.orderNavigationCounts = catchAsync(async (req, res, next) => {
            JOIN users ON users.id = orders.userId 
            WHERE orders.statusId = statuses.id
            AND orders.type = 'regular-order'
+           ${opsOrderOnSql("orders")}
            ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
@@ -2465,6 +2487,7 @@ exports.orderNavigationCountsLocalPatner = catchAsync(
             `(SELECT COUNT(orders.id) 
              FROM orders 
              WHERE orders.statusId = statuses.id 
+             ${opsOrderOnSql("orders")}
              ${employeeFilterLiteral})`,
           ),
           "count",
@@ -2518,7 +2541,7 @@ exports.orderNavigationCountsSupplier = catchAsync(async (req, res, next) => {
       "orderStatus",
       [
         literal(
-          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id})`,
+          `(SELECT COUNT(id) FROM orders WHERE orders.statusId = statuses.id AND orders.supplierId = ${req.params?.id} ${opsOrderOnSql("orders")})`,
         ),
         "count",
       ],
@@ -2608,7 +2631,7 @@ exports.deleteOrder = catchAsync(async (req, res, next) => {
 
 exports.listAdminQboSyncedOrdersBeforeMarch2026 = catchAsync(
   async (req, res, next) => {
-    if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       return next(
         new AppError("You do not have permission to perform this action.", 403),
       );
@@ -2640,7 +2663,7 @@ exports.listAdminQboSyncedOrdersBeforeMarch2026 = catchAsync(
  * Deletes admin QBO payment for each order and clears quickBooksPaymentId in DB.
  */
 exports.deleteAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );
@@ -2690,7 +2713,7 @@ exports.deleteAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
  * Deletes admin QBO invoice per order; clears quickBooksInvoiceId, quickBooksPaymentId, paymentSyncedToQBO.
  */
 exports.deleteAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );
@@ -2741,7 +2764,7 @@ exports.deleteAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
  * Updates existing **admin** QBO invoices only (partner QBO untouched).
  */
 exports.updateAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );
@@ -2787,7 +2810,7 @@ exports.updateAdminQboInvoicesForOrders = catchAsync(async (req, res, next) => {
  * Creates/links **admin** QBO payment only (partner QBO untouched).
  */
 exports.syncAdminQboPaymentsForOrders = catchAsync(async (req, res, next) => {
-  if (!["admin", "adminEmployee"].includes(req.user?.entity)) {
+  if (!["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
     return next(
       new AppError("You do not have permission to perform this action.", 403),
     );

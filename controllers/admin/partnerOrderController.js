@@ -27,6 +27,8 @@ const AppError = require("../../utils/appError");
 const factory = require("../handlerFactory");
 const { Op, literal, fn, col, where, or } = require("sequelize");
 const APIFeatures = require("../../utils/apiFeatures");
+const { applyInvoiceException } = require("../../utils/invoiceExceptionFilter");
+const { applyOpsOrderDateFloor, opsOrderOnSql } = require("../../utils/opsOrderDateFloor");
 const {
   orderEvents,
   orderEventsToLocalPatnerOrAdmin,
@@ -66,7 +68,9 @@ exports.bookNewPartnerOrder = catchAsync(async (req, res, next) => {
     req.user?.entity === "localPartner" ||
     req.user?.entity === "partnerEmployee";
   const isAdminOrEmployee =
-    req.user?.entity === "admin" || req.user?.entity === "adminEmployee";
+    req.user?.entity === "admin" ||
+    req.user?.entity === "adminEmployee" ||
+    req.user?.entity === "subAdmin";
 
   let salesRepId;
   if (isLocalPartnerOrEmployee) {
@@ -336,6 +340,9 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   let condition = {};
   if (req.params.id) condition.id = req.params.id;
 
+  applyOpsOrderDateFloor(req, condition);
+  applyInvoiceException(req, condition, "partnerOrder");
+
   // Define searchable columns for partner orders
   const searchableFields = [
     "id",
@@ -358,8 +365,20 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
   // Get the base query options (where, limit, offset, order, etc.)
   const queryOptions = features.getQuery();
 
+  APIFeatures.appendSearchOrConditions(
+    queryOptions,
+    APIFeatures.relatedNameSearchConditions(
+      partnerOrder.sequelize,
+      req.query?.search,
+      {
+        tableAlias: "partnerOrder",
+        salesRepName: true,
+      },
+    ),
+  );
+
   if (req?.params?.qbo == "not-synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.or]: [null, ""] };
     }
     condition[Op.or] = [
@@ -367,17 +386,17 @@ exports.allPartnerOrder = catchAsync(async (req, res, next) => {
       { paymentStatus: "done" },
     ];
   } else if (req?.params?.qbo == "synced") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
     }
   } else if (req?.params?.qbo == "unsynced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksInvoiceId = { [Op.ne]: null };
       condition.quickBooksPaymentId = { [Op.or]: [null, ""] };
     }
     condition.paymentStatus = "done";
   } else if (req?.params?.qbo == "synced-paid") {
-    if (["admin", "adminEmployee"].includes(req.user?.entity)) {
+    if (["admin", "adminEmployee", "subAdmin"].includes(req.user?.entity)) {
       condition.quickBooksPaymentId = { [Op.ne]: null };
     }
   } else {
@@ -1178,6 +1197,7 @@ exports.partnerOrderNavigationCounts = catchAsync(async (req, res, next) => {
           `(SELECT COUNT(partnerOrders.id) 
            FROM partnerOrders  WHERE partnerOrders.statusId = statuses.id
            AND partnerOrders.type = 'regular-order'
+           ${opsOrderOnSql("partnerOrders")}
            ${employeeId ? `AND users.employeeId = ${employeeId}` : ""})`,
         ),
         "count",
@@ -1263,6 +1283,7 @@ exports.partnerOrderNavigationCountsLocalPatner = catchAsync(
             `(SELECT COUNT(partnerOrders.id) 
              FROM partnerOrders 
              WHERE partnerOrders.statusId = statuses.id 
+             ${opsOrderOnSql("partnerOrders")}
              ${employeeFilterLiteral})`,
           ),
           "count",
@@ -1315,7 +1336,7 @@ exports.partnerOrderNavigationCountsSupplier = catchAsync(
         "orderStatus",
         [
           literal(
-            `(SELECT COUNT(id) FROM partnerOrders WHERE partnerOrders.statusId = statuses.id AND partnerOrders.supplierId = ${req.params?.id})`,
+            `(SELECT COUNT(id) FROM partnerOrders WHERE partnerOrders.statusId = statuses.id AND partnerOrders.supplierId = ${req.params?.id} ${opsOrderOnSql("partnerOrders")})`,
           ),
           "count",
         ],

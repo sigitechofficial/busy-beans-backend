@@ -1,6 +1,7 @@
 const connectStripeAccountLocalPatner = require('../../helper/connectStripeAccountLocalPatner');
 const { salesRep } = require('../../models');
 const Stripe = require('../stripe');
+const { sendIfAllowed } = require('../../utils/emailSendGate');
 
 exports.connectStripeAccountEvent = async ({ patner, returnUrl }) => {
   try {
@@ -26,10 +27,18 @@ exports.connectStripeAccountEvent = async ({ patner, returnUrl }) => {
       { where: { id: patner.id } },
     );
 
-    connectStripeAccountLocalPatner({
-      email: patner.email,
-      name: patner.srName,
-      boardingLink: connectAccount.accountLink?.url, // Assumes this is returned by Stripe
+    await sendIfAllowed({
+      recipientType: 'partner',
+      recipientId: patner.id,
+      emailType: 'connect_stripe',
+      recipients: patner.email,
+      send: async () => {
+        await connectStripeAccountLocalPatner({
+          email: patner.email,
+          name: patner.srName,
+          boardingLink: connectAccount.accountLink?.url,
+        });
+      },
     });
 
     console.log('🚀 ~~~~~ eventDrivenCommunication ~~~~~~~ 🚀');

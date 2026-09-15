@@ -8,10 +8,16 @@
     } = require("../../models");
     const catchAsync = require("../../utils/catchAsync");
     const AppError = require("../../utils/appError");
+    const { isHqOperator } = require("../../utils/hqOperator");
     const { Op } = require("sequelize");
     const sendCustomerEmail = require("../../helper/coffeeMachineQuotation");
     const sendAdminEmail = require("../../helper/coffeeMachineQuotationAdmin");
     const sendLeadQuotation = require("../../helper/leadQuotation");
+    const {
+    sendIfAllowed,
+    leadPerson,
+    hqPerson,
+    } = require("../../utils/emailSendGate");
     const {
     createLeadLog,
     formatLogDetails,
@@ -121,7 +127,7 @@
         const where = {};
 
         // Admin sees all leads
-        if (req.user?.entity === "admin") {
+        if (isHqOperator(req.user?.entity)) {
         // No filter needed - admin sees all
         } else if (req.user?.entity === "localPartner") {
         // Local partner sees leads assigned to them
@@ -264,8 +270,18 @@
 
         // Send email notifications
 
-        sendCustomerEmail({ data: req.body });
-        sendAdminEmail({ data: req.body });
+        await sendIfAllowed({
+            ...leadPerson(),
+            emailType: "coffee_machine_customer",
+            recipients: req.body?.contactEmail || req.body?.email,
+            send: async () => sendCustomerEmail({ data: req.body }),
+        });
+        await sendIfAllowed({
+            ...hqPerson(),
+            emailType: "coffee_machine_admin",
+            recipients: "sigidevelopers@gmail.com",
+            send: async () => sendAdminEmail({ data: req.body }),
+        });
 
         res.status(201).json({
             success: true,
@@ -440,7 +456,13 @@
         await transaction.commit();
 
         // Send quotation email
-        sendLeadQuotation({ lead: lead.toJSON(), quotationAmount: amount });
+        await sendIfAllowed({
+            ...leadPerson(),
+            emailType: "lead_quotation",
+            recipients: lead.contactEmail || lead.email,
+            send: async () =>
+            sendLeadQuotation({ lead: lead.toJSON(), quotationAmount: amount }),
+        });
 
         res.status(200).json({
             success: true,
@@ -724,7 +746,7 @@
             updateData.salesRepId = salesRepId;
         } else if (employeeId !== undefined) {
             // If employeeId is provided but salesRepId is not:
-            if (req.user?.entity === "admin") {
+            if (isHqOperator(req.user?.entity)) {
             // Admin assigning employee: clear salesRepId
             updateData.salesRepId = null;
             } else if (req.user?.entity === "localPartner" && lead.salesRepId) {

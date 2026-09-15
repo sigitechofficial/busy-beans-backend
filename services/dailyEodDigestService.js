@@ -8,6 +8,11 @@ const {
 } = require("../models");
 const sendAdminDailyEodDigest = require("../helper/dailyEodDigestAdmin");
 const sendPartnerDailyEodDigest = require("../helper/dailyEodDigestPartner");
+const {
+  canSendEmail,
+  logEmailSkipped,
+  hqPerson,
+} = require("../utils/emailSendGate");
 
 const FLORIDA_TIMEZONE = "America/New_York";
 /** Pending claim older than this can be reclaimed after a crashed job. */
@@ -382,6 +387,23 @@ async function sendAdminDigestSafe({ reportDate, forceRetryFailed }) {
     };
   }
 
+  const allowed = await canSendEmail({
+    ...hqPerson(),
+    emailType: "daily_eod_report_admin",
+  });
+  if (!allowed) {
+    await logEmailSkipped({
+      emailType: "daily_eod_report_admin",
+      recipients: admin.email,
+    });
+    return {
+      status: "skipped",
+      reason: "disabled_by_settings",
+      recipientId: admin.id,
+      email: admin.email,
+    };
+  }
+
   const claim = await claimDigestSlot({
     reportDate,
     recipientType: "admin",
@@ -456,6 +478,24 @@ async function sendPartnerDigestSafe({ partner, reportDate, forceRetryFailed }) 
       status: "skipped",
       reason: "no_partner_email",
       recipientId: partner?.id,
+    };
+  }
+
+  const allowed = await canSendEmail({
+    recipientType: "partner",
+    recipientId: partner.id,
+    emailType: "daily_eod_report",
+  });
+  if (!allowed) {
+    await logEmailSkipped({
+      emailType: "daily_eod_report",
+      recipients: partner.email,
+    });
+    return {
+      status: "skipped",
+      reason: "disabled_by_settings",
+      recipientId: partner.id,
+      email: partner.email,
     };
   }
 

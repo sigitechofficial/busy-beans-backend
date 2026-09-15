@@ -7,6 +7,7 @@ const {
   deviceToken,
   order,
   user,
+  subAdmin,
 } = require("../../models");
 const catchAsync = require("../../utils/catchAsync");
 const AppError = require("../../utils/appError");
@@ -17,6 +18,7 @@ const {
 const factory = require("../handlerFactory");
 const APIFeatures = require("../../utils/apiFeatures");
 const { Op, literal, where, fn, col } = require("sequelize");
+const { clampOpsOnQuery } = require("../../utils/opsOrderDateFloor");
 const Stripe = require("../stripe");
 const {
   transferEmployeeCommission,
@@ -26,6 +28,7 @@ const {
   ACTIVE_PAYOUT_STATUSES,
   calculateAndPayoutDirectPartnerEmployeeCommission,
 } = require("../../utils/directPartnerEmployeePayoutUtils");
+const { hasPermissionKey, getHqAccountId } = require("../../utils/hqOperator");
 const bcrypt = require("bcryptjs");
 
 console.log("🚀 ~ literal:", process.env.BASE_URL);
@@ -88,6 +91,18 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
   if (req.user.entity === "admin") {
     req.body.accountId = req.user?.id;
     req.body.employeeOf = "Admin";
+  } else if (req.user.entity === "subAdmin") {
+    if (!hasPermissionKey(req, "employees_create")) {
+      return next(
+        new AppError(
+          "You do not have permission to perform this action",
+          403,
+          "permission-fail",
+        ),
+      );
+    }
+    req.body.accountId = await getHqAccountId();
+    req.body.employeeOf = "Admin";
   } else if (req.user.entity === "localPartner") {
     req.body.salesRepId = req.user?.id;
   }
@@ -99,6 +114,11 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
   if (!exist)
     exist = req.body?.email
       ? await salesRep.findOne({ where: { email: req.body?.email } })
+      : null;
+
+  if (!exist)
+    exist = req.body?.email
+      ? await subAdmin.findOne({ where: { email: req.body?.email } })
       : null;
 
   if (exist) {
@@ -127,15 +147,28 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllEmployee = async (req, res, next) => {
-  const condition = {};
-  if (req.user.entity == "admin" && !req.query.salesRepId) {
-    condition.accountId = req.user?.id;
-  } else if (req.user.entity == "admin" && req.query.salesRepId) {
-    condition.salesRepId = req.query.salesRepId;
-  }
-  if (req.user.entity == "localPartner") {
-    condition.salesRepId = req.user.id;
-  }
+  try {
+    if (
+      req.user.entity === "subAdmin" &&
+      !hasPermissionKey(req, "employees_view")
+    ) {
+      return res.status(200).json({
+        status: "fail",
+        message: "You do not have permission to perform this action",
+      });
+    }
+    const condition = {};
+    const isHqLister =
+      req.user.entity == "admin" || req.user.entity == "subAdmin";
+    if (isHqLister && !req.query.salesRepId) {
+      condition.accountId =
+        req.user.entity == "admin" ? req.user?.id : await getHqAccountId();
+    } else if (isHqLister && req.query.salesRepId) {
+      condition.salesRepId = req.query.salesRepId;
+    }
+    if (req.user.entity == "localPartner") {
+      condition.salesRepId = req.user.id;
+    }
   console.log("🚀 ~ condition:", condition);
 
   const emp = await employee.findAll({
@@ -144,9 +177,21 @@ exports.getAllEmployee = async (req, res, next) => {
   });
 
   res.status(200).json({ status: "success", data: { data: emp } });
+  } catch (err) {
+    next(err);
+  }
 };
 
 exports.getEmployee = async (req, res, next) => {
+  if (
+    req.user.entity === "subAdmin" &&
+    !hasPermissionKey(req, "employees_view")
+  ) {
+    return res.status(200).json({
+      status: "fail",
+      message: "You do not have permission to perform this action",
+    });
+  }
   const emp = await employee.findByPk(req.params.employeeId, {
     include: { model: permission, attributes: ["id", "key"] },
   });
@@ -157,6 +202,15 @@ exports.getEmployee = async (req, res, next) => {
 };
 
 exports.updateEmployee = async (req, res, next) => {
+  if (
+    req.user.entity === "subAdmin" &&
+    !hasPermissionKey(req, "employees_update")
+  ) {
+    return res.status(200).json({
+      status: "fail",
+      message: "You do not have permission to perform this action",
+    });
+  }
   const { employeeId } = req.params;
 
   let exist = req.body?.email
@@ -214,6 +268,15 @@ exports.updateEmployee = async (req, res, next) => {
 };
 
 exports.deleteEmployee = async (req, res, next) => {
+  if (
+    req.user.entity === "subAdmin" &&
+    !hasPermissionKey(req, "employees_delete")
+  ) {
+    return res.status(200).json({
+      status: "fail",
+      message: "You do not have permission to perform this action",
+    });
+  }
   const emp = await employee.findByPk(req.params.employeeId);
 
   if (!emp) {
@@ -656,6 +719,7 @@ exports.getDirectPartnerEmployeePayoutOrders = catchAsync(
 
     const sanitizedQuery = { ...req.query };
     delete sanitizedQuery.payoutStatus;
+    clampOpsOnQuery(sanitizedQuery);
 
     const features = new APIFeatures(order, sanitizedQuery)
       .filter()
@@ -778,6 +842,7 @@ exports.getEmployeeCommissionOrders = catchAsync(async (req, res, next) => {
   }
 
   // Use APIFeatures for pagination, sorting, etc.
+  clampOpsOnQuery(req.query);
   const features = new APIFeatures(order, req.query)
     .filter()
     .sort()

@@ -83,52 +83,17 @@ exports.ordersPlacedReport = catchAsync(async (req, res, next) => {
   // Get the base query options (where, limit, offset, order etc.)
   const queryOptions = features.getQuery();
 
-  // Add custom search for companyName (customerName) from related users table
-  if (otherQueryParams.search && otherQueryParams.search.trim()) {
-    const searchTerm = otherQueryParams.search.trim();
-    // Escape search term to prevent SQL injection
-    const escapedSearchTerm = order.sequelize.escape(`%${searchTerm}%`);
-    const companyNameSearch = literal(
-      `EXISTS (SELECT 1 FROM users WHERE users.id = order.userId AND users.companyName LIKE ${escapedSearchTerm})`
-    );
-
-    // Add companyName search to existing search conditions
-    if (queryOptions.where && queryOptions.where[Op.and]) {
-      // Find the Op.or search condition and add companyName search to it
-      const andConditions = queryOptions.where[Op.and];
-      const searchConditionIndex = andConditions.findIndex(
-        (cond) => cond[Op.or]
-      );
-
-      if (searchConditionIndex !== -1) {
-        // Add companyName search to existing Op.or condition
-        andConditions[searchConditionIndex][Op.or].push(companyNameSearch);
-      } else {
-        // Add new Op.or condition with companyName search
-        andConditions.push({
-          [Op.or]: [companyNameSearch],
-        });
-      }
-    } else if (queryOptions.where && queryOptions.where[Op.or]) {
-      // If Op.or exists at root level, add companyName search to it
-      queryOptions.where[Op.or].push(companyNameSearch);
-    } else if (queryOptions.where) {
-      // Create Op.and structure with existing where and companyName search
-      queryOptions.where = {
-        [Op.and]: [
-          queryOptions.where,
-          {
-            [Op.or]: [companyNameSearch],
-          },
-        ],
-      };
-    } else {
-      // No existing where, just add companyName search
-      queryOptions.where = {
-        [Op.or]: [companyNameSearch],
-      };
-    }
-  }
+  APIFeatures.appendSearchOrConditions(
+    queryOptions,
+    APIFeatures.relatedNameSearchConditions(
+      order.sequelize,
+      otherQueryParams.search,
+      {
+        tableAlias: "order",
+        companyName: true,
+      },
+    ),
+  );
 
   // Merge manual filter conditions with existing where conditions
   // Handle both simple object merge and Op.and structure

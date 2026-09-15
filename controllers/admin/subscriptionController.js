@@ -19,6 +19,25 @@ const sendSubscriptionInvitationEmail = require("../../helper/subscriptionInvita
 const {
   subscriptionCancellationEmailEvent,
 } = require("../events/subscriptionCancellationEvent");
+const {
+  sendIfAllowed,
+  lookupUserIdByEmail,
+} = require("../../utils/emailSendGate");
+
+async function sendSubscriptionInvitationIfAllowed(payload) {
+  const customerEmail = payload?.data?.customerEmail;
+  const userId =
+    payload?.data?.userId || (await lookupUserIdByEmail(customerEmail));
+  return sendIfAllowed({
+    recipientType: "customer",
+    recipientId: userId,
+    emailType: "subscription_invitation",
+    recipients: customerEmail,
+    send: async () => {
+      await sendSubscriptionInvitationEmail(payload);
+    },
+  });
+}
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -286,10 +305,11 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
     }
 
     // Send invitation email with payment link
-    await sendSubscriptionInvitationEmail({
+    await sendSubscriptionInvitationIfAllowed({
       data: {
         customerEmail,
         userName,
+        userId,
         subscriptionId: newSubscription.id,
         machine,
         products,
@@ -639,10 +659,11 @@ exports.createSubscription = catchAsync(async (req, res, next) => {
         .filter(Boolean) || [];
 
     // Send 3D Secure payment completion email
-    await sendSubscriptionInvitationEmail({
+    await sendSubscriptionInvitationIfAllowed({
       data: {
         customerEmail,
         userName,
+        userId,
         subscriptionId: newSubscription.id,
         machine: subscriptionWithDetails.machine,
         products: emailProducts,
