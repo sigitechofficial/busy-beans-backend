@@ -1,7 +1,7 @@
 name: CI/CD Workflow
 
 on:
-  # Staging SSH deploy lives in deploy-testing.yml. This file is production FTP only.
+  # SSH deploy (testing + main) lives in deploy.yml. This file is production FTP only until SSH prod is trusted.
   workflow_dispatch:
     branches:
       - main
