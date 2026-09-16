@@ -1,15 +1,36 @@
 const redisClient = require("../redis_connect"); // This returns the client instance
 
+const LOGIN_REDIS_TIMEOUT_MS = 2500;
+
+async function withLoginRedisTimeout(promise, fallback) {
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Redis login helper timed out")),
+          LOGIN_REDIS_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+  } catch (err) {
+    console.error("[redis] login helper skipped:", err.message);
+    return fallback;
+  }
+}
+
 //* Token Storage Logic (Login)
 async function storeAccessToken(userId, refreshToken) {
   console.log("🚀 ~ Tokenn saved in REDIS:");
 
-  await redisClient.set(`${refreshToken}`, userId, {
-    EX: 60 * 60 * 24 * 7, // 7 days
-  });
+  await withLoginRedisTimeout(
+    redisClient.set(`${refreshToken}`, userId, {
+      EX: 60 * 60 * 24 * 7, // 7 days
+    }),
+    undefined,
+  );
 
-  // Track token in user-specific Set
-  await redisClient.sAdd(`${userId}`, refreshToken);
+  await withLoginRedisTimeout(redisClient.sAdd(`${userId}`, refreshToken), undefined);
 }
 // await storeRefreshToken(user.id, refreshToken);
 
@@ -62,21 +83,26 @@ function loginFailedKey(entity, id) {
 
 async function getLoginFailedAttempts(entity, id) {
   const key = loginFailedKey(entity, id);
-  const val = await redisClient.get(key);
+  const val = await withLoginRedisTimeout(redisClient.get(key), null);
   return val ? parseInt(val, 10) : 0;
 }
 
 async function incrementLoginFailedAttempts(entity, id) {
   const key = loginFailedKey(entity, id);
-  const count = await redisClient.incr(key);
-  const ttl = await redisClient.ttl(key);
-  if (ttl === -1) await redisClient.expire(key, LOGIN_FAILED_WINDOW_SEC);
+  const count = await withLoginRedisTimeout(redisClient.incr(key), 1);
+  const ttl = await withLoginRedisTimeout(redisClient.ttl(key), -2);
+  if (ttl === -1) {
+    await withLoginRedisTimeout(
+      redisClient.expire(key, LOGIN_FAILED_WINDOW_SEC),
+      undefined,
+    );
+  }
   return count;
 }
 
 async function resetLoginFailedAttempts(entity, id) {
   const key = loginFailedKey(entity, id);
-  await redisClient.del(key);
+  await withLoginRedisTimeout(redisClient.del(key), undefined);
 }
 
 module.exports = {
