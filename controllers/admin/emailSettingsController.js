@@ -79,6 +79,11 @@ exports.getSettings = catchAsync(async (req, res, next) => {
   const emails = getEmailsForType(recipientType);
   const emailKeys = emails.map((item) => item.key);
   const search = (req.query.search || "").trim();
+  const requestedRecipientId = Number(req.query.recipientId);
+  const singlePersonId =
+    Number.isFinite(requestedRecipientId) && requestedRecipientId > 0
+      ? requestedRecipientId
+      : null;
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
   const offset = (page - 1) * limit;
@@ -106,7 +111,9 @@ exports.getSettings = catchAsync(async (req, res, next) => {
 
   if (peopleConfig) {
     const where = { deleted: { [Op.ne]: true } };
-    if (search) {
+    if (singlePersonId) {
+      where.id = singlePersonId;
+    } else if (search) {
       where[Op.or] = [
         { [peopleConfig.nameField]: { [Op.like]: `%${search}%` } },
         { email: { [Op.like]: `%${search}%` } },
