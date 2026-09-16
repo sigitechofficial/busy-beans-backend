@@ -257,24 +257,28 @@ router.get(
 router.get(
   "/email-settings/catalog",
   protect,
+  auth.restrictTo("admin"),
   emailSettingsController.getCatalog,
 );
 
 router.get(
   "/email-settings",
   protect,
+  auth.restrictTo("admin"),
   emailSettingsController.getSettings,
 );
 
 router.patch(
   "/email-settings/default-supplier",
   protect,
+  auth.restrictTo("admin"),
   emailSettingsController.setDefaultSupplier,
 );
 
 router.patch(
   "/email-settings",
   protect,
+  auth.restrictTo("admin"),
   emailSettingsController.updateSetting,
 );
 
