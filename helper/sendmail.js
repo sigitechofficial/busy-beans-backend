@@ -1,12 +1,50 @@
+const path = require("path");
 const dotenv = require("dotenv");
-dotenv.config({ path: "../.env" });
+dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const axios = require("axios");
 const fs = require("fs");
-const path = require("path");
 
 const ZEPTO_URL = "https://api.zeptomail.com/v1.1/email";
 const DEFAULT_FROM_NAME = "Busy Bean Coffee";
+const DEFAULT_LOCAL_OBSERVER_BCC = "sigidevelopers@gmail.com";
+
+/** BCC on non-production sends so local/staging tests are visible in one inbox. */
+function getLocalObserverBccAddress() {
+  if (process.env.NODE_ENV === "production") return null;
+  if (process.env.DISABLE_LOCAL_EMAIL_OBSERVER_BCC === "true") return null;
+  const custom = process.env.LOCAL_EMAIL_OBSERVER_BCC;
+  if (custom === "false" || custom === "0") return null;
+  const trimmed = custom?.trim();
+  return trimmed || DEFAULT_LOCAL_OBSERVER_BCC;
+}
+
+function collectRecipientAddresses(...fields) {
+  const set = new Set();
+  for (const field of fields) {
+    if (field == null || field === "") continue;
+    const arr = Array.isArray(field) ? field : [field];
+    for (const item of arr) {
+      const raw =
+        typeof item === "string"
+          ? item
+          : item?.address || item?.email || "";
+      const address = String(raw).trim().toLowerCase();
+      if (address) set.add(address);
+    }
+  }
+  return set;
+}
+
+function mergeLocalObserverBcc(bcc, to) {
+  const observer = getLocalObserverBccAddress();
+  if (!observer) return bcc;
+  const existing = collectRecipientAddresses(to, bcc);
+  if (existing.has(observer.toLowerCase())) return bcc;
+  if (bcc == null || bcc === "") return observer;
+  if (Array.isArray(bcc)) return [...bcc, observer];
+  return [bcc, observer];
+}
 
 const mimeTypes = {
   ".png": "image/png",
@@ -168,8 +206,12 @@ async function sendMail(options, callback) {
     payload.htmlbody = "";
   }
 
-  if (bcc != null && (Array.isArray(bcc) ? bcc.length > 0 : bcc)) {
-    payload.bcc = normalizeToZeptoRecipients(bcc);
+  const effectiveBcc = mergeLocalObserverBcc(bcc, to);
+  if (
+    effectiveBcc != null &&
+    (Array.isArray(effectiveBcc) ? effectiveBcc.length > 0 : effectiveBcc)
+  ) {
+    payload.bcc = normalizeToZeptoRecipients(effectiveBcc);
   }
   if (cc != null && (Array.isArray(cc) ? cc.length > 0 : cc)) {
     payload.cc = normalizeToZeptoRecipients(cc);
@@ -198,6 +240,7 @@ async function sendMail(options, callback) {
       });
       console.log("[sendMail] Email sent successfully", {
         to: payload.to,
+        bcc: payload.bcc,
         subject: payload.subject,
       });
       return res.data;
@@ -208,6 +251,15 @@ async function sendMail(options, callback) {
           d?.error?.message ??
           d?.message ??
           (typeof d === "object" ? JSON.stringify(d) : d);
+        const details = d?.error?.details;
+        const ipBlocked = Array.isArray(details)
+          ? details.some((x) => x?.code === "SERR_156")
+          : false;
+        if (ipBlocked) {
+          console.error(
+            "[sendMail] ZeptoMail blocked this request: your public IP is not on the Zepto Mail allowlist (SERR_156). Add it in Zoho ZeptoMail → Mail Agents → IP restrictions. No email is delivered to To or BCC until fixed.",
+          );
+        }
         console.error("[sendMail] ZeptoMail", err.response.status, msg);
       }
       throw err;

@@ -21,6 +21,21 @@ class APIFeatures {
 
   filter() {
     const queryObj = { ...this.queryString };
+
+    const modelColumns = this.query?.rawAttributes
+      ? new Set(Object.keys(this.query.rawAttributes))
+      : null;
+
+    if (
+      queryObj.userid !== undefined &&
+      queryObj.userId === undefined &&
+      modelColumns?.has("userId") &&
+      !modelColumns.has("userid")
+    ) {
+      queryObj.userId = queryObj.userid;
+      delete queryObj.userid;
+    }
+
     const excludedFields = [
       "page",
       "sort",
