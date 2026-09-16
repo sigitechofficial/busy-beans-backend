@@ -235,7 +235,7 @@ jobs:
             echo "HTTP $HTTP_CODE"
             if [ "$HTTP_CODE" != "000" ] && [ "$HTTP_CODE" -lt 500 ]; then
               echo "Smoke check passed."
-              exit 0
+              break
             fi
             if [ "$ATTEMPT" -eq "$MAX_ATTEMPTS" ]; then
               echo "Smoke check failed after $MAX_ATTEMPTS attempts. Last code: $HTTP_CODE"
@@ -244,3 +244,20 @@ jobs:
             sleep 5
             ATTEMPT=$((ATTEMPT + 1))
           done
+
+          echo "Login smoke (must return within 8s; hang = Redis/env regression)..."
+          LOGIN_CODE="$(curl -sS -o /tmp/bb-login-smoke.json -w "%{http_code}" --max-time 8 \
+            -X POST "${APP_URL%/}/api/v1/admin/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"deploy-smoke@example.com","password":"invalid"}' || echo 000)"
+          echo "Login HTTP $LOGIN_CODE"
+          if [ "$LOGIN_CODE" = "000" ]; then
+            echo "Login smoke timed out. Admin sign-in would hang. Check Redis on localhost:6379; do not use laptop REDIS_PORT (6397) on the VPS."
+            exit 1
+          fi
+          if [ "$LOGIN_CODE" -ge 500 ]; then
+            echo "Login smoke returned 5xx."
+            cat /tmp/bb-login-smoke.json || true
+            exit 1
+          fi
+          echo "Login smoke passed (got a timely non-5xx response)."

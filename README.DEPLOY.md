@@ -39,7 +39,9 @@ There are **not** two workflow files for staging vs production. Branch mapping l
    - `NODE_ENV=production npm run migrate`
    - `NODE_ENV=production npm run marketing:migrate`
 9. **`pm2 restart <name> --update-env --interpreter /bin/node`**. The process must already exist. The job does **not** `pm2 start`, `pm2 kill`, or reload other apps (`trim`, `thetrim`, etc.).
-10. **Smoke check**: HTTP HEAD on the public URL. Pass if the status is not `5xx` (a `404` on `/` is OK for this API).
+10. **Smoke check**: HTTP HEAD on the public URL, then a timed **POST `/api/v1/admin/login`** (8s max). A hang fails the job (this is how a bad Redis `.env` took down admin login). A `400` from fake credentials is OK.
+
+**Redis on the VPS:** `testbb.js` / `bb.js` always use `localhost:6379`. Do not point server `.env` at laptop Redis (`REDIS_PORT=6397`). Optional server keys: `REDIS_HOST=localhost` and `REDIS_PORT=6379` with no quotes or semicolons. `local.js` only may use a custom Redis port.
 
 Concurrency groups: `busybeans-testing` and `busybeans-production`. In-progress runs are **not** cancelled.
 

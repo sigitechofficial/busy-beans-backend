@@ -13,12 +13,16 @@ function sanitize(value, fallback) {
 // testbb.js / bb.js must keep the previous hardcoded localhost:6379.
 // Reading laptop .env values on the VPS is what hung admin login after the last deploy.
 const runningLocal = /local\.js$/i.test(process.argv[1] || "");
-const port = runningLocal
-  ? Number(sanitize(process.env.REDIS_PORT, "6379")) || 6379
-  : 6379;
-const host = runningLocal
-  ? sanitize(process.env.REDIS_HOST, "localhost")
-  : "localhost";
+const envPort = Number(sanitize(process.env.REDIS_PORT, "6379")) || 6379;
+const envHost = sanitize(process.env.REDIS_HOST, "localhost");
+const port = runningLocal ? envPort : 6379;
+const host = runningLocal ? envHost : "localhost";
+
+if (!runningLocal && (envPort !== 6379 || envHost !== "localhost")) {
+  console.warn(
+    `[redis] Ignoring .env REDIS_HOST=${envHost} REDIS_PORT=${envPort} on server entry; using ${host}:${port}. Laptop Redis ports (e.g. 6397) must never be used by testbb.js or bb.js.`,
+  );
+}
 
 console.log(`[redis] connecting to ${host}:${port}${runningLocal ? " (local env)" : " (server default)"}`);
 
