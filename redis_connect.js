@@ -1,7 +1,14 @@
-const redis = require('redis');
+require("dotenv").config();
+
+const redis = require("redis");
+
+const port = Number(String(process.env.REDIS_PORT || "6379").replace(/['";]/g, "")) || 6379;
+const host = String(process.env.REDIS_HOST || "localhost")
+  .replace(/['";]/g, "")
+  .trim() || "localhost";
 
 const client = redis.createClient({
-  socket: { host: 'localhost', port: 6379 },
+  socket: { host, port },
 });
 
 client.on('connect', () => console.log('✅ Redis connected'));
