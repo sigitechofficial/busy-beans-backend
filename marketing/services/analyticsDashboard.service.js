@@ -3,7 +3,10 @@ const { QueryTypes } = require("sequelize");
 const { getMarketingSequelize } = require("../db/sequelize.marketing");
 const { getTouchpointModel } = require("../models/touchpoint");
 const { getAnalyticsEventModel } = require("../models/analyticsEvent");
-const { parseDateRange, appendTimestampFilter } = require("../utils/dateRange");
+const { appendTimestampFilter } = require("../utils/dateRange");
+const { parseReportRange } = require("../utils/businessTime");
+const { getPageStats } = require("./pageStats.service");
+const customerReports = require("./customerReports.service");
 const { formatTouchpointRow } = require("./touchpoints.service");
 const { formatEventRow } = require("./analyticsEvents.service");
 const { countNonTestLeads } = require("./leadSubmissionsAdmin.service");
@@ -84,6 +87,27 @@ async function sumRevenueFromEvents(range) {
   return Number(rows[0]?.total || 0);
 }
 
+/**
+ * Revenue of paid attributed orders (marketing_order_attribution) grouped by a UTM field of the
+ * chosen touch ("last" = last_touch, "first" = first_touch). Keyed like the touchpoint rows.
+ */
+async function getOrderRevenueBy(range, touch, field, fallback) {
+  const sequelize = getMarketingSequelize();
+  const column = touch === "first" ? "first_touch" : "last_touch";
+  const expr = `COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(${column}, '$.${field}')), ''), '${fallback}')`;
+  const filter = appendTimestampFilter(range, "paid_at", "AND");
+  const rows = await sequelize.query(
+    `SELECT ${expr} AS grp, SUM(revenue) AS revenue
+     FROM marketing_order_attribution
+     WHERE status = 'paid' ${filter.sql}
+     GROUP BY ${expr}`,
+    { replacements: { ...filter.replacements }, type: QueryTypes.SELECT },
+  );
+  const byGroup = {};
+  for (const row of rows) byGroup[row.grp] = Number(row.revenue || 0);
+  return byGroup;
+}
+
 async function getFunnelCounts(range) {
   const sequelize = getMarketingSequelize();
   const filter = appendTimestampFilter(range, "timestamp", "AND");
@@ -135,7 +159,7 @@ async function getLeadCountsBySlug(range) {
   return bySlug;
 }
 
-async function getTrafficSources(range) {
+async function getTrafficSources(range, touch) {
   const tpFilter = appendTimestampFilter(range, "tp.timestamp", "AND");
   const leadFilter = appendTimestampFilter(range, "l.submitted_at", "AND");
 
@@ -160,7 +184,8 @@ async function getTrafficSources(range) {
        COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.source')), ''), 'direct') AS source,
        COUNT(*) AS leads
      FROM lead_submissions l
-     WHERE l.test_mode = 0 ${leadFilter.sql}`,
+     WHERE l.test_mode = 0 ${leadFilter.sql}
+     GROUP BY source`,
     {
       replacements: { ...leadFilter.replacements },
       type: QueryTypes.SELECT,
@@ -171,16 +196,23 @@ async function getTrafficSources(range) {
   for (const row of leadRows) {
     leadsBySource[row.source] = Number(row.leads || 0);
   }
+  const revenueBySource = await getOrderRevenueBy(range, touch, "source", "direct");
+  const wonBySource = await customerReports.getWonLeadsBy(range, customerReports.LEAD_SOURCE);
 
-  return rows.map((row) => ({
-    source: row.source,
-    visitors: Number(row.visitors || 0),
-    leads: leadsBySource[row.source] || 0,
-    revenue: 0,
-  }));
+  return rows.map((row) => {
+    const won = wonBySource.get(String(row.source).toLowerCase()) || { wonLeads: 0, wonRevenue: 0 };
+    return {
+      source: row.source,
+      visitors: Number(row.visitors || 0),
+      leads: leadsBySource[row.source] || 0,
+      revenue: revenueBySource[row.source] || 0,
+      wonLeads: won.wonLeads,
+      wonRevenue: won.wonRevenue,
+    };
+  });
 }
 
-async function getUtmCampaigns(range) {
+async function getUtmCampaigns(range, touch) {
   const tpFilter = appendTimestampFilter(range, "tp.timestamp", "AND");
   const leadFilter = appendTimestampFilter(range, "l.submitted_at", "AND");
   const sequelize = getMarketingSequelize();
@@ -205,7 +237,8 @@ async function getUtmCampaigns(range) {
        COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.utmCampaign')), ''), '(not set)') AS campaign,
        COUNT(*) AS leads
      FROM lead_submissions l
-     WHERE l.test_mode = 0 ${leadFilter.sql}`,
+     WHERE l.test_mode = 0 ${leadFilter.sql}
+     GROUP BY campaign`,
     {
       replacements: { ...leadFilter.replacements },
       type: QueryTypes.SELECT,
@@ -216,183 +249,103 @@ async function getUtmCampaigns(range) {
   for (const row of leadRows) {
     leadsByCampaign[row.campaign] = Number(row.leads || 0);
   }
+  const revenueByCampaign = await getOrderRevenueBy(range, touch, "campaign", "(not set)");
+  const wonByCampaign = await customerReports.getWonLeadsBy(range, customerReports.LEAD_CAMPAIGN);
 
-  return rows.map((row) => ({
-    campaign: row.campaign,
-    visitors: Number(row.visitors || 0),
-    leads: leadsByCampaign[row.campaign] || 0,
-    revenue: 0,
-  }));
+  return rows.map((row) => {
+    const won = wonByCampaign.get(String(row.campaign).toLowerCase()) || { wonLeads: 0, wonRevenue: 0 };
+    return {
+      campaign: row.campaign,
+      visitors: Number(row.visitors || 0),
+      leads: leadsByCampaign[row.campaign] || 0,
+      revenue: revenueByCampaign[row.campaign] || 0,
+      wonLeads: won.wonLeads,
+      wonRevenue: won.wonRevenue,
+    };
+  });
 }
 
-async function getLandingPageMetrics(range) {
+/** Per landing page: id and view breakdowns by device / source / campaign (grouped, not per slug). */
+async function getLandingPageBreakdowns(range) {
   const sequelize = getMarketingSequelize();
   const filter = appendTimestampFilter(range, "timestamp", "AND");
-  const leadCountsBySlug = await getLeadCountsBySlug(range);
-
-  const slugRows = await sequelize.query(
-    `SELECT DISTINCT landing_page_slug AS slug, landing_page_id AS landingPageId
+  const bySlug = new Map();
+  const entry = (slug) => {
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, { landingPageId: null, deviceBreakdown: {}, sourceBreakdown: {}, campaignBreakdown: {} });
+    }
+    return bySlug.get(slug);
+  };
+  const ids = await sequelize.query(
+    `SELECT landing_page_slug AS slug, MAX(landing_page_id) AS landingPageId
      FROM marketing_analytics_events
-     WHERE landing_page_slug IS NOT NULL AND landing_page_slug != ''
-     ${filter.sql}`,
-    {
-      replacements: { ...filter.replacements },
-      type: QueryTypes.SELECT,
-    },
+     WHERE page_type = 'landing_page' AND landing_page_slug IS NOT NULL ${filter.sql}
+     GROUP BY landing_page_slug`,
+    { replacements: { ...filter.replacements }, type: QueryTypes.SELECT },
   );
-
-  const slugMap = new Map();
-  for (const slugRow of slugRows) {
-    slugMap.set(slugRow.slug, {
-      slug: slugRow.slug,
-      landingPageId: slugRow.landingPageId || null,
-    });
+  for (const row of ids) entry(row.slug).landingPageId = row.landingPageId || null;
+  const breakdowns = [
+    ["deviceBreakdown", "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.deviceType')), ''), 'unknown')"],
+    ["sourceBreakdown", "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(attribution, '$.source')), ''), 'direct')"],
+    ["campaignBreakdown", "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(attribution, '$.campaign')), ''), '(not set)')"],
+  ];
+  for (const [key, expr] of breakdowns) {
+    // eslint-disable-next-line no-await-in-loop
+    const rows = await sequelize.query(
+      `SELECT landing_page_slug AS slug, ${expr} AS name, COUNT(*) AS cnt
+       FROM marketing_analytics_events
+       WHERE event_type = 'landing_page_view' AND page_type = 'landing_page' ${filter.sql}
+       GROUP BY landing_page_slug, ${expr}`,
+      { replacements: { ...filter.replacements }, type: QueryTypes.SELECT },
+    );
+    for (const row of rows) entry(row.slug)[key][row.name] = Number(row.cnt || 0);
   }
-  for (const [slug, info] of Object.entries(leadCountsBySlug)) {
-    if (!slugMap.has(slug)) {
-      slugMap.set(slug, { slug, landingPageId: info.landingPageId || null });
-    }
-  }
+  return bySlug;
+}
 
-  const landingPages = [];
-
-  for (const slugRow of slugMap.values()) {
-    const slug = slugRow.slug;
-    const slugFilter = appendTimestampFilter(range, "timestamp", "AND");
-    const replacements = {
-      slug,
-      ...slugFilter.replacements,
-    };
-
-    const viewRows = await sequelize.query(
-      `SELECT COUNT(*) AS views,
-              COUNT(DISTINCT visitor_id) AS uniqueVisitors,
-              COUNT(DISTINCT session_id) AS sessions
-       FROM marketing_analytics_events
-       WHERE event_type = 'landing_page_view'
-         AND landing_page_slug = :slug ${slugFilter.sql}`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-
-    const views = Number(viewRows[0]?.views || 0);
-    const uniqueVisitors = Number(viewRows[0]?.uniqueVisitors || 0);
-    const sessions = Number(viewRows[0]?.sessions || 0);
-
-    const eventCounts = await sequelize.query(
-      `SELECT event_type, COUNT(*) AS cnt
-       FROM marketing_analytics_events
-       WHERE landing_page_slug = :slug ${slugFilter.sql}
-       GROUP BY event_type`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-
-    const counts = {};
-    for (const row of eventCounts) {
-      counts[row.event_type] = Number(row.cnt || 0);
-    }
-
-    const bounceRows = await sequelize.query(
-      `SELECT
-         SUM(CASE WHEN event_count = 1 THEN 1 ELSE 0 END) AS bounced,
-         COUNT(*) AS total_sessions
-       FROM (
-         SELECT session_id, COUNT(*) AS event_count
-         FROM marketing_analytics_events
-         WHERE landing_page_slug = :slug ${slugFilter.sql}
-         GROUP BY session_id
-       ) s`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-
-    const bounced = Number(bounceRows[0]?.bounced || 0);
-    const totalSessions = Number(bounceRows[0]?.total_sessions || 0);
-    const bounceRate =
-      totalSessions > 0 ? Math.round((bounced / totalSessions) * 100) : 0;
-
-    const scrollRows = await sequelize.query(
-      `SELECT AVG(
-         CAST(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.depthPct')) AS DECIMAL(10,2))
-       ) AS avgDepth
-       FROM marketing_analytics_events
-       WHERE event_type = 'scroll_depth'
-         AND landing_page_slug = :slug ${slugFilter.sql}`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-
-    const avgScrollDepth = Math.round(Number(scrollRows[0]?.avgDepth || 0));
-
-    const deviceRows = await sequelize.query(
-      `SELECT
-         COALESCE(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.deviceType')), 'unknown') AS deviceType,
-         COUNT(*) AS cnt
-       FROM marketing_analytics_events
-       WHERE landing_page_slug = :slug ${slugFilter.sql}
-       GROUP BY COALESCE(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.deviceType')), 'unknown')`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-
-    const deviceBreakdown = {};
-    for (const row of deviceRows) {
-      deviceBreakdown[row.deviceType] = Number(row.cnt || 0);
-    }
-
-    const sourceRows = await sequelize.query(
-      `SELECT
-         COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(attribution, '$.source')), ''), 'direct') AS source,
-         COUNT(*) AS cnt
-       FROM marketing_analytics_events
-       WHERE landing_page_slug = :slug ${slugFilter.sql}
-       GROUP BY COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(attribution, '$.source')), ''), 'direct')`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-
-    const sourceBreakdown = {};
-    for (const row of sourceRows) {
-      sourceBreakdown[row.source] = Number(row.cnt || 0);
-    }
-
-    const campaignRows = await sequelize.query(
-      `SELECT
-         COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(attribution, '$.campaign')), ''), '(not set)') AS campaign,
-         COUNT(*) AS cnt
-       FROM marketing_analytics_events
-       WHERE landing_page_slug = :slug ${slugFilter.sql}
-       GROUP BY COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(attribution, '$.campaign')), ''), '(not set)')`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-
-    const campaignBreakdown = {};
-    for (const row of campaignRows) {
-      campaignBreakdown[row.campaign] = Number(row.cnt || 0);
-    }
-
-    const leads = leadCountsBySlug[slug]?.leads ?? counts.lead_created ?? 0;
-    const conversionRate =
-      views > 0 ? roundOneDecimal((leads / views) * 100) : 0;
-
-    landingPages.push({
-      landingPageSlug: slug,
-      landingPageId: slugRow.landingPageId || null,
-      visitors: uniqueVisitors,
-      uniqueVisitors,
-      sessions,
-      bounceRate,
-      avgTimeOnPageSec: 0,
-      avgScrollDepth,
-      ctaClicks: counts.cta_click || 0,
-      formStarts: counts.form_start || 0,
-      formSubmissions: counts.form_submit || 0,
-      leads,
-      orders: counts.order_completed || 0,
-      revenue: 0,
-      conversionRate,
-      deviceBreakdown,
-      sourceBreakdown,
-      campaignBreakdown,
-    });
-  }
-
-  return landingPages.sort((a, b) => b.visitors - a.visitors);
+/**
+ * Landing page table (from the daily rollups — see pageStats.service for definitions).
+ * Field names kept for existing clients; conversionRate is now leads per session.
+ */
+async function getLandingPageMetrics(reportRange, legacyRange, touch) {
+  const { rows } = await getPageStats({ range: reportRange, pageType: "landing_page", touch });
+  const breakdowns = await getLandingPageBreakdowns(legacyRange);
+  return rows
+    .map((r) => {
+      const extra = breakdowns.get(r.pageSlug) || {};
+      return {
+        landingPageSlug: r.pageSlug,
+        landingPageId: extra.landingPageId || null,
+        visitors: r.visitors,
+        uniqueVisitors: r.visitors,
+        sessions: r.sessions,
+        views: r.views,
+        entrances: r.entrances,
+        bounceRate: r.bounceRate,
+        exits: r.exits,
+        avgTimeOnPageSec: Math.round(r.avgEngagedSec),
+        avgEngagedSec: r.avgEngagedSec,
+        avgScrollDepth: r.avgScrollDepth,
+        ctaClicks: r.ctaClicks,
+        formStarts: r.formStarts,
+        formSubmissions: r.formSubmissions,
+        leads: r.leads,
+        orders: r.orders,
+        revenue: r.revenue,
+        repeatOrders: r.repeatOrders,
+        repeatRevenue: r.repeatRevenue,
+        wonLeads: r.wonLeads,
+        wonRevenue: r.wonRevenue,
+        leadWinRate: r.leadWinRate,
+        customerRevenue: r.customerRevenue,
+        conversionRate: r.leadConversionRate,
+        orderConversionRate: r.orderConversionRate,
+        deviceBreakdown: extra.deviceBreakdown || {},
+        sourceBreakdown: extra.sourceBreakdown || {},
+        campaignBreakdown: extra.campaignBreakdown || {},
+      };
+    })
+    .sort((a, b) => b.visitors - a.visitors);
 }
 
 async function getRecentTouchpoints(range, limit = 20) {
@@ -432,7 +385,13 @@ async function getRecentEvents(range, limit = 30) {
 }
 
 async function getDashboard(query = {}) {
-  const range = parseDateRange(query.from, query.to);
+  // Dates are business-timezone days (MARKETING_REPORT_TIMEZONE), "to" inclusive.
+  const reportRange = parseReportRange(query.from, query.to);
+  const range = {
+    start: reportRange.start,
+    end: reportRange.end ? new Date(reportRange.end.getTime() - 1000) : undefined,
+  };
+  const touch = query.touch === "first" ? "first" : "last";
 
   const totalVisitors = await countUniqueVisitorsFromEvents(range);
   const funnelCounts = await getFunnelCounts(range);
@@ -446,9 +405,12 @@ async function getDashboard(query = {}) {
     totalOrders > 0 ? roundOneDecimal(revenue / totalOrders) : 0;
   const returningVisitors = await countReturningVisitors(range);
 
-  const trafficSources = await getTrafficSources(range);
-  const utmCampaigns = await getUtmCampaigns(range);
-  const landingPages = await getLandingPageMetrics(range);
+  const trafficSources = await getTrafficSources(range, touch);
+  const trafficSourceMediums = await customerReports.getTrafficSourceMediums(range, touch);
+  const utmCampaigns = await getUtmCampaigns(range, touch);
+  const customerSummary = await customerReports.getCustomerSummary(range);
+  const customersBySource = await customerReports.getCustomersBySource(range, touch);
+  const landingPages = await getLandingPageMetrics(reportRange, range, touch);
   const recentTouchpoints = await getRecentTouchpoints(range, 20);
   const recentEvents = await getRecentEvents(range, 30);
   const funnel = buildFunnel(funnelCounts);
@@ -462,16 +424,38 @@ async function getDashboard(query = {}) {
       conversionRate,
       averageOrderValue,
       returningVisitors,
+      newCustomers: customerSummary.newCustomers,
+      repeatCustomers: customerSummary.repeatCustomers,
+      repeatRevenue: customerSummary.repeatRevenue,
+      wonLeads: customerSummary.wonLeads,
+      wonRevenue: customerSummary.wonRevenue,
+      totalCustomerRevenue: customerSummary.totalCustomerRevenue,
+      // Store activity (Phase 16): website sign-ins / sign-ups, add-to-carts, checkouts started.
+      signIns: funnelCounts.login || 0,
+      signUps: funnelCounts.sign_up || 0,
+      addToCarts: funnelCounts.add_to_cart || 0,
+      checkoutsStarted: funnelCounts.begin_checkout || 0,
     },
     marketing: {
       trafficSources,
+      trafficSourceMediums,
       utmCampaigns,
-      landingPages: [],
+      landingPages,
+    },
+    customers: {
+      summary: customerSummary,
+      bySource: customersBySource,
     },
     funnel,
     landingPages,
     recentTouchpoints,
     recentEvents,
+    meta: {
+      timeZone: reportRange.tz,
+      from: reportRange.fromDay || null,
+      to: reportRange.toDay || null,
+      touch,
+    },
   };
 }
 

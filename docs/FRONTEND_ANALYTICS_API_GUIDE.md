@@ -1,5 +1,7 @@
 # Marketing Analytics & Leads — Frontend API Guide
 
+> **Partly outdated (2026-09).** Dashboard revenue/avg time are real values now, there is a `touch` parameter, and per-page reports live at `/api/admin/analytics/pages`. Current references: `docs/analytics/EVENT_CONTRACT.md` (events, reports, revenue), `docs/security/HARDENING.md` (API security), and in the Campaign Builder repo `docs/landing-pages/ARCHITECTURE.md` / `ENVIRONMENT.md` / `RENDERER_PACKAGE.md`.
+
 **Backend repo:** `busy-beans-backend`  
 **Module:** `marketing/` only (mounted at `/api`)  
 **Status:** Implemented — ready for customer site + `/admin/marketing/analytics`  

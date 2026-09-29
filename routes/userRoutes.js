@@ -13,6 +13,8 @@ const categoryController = require("../controllers/admin/categoriesController");
 const userController = require("../controllers/userController");
 const multiInvoiceCheckoutController = require("../controllers/customer/multiInvoiceCheckoutController");
 const Authorization = require("../middlewares/protect");
+const { requireOwnSubscription } = require("../middlewares/subscriptionAccess");
+const { hideMachinePrices, fillMachineLeadValue } = require("../middlewares/machinePricing");
 const {
   signupRateLimiter,
   loginRateLimiter,
@@ -120,7 +122,12 @@ router.post("/signup", signupRateLimiter, authController.signup);
  *       404:
  *         description: Subscription not found
  */
-router.get("/subscription/:id", subscriptionController.getSubscription);
+router.get(
+  "/subscription/:id",
+  Authorization.protect,
+  requireOwnSubscription,
+  subscriptionController.getSubscription,
+);
 
 /**
  * @swagger
@@ -147,6 +154,8 @@ router.get("/subscription/:id", subscriptionController.getSubscription);
  */
 router.get(
   "/subscription/:id/create-payment-intent/:userId",
+  Authorization.protect,
+  requireOwnSubscription,
   subscriptionController.createPaymentIntent,
 );
 
@@ -175,6 +184,8 @@ router.get(
  */
 router.post(
   "/subscription/:id/create-payment-intent/:userId",
+  Authorization.protect,
+  requireOwnSubscription,
   subscriptionController.createPaymentIntent,
 );
 
@@ -206,6 +217,8 @@ router.post(
  */
 router.post(
   "/subscription/:id/confirm-payment",
+  Authorization.protect,
+  requireOwnSubscription,
   subscriptionController.confirmSubscriptionPayment,
 );
 /**
@@ -508,7 +521,12 @@ router.post(
  *       200:
  *         description: List of coffee machines
  */
-router.get("/coffee-machine", machineController.getAllMachines);
+// The websites never show machine prices: returned without price / pricePer.
+router.get(
+  "/coffee-machine",
+  hideMachinePrices,
+  machineController.getAllMachines,
+);
 
 /**
  * @swagger
@@ -526,7 +544,11 @@ router.get("/coffee-machine", machineController.getAllMachines);
  *       200:
  *         description: Coffee machine details
  */
-router.get("/coffee-machine/:id", machineController.getMachines);
+router.get(
+  "/coffee-machine/:id",
+  hideMachinePrices,
+  machineController.getMachines,
+);
 
 /**
  * @swagger
@@ -551,7 +573,7 @@ router.get("/coffee-machine/:id", machineController.getMachines);
  *       201:
  *         description: Lead created successfully
  */
-router.post("/create-lead", leadController.createLead);
+router.post("/create-lead", fillMachineLeadValue, leadController.createLead);
 
 /**
  * @swagger

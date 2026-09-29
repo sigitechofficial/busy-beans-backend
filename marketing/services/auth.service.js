@@ -46,6 +46,7 @@ function signMarketingToken(user) {
     {
       sub: user.id,
       email: user.email,
+      role: user.role,
       scope: "marketing",
     },
     secret,

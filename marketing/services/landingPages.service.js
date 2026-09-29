@@ -4,8 +4,19 @@ const { getLandingPageModel } = require("../models/landingPage");
 const { getLandingPageVersionModel } = require("../models/landingPageVersion");
 const { getCampaignsReferencingLandingPage } = require("./campaignReferences.service");
 const { getDefaultTrackingForNewPage } = require("./globalTracking.service");
-const { resolveInitialSections } = require("../utils/templateSections");
+const { resolveInitialSections, resolveTemplateDesignSystem } = require("../utils/templateSections");
+const { normalizeDesignSystem } = require("../utils/designSystem");
+const { normalizeTrackingSettings } = require("../utils/trackingSettings");
 const { parseJsonField } = require("../utils/jsonField");
+const { getMediaAssetModel } = require("../models/mediaAsset");
+const {
+  getApiPublicUrl,
+  getCampaignAppUrl,
+  getLeadSubmitUrl,
+  getWebsitePublicUrl,
+} = require("../utils/publicUrls");
+const { revalidateWebsiteLandingPage } = require("./websiteRevalidate.service");
+const { attachCustomHtmlSsr } = require("../utils/customHtmlSsr");
 
 function cloneJson(input) {
   return JSON.parse(JSON.stringify(input));
@@ -20,7 +31,7 @@ function buildPreviewToken() {
 }
 
 function buildPublishedUrl(slug) {
-  const base = (process.env.PUBLIC_SITE_URL || "").replace(/\/+$/, "");
+  const base = getWebsitePublicUrl();
   if (!base) return null;
   return `${base}/lp/${slug}`;
 }
@@ -42,12 +53,31 @@ function defaultSeo(slug) {
   };
 }
 
-function getLeadSubmitUrl() {
-  const configured = process.env.DEFAULT_LEAD_SUBMIT_URL;
-  if (configured) return configured;
-  const site = (process.env.PUBLIC_SITE_URL || "").replace(/\/+$/, "");
-  if (site) return `${site}/api/public/lead-submissions`;
-  return null;
+const PAGE_CHROME_VALUES = new Set(["site", "minimal"]);
+
+/** Keep only known page settings with valid values. */
+function normalizePageSettings(raw) {
+  const input = parseJsonField(raw, {});
+  const settings = {};
+  if (input && typeof input === "object" && PAGE_CHROME_VALUES.has(input.chrome)) {
+    settings.chrome = input.chrome;
+  }
+  return settings;
+}
+
+/** Absolute public URL for the page's OG image (seo.ogImageId may be a media id or a URL). */
+async function resolveOgImageUrl(seo) {
+  const ref = String(seo?.ogImageId || "").trim();
+  if (!ref) return null;
+  let url = ref;
+  if (!/^https?:\/\//i.test(ref) && !ref.startsWith("/")) {
+    const asset = await getMediaAssetModel().findByPk(ref);
+    url = asset?.url || "";
+  }
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const api = getApiPublicUrl();
+  return api && url.startsWith("/") ? `${api}${url}` : null;
 }
 
 function injectLeadSubmitUrls(sections) {
@@ -82,13 +112,64 @@ function normalizeSections(sections) {
   return parsed;
 }
 
+// Keep in sync with page-builder-nextjs/src/features/landing-pages/utils/publishValidation.ts
+const PUBLISH_HERO_SECTION_TYPES = new Set([
+  "hero",
+  "local-hero",
+  "product-hero",
+  "simple-hero",
+  "industry-hero",
+  "cp-hero",
+  "cb-hero",
+  "pl-hero",
+]);
+
+const PUBLISH_LEAD_FORM_SECTION_TYPES = new Set([
+  "lead-form",
+  "request-demo-form",
+  "contact-form",
+  "consultation-booking-form",
+  "brochure-download-form",
+  "callback-request-form",
+  "cp-lead-form",
+  "cb-lead-form",
+  "pl-lead-form",
+]);
+
+const PUBLISH_CTA_SECTION_TYPES = new Set([
+  ...PUBLISH_HERO_SECTION_TYPES,
+  ...PUBLISH_LEAD_FORM_SECTION_TYPES,
+  "cta-banner",
+  "final-cta-banner",
+  "sticky-mobile-cta",
+  "cp-pricing",
+  "cb-machines",
+  "cb-final-cta",
+  "pl-founder-note",
+]);
+
+/** A section matches when either its wire type or its real renderer slug (renderType) is in the set. */
+function sectionMatches(section, typeSet) {
+  return typeSet.has(section.type) || (section.renderType ? typeSet.has(section.renderType) : false);
+}
+
+function isCustomHtmlSection(section) {
+  return (section.renderType || section.type) === "custom-html";
+}
+
 function runPublishValidation(page) {
   const errors = [];
   const warnings = [];
   const sections = normalizeSections(page.draftSections);
   const visibleSections = sections.filter((s) => s && s.visible !== false);
 
-  const hasHero = visibleSections.some((s) => s.type === "hero");
+  // Imported / freeform pages: every visible section is custom HTML, so hero/CTA
+  // checks do not apply (the builder skips them too).
+  if (visibleSections.length > 0 && visibleSections.every(isCustomHtmlSection)) {
+    return { passed: true, errors, warnings };
+  }
+
+  const hasHero = visibleSections.some((s) => sectionMatches(s, PUBLISH_HERO_SECTION_TYPES));
   if (!hasHero) {
     errors.push({
       key: "sections.hero",
@@ -96,7 +177,9 @@ function runPublishValidation(page) {
     });
   }
 
-  const hasLeadForm = visibleSections.some((s) => s.type === "lead-form");
+  const hasLeadForm = visibleSections.some((s) =>
+    sectionMatches(s, PUBLISH_LEAD_FORM_SECTION_TYPES),
+  );
   if (!hasLeadForm) {
     warnings.push({
       key: "sections.lead-form",
@@ -104,9 +187,7 @@ function runPublishValidation(page) {
     });
   }
 
-  const hasCta = visibleSections.some((s) =>
-    ["hero", "cta-banner", "lead-form"].includes(s.type),
-  );
+  const hasCta = visibleSections.some((s) => sectionMatches(s, PUBLISH_CTA_SECTION_TYPES));
   if (!hasCta) {
     errors.push({
       key: "sections.cta",
@@ -188,8 +269,10 @@ async function createLandingPage(payload, actor) {
       existing.draftSections = normalizeSections(payload.sections);
     }
     if (payload.seo !== undefined) existing.seo = payload.seo;
-    if (payload.tracking !== undefined) existing.tracking = payload.tracking;
+    if (payload.tracking !== undefined) existing.tracking = normalizeTrackingSettings(payload.tracking);
     if (payload.formSettings !== undefined) existing.formSettings = payload.formSettings;
+    if (payload.settings !== undefined) existing.settings = normalizePageSettings(payload.settings);
+    if (payload.designSystem !== undefined) existing.designSystem = normalizeDesignSystem(payload.designSystem);
     existing.updatedBy = actor?.sub || existing.updatedBy;
     await existing.save();
     return existing;
@@ -202,6 +285,10 @@ async function createLandingPage(payload, actor) {
       await resolveInitialSections(payload.templateId || null),
     );
   }
+  const designSystem =
+    payload.designSystem !== undefined
+      ? normalizeDesignSystem(payload.designSystem)
+      : normalizeDesignSystem(await resolveTemplateDesignSystem(payload.templateId || null));
   const trackingDefaults = await getDefaultTrackingForNewPage();
   const page = await LandingPage.create({
     id,
@@ -215,8 +302,10 @@ async function createLandingPage(payload, actor) {
     city: payload.city || null,
     draftSections,
     seo: payload.seo || defaultSeo(slug),
-    tracking: payload.tracking || trackingDefaults,
+    tracking: normalizeTrackingSettings(payload.tracking || trackingDefaults),
     formSettings: payload.formSettings || defaultFormSettings(),
+    settings: normalizePageSettings(payload.settings),
+    designSystem,
     previewToken: buildPreviewToken(),
     createdBy: actor?.sub || null,
     updatedBy: actor?.sub || null,
@@ -239,8 +328,10 @@ async function patchDraft(id, payload, actor) {
   if (payload.title !== undefined) page.title = payload.title;
   if (payload.sections !== undefined) page.draftSections = normalizeSections(payload.sections);
   if (payload.seo !== undefined) page.seo = payload.seo || {};
-  if (payload.tracking !== undefined) page.tracking = payload.tracking || {};
+  if (payload.tracking !== undefined) page.tracking = normalizeTrackingSettings(payload.tracking || {});
   if (payload.formSettings !== undefined) page.formSettings = payload.formSettings || {};
+  if (payload.settings !== undefined) page.settings = normalizePageSettings(payload.settings);
+  if (payload.designSystem !== undefined) page.designSystem = normalizeDesignSystem(payload.designSystem);
   page.updatedBy = actor?.sub || page.updatedBy;
   await page.save();
 
@@ -274,7 +365,8 @@ async function publishLandingPage(id, payload, actor) {
     page.publishedAt = null;
   } else {
     page.status = "published";
-    page.publishedSections = injectLeadSubmitUrls(cloneJson(page.draftSections || []));
+    page.publishedSections = attachCustomHtmlSsr(injectLeadSubmitUrls(cloneJson(page.draftSections || [])));
+    page.publishedDesignSystem = normalizeDesignSystem(page.designSystem);
     page.publishedAt = now;
     page.publishedUrl = buildPublishedUrl(page.slug);
   }
@@ -288,6 +380,7 @@ async function publishLandingPage(id, payload, actor) {
     sectionsSnapshot: cloneJson(page.draftSections || []),
   });
 
+  revalidateWebsiteLandingPage(page.slug);
   return page;
 }
 
@@ -299,6 +392,7 @@ async function unpublishLandingPage(id, actor) {
   page.scheduledAt = null;
   page.updatedBy = actor?.sub || page.updatedBy;
   await page.save();
+  revalidateWebsiteLandingPage(page.slug);
   return page;
 }
 
@@ -331,6 +425,8 @@ async function duplicateLandingPage(id, actor) {
       seo: cloneJson(page.seo || {}),
       tracking: cloneJson(page.tracking || {}),
       formSettings: cloneJson(page.formSettings || {}),
+      settings: cloneJson(page.settings || {}),
+      designSystem: page.designSystem || null,
     },
     actor,
   );
@@ -343,6 +439,7 @@ async function archiveLandingPage(id, actor) {
   page.archivedAt = new Date();
   page.updatedBy = actor?.sub || page.updatedBy;
   await page.save();
+  revalidateWebsiteLandingPage(page.slug);
   return page;
 }
 
@@ -359,7 +456,9 @@ async function deleteLandingPage(id) {
     };
   }
 
+  const { slug } = page;
   await page.destroy();
+  revalidateWebsiteLandingPage(slug);
   return { deleted: true };
 }
 
@@ -372,10 +471,11 @@ async function restoreLandingPageVersion(id, versionNumber, actor) {
   });
   if (!version) return null;
 
+  // Restore into the draft only. Status and published sections are untouched so a
+  // live page stays live until the restored draft is explicitly published.
   if (Array.isArray(version.sectionsSnapshot)) {
     page.draftSections = cloneJson(version.sectionsSnapshot);
   }
-  page.status = "draft";
   page.updatedBy = actor?.sub || page.updatedBy;
   await page.save();
   return page;
@@ -390,8 +490,17 @@ async function regeneratePreviewToken(id) {
   }
   return {
     token: page.previewToken,
-    previewUrl: `${(process.env.PUBLIC_SITE_URL || "").replace(/\/+$/, "")}/preview/landing-page/${page.id}?token=${page.previewToken}`,
+    previewUrl: `${getCampaignAppUrl()}/preview/landing-page/${page.id}?token=${page.previewToken}`,
   };
+}
+
+/** Page tracking for public payloads: validated IDs only (invalid legacy values dropped). */
+function safeTracking(value) {
+  try {
+    return normalizeTrackingSettings(value);
+  } catch {
+    return { captureUtmFields: true };
+  }
 }
 
 async function getPublicLandingPageBySlug(slug) {
@@ -421,12 +530,37 @@ async function getPublicLandingPageBySlug(slug) {
     targetAudience: page.targetAudience,
     city: page.city,
     sections: cloneJson(page.publishedSections || []),
-    seo: cloneJson(page.seo || {}),
-    tracking: cloneJson(page.tracking || {}),
+    seo: { ...cloneJson(page.seo || {}), ogImageUrl: await resolveOgImageUrl(page.seo) },
+    tracking: safeTracking(page.tracking),
     formSettings: cloneJson(page.formSettings || {}),
+    settings: normalizePageSettings(page.settings),
+    designSystem: normalizeDesignSystem(page.publishedDesignSystem),
     publishedUrl: page.publishedUrl || buildPublishedUrl(page.slug),
     publishedAt: page.publishedAt,
+    updatedAt: page.get("updated_at"),
   };
+}
+
+/**
+ * Live landing pages for the website sitemap: published (or past-scheduled), not
+ * excluded via seo.includeInSitemap=false, and not noindex.
+ */
+async function listSitemapLandingPages() {
+  const LandingPage = getLandingPageModel();
+  const now = Date.now();
+  const rows = await LandingPage.findAll({
+    where: { status: { [Op.in]: ["published", "scheduled"] } },
+    attributes: ["slug", "status", "seo", "scheduledAt", "publishedAt", "updated_at"],
+    order: [["updated_at", "DESC"]],
+  });
+  return rows
+    .filter((row) => row.status === "published" || (row.scheduledAt && new Date(row.scheduledAt).getTime() <= now))
+    .filter((row) => {
+      const seo = row.seo || {};
+      if (seo.includeInSitemap === false) return false;
+      return !/noindex/i.test(String(seo.robots || ""));
+    })
+    .map((row) => ({ slug: row.slug, lastModified: row.get("updated_at") || row.publishedAt }));
 }
 
 async function getPreviewLandingPageByToken(pageId, token) {
@@ -448,6 +582,8 @@ async function getPreviewLandingPageByToken(pageId, token) {
     seo: cloneJson(page.seo || {}),
     tracking: cloneJson(page.tracking || {}),
     formSettings: cloneJson(page.formSettings || {}),
+    settings: normalizePageSettings(page.settings),
+    designSystem: normalizeDesignSystem(page.designSystem),
   };
 }
 
@@ -467,4 +603,6 @@ module.exports = {
   regeneratePreviewToken,
   getPublicLandingPageBySlug,
   getPreviewLandingPageByToken,
+  listSitemapLandingPages,
+  normalizePageSettings,
 };

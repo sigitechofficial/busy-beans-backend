@@ -95,8 +95,56 @@ async function run() {
     throw new Error("Funnel lead_created count must match executive.totalLeads");
   }
 
+  await checkPageContextContract(suffix);
+
   // eslint-disable-next-line no-console
   console.log("[analytics-contract] passed");
+}
+
+/**
+ * Page context (Phase 7): landing-page fields only on /lp events, page fields on every event,
+ * engaged time accumulated on the session. Uses its own session and removes its rows.
+ */
+async function checkPageContextContract(suffix) {
+  const { getMarketingSequelize } = require("../db/sequelize.marketing");
+  const db = getMarketingSequelize();
+  const visitorId = `contract-pc-visitor-${suffix}`;
+  const sessionId = `contract-pc-session-${suffix}`;
+  const base = { visitorId, sessionId, metadata: { site: "customer-website" } };
+  const ts = () => new Date().toISOString();
+
+  try {
+    await analyticsEventsService.ingestEvent({ ...base, id: `ev-pc-site-${suffix}`, eventType: "page_view", timestamp: ts(), pathname: "/products" });
+    // What the old website tracker sent from ordinary pages: must NOT count as a landing page.
+    await analyticsEventsService.ingestEvent({ ...base, id: `ev-pc-polluted-${suffix}`, eventType: "cta_click", timestamp: ts(), pathname: "/products", landingPageSlug: "products" });
+    await analyticsEventsService.ingestEvent({ ...base, id: `ev-pc-lp-${suffix}`, eventType: "landing_page_view", timestamp: ts(), pathname: "/lp/contract-test-slug", landingPageSlug: "contract-test-slug", landingPageId: "lp-contract" });
+    await analyticsEventsService.ingestEvent({ ...base, id: `ev-pc-eng-${suffix}`, eventType: "page_engagement", timestamp: ts(), pathname: "/lp/contract-test-slug", metadata: { site: "customer-website", activeMs: 12000 } });
+
+    const rows = await db.query(
+      "SELECT id, landing_page_slug, page_slug, page_type, site FROM marketing_analytics_events WHERE session_id = ?",
+      { replacements: [sessionId], type: "SELECT" },
+    );
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    const polluted = byId[`ev-pc-polluted-${suffix}`];
+    if (polluted.landing_page_slug !== null) throw new Error("Site-page event must not keep a landing_page_slug");
+    if (polluted.page_slug !== "products" || polluted.page_type !== "site") throw new Error("Site-page event must record page_slug/page_type");
+    const lp = byId[`ev-pc-lp-${suffix}`];
+    if (lp.landing_page_slug !== "contract-test-slug" || lp.page_type !== "landing_page") throw new Error("Landing page event must keep its slug");
+    if (lp.site !== "customer-website") throw new Error("Event must record the sending site");
+
+    const [session] = await db.query(
+      "SELECT entry_pathname, entry_landing_page_slug, last_landing_page_slug, page_count, engaged_ms FROM marketing_sessions WHERE session_id = ?",
+      { replacements: [sessionId], type: "SELECT" },
+    );
+    if (session.entry_pathname !== "/products" || session.entry_landing_page_slug !== null) throw new Error("Session entry must be the first page (write-once)");
+    if (session.last_landing_page_slug !== "contract-test-slug") throw new Error("Session must record the last landing page");
+    if (Number(session.page_count) !== 2) throw new Error(`Session page_count should be 2, got ${session.page_count}`);
+    if (Number(session.engaged_ms) !== 12000) throw new Error(`Session engaged_ms should be 12000, got ${session.engaged_ms}`);
+  } finally {
+    await db.query("DELETE FROM marketing_analytics_events WHERE session_id = ?", { replacements: [sessionId] });
+    await db.query("DELETE FROM marketing_sessions WHERE session_id = ?", { replacements: [sessionId] });
+    await db.query("DELETE FROM marketing_visitors WHERE visitor_id = ?", { replacements: [visitorId] });
+  }
 }
 
 if (require.main === module) {

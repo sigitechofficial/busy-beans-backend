@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { getMarketingSequelize } = require("../db/sequelize.marketing");
+const { jsonGetter, jsonSetter } = require("../utils/jsonField");
 
 let CustomTemplateModel = null;
 
@@ -63,6 +64,14 @@ function getCustomTemplateModel() {
         type: DataTypes.JSON,
         field: "initial_sections",
         allowNull: true,
+      },
+      /** Page theme for pages created from this template (utils/designSystem.js). */
+      designSystem: {
+        type: DataTypes.JSON,
+        field: "design_system",
+        allowNull: true,
+        get: jsonGetter("designSystem", null),
+        set: jsonSetter("designSystem"),
       },
       usageCount: {
         type: DataTypes.INTEGER,

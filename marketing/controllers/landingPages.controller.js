@@ -12,6 +12,9 @@ function sendKnownError(res, error) {
   if (error.code === "VALIDATION_FAILED") {
     return sendError(res, 400, error.message, error.code, error.details);
   }
+  if (error.code === "VALIDATION_ERROR") {
+    return sendError(res, 400, error.message, error.code, error.field ? { field: error.field } : undefined);
+  }
   return sendError(res, 500, "Unable to process request.", "INTERNAL_ERROR");
 }
 
@@ -38,7 +41,12 @@ exports.create = catchAsync(async (req, res) => {
 });
 
 exports.patchDraft = catchAsync(async (req, res) => {
-  const page = await landingPagesService.patchDraft(req.params.id, req.body || {}, req.marketingUser);
+  let page;
+  try {
+    page = await landingPagesService.patchDraft(req.params.id, req.body || {}, req.marketingUser);
+  } catch (error) {
+    return sendKnownError(res, error);
+  }
   if (!page) {
     return sendError(res, 404, "Landing page not found.", "NOT_FOUND");
   }

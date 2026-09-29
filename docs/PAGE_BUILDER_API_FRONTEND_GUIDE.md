@@ -1,5 +1,7 @@
 # Page Builder API — Frontend Integration Guide
 
+> **Partly outdated (2026-09).** Written for the Vite/MSW builder; the builder is now Next.js and the website renders `/lp` itself. Current references: `docs/analytics/EVENT_CONTRACT.md` (events, reports, revenue), `docs/security/HARDENING.md` (API security), and in the Campaign Builder repo `docs/landing-pages/ARCHITECTURE.md` / `ENVIRONMENT.md` / `RENDERER_PACKAGE.md`.
+
 **Backend:** `busy-beans-backend` (marketing module)  
 **Audience:** Frontend team (`busy-bean-page-builder`)  
 **Status:** MVP implemented — wire existing UI to these HTTP endpoints  

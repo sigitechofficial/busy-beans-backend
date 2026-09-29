@@ -165,3 +165,17 @@ exports.restrictTo = (...allowedRoles) => {
     next();
   };
 };
+
+/** Every signed-in entity except customers (`user`): admin panel, partner and supplier accounts. */
+exports.STAFF_ENTITIES = [
+  "admin",
+  "subAdmin",
+  "adminEmployee",
+  "localPartner",
+  "partnerEmployee",
+  "supplier",
+];
+
+/** HQ accounts that manage the catalog (products, categories). */
+exports.ADMIN_STAFF_ENTITIES = ["admin", "subAdmin", "adminEmployee"];
+

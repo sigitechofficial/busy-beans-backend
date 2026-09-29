@@ -36,7 +36,12 @@ const multer = require("multer");
 const path = require("path");
 const { createDestinationDirectory } = require("../utils/customFunctions");
 const auth = require("../middlewares/protect");
-const { protect } = auth;
+const { protect, STAFF_ENTITIES, ADMIN_STAFF_ENTITIES } = auth;
+// Scheduled jobs / internal calls: job key (INTERNAL_JOB_API_KEY) or a staff token. See docs/API_ACCESS.md.
+const { jobKeyOrStaff } = require("../middlewares/requireJobKey");
+// Customers (`user` tokens) must never read admin prices or edit the catalog.
+const staffOnly = auth.restrictTo(...STAFF_ENTITIES);
+const catalogAdminOnly = auth.restrictTo(...ADMIN_STAFF_ENTITIES);
 const { loginRateLimiter } = require("../middlewares/loginRateLimit");
 const {
   setTemporaryBlockContext,
@@ -83,6 +88,7 @@ router.post(
  */
 router.post(
   "/order-management/email-helper",
+  jobKeyOrStaff,
   manageOrderController.emailHelper,
 );
 
@@ -122,6 +128,7 @@ router.post(
  */
 router.post(
   "/order-management/bulk-email-helper",
+  jobKeyOrStaff,
   bulkEmailController.bulkEmailHelper,
 );
 
@@ -137,6 +144,7 @@ router.post(
  */
 router.post(
   "/order-management/ensure-invoice-pdfs",
+  jobKeyOrStaff,
   manageOrderController.ensurePendingInvoicePdfs,
 );
 
@@ -165,6 +173,7 @@ router.post(
  */
 router.post(
   "/order-management/resend-unopened-supplier-emails",
+  jobKeyOrStaff,
   supplierEmailReminderController.resendUnopenedSupplierEmails,
 );
 
@@ -180,6 +189,7 @@ router.post(
  */
 router.get(
   "/order-management/pending-pdfs-list",
+  jobKeyOrStaff,
   manageOrderController.listPendingPdfs,
 );
 
@@ -723,13 +733,13 @@ router.post("/reset-password/supplier", authController.supplierResetPassword);
  * @swagger
  * /api/v1/admin/product:
  *   get:
- *     summary: Get all products (Public)
+ *     summary: Get all products with prices (staff only)
  *     tags: [Products]
  *     responses:
  *       200:
  *         description: List of all products
  */
-router.get("/product", productController.getAllProducts);
+router.get("/product", protect, staffOnly, productController.getAllProducts);
 /**
  * @swagger
  * /api/v1/admin/lambda-function/pending-pullout-fromlocal-patner-banks:
@@ -742,6 +752,7 @@ router.get("/product", productController.getAllProducts);
  */
 router.post(
   "/lambda-function/pending-pullout-fromlocal-patner-banks",
+  jobKeyOrStaff,
   pulloutPaymentsController.processAllLocalPartnersForPaymentPullouts,
 );
 
@@ -757,6 +768,7 @@ router.post(
  */
 router.post(
   "/lambda-function/create-upcomming-orders",
+  jobKeyOrStaff,
   orderFrequencyController.bookOrderAccordingToFrequencyLamdaFunction,
 );
 
@@ -785,6 +797,7 @@ router.post(
  */
 router.post(
   "/lambda-function/send-daily-eod-digests",
+  jobKeyOrStaff,
   dailyEodDigestController.sendDailyEodDigests,
 );
 
@@ -826,6 +839,7 @@ router.post(
  */
 router.post(
   "/lambda-function/sync-unsynced-paid-customer-payments",
+  jobKeyOrStaff,
   qboUnsyncedPaidPaymentSyncController.syncUnsyncedPaidCustomerPayments,
 );
 
@@ -1718,6 +1732,7 @@ const uploadSalesRepImage = multer({
  */
 router.post(
   "/product",
+  catalogAdminOnly,
   uploadProductImage.single("image"),
   productController.addProduct,
 );
@@ -1793,9 +1808,9 @@ router.post(
  */
 router
   .route("/product/:id")
-  .get(productController.getProduct) // For fetching a product by ID
-  .delete(productController.deleteProduct) // For deleting a product by ID
-  .patch(uploadProductImage.single("image"), productController.updateProduct); // For updating a product (including image upload)
+  .get(staffOnly, productController.getProduct) // For fetching a product by ID
+  .delete(catalogAdminOnly, productController.deleteProduct) // For deleting a product by ID
+  .patch(catalogAdminOnly, uploadProductImage.single("image"), productController.updateProduct); // For updating a product (including image upload)
 
 //! Sales Rep Product Price Management
 /**
@@ -1932,18 +1947,21 @@ router.patch(
 router.get(
   "/products/sales-rep",
   protect,
+  staffOnly,
   salesRepProductPriceController.getAllSalesRepProductPrices,
 );
 
 router.get(
   "/products/sales-rep/import",
   protect,
+  staffOnly,
   salesRepProductPriceController.productsFromAdminForSalesRep,
 );
 
 router.get(
   "/products/sales-rep/import/:srId",
   protect,
+  staffOnly,
   salesRepProductPriceController.productsFromAdminForSalesRep,
 );
 
@@ -2114,7 +2132,7 @@ router.delete(
  *       401:
  *         description: Unauthorized
  */
-router.route("/category/").post(categoryController.createCatagory); // For creating a new category
+router.route("/category/").post(catalogAdminOnly, categoryController.createCatagory); // For creating a new category
 
 // Category by ID routes
 
@@ -2182,8 +2200,8 @@ router.route("/category/").post(categoryController.createCatagory); // For creat
 router
   .route("/category/:id")
   .get(categoryController.getCatagory) // For fetching a category by ID
-  .patch(categoryController.updateCatagory) // For updating category by ID
-  .delete(categoryController.deleteCatagory); // For deleting a category by ID
+  .patch(catalogAdminOnly, categoryController.updateCatagory) // For updating category by ID
+  .delete(catalogAdminOnly, categoryController.deleteCatagory); // For deleting a category by ID
 
 //! Order Management
 

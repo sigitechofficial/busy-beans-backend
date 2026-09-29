@@ -1,5 +1,7 @@
 # Frontend Tracking Implementation Guide
 
+> **Partly outdated (2026-09).** Landing-page fields are now derived server-side from the URL (only `/lp/{slug}` events carry `landingPageSlug`), and `page_engagement` / order events were added. Current references: `docs/analytics/EVENT_CONTRACT.md` (events, reports, revenue), `docs/security/HARDENING.md` (API security), and in the Campaign Builder repo `docs/landing-pages/ARCHITECTURE.md` / `ENVIRONMENT.md` / `RENDERER_PACKAGE.md`.
+
 This document explains how **visitor ID**, **session ID**, **page visit tracking**, and **source (attribution) tracking** work in the Busy Bean page-builder Next.js app.
 
 **Related docs:**
