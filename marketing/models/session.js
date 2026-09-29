@@ -47,6 +47,35 @@ function getSessionModel() {
         allowNull: false,
         defaultValue: false,
       },
+      /** First page of the session (write-once). */
+      entryPathname: {
+        type: DataTypes.STRING(500),
+        field: "entry_pathname",
+        allowNull: true,
+      },
+      /** Landing page the session started on, if any (write-once) — used for attribution. */
+      entryLandingPageSlug: {
+        type: DataTypes.STRING(200),
+        field: "entry_landing_page_slug",
+        allowNull: true,
+      },
+      lastLandingPageSlug: {
+        type: DataTypes.STRING(200),
+        field: "last_landing_page_slug",
+        allowNull: true,
+      },
+      pageCount: {
+        type: DataTypes.INTEGER,
+        field: "page_count",
+        allowNull: false,
+        defaultValue: 0,
+      },
+      engagedMs: {
+        type: DataTypes.BIGINT,
+        field: "engaged_ms",
+        allowNull: false,
+        defaultValue: 0,
+      },
     },
     {
       tableName: "marketing_sessions",

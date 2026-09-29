@@ -1,4 +1,5 @@
 const { sendMailPromise } = require("../../helper/transpoter");
+const { leadIpForStorage } = require("../utils/requestMeta");
 const { sendIfAllowed, hqPerson } = require("../../utils/emailSendGate");
 const { getLeadSubmissionModel } = require("../models/leadSubmission");
 const { getLandingPageModel } = require("../models/landingPage");
@@ -75,16 +76,26 @@ function buildDevice(payload) {
   };
 }
 
+/** Lead values are visitor input: escape before putting them in the staff notification email. */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildLeadEmailHtml(fields, pageUrl, submittedAt) {
   const rows = Object.entries(fields || {})
     .map(
       ([key, value]) =>
-        `<tr><td><strong>${key}</strong></td><td>${String(value)}</td></tr>`,
+        `<tr><td><strong>${escapeHtml(key)}</strong></td><td>${escapeHtml(value)}</td></tr>`,
     )
     .join("");
   return `
     <h3>New Landing Page Lead</h3>
-    <p><strong>Page URL:</strong> ${pageUrl}</p>
+    <p><strong>Page URL:</strong> ${escapeHtml(pageUrl)}</p>
     <p><strong>Submitted At:</strong> ${submittedAt.toISOString()}</p>
     <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
       <tbody>${rows}</tbody>
@@ -131,6 +142,7 @@ function formatLeadRow(row) {
     attribution,
     device,
     conversionStatus: row.conversionStatus || "new",
+    convertedAt: row.convertedAt || null,
     revenue:
       row.revenue !== null && row.revenue !== undefined ? Number(row.revenue) : null,
     profit:
@@ -146,7 +158,11 @@ function formatLeadRow(row) {
   };
 }
 
-async function submitLead(payload) {
+/**
+ * @param {object} payload
+ * @param {{ ip?: string, userAgent?: string }} [requestMeta] from the HTTP request (not the body)
+ */
+async function submitLead(payload, requestMeta = {}) {
   const pageUrl = pickString(payload?.pageUrl).trim();
   const testMode = Boolean(payload?.testMode);
   const submittedAt = payload?.submittedAt ? new Date(payload.submittedAt) : new Date();
@@ -202,6 +218,8 @@ async function submitLead(payload) {
     device,
     conversionStatus: "new",
     submitStatus: "success",
+    ipAddress: leadIpForStorage(requestMeta.ip),
+    userAgent: requestMeta.userAgent ? String(requestMeta.userAgent).slice(0, 500) : null,
   });
 
   if (!testMode) {

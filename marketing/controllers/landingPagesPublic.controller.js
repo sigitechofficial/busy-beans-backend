@@ -12,6 +12,13 @@ exports.getBySlug = catchAsync(async (req, res) => {
   return sendData(res, 200, data);
 });
 
+/** Live, indexable landing pages for the website's sitemap-landing-pages.xml. */
+exports.listForSitemap = catchAsync(async (_req, res) => {
+  const data = await landingPagesService.listSitemapLandingPages();
+  res.set("Cache-Control", "public, max-age=300");
+  return sendData(res, 200, data);
+});
+
 exports.getPreviewByToken = catchAsync(async (req, res) => {
   const token = String(req.query.token || "");
   const data = await landingPagesService.getPreviewLandingPageByToken(

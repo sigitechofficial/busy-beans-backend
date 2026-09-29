@@ -54,6 +54,35 @@ function getAnalyticsEventModel() {
         field: "landing_page_slug",
         allowNull: true,
       },
+      /** Page the event happened on (every page, e.g. "products" or a landing page slug). */
+      pageSlug: {
+        type: DataTypes.STRING(200),
+        field: "page_slug",
+        allowNull: true,
+      },
+      /** "landing_page" | "site" | "not_found" (website 404 views, excluded from page reports) */
+      pageType: {
+        type: DataTypes.STRING(32),
+        field: "page_type",
+        allowNull: true,
+      },
+      /** Commerce product id (product page URL or cart event), see utils/productEvents.js */
+      productId: {
+        type: DataTypes.STRING(64),
+        field: "product_id",
+        allowNull: true,
+      },
+      /** Signed-in customer account (only sent with analytics consent). */
+      customerUserId: {
+        type: DataTypes.BIGINT,
+        field: "customer_user_id",
+        allowNull: true,
+      },
+      /** Sending app: "customer-website" | "campaign-lp" | "campaign-preview" | "server" */
+      site: {
+        type: DataTypes.STRING(32),
+        allowNull: true,
+      },
       attribution: {
         type: DataTypes.JSON,
         allowNull: true,

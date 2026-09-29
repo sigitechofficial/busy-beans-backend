@@ -2,6 +2,10 @@ const express = require("express");
 const router = express.Router();
 const subscriptionController = require("../controllers/admin/subscriptionController");
 const addonController = require("../controllers/admin/addonController");
+const auth = require("../middlewares/protect");
+
+// Subscription management is admin panel only (staff tokens); customers use /api/v1/users/subscription*.
+router.use(auth.protect, auth.restrictTo(...auth.STAFF_ENTITIES));
 
 /**
  * @swagger

@@ -1,5 +1,7 @@
 # Page Builder MVP — Endpoint Test Checklist
 
+> **Partly outdated (2026-09).** Written for the Vite/MSW builder (MVP era). Current references: `docs/analytics/EVENT_CONTRACT.md` (events, reports, revenue), `docs/security/HARDENING.md` (API security), and in the Campaign Builder repo `docs/landing-pages/ARCHITECTURE.md` / `ENVIRONMENT.md` / `RENDERER_PACKAGE.md`.
+
 **Companion to:** [PAGE_BUILDER_BACKEND_MODULE_PLAN.md](./PAGE_BUILDER_BACKEND_MODULE_PLAN.md)  
 **Contract reference:** `BACKEND_API_REQUIREMENTS.md` (frontend spec)  
 **Base URL (local):** `http://localhost:8011/api` (adjust port/host as needed)

@@ -77,6 +77,12 @@ function getLeadSubmissionModel() {
         allowNull: false,
         defaultValue: "new",
       },
+      /** When the lead was marked "won" (a customer); drives won-lead reporting. */
+      convertedAt: {
+        type: DataTypes.DATE,
+        field: "converted_at",
+        allowNull: true,
+      },
       revenue: {
         type: DataTypes.DECIMAL(20, 2),
         allowNull: true,

@@ -90,6 +90,27 @@ function getLandingPageModel() {
         get: jsonGetter("formSettings", {}),
         set: jsonSetter("formSettings"),
       },
+      settings: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        get: jsonGetter("settings", {}),
+        set: jsonSetter("settings"),
+      },
+      /** Draft page theme (utils/designSystem.js); copied to publishedDesignSystem on publish. */
+      designSystem: {
+        type: DataTypes.JSON,
+        field: "design_system",
+        allowNull: true,
+        get: jsonGetter("designSystem", null),
+        set: jsonSetter("designSystem"),
+      },
+      publishedDesignSystem: {
+        type: DataTypes.JSON,
+        field: "published_design_system",
+        allowNull: true,
+        get: jsonGetter("publishedDesignSystem", null),
+        set: jsonSetter("publishedDesignSystem"),
+      },
       previewToken: {
         type: DataTypes.STRING(128),
         field: "preview_token",

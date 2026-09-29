@@ -814,6 +814,11 @@ async function createStripeAccountLink({ accountId, returnUrl }) {
 //   }
 // }
 
+/** Storefront origin for Stripe Checkout return URLs (staging must not bounce to prod). */
+function checkoutReturnOrigin() {
+  return (process.env.WEBSITE_PUBLIC_URL || "https://www.busybeancoffee.com").replace(/\/+$/, "");
+}
+
 async function createInvoiceWithItems({ order, currency = "usd" }) {
   // Guards
   if (!order || !Array.isArray(order.items) || order.items.length === 0) {
@@ -858,8 +863,8 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
     payment_method_types: ["card"],
     mode: "payment",
     line_items,
-    success_url: "https://www.busybeancoffee.com/products?status=success",
-    cancel_url: "https://www.busybeancoffee.com/products?status=cancel",
+    success_url: `${checkoutReturnOrigin()}/products?status=success`,
+    cancel_url: `${checkoutReturnOrigin()}/products?status=cancel`,
     saved_payment_method_options: { payment_method_save: "enabled" },
     payment_intent_data: {
       description: `Payment for invoice ${order?.invoiceNumber}.`,

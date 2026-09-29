@@ -6,6 +6,7 @@ const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const compression = require("compression");
 const cors = require("cors");
+const { corsOriginAudit, corsOptions } = require("./middlewares/corsOriginAudit");
 const bodyParser = require("body-parser");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./swagger");
@@ -70,14 +71,18 @@ app.enable("trust proxy");
 app.use("/public", express.static(path.join(__dirname, "public")));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+// Logs browser origins not in CORS_ALLOWED_ORIGINS; with CORS_ENFORCE=true only listed
+// origins get CORS headers (see middlewares/corsOriginAudit.js).
+app.use(corsOriginAudit());
+app.use(cors(corsOptions()));
+// Security headers. No CSP here: the API serves JSON plus a few EJS pages and Swagger UI with
+// inline scripts. Uploaded media under /public is embedded by the website → cross-origin CORP.
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
-      if (!origin) return callback(null, true);
-      return callback(null, true); // reflect the requested origin
-    },
-    credentials: true, // <-- REQUIRED to allow cookies
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
 app.use(cookieParser());
@@ -138,6 +143,14 @@ app.use((req, res, next) => {
 
 // 3) ROUTES
 app.use("/api/v1/users", userRouter);
+// Price-free product catalog for guests and search engines (public).
+app.use("/api/v1/public/catalog", require("./routes/publicCatalogRoutes"));
+// Admin panel → Campaign Builder SSO (commerce admin session required); before adminRouter.
+app.use(
+  "/api/v1/admin/marketing-sso",
+  require("./middlewares/protect").protect,
+  require("./marketing/routes/adminSso.routes"),
+);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/leads", leadRoutes);
 app.use("/qbo", qboRoutes);

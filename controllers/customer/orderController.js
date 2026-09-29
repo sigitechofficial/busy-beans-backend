@@ -40,6 +40,9 @@ const {
 const {
   syncPaymentToQuickBooks,
 } = require("../../services/paymentSyncService");
+const {
+  recordOrderCreatedSafe,
+} = require("../../marketing/services/orderAttribution.service");
 
 // Service function to handle user bulk creation in background (fire-and-forget)
 // Optimized for performance with transactions, chunking, and disabled validations
@@ -566,6 +569,21 @@ exports.bookOrder = catchAsync(async (req, res, next) => {
     });
   orderEventsToLocalPatnerOrAdmin({ orderId: newOrder?.id });
   orderEvents({ orderId: newOrder?.id });
+  // Marketing revenue attribution (website visitor/session/UTM); fire-and-forget.
+  recordOrderCreatedSafe({
+    orderId: newOrder?.id,
+    customerUserId: newOrder?.userId,
+    orderTotal: newOrder?.totalBill,
+    analytics: input?.analytics,
+    // Line items for product reports (name from the product row, line total after discount).
+    items: finalItems.map((i) => ({
+      productId: i.productId,
+      categoryId: i.categoryId,
+      qty: i.qty,
+      lineTotal: i.price,
+      name: products.find((p) => p.id == i.productId)?.name,
+    })),
+  });
   return res.status(200).json({
     status: "success",
     data: { id: newOrder?.id },

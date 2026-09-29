@@ -9,6 +9,7 @@ const {
   validatePassword,
 } = require("../services/auth.service");
 const { sendData, sendError } = require("../utils/httpResponses");
+const { roleCanViewCustomerDetails } = require("../services/piiAccess.service");
 
 exports.login = catchAsync(async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -46,7 +47,8 @@ exports.me = catchAsync(async (req, res) => {
     return sendError(res, 401, "User not found for token.", "UNAUTHORIZED");
   }
 
-  return sendData(res, 200, formatUserResponse(user));
+  // Enterprise access: may this user see identified customers (names, emails, journeys)?
+  return sendData(res, 200, { ...formatUserResponse(user), canViewCustomerDetails: roleCanViewCustomerDetails(user.role) });
 });
 
 exports.logout = catchAsync(async (_req, res) => {

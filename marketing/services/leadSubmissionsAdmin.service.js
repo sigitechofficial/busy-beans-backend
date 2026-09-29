@@ -43,6 +43,8 @@ async function updateLead(id, patch = {}) {
       error.code = "VALIDATION_ERROR";
       throw error;
     }
+    if (patch.conversionStatus === "won" && row.conversionStatus !== "won") row.convertedAt = new Date();
+    if (patch.conversionStatus !== "won") row.convertedAt = null;
     row.conversionStatus = patch.conversionStatus;
   }
 
