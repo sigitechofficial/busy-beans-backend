@@ -9,7 +9,7 @@ const { getPageStats } = require("./pageStats.service");
 const customerReports = require("./customerReports.service");
 const { formatTouchpointRow } = require("./touchpoints.service");
 const { formatEventRow } = require("./analyticsEvents.service");
-const { countNonTestLeads } = require("./leadSubmissionsAdmin.service");
+const { countNonTestLeads, countLeadVisitors } = require("./leadSubmissionsAdmin.service");
 
 const FUNNEL_STEPS = [
   { step: "landing_page_view", label: "Landing page views" },
@@ -399,8 +399,10 @@ async function getDashboard(query = {}) {
   funnelCounts.lead_created = totalLeads;
   const totalOrders = funnelCounts.order_completed || 0;
   const revenue = await sumRevenueFromEvents(range);
+  // Visitors who submitted at least one lead / visitors (never above 100%).
+  const leadVisitors = await countLeadVisitors(range);
   const conversionRate =
-    totalVisitors > 0 ? roundOneDecimal((totalLeads / totalVisitors) * 100) : 0;
+    totalVisitors > 0 ? roundOneDecimal((Math.min(leadVisitors, totalVisitors) / totalVisitors) * 100) : 0;
   const averageOrderValue =
     totalOrders > 0 ? roundOneDecimal(revenue / totalOrders) : 0;
   const returningVisitors = await countReturningVisitors(range);

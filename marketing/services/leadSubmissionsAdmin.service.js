@@ -85,10 +85,31 @@ async function countNonTestLeads(range) {
   return LeadSubmission.count({ where });
 }
 
+/** Distinct visitors with a non-test lead in the range (a lead without a visitor id counts once). */
+async function countLeadVisitors(range) {
+  const LeadSubmission = getLeadSubmissionModel();
+  const where = ["test_mode = 0"];
+  const replacements = {};
+  if (range.start) {
+    where.push("submitted_at >= :start");
+    replacements.start = range.start;
+  }
+  if (range.end) {
+    where.push("submitted_at <= :end");
+    replacements.end = range.end;
+  }
+  const [row] = await LeadSubmission.sequelize.query(
+    `SELECT COUNT(DISTINCT COALESCE(visitor_id, CONCAT('lead:', id))) AS n FROM lead_submissions WHERE ${where.join(" AND ")}`,
+    { replacements, type: LeadSubmission.sequelize.QueryTypes.SELECT },
+  );
+  return Number(row?.n || 0);
+}
+
 module.exports = {
   listLeads,
   getLeadById,
   updateLead,
   deleteLead,
   countNonTestLeads,
+  countLeadVisitors,
 };
