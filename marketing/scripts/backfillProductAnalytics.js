@@ -17,8 +17,9 @@ const { getMarketingSequelize } = require("../db/sequelize.marketing");
 const { productIdFromPath, cleanCustomerId } = require("../utils/productEvents");
 const { defaultLookupOrderItems } = require("../services/orderAttribution.service");
 
-const APPLY = process.argv.includes("--apply");
-const WITH_CUSTOMERS = process.argv.includes("--with-customers");
+// CLI flags; run() options override them when called from a data migration.
+let APPLY = process.argv.includes("--apply");
+let WITH_CUSTOMERS = process.argv.includes("--with-customers");
 
 /** First path segments of the website's routes (busy-bean-website-new-nextjs/src/app). */
 const WEBSITE_ROUTES = new Set([
@@ -35,7 +36,9 @@ function isWebsiteRoute(pathname) {
   return WEBSITE_ROUTES.has(first);
 }
 
-async function run() {
+async function run({ apply = APPLY, withCustomers = WITH_CUSTOMERS } = {}) {
+  APPLY = apply;
+  WITH_CUSTOMERS = withCustomers;
   const db = getMarketingSequelize();
   const q = (sql, replacements = {}) => db.query(sql, { replacements, type: QueryTypes.SELECT });
   const x = (sql, replacements = {}) => db.query(sql, { replacements });
@@ -95,9 +98,13 @@ async function run() {
   console.log(APPLY ? "[backfill] applied" : "[backfill] dry run — nothing changed (pass --apply)");
 }
 
-run()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error("[backfill] failed:", error.message);
-    process.exit(1);
-  });
+module.exports = { run };
+
+if (require.main === module) {
+  run()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error("[backfill] failed:", error.message);
+      process.exit(1);
+    });
+}

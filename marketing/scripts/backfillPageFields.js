@@ -23,7 +23,8 @@ const { resolvePageContext } = require("../utils/analyticsPayload");
 const { reportTimeZone, localDateOf, addDays } = require("../utils/businessTime");
 const { rollupDay } = require("../services/pageStats.service");
 
-const APPLY = process.argv.includes("--apply");
+// CLI flag; run() options override it when called from a data migration.
+let APPLY = process.argv.includes("--apply");
 const BATCH = 500;
 const VIEW_TYPES = new Set(["page_view", "landing_page_view"]);
 const MAX_ENGAGED_MS_PER_EVENT = 30 * 60 * 1000;
@@ -186,7 +187,8 @@ async function rebuildDailyStats() {
   return { days: days.length };
 }
 
-async function run() {
+async function run({ apply = APPLY, rebuild = true } = {}) {
+  APPLY = apply;
   console.log(`[backfill-page-fields] ${APPLY ? "APPLY" : "DRY RUN (add --apply to write)"}`);
   const contract = await removeContractTestData();
   console.log("contract-test data", APPLY ? "removed:" : "to remove:", JSON.stringify(contract));
@@ -194,14 +196,19 @@ async function run() {
   console.log("events:", JSON.stringify(events));
   const sessions = await backfillSessions();
   console.log("sessions:", JSON.stringify(sessions));
+  if (!rebuild) return;
   const stats = await rebuildDailyStats();
   console.log("daily page stats", APPLY ? "rebuilt:" : "to rebuild:", JSON.stringify(stats));
   if (APPLY) console.log("Next: node marketing/scripts/backfillProductAnalytics.js --apply");
 }
 
-run()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error("[backfill-page-fields] failed:", error.message);
-    process.exit(1);
-  });
+module.exports = { run, rebuildDailyStats };
+
+if (require.main === module) {
+  run()
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error("[backfill-page-fields] failed:", error.message);
+      process.exit(1);
+    });
+}
