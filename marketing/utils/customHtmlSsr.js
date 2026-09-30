@@ -1,5 +1,25 @@
-const sanitizeHtml = require("sanitize-html");
 const { parseJsonField } = require("./jsonField");
+
+/**
+ * sanitize-html is loaded on first use, not at startup: its current releases need Node 22.12+
+ * (their HTML parser is ESM-only) and older releases have known XSS bugs. On an older Node the
+ * API still starts; custom HTML then gets no server-rendered copy (fails closed, never
+ * unsanitized) and the browser renders it as before.
+ */
+let sanitizer; // undefined = not loaded yet, null = unavailable
+function loadSanitizer() {
+  if (sanitizer !== undefined) return sanitizer;
+  try {
+    sanitizer = require("sanitize-html");
+  } catch (error) {
+    sanitizer = null;
+    console.warn(
+      `[custom-html-ssr] sanitize-html unavailable on Node ${process.version} (needs 22.12+): ` +
+        `server-rendered custom HTML is skipped. ${error.message}`,
+    );
+  }
+  return sanitizer;
+}
 
 /**
  * Server-renderable copy of imported custom HTML (SEO): the page body with every script,
@@ -13,7 +33,7 @@ const { parseJsonField } = require("./jsonField");
 const SSR_VERSION = 1;
 const MAX_SSR_BYTES = 500 * 1024;
 
-const SANITIZE_OPTIONS = {
+const sanitizeOptions = (sanitizeHtml) => ({
   allowedTags: [
     ...sanitizeHtml.defaults.allowedTags,
     "img", "picture", "source", "figure", "figcaption", "section", "header", "footer",
@@ -48,7 +68,7 @@ const SANITIZE_OPTIONS = {
       return { tagName, attribs: safe.target === "_blank" ? { ...safe, rel: "noopener noreferrer" } : safe };
     },
   },
-};
+});
 
 /** Drop inline styles that load resources or smuggle script-like values. */
 function withSafeStyle(attribs) {
@@ -70,9 +90,11 @@ function extractBody(html) {
 function buildCustomHtmlSsr(rawHtml) {
   const html = typeof rawHtml === "string" ? rawHtml : "";
   if (!html.trim() || html.length > 5 * MAX_SSR_BYTES) return null;
+  const sanitizeHtml = loadSanitizer();
+  if (!sanitizeHtml) return null;
   const { bodyClass, body } = extractBody(html);
   const wrapped = `<div data-bb-custom-html-body${bodyClass ? ` class="${bodyClass.replace(/"/g, "")}"` : ""}>${body}</div>`;
-  const clean = sanitizeHtml(wrapped, SANITIZE_OPTIONS).trim();
+  const clean = sanitizeHtml(wrapped, sanitizeOptions(sanitizeHtml)).trim();
   const text = sanitizeHtml(clean, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, " ").trim();
   if (!text || clean.length > MAX_SSR_BYTES) return null;
   return { html: clean, version: SSR_VERSION };
