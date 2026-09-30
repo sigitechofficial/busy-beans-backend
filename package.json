@@ -33,6 +33,7 @@
     "marketing:consent-log-test": "node marketing/scripts/consentLogTest.js",
     "marketing:product-analytics-test": "node marketing/scripts/productAnalyticsTest.js",
     "marketing:backfill-product-analytics": "node marketing/scripts/backfillProductAnalytics.js",
+    "marketing:backfill-page-fields": "node marketing/scripts/backfillPageFields.js",
     "marketing:capture-demos": "node marketing/scripts/captureDemoResponses.js",
     "qbo:sales-rep-id": "node scripts/fetchQboSalesRepDefinitionIdAndUpdateEnv.js",
     "qbo:list-custom-fields": "node scripts/fetchAllQboCustomFields.js",

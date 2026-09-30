@@ -61,6 +61,12 @@ async function run() {
        VALUES (?, ?, ?, ?, '{}', 0, '2026-01-15 14:03:30', 'won', 500, '2026-01-15 20:00:00')`,
       { replacements: [slug, v("a"), s("a"), `https://example.test${lp}`] },
     );
+    // A submits the form a second time in the same visit: 2 leads, but 1 converting visit.
+    await db.query(
+      `INSERT INTO lead_submissions (landing_page_slug, visitor_id, session_id, page_url, fields, test_mode, submitted_at)
+       VALUES (?, ?, ?, ?, '{}', 0, '2026-01-15 14:03:50')`,
+      { replacements: [slug, v("a"), s("a"), `https://example.test${lp}`] },
+    );
     // E: lead from an earlier day, marked won on DAY → counts as won on DAY, not as a DAY lead.
     await db.query(
       `INSERT INTO lead_submissions (landing_page_slug, visitor_id, session_id, page_url, fields, test_mode, submitted_at,
@@ -115,7 +121,9 @@ async function run() {
     eq(r.ctaClicks, 1, "ctaClicks");
     eq(r.formStarts, 2, "formStarts");
     eq(r.formSubmissions, 1, "formSubmissions");
-    eq(r.leads, 1, "leads");
+    eq(r.leads, 2, "leads (A submitted twice)");
+    eq(r.leadSessions, 1, "visits with a lead");
+    eq(r.leadConversionRate, 33.3, "lead conversion = 1 converting visit / 3 visits (never leads / visits)");
     eq(r.orders, 2, "orders (last touch)");
     eq(r.revenue, 70, "revenue (last touch)");
     eq(r.repeatOrders, 1, "repeat orders");

@@ -13,6 +13,7 @@
  *   exits        sessions whose last page view that day was the page
  *   engaged time page_engagement.activeMs (visible + focused + active); avg is per view
  *   leads        landing pages: non-test lead_submissions; site pages: lead_created events
+ *   lead sessions  distinct visits with a lead (lead conversion % = lead sessions / sessions)
  *   orders       paid attributed orders (marketing_order_attribution) by paid day;
  *                last touch = landing_page_slug, first touch = first_landing_page_slug;
  *                repeat_* = the customer's 2nd+ paid order (incl. untracked repeat orders
@@ -55,6 +56,7 @@ const COUNTERS = [
   "form_starts",
   "form_submits",
   "leads",
+  "lead_sessions",
   "won_leads",
   "won_revenue",
   "orders_last",
@@ -120,7 +122,8 @@ async function computeDay(day, tz = reportTimeZone()) {
        SUM(event_type = 'cta_click') AS cta_clicks,
        SUM(event_type = 'form_start') AS form_starts,
        SUM(event_type = 'form_submit') AS form_submits,
-       SUM(event_type = 'lead_created') AS lead_events
+       SUM(event_type = 'lead_created') AS lead_events,
+       COUNT(DISTINCT CASE WHEN event_type = 'lead_created' THEN session_id END) AS lead_event_sessions
      FROM marketing_analytics_events
      WHERE timestamp >= :start AND timestamp < :end
        AND page_slug IS NOT NULL AND page_type IN ('site', 'landing_page')
@@ -131,17 +134,25 @@ async function computeDay(day, tz = reportTimeZone()) {
     for (const key of ["views", "sessions", "visitors", "engaged_ms", "engagement_reports", "scroll_pct_sum", "cta_clicks", "form_starts", "form_submits"]) {
       row[key] = num(r[key]);
     }
-    if (r.page_type === "site") row.leads = num(r.lead_events);
+    if (r.page_type === "site") {
+      row.leads = num(r.lead_events);
+      row.lead_sessions = num(r.lead_event_sessions);
+    }
   }
 
   const leadRows = await q(
-    `SELECT landing_page_slug AS slug, COUNT(*) AS leads
+    `SELECT landing_page_slug AS slug, COUNT(*) AS leads,
+       COUNT(DISTINCT COALESCE(session_id, CONCAT('lead:', id))) AS lead_sessions
      FROM lead_submissions
      WHERE test_mode = 0 AND landing_page_slug IS NOT NULL AND landing_page_slug != ''
        AND submitted_at >= :start AND submitted_at < :end
      GROUP BY landing_page_slug`,
   );
-  for (const r of leadRows) rowFor("landing_page", r.slug).leads = num(r.leads);
+  for (const r of leadRows) {
+    const row = rowFor("landing_page", r.slug);
+    row.leads = num(r.leads);
+    row.lead_sessions = num(r.lead_sessions);
+  }
 
   const wonRows = await q(
     `SELECT landing_page_slug AS slug, page_url AS pageUrl, revenue
@@ -409,7 +420,9 @@ function toMetrics(t, visitors, touch) {
     formStarts: t.form_starts,
     formSubmissions: t.form_submits,
     leads: t.leads,
-    leadConversionRate: t.sessions > 0 ? round1((t.leads / t.sessions) * 100) : 0,
+    leadSessions: t.lead_sessions,
+    // Visits that produced at least one lead / visits (several leads in one visit count once).
+    leadConversionRate: t.sessions > 0 ? round1((Math.min(t.lead_sessions, t.sessions) / t.sessions) * 100) : 0,
     wonLeads: t.won_leads,
     wonRevenue: t.won_revenue,
     leadWinRate: t.leads > 0 ? round1((t.won_leads / t.leads) * 100) : 0,
