@@ -14,9 +14,9 @@ const templatesRoutes = require("./admin/templates.routes");
 const seedRoutes = require("./admin/seed.routes");
 const leadSubmissionsAdminRoutes = require("./admin/leadSubmissions.routes");
 const analyticsRoutes = require("./admin/analytics.routes");
-const landingPagesPublicRoutes = require("./public/landingPagesPublic.routes");
-const leadSubmissionsRoutes = require("./public/leadSubmissions.routes");
-const publicTrackingRoutes = require("./public/tracking.routes");
+const landingPagesPublicRoutes = require("./site/landingPagesPublic.routes");
+const leadSubmissionsRoutes = require("./site/leadSubmissions.routes");
+const publicTrackingRoutes = require("./site/tracking.routes");
 
 const router = express.Router();
 router.use(marketingRequestLogger);
