@@ -67,7 +67,8 @@ async function getVisitorStats(range) {
     replacements.start = range.start;
   }
   const [row] = await sequelize.query(
-    `SELECT COUNT(*) AS visitors, COALESCE(SUM(v.sessions >= 2), 0) AS returning
+    // Not "AS returning": RETURNING is a reserved word in MariaDB (the staging / production DB).
+    `SELECT COUNT(*) AS visitors, COALESCE(SUM(v.sessions >= 2), 0) AS returningVisitors
      FROM (
        SELECT a.visitor_id, COUNT(DISTINCT s2.session_id) AS sessions
        FROM (SELECT DISTINCT s.visitor_id FROM marketing_sessions s WHERE ${active.join(" AND ")}) a
@@ -77,7 +78,7 @@ async function getVisitorStats(range) {
     { replacements, type: QueryTypes.SELECT },
   );
   const visitors = Number(row?.visitors || 0);
-  const returningVisitors = Number(row?.returning || 0);
+  const returningVisitors = Number(row?.returningVisitors || 0);
   return { visitors, newVisitors: visitors - returningVisitors, returningVisitors };
 }
 
