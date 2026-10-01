@@ -1,6 +1,6 @@
 const catchAsync = require("../../utils/catchAsync");
 const consentLogService = require("../services/consentLog.service");
-const { parseReportRange } = require("../utils/businessTime");
+const { rangeFromQuery } = require("../utils/reportQuery");
 const { clientIp, anonymizeIp } = require("../utils/requestMeta");
 const { sendData, sendError } = require("../utils/httpResponses");
 
@@ -22,7 +22,7 @@ exports.record = catchAsync(async (req, res) => {
 
 /** GET /api/admin/analytics/consent?from=YYYY-MM-DD&to=YYYY-MM-DD — choice counts and rates. */
 exports.summary = catchAsync(async (req, res) => {
-  const range = parseReportRange(req.query?.from, req.query?.to);
+  const range = rangeFromQuery(req.query || {}, { defaultPreset: null });
   const data = await consentLogService.getConsentSummary(range);
   return sendData(res, 200, { ...data, retentionDays: consentLogService.retentionDays() });
 });

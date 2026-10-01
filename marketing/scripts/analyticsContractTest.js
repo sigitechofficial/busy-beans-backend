@@ -1,4 +1,6 @@
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
+const { getMarketingJwtSecret } = require("../services/auth.service");
 const touchpointsService = require("../services/touchpoints.service");
 const analyticsEventsService = require("../services/analyticsEvents.service");
 const leadSubmissionsService = require("../services/leadSubmissions.service");
@@ -48,11 +50,14 @@ async function run() {
     fields: { name: "Contract Test", email: "contract@example.com", utm_source: "" },
     pageUrl: `https://example.com/lp/${slug}?utm_source=instagram`,
     submittedAt: ts,
-    testMode: true,
     visitorId,
     sessionId,
     trafficCategory: "paid_social",
+  }, {
+    // Test mode is decided by the server: a Campaign Builder session marks the lead as a test.
+    authorization: `Bearer ${jwt.sign({ id: 0, scope: "marketing" }, getMarketingJwtSecret(), { expiresIn: "5m" })}`,
   });
+  if (!testLead.testMode) throw new Error("Campaign Builder session must produce a test lead");
 
   const realLead = await leadSubmissionsService.submitLead({
     fields: { name: "Real Lead", email: "real@example.com" },

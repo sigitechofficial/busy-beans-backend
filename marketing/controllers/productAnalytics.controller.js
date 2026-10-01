@@ -1,13 +1,13 @@
 const catchAsync = require("../../utils/catchAsync");
 const productAnalytics = require("../services/productAnalytics.service");
 const { resolveAccess, listPiiAccess, retentionDays } = require("../services/piiAccess.service");
-const { parseReportRange } = require("../utils/businessTime");
+const { rangeFromQuery } = require("../utils/reportQuery");
 const { sendData, sendError } = require("../utils/httpResponses");
 
 const PRODUCT_ID = /^[\w-]{1,64}$/;
 
 function range(req) {
-  return parseReportRange(req.query?.from, req.query?.to);
+  return rangeFromQuery(req.query || {}, { defaultPreset: null });
 }
 
 /** GET /admin/analytics/products?from=&to= */

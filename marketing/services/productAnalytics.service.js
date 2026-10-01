@@ -20,6 +20,7 @@ const { appendTimestampFilter, toSqlUtc } = require("../utils/dateRange");
 const { reportTimeZone, localDateOf } = require("../utils/businessTime");
 const { presentCustomer, logPiiAccess, maskedCustomer } = require("./piiAccess.service");
 const { getApiPublicUrl } = require("../utils/publicUrls");
+const { realEvents, realSessions } = require("../utils/reportFilters");
 
 const VIEW_TYPES = "('page_view','landing_page_view')";
 const MAX_ENGAGED_MS_PER_EVENT = 30 * 60 * 1000;
@@ -207,7 +208,7 @@ async function getProductReport(range, options = {}) {
     `SELECT pid, COUNT(*) AS repeatViewers FROM (
        SELECT e.product_id AS pid, e.visitor_id, COUNT(DISTINCT e.session_id) AS s
        FROM marketing_analytics_events e
-       WHERE e.event_type IN ${VIEW_TYPES} ${productFilter} ${f.sql}
+       WHERE e.event_type IN ${VIEW_TYPES} AND ${realEvents("e")} ${productFilter} ${f.sql}
        GROUP BY e.product_id, e.visitor_id HAVING s > 1) t
      GROUP BY pid`,
     reps,
@@ -218,7 +219,7 @@ async function getProductReport(range, options = {}) {
             COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(e.attribution, '$.source')), ''), 'direct') AS source,
             COUNT(DISTINCT e.session_id) AS n
      FROM marketing_analytics_events e
-     WHERE e.event_type IN ${VIEW_TYPES} ${productFilter} ${f.sql}
+     WHERE e.event_type IN ${VIEW_TYPES} AND ${realEvents("e")} ${productFilter} ${f.sql}
      GROUP BY e.product_id, source`,
     reps,
   );
@@ -227,7 +228,7 @@ async function getProductReport(range, options = {}) {
   const baskets = await select(
     `SELECT e.event_type AS type, e.session_id AS sessionId, JSON_EXTRACT(e.metadata, '$.items') AS items
      FROM marketing_analytics_events e
-     WHERE e.event_type IN ('view_cart', 'begin_checkout') ${f.sql}
+     WHERE e.event_type IN ('view_cart', 'begin_checkout') AND ${realEvents("e")} ${f.sql}
      LIMIT ${EVENT_ROW_CAP}`,
     f.replacements,
   );
@@ -235,7 +236,7 @@ async function getProductReport(range, options = {}) {
   const listViews = await select(
     `SELECT COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(e.metadata, '$.category')), ''), 'all') AS category, COUNT(*) AS n
      FROM marketing_analytics_events e
-     WHERE e.event_type = 'view_item_list' ${f.sql}
+     WHERE e.event_type = 'view_item_list' AND ${realEvents("e")} ${f.sql}
      GROUP BY category`,
     f.replacements,
   );
@@ -323,7 +324,7 @@ async function getProductReport(range, options = {}) {
             SUM(e.event_type = 'view_item_list') AS listViews,
             SUM(e.event_type = 'select_item') AS listClicks
      FROM marketing_analytics_events e
-     WHERE (e.product_id IS NOT NULL OR e.event_type IN ('begin_checkout', 'view_item_list', 'select_item')) ${f.sql}`,
+     WHERE (e.product_id IS NOT NULL OR e.event_type IN ('begin_checkout', 'view_item_list', 'select_item')) AND ${realEvents("e")} ${f.sql}`,
     f.replacements,
   );
   const orderIds = new Set(orders.map((o) => String(o.orderId)));
@@ -368,7 +369,7 @@ async function getProductDetail(range, productId, access, options = {}) {
             JSON_UNQUOTE(JSON_EXTRACT(e.metadata, '$.deviceType')) AS device,
             JSON_UNQUOTE(JSON_EXTRACT(e.metadata, '$.qty')) AS qty
      FROM marketing_analytics_events e
-     WHERE e.product_id = :pid AND e.event_type IN ('page_view', 'landing_page_view', 'add_to_cart') ${f.sql}
+     WHERE e.product_id = :pid AND e.event_type IN ('page_view', 'landing_page_view', 'add_to_cart') AND ${realEvents("e")} ${f.sql}
      ORDER BY e.timestamp DESC
      LIMIT ${EVENT_ROW_CAP}`,
     { ...f.replacements, pid },
@@ -444,7 +445,7 @@ async function getProductDetail(range, productId, access, options = {}) {
       `SELECT e.product_id AS pid, COUNT(DISTINCT e.session_id) AS sessions
        FROM marketing_analytics_events e
        WHERE e.session_id IN (:sessions) AND e.product_id IS NOT NULL AND e.product_id <> :pid
-         AND e.event_type IN ${VIEW_TYPES}
+         AND e.event_type IN ${VIEW_TYPES} AND ${realEvents("e")}
        GROUP BY e.product_id ORDER BY sessions DESC LIMIT 10`,
       { sessions: sessionList, pid },
     )
@@ -513,7 +514,7 @@ async function getStoreFunnel(range, access, options = {}) {
   const f = rangeFilter(range, "e.timestamp");
   const viewed = await select(
     `SELECT DISTINCT e.session_id AS sessionId FROM marketing_analytics_events e
-     WHERE e.product_id IS NOT NULL AND e.event_type IN ${VIEW_TYPES} ${f.sql}
+     WHERE e.product_id IS NOT NULL AND e.event_type IN ${VIEW_TYPES} AND ${realEvents("e")} ${f.sql}
      LIMIT ${EVENT_ROW_CAP}`,
     f.replacements,
   );
@@ -523,7 +524,7 @@ async function getStoreFunnel(range, access, options = {}) {
     const events = await select(
       `SELECT e.session_id AS sessionId, e.event_type AS type, e.timestamp AS ts, e.product_id AS pid
        FROM marketing_analytics_events e
-       WHERE e.session_id IN (:ids)
+       WHERE e.session_id IN (:ids) AND ${realEvents("e")}
          AND (e.event_type IN ('add_to_cart', 'view_cart', 'begin_checkout', 'order_created')
               OR (e.product_id IS NOT NULL AND e.event_type IN ${VIEW_TYPES}))`,
       { ids: sessionIds },
@@ -574,7 +575,7 @@ async function getStoreFunnel(range, access, options = {}) {
             JSON_EXTRACT(e.metadata, '$.qty') AS qty, JSON_EXTRACT(e.metadata, '$.price') AS price,
             JSON_UNQUOTE(JSON_EXTRACT(e.attribution, '$.source')) AS source
      FROM marketing_analytics_events e
-     WHERE e.event_type = 'add_to_cart' ${f.sql}
+     WHERE e.event_type = 'add_to_cart' AND ${realEvents("e")} ${f.sql}
      ORDER BY e.timestamp DESC LIMIT ${EVENT_ROW_CAP}`,
     f.replacements,
   );
@@ -640,7 +641,7 @@ async function hourHeatmap(range, where, tz) {
   const buckets = await select(
     `SELECT DATE_FORMAT(e.timestamp, '%Y-%m-%d %H:00:00') AS utcHour, COUNT(*) AS n
      FROM marketing_analytics_events e
-     WHERE ${where} ${f.sql}
+     WHERE ${where} AND ${realEvents("e")} ${f.sql}
      GROUP BY utcHour`,
     f.replacements,
   );
@@ -749,7 +750,7 @@ async function getVisitorJourney(ref, access, options = {}) {
               e.pathname, e.page_type AS pageType, e.product_id AS productId, e.customer_user_id AS customerUserId,
               e.attribution, e.metadata
        FROM marketing_analytics_events e
-       WHERE e.visitor_id IN (:vids) AND e.event_type IN (:types)
+       WHERE e.visitor_id IN (:vids) AND e.event_type IN (:types) AND ${realEvents("e")}
        ORDER BY e.timestamp DESC LIMIT 1000`,
       { vids: visitorIds, types: JOURNEY_TYPES },
     )
@@ -768,11 +769,39 @@ async function getVisitorJourney(ref, access, options = {}) {
     { vids: visitorIds },
   );
 
+  // Visits come from the recorded sessions (their own acquisition touch: channel / source / medium /
+  // campaign); events are attached to them. Visits without journey events still appear.
+  const recordedSessions = await select(
+    `SELECT s.session_id AS sessionId, s.visitor_id AS visitorId, s.started_at AS startedAt,
+            COALESCE(s.last_activity_at, s.ended_at, s.started_at) AS endedAt,
+            s.channel, s.source, s.medium, s.campaign, s.entry_pathname AS entryPath
+     FROM marketing_sessions s
+     WHERE s.visitor_id IN (:vids) AND ${realSessions("s")}
+     ORDER BY s.started_at DESC LIMIT 200`,
+    { vids: visitorIds },
+  );
+
   const productIds = new Set(events.map((e) => e.productId).filter(Boolean).map(String));
   const catalog = await lookupProducts([...productIds]).catch(() => new Map());
   const productName = (id, fallback) => (id ? catalog.get(String(id))?.name || fallback || `Product #${id}` : fallback || null);
 
   const sessions = new Map();
+  for (const r of [...recordedSessions].reverse()) {
+    sessions.set(r.sessionId, {
+      sessionId: r.sessionId,
+      visitorId: r.visitorId,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      channel: r.channel || null,
+      source: r.source || null,
+      medium: r.medium || null,
+      campaign: r.campaign || null,
+      device: null,
+      entryPath: r.entryPath || null,
+      events: [],
+    });
+  }
+  const time = (v) => (v ? new Date(v).getTime() : NaN);
   for (const e of events) {
     const meta = json(e.metadata, {});
     const attr = json(e.attribution, {});
@@ -791,7 +820,8 @@ async function getVisitorJourney(ref, access, options = {}) {
       });
     }
     const s = sessions.get(e.sessionId);
-    s.endedAt = e.ts;
+    if (!(time(s.endedAt) >= time(e.ts))) s.endedAt = e.ts;
+    if (time(e.ts) < time(s.startedAt)) s.startedAt = e.ts;
     if (!s.device && meta.deviceType) s.device = meta.deviceType;
     const isView = e.type === "page_view" || e.type === "landing_page_view";
     if (isView && !s.entryPath) s.entryPath = e.pathname;
@@ -834,8 +864,10 @@ async function getVisitorJourney(ref, access, options = {}) {
   const customers = customerIds.map((id) => presentCustomer(access, id, directory));
   await logPiiAccess(access, { action: "journey", subject, customerIds }).catch(() => false);
 
-  const sessionList = [...sessions.values()];
+  const sessionList = [...sessions.values()].sort((a, b) => time(a.startedAt) - time(b.startedAt));
   const views = events.filter((e) => e.type === "page_view" || e.type === "landing_page_view");
+  const firstSeenAt = sessionList[0]?.startedAt || events[0]?.ts || null;
+  const lastSeenAt = sessionList.reduce((m, x) => (time(x.endedAt) > time(m) || !m ? x.endedAt : m), events[events.length - 1]?.ts || null);
   return {
     found: true,
     subject,
@@ -844,13 +876,15 @@ async function getVisitorJourney(ref, access, options = {}) {
     customers,
     customerDetailsHidden: !access?.canViewCustomerDetails,
     summary: {
-      firstSeenAt: events[0]?.ts || null,
-      lastSeenAt: events[events.length - 1]?.ts || null,
+      firstSeenAt,
+      lastSeenAt,
       visits: sessionList.length,
       pageViews: views.length,
       productViews: views.filter((e) => e.productId).length,
       productsViewed: new Set(views.map((e) => e.productId).filter(Boolean)).size,
-      firstSource: sessionList[0] ? { source: sessionList[0].source, medium: sessionList[0].medium, campaign: sessionList[0].campaign } : null,
+      firstSource: sessionList[0]
+        ? { channel: sessionList[0].channel || null, source: sessionList[0].source, medium: sessionList[0].medium, campaign: sessionList[0].campaign }
+        : null,
       leads: leads.length,
       orders: orders.length,
       revenue: money(orders.filter((o) => o.status === "paid").reduce((s, o) => s + num(o.revenue), 0)),

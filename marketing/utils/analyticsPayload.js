@@ -3,6 +3,36 @@ function pickString(value, fallback = "") {
   return String(value);
 }
 
+/** Visitor / session / event ids: short opaque tokens only (uuid-, nanoid- or tp_…-style). */
+const IDENTITY = /^[A-Za-z0-9_.:-]+$/;
+function cleanIdentity(value, max = 64) {
+  if (typeof value !== "string" && typeof value !== "number") return "";
+  const id = String(value).trim();
+  return id && id.length <= max && IDENTITY.test(id) ? id : "";
+}
+
+/**
+ * Server-validated event time: the browser's clock is used only when it is plausible (up to 24h
+ * old — buffered/offline events — and at most 2 minutes ahead); otherwise the receive time.
+ */
+const MAX_CLIENT_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_CLIENT_SKEW_MS = 2 * 60 * 1000;
+function serverTimestamp(value, now = new Date()) {
+  const t = typeof value === "string" || typeof value === "number" ? Date.parse(String(value)) : NaN;
+  if (!Number.isFinite(t)) return now;
+  if (t > now.getTime() + MAX_CLIENT_SKEW_MS || t < now.getTime() - MAX_CLIENT_AGE_MS) return now;
+  return new Date(t);
+}
+
+/** decodeURIComponent that never throws (a malformed %-sequence must not become a 500). */
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function normalizeAttribution(payload = {}) {
   const nested =
     payload.attribution && typeof payload.attribution === "object"
@@ -114,7 +144,7 @@ function resolvePageContext(payload = {}) {
   const metadata = payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {};
   const siteRaw = pickString(payload.site || metadata.site).trim();
   const site = KNOWN_SITES.has(siteRaw) ? siteRaw : null;
-  const pathname = pickString(payload.pathname).trim();
+  const pathname = pickString(payload.pathname).trim().slice(0, 500);
   const givenSlug = pickString(payload.landingPageSlug || payload.landing_page_slug || payload.landingPage).trim();
   const givenId = pickString(payload.landingPageId || payload.landing_page_id).trim();
 
@@ -125,15 +155,15 @@ function resolvePageContext(payload = {}) {
       pathname: null,
       pageType: null,
       pageSlug: null,
-      landingPageSlug: givenSlug || null,
-      landingPageId: givenId || null,
+      landingPageSlug: givenSlug ? givenSlug.slice(0, 200) : null,
+      landingPageId: givenId ? givenId.slice(0, 64) : null,
     };
   }
 
   const lpMatch = pathname.match(/^\/lp\/([^/?#]+)/);
   if (lpMatch) {
-    const slug = decodeURIComponent(lpMatch[1]).slice(0, 200);
-    return { site, pathname, pageType: "landing_page", pageSlug: slug, landingPageSlug: slug, landingPageId: givenId || null };
+    const slug = safeDecode(lpMatch[1]).slice(0, 200);
+    return { site, pathname, pageType: "landing_page", pageSlug: slug, landingPageSlug: slug, landingPageId: givenId ? givenId.slice(0, 64) : null };
   }
   return { site, pathname, pageType: "site", pageSlug: pathnameToPageSlug(pathname), landingPageSlug: null, landingPageId: null };
 }
@@ -152,6 +182,9 @@ function normalizeLeadFields(fields) {
 
 module.exports = {
   pickString,
+  cleanIdentity,
+  serverTimestamp,
+  safeDecode,
   normalizeAttribution,
   normalizeMetadata,
   normalizeLeadFields,

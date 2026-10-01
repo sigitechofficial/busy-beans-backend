@@ -8,18 +8,20 @@
  *   Won leads   non-test leads marked "won" by sales (converted_at in range) with the revenue
  *               entered on the lead — B2B customers who never check out online.
  *   Sources     touch = "last" | "first": which stored touch the order is credited to. Leads use
- *               the attribution captured with the lead.
+ *               the same model (utils/leadAttributionSql.js): "last" = last non-direct touch,
+ *               "first" = first touch.
  */
 const { QueryTypes } = require("sequelize");
 const { getMarketingSequelize } = require("../db/sequelize.marketing");
 const { appendTimestampFilter } = require("../utils/dateRange");
+const { leadAttrExpr } = require("../utils/leadAttributionSql");
+const { realTouchpoints } = require("../utils/reportFilters");
 
-const LEAD_SOURCE =
-  "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.source')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.utmSource')), ''), 'direct')";
-const LEAD_MEDIUM =
-  "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.medium')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.utmMedium')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.lastTouchMedium')), ''), 'none')";
-const LEAD_CAMPAIGN =
-  "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.campaign')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.utmCampaign')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.lastTouchCampaign')), ''), '(not set)')";
+// Lead attribution: one shared definition (utils/leadAttributionSql.js). The default constants
+// are the "last" model (last non-direct touch); touch-aware reports use leadAttrExpr directly.
+const LEAD_SOURCE = leadAttrExpr("source");
+const LEAD_MEDIUM = leadAttrExpr("medium");
+const LEAD_CAMPAIGN = leadAttrExpr("campaign");
 
 function orderExpr(touch, key, fallback) {
   const column = touch === "first" ? "m.first_touch" : "m.last_touch";
@@ -130,7 +132,7 @@ async function getCustomersBySource(range, touch = "last") {
      GROUP BY ${source}, ${medium}`,
     paid.replacements,
   );
-  const won = await getWonLeadsBy(range, `CONCAT(${LEAD_SOURCE}, '|', ${LEAD_MEDIUM})`);
+  const won = await getWonLeadsBy(range, `CONCAT(${leadAttrExpr("source", { touch })}, '|', ${leadAttrExpr("medium", { touch })})`);
   const out = new Map();
   for (const r of rows) {
     const k = keyOf(r.source, normMedium(r.medium));
@@ -189,15 +191,18 @@ async function getTrafficSourceMediums(range, touch = "last") {
     `SELECT ${tpSource} AS source, ${tpMedium} AS medium, MAX(tp.category) AS category,
             COUNT(DISTINCT tp.visitor_id) AS visitors
      FROM marketing_touchpoints tp
-     WHERE 1 = 1 ${tp.sql}
+     WHERE ${realTouchpoints("tp")} ${tp.sql}
      GROUP BY ${tpSource}, ${tpMedium}`,
     tp.replacements,
   );
+  // Leads follow the same touch model as orders (first touch / last non-direct touch).
+  const leadSource = leadAttrExpr("source", { touch });
+  const leadMedium = leadAttrExpr("medium", { touch });
   const leads = await select(
-    `SELECT ${LEAD_SOURCE} AS source, ${LEAD_MEDIUM} AS medium, COUNT(*) AS leads
+    `SELECT ${leadSource} AS source, ${leadMedium} AS medium, COUNT(*) AS leads
      FROM lead_submissions l
      WHERE l.test_mode = 0 ${leadF.sql}
-     GROUP BY ${LEAD_SOURCE}, ${LEAD_MEDIUM}`,
+     GROUP BY ${leadSource}, ${leadMedium}`,
     leadF.replacements,
   );
   const oSource = orderExpr(touch, "source", "direct");
@@ -210,7 +215,7 @@ async function getTrafficSourceMediums(range, touch = "last") {
      GROUP BY ${oSource}, ${oMedium}`,
     paid.replacements,
   );
-  const won = await getWonLeadsBy(range, `CONCAT(${LEAD_SOURCE}, '|', ${LEAD_MEDIUM})`);
+  const won = await getWonLeadsBy(range, `CONCAT(${leadAttrExpr("source", { touch })}, '|', ${leadAttrExpr("medium", { touch })})`);
 
   const rows = new Map();
   const rowFor = (source, rawMedium) => {
@@ -255,5 +260,6 @@ module.exports = {
   getTrafficSourceMediums,
   getWonLeadsBy,
   LEAD_SOURCE,
+  LEAD_MEDIUM,
   LEAD_CAMPAIGN,
 };

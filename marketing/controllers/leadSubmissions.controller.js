@@ -8,6 +8,8 @@ exports.create = catchAsync(async (req, res) => {
     const data = await submitLead(req.body || {}, {
       ip: clientIp(req),
       userAgent: req.headers["user-agent"],
+      // Campaign Builder session → test lead (decided here, never by the body).
+      authorization: req.headers.authorization,
     });
     return sendData(res, 200, data);
   } catch (error) {
