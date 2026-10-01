@@ -44,6 +44,31 @@ async function getOrCreateConnectedCustomerForDirectPartner(order) {
   return customerId;
 }
 
+/**
+ * Platform Stripe customer for the order's user; created and saved on first use
+ * (customers added from the admin panel have none until they pay by card).
+ * Returns null when there is no email to create one with.
+ */
+async function getOrCreatePlatformCustomer(order) {
+  const existingId = order.stripeCustomerId || order.user?.stripeCustomerId;
+  if (existingId) {
+    return existingId;
+  }
+  const email = order.email || order.user?.email;
+  if (!email) {
+    return null;
+  }
+  const name = order.customerName || order.user?.name || "Customer";
+  const customerId = await addCustomer({ name, email });
+  if (order.userId) {
+    await user.update(
+      { stripeCustomerId: customerId },
+      { where: { id: order.userId } },
+    );
+  }
+  return customerId;
+}
+
 function estimateStripeFeeFromDollars(amountInDollars) {
   const parsed = parseFloat(amountInDollars);
   if (isNaN(parsed)) throw new Error("Invalid dollar amount");
@@ -923,10 +948,18 @@ async function createInvoiceWithItems({ order, currency = "usd" }) {
     const stripeFeeInCents = convertToCents(stripeFee, currency);
     const adminProfitCents = platformFeeInCents + stripeFeeInCents;
 
+    const customerId = await getOrCreatePlatformCustomer(order).catch((err) => {
+      console.error("⚠️ Stripe customer could not be created for invoice:", err?.message);
+      return null;
+    });
     const input = {
       ...base,
-      customer: order?.stripeCustomerId || undefined, // platform customer is fine in this flow
+      customer: customerId || undefined, // platform customer is fine in this flow
     };
+    // Stripe only allows saving the card when a customer is attached.
+    if (!customerId) {
+      delete input.saved_payment_method_options;
+    }
 
     if (order.connectAccountId) {
       input.payment_intent_data.application_fee_amount = adminProfitCents;
