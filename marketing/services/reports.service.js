@@ -314,7 +314,8 @@ async function visitorSplit(range, filters) {
   const f = filterSql(filters, sessionExpr, "vf");
   const upToEnd = range?.end ? "AND s2.started_at < :a_end" : "";
   const [row] = await select(
-    `SELECT COUNT(*) AS visitors, COALESCE(SUM(v.n >= 2), 0) AS returning
+    // Not "AS returning": RETURNING is a reserved word in MariaDB (the staging / production DB).
+    `SELECT COUNT(*) AS visitors, COALESCE(SUM(v.n >= 2), 0) AS returningVisitors
      FROM (
        SELECT a.visitor_id, COUNT(DISTINCT s2.session_id) AS n
        FROM (SELECT DISTINCT s.visitor_id FROM marketing_sessions s WHERE ${realSessions("s")} AND ${r.sql}${f.sql}) a
@@ -324,7 +325,7 @@ async function visitorSplit(range, filters) {
     { ...r.replacements, ...f.replacements },
   );
   const visitors = num(row?.visitors);
-  const returning = num(row?.returning);
+  const returning = num(row?.returningVisitors);
   return { newVisitors: visitors - returning, returningVisitors: returning };
 }
 
