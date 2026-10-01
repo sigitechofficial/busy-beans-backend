@@ -82,7 +82,9 @@ async function up() {
     for (const { id } of rows) {
       lastId = id;
       // eslint-disable-next-line no-await-in-loop
-      const lead = await LeadSubmission.findByPk(id);
+      // Only columns that exist at this point: the model also has later columns (e.g. page_type,
+      // migration 040), and selecting them fails on a database that hasn't reached 040 yet.
+      const lead = await LeadSubmission.findByPk(id, { attributes: ["id", "attribution", "pageUrl", "submittedAt"] });
       if (!lead) continue; // eslint-disable-line no-continue
       const attribution = lead.attribution || {};
       // eslint-disable-next-line no-await-in-loop
