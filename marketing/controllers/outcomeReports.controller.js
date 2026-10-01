@@ -2,7 +2,7 @@ const catchAsync = require("../../utils/catchAsync");
 const outcomes = require("../services/outcomeReports.service");
 const { sendData, sendError } = require("../utils/httpResponses");
 const { rangeFromQuery, compareRangeFromQuery, modelFromQuery, cleanFilter, toCsv, sendCsv } = require("../utils/reportQuery");
-const { periodMeta, reportFilters } = require("./reports.controller");
+const { periodMeta, reportFilters, groupingColumns } = require("./reports.controller");
 
 /** Reporting Phase C endpoints (business outcomes). Same period / filter / CSV rules as Phase A / B. */
 
@@ -13,18 +13,17 @@ const dimensionOf = (query, allowed) => {
   return allowed.includes(d) ? d : null;
 };
 
-/** GET /reports/lead-quality?dimension=channel|source|medium|campaign|landingPage&attribution&compare&…&format=csv */
+/** GET /reports/lead-quality?dimension=channel|source|medium|campaign|content|term|landingPage|campaignDetail&attribution&compare&…&format=csv */
 exports.leadQuality = catchAsync(async (req, res) => {
   const dimension = dimensionOf(req.query, outcomes.LEAD_QUALITY_DIMENSIONS);
   if (!dimension) return sendError(res, 400, "Unknown dimension.", "VALIDATION_ERROR");
   const range = rangeFromQuery(req.query);
   const compareRange = compareRangeFromQuery(req.query, range);
   const filters = reportFilters(req.query);
-  delete filters[dimension];
   const data = await outcomes.getLeadQuality({ range, compareRange, model: modelFromQuery(req.query), dimension, filters });
   if (req.query.format === "csv") {
     const columns = [
-      { header: "dimension", key: "value" },
+      ...groupingColumns(dimension),
       { header: "attribution_model", value: () => data.model },
       { header: "leads", key: "leads" },
       { header: "new", key: "newLeads" },
@@ -46,18 +45,17 @@ exports.leadQuality = catchAsync(async (req, res) => {
   return sendData(res, 200, { ...data, period: periodMeta(range, compareRange) });
 });
 
-/** GET /reports/revenue?dimension=channel|source|medium|campaign&attribution&compare&…&format=csv */
+/** GET /reports/revenue?dimension=channel|source|medium|campaign|content|term|campaignDetail&attribution&compare&…&format=csv */
 exports.revenue = catchAsync(async (req, res) => {
   const dimension = dimensionOf(req.query, outcomes.REVENUE_DIMENSIONS);
   if (!dimension) return sendError(res, 400, "Unknown dimension.", "VALIDATION_ERROR");
   const range = rangeFromQuery(req.query);
   const compareRange = compareRangeFromQuery(req.query, range);
   const filters = reportFilters(req.query);
-  delete filters[dimension];
   const data = await outcomes.getRevenue({ range, compareRange, model: modelFromQuery(req.query), dimension, filters });
   if (req.query.format === "csv") {
     const columns = [
-      { header: "dimension", key: "value" },
+      ...groupingColumns(dimension),
       { header: "lead_attribution_model", value: () => data.model },
       { header: "leads", key: "leads" },
       { header: "won_leads", key: "wonLeads" },

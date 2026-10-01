@@ -41,6 +41,19 @@ const pct = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
  */
 const NO_LP = "(not a landing page)";
 const REPORT_DIMENSIONS = [...DIMENSIONS, "landingPage", "searchEngine", "socialNetwork"];
+/**
+ * Combined groupings (grouping only, never a filter): one row per combination of the fields, so a
+ * campaign run on two platforms is two rows. The row's `value` is the last field and each field is
+ * also returned on the row (e.g. { value: campaign, channel, source, medium, campaign }).
+ */
+const COMBINED = { campaignDetail: ["channel", "source", "medium", "campaign"] };
+const GROUPINGS = [...REPORT_DIMENSIONS, ...Object.keys(COMBINED)];
+const SEP = "\u001f";
+/** GROUP BY expression of a grouping for one dataset (`exprFor` = that dataset's field expression). */
+function groupSql(exprFor, field) {
+  const fields = COMBINED[field];
+  return fields ? `CONCAT_WS(CHAR(31 USING utf8mb4), ${fields.map(exprFor).join(", ")})` : exprFor(field);
+}
 const DIMENSION_DEFAULTS = { ...UNKNOWN_DEFAULTS, landingPage: NO_LP, searchEngine: "Other", socialNetwork: "Other" };
 const SEARCH_ENGINES = [["Google", ["google"]], ["Bing", ["bing"]], ["DuckDuckGo", ["duckduckgo"]], ["Yahoo", ["yahoo"]]];
 const SOCIAL_NETWORKS = [
@@ -123,7 +136,7 @@ async function sessionMetrics(range, filters, field) {
   const f = filterSql(filters, sessionFilterExpr(filters || {}), "sf");
   const lr = leadRangeSql(range, "ls");
   const lv = leadRangeSql(range, "lv");
-  const group = field ? sessionExpr(field) : null;
+  const group = field ? groupSql(sessionExpr, field) : null;
   const rows = await select(
     `SELECT ${group ? `${group} AS grp,` : ""}
             COUNT(*) AS sessions,
@@ -161,7 +174,7 @@ const LEAD_COUNT_KEYS = ["leads", "newLeads", "contacted", "qualified", "wonLead
 async function leadMetrics(range, filters, model, field) {
   const lr = leadRangeSql(range);
   const f = filterSql(filters, (d) => leadExpr(d, model), "lf");
-  const group = field ? leadExpr(field, model) : null;
+  const group = field ? groupSql((d) => leadExpr(d, model), field) : null;
   return select(
     `SELECT ${group ? `${group} AS grp,` : ""}
             COUNT(*) AS leads,
@@ -176,7 +189,7 @@ async function leadMetrics(range, filters, model, field) {
 async function orderMetrics(range, filters, model, field) {
   const r = rangeSql(range, "m.paid_at", "o_");
   const f = filterSql(filters, (d) => orderExpr(d, model), "of");
-  const group = field ? orderExpr(field, model) : null;
+  const group = field ? groupSql((d) => orderExpr(d, model), field) : null;
   return select(
     `SELECT ${group ? `${group} AS grp,` : ""} COUNT(*) AS orders, SUM(m.revenue) AS orderRevenue
      FROM marketing_order_attribution m
@@ -264,7 +277,7 @@ const pickCompared = (row) => Object.fromEntries(COMPARED.map((k) => [k, row[k] 
  *   orders — reports that do not show visits skip the session queries).
  */
 async function getAcquisition({ range, compareRange = null, model = "operational", dimension = "channel", filters = {}, parts = ALL_PARTS }) {
-  if (!REPORT_DIMENSIONS.includes(dimension)) throw Object.assign(new Error("Unknown dimension."), { code: "VALIDATION_ERROR" });
+  if (!GROUPINGS.includes(dimension)) throw Object.assign(new Error("Unknown dimension."), { code: "VALIDATION_ERROR" });
   const [sessions, leads, orders, totals, previous] = await Promise.all([
     parts.sessions ? sessionMetrics(range, filters, dimension) : none(),
     parts.leads ? leadMetrics(range, filters, model, dimension) : none(),
@@ -273,7 +286,15 @@ async function getAcquisition({ range, compareRange = null, model = "operational
     compareRange ? periodTotals(compareRange, filters, model, parts) : Promise.resolve(null),
   ]);
   const rows = new Map();
+  const combined = COMBINED[dimension];
   const rowFor = (label) => {
+    if (combined) {
+      const parts = String(label ?? "").split(SEP);
+      const fields = Object.fromEntries(combined.map((f, i) => [f, String(parts[i] ?? "").trim() || DIMENSION_DEFAULTS[f]]));
+      const key = combined.map((f) => fields[f].toLowerCase()).join(SEP);
+      if (!rows.has(key)) rows.set(key, { value: fields[combined[combined.length - 1]], ...fields, ...EMPTY_ROW() });
+      return rows.get(key);
+    }
     const name = String(label ?? "").trim() || DIMENSION_DEFAULTS[dimension];
     const key = name.toLowerCase();
     if (!rows.has(key)) rows.set(key, { value: name, ...EMPTY_ROW() });
@@ -551,6 +572,8 @@ module.exports = {
   LEAD_STATUS_SQL,
   LEAD_COUNT_KEYS,
   REPORT_DIMENSIONS,
+  GROUPINGS,
+  COMBINED,
   DIMENSION_DEFAULTS,
   getOverview,
   listLeads,

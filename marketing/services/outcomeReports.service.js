@@ -30,7 +30,7 @@ const validation = (message) => Object.assign(new Error(message), { code: "VALID
 
 // ── lead quality ──────────────────────────────────────────────────────────────
 
-const LEAD_QUALITY_DIMENSIONS = ["channel", "source", "medium", "campaign", "landingPage"];
+const LEAD_QUALITY_DIMENSIONS = ["channel", "source", "medium", "campaign", "content", "term", "landingPage", "campaignDetail"];
 
 /**
  * Lead quality per dimension (selected attribution model) + the current-state status funnel.
@@ -66,7 +66,7 @@ async function getLeadQuality({ range, compareRange = null, model = "operational
 
 // ── revenue ───────────────────────────────────────────────────────────────────
 
-const REVENUE_DIMENSIONS = ["channel", "source", "medium", "campaign"];
+const REVENUE_DIMENSIONS = ["channel", "source", "medium", "campaign", "content", "term", "campaignDetail"];
 
 /** Lead revenue (selected model) and order revenue (the order's own attribution), side by side. */
 async function getRevenue({ range, compareRange = null, model = "operational", dimension = "channel", filters = {} }) {
