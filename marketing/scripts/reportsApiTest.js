@@ -155,6 +155,16 @@ async function checks(journeyId) {
   check(op.totals.sessions === 6 && op.totals.visitors === 5, `totals: preview + previous-period sessions excluded; 6 sessions, 5 distinct visitors (got ${op.totals.sessions}/${op.totals.visitors})`);
   const camp = await reports.getAcquisition({ range, model: "operational", dimension: "campaign" });
   check(row(camp.rows, "(not set)").leads >= 9, 'leads without campaign in "(not set)"');
+  // Campaign with platform: one row per channel + source + medium + campaign, same totals.
+  const detail = await reports.getAcquisition({ range, model: "operational", dimension: "campaignDetail" });
+  check(
+    detail.rows.every((r) => r.channel && r.source && r.medium && r.campaign === r.value) &&
+      sum(detail.rows, "sessions") === sum(camp.rows, "sessions") && sum(detail.rows, "leads") === sum(camp.rows, "leads") &&
+      JSON.stringify(detail.totals) === JSON.stringify(camp.totals) && detail.rows.length >= camp.rows.length,
+    "campaignDetail: rows carry channel / source / medium and reconcile with the campaign grouping",
+  );
+  const detailPs = await reports.getAcquisition({ range, model: "operational", dimension: "campaignDetail", filters: { channel: "Paid Search" } });
+  check(detailPs.rows.length > 0 && detailPs.rows.every((r) => r.channel === "Paid Search") && detailPs.totals.leads === ps.leads, "campaignDetail honours filters (Paid Search only)");
 
   // Drill-down: Paid Search → sources → medium; child totals = parent row.
   const psSources = await reports.getAcquisition({ range, model: "operational", dimension: "source", filters: { channel: "Paid Search" } });
@@ -222,6 +232,13 @@ async function httpChecks() {
   const cross = await fetch(`${BASE}/api/admin/analytics/reports/acquisition?${q}&dimension=channel&format=csv`, { headers: { ...auth, Origin: "http://localhost:3000" } });
   const exposed = String(cross.headers.get("access-control-expose-headers") || "").toLowerCase();
   check(exposed.includes("content-disposition") && exposed.includes("x-export-truncated") && /attachment; filename="channel-/.test(cross.headers.get("content-disposition") || ""), "CSV filename + truncation flag readable cross-origin (CORS expose headers)");
+  const det = await (await fetch(`${BASE}/api/admin/analytics/reports/acquisition?${q}&dimension=campaignDetail&channel=Paid%20Search`, { headers: auth })).json();
+  check(det.data?.dimension === "campaignDetail" && det.data.rows.length > 0 && det.data.rows.every((r) => r.channel === "Paid Search" && r.source), "GET /reports/acquisition?dimension=campaignDetail (filtered, with platform)");
+  const detCsv = await (await fetch(`${BASE}/api/admin/analytics/reports/acquisition?${q}&dimension=campaignDetail&format=csv`, { headers: auth })).text();
+  check(/^"?channel"?,"?source"?,"?medium"?,"?campaign"?,/.test(detCsv), "campaignDetail CSV has channel, source, medium, campaign columns");
+  // A filter on the grouped field itself applies (filter bar: Source = google, grouped by source).
+  const own = await (await fetch(`${BASE}/api/admin/analytics/reports/acquisition?${q}&dimension=channel&channel=Paid%20Search`, { headers: auth })).json();
+  check(own.data.rows.length === 1 && own.data.rows[0].value === "Paid Search", "filter on the grouped field narrows the rows");
   const bad = await fetch(`${BASE}/api/admin/analytics/reports/acquisition?${q}&dimension=password`, { headers: auth });
   check(bad.status === 400, "unknown dimension → 400");
   const leadCsv = await fetch(`${BASE}/api/admin/analytics/reports/leads/export?${q}&channel=Paid%20Search`, { headers: auth });

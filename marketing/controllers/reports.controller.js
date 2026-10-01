@@ -47,22 +47,28 @@ function reportFilters(query) {
   return filters;
 }
 
+/** CSV key columns of a grouping: one per field for combined groupings (campaignDetail). */
+function groupingColumns(dimension) {
+  const fields = reports.COMBINED[dimension];
+  return fields ? fields.map((f) => ({ header: f, key: f })) : [{ header: dimension, key: "value" }];
+}
+
 /**
  * GET /admin/analytics/reports/acquisition?dimension=channel|source|medium|campaign|content|term|
- * landingPage|searchEngine|socialNetwork&compare=previous&… (&format=csv)
+ * landingPage|searchEngine|socialNetwork|campaignDetail&compare=previous&… (&format=csv)
  * Also serves the Organic Search / Social / Referral views (channel filter + grouped dimension).
+ * campaignDetail = one row per channel + source + medium + campaign.
  */
 exports.acquisition = catchAsync(async (req, res) => {
   const dimension = String(req.query.dimension || "channel");
-  if (!reports.REPORT_DIMENSIONS.includes(dimension)) return sendError(res, 400, "Unknown dimension.", "VALIDATION_ERROR");
+  if (!reports.GROUPINGS.includes(dimension)) return sendError(res, 400, "Unknown dimension.", "VALIDATION_ERROR");
   const range = rangeFromQuery(req.query);
   const compareRange = compareRangeFromQuery(req.query, range);
   const filters = reportFilters(req.query);
-  delete filters[dimension];
   const data = await reports.getAcquisition({ range, compareRange, model: modelFromQuery(req.query), dimension, filters });
   if (req.query.format === "csv") {
     const columns = [
-      { header: dimension, key: "value" },
+      ...groupingColumns(dimension),
       { header: "visitors", key: "visitors" },
       { header: "sessions", key: "sessions" },
       { header: "visitor_to_lead_rate_pct", value: (r) => pctCell(r.visitorToLeadRate) },
@@ -85,6 +91,7 @@ exports.acquisition = catchAsync(async (req, res) => {
 
 exports.periodMeta = periodMeta;
 exports.reportFilters = reportFilters;
+exports.groupingColumns = groupingColumns;
 
 function leadQuery(query) {
   const out = {};
