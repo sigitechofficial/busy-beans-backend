@@ -1,7 +1,7 @@
 const catchAsync = require("../../utils/catchAsync");
 const analyticsDashboardService = require("../services/analyticsDashboard.service");
 const pageStatsService = require("../services/pageStats.service");
-const { parseReportRange } = require("../utils/businessTime");
+const { rangeFromQuery } = require("../utils/reportQuery");
 const { sendData, sendError } = require("../utils/httpResponses");
 
 const PAGE_TYPES = new Set(["landing_page", "site"]);
@@ -9,7 +9,8 @@ const SLUG_RE = /^[A-Za-z0-9._~%-]{1,200}$/;
 
 function reportOptions(query = {}) {
   return {
-    range: parseReportRange(query.from, query.to),
+    // Presets (range=last_30_days…) or from/to; no range → all time (unchanged default).
+    range: rangeFromQuery(query, { defaultPreset: null }),
     pageType: PAGE_TYPES.has(query.type) ? query.type : "landing_page",
     touch: query.touch === "first" ? "first" : "last",
   };

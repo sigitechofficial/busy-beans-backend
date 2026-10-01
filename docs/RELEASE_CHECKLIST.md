@@ -15,6 +15,12 @@ recorded in `marketing_migrations`, so each one runs **once per environment**:
 | `033_page_stats_lead_sessions.sql` | Lead conversion % = visits with a lead / visits; clears derived daily stats |
 | `034_backfill_analytics_page_fields.js` | **Data migration**: page fields for analytics recorded before 024, product ids, old 404 views, removes contract-test data, rebuilds daily stats |
 | `035_recompute_published_urls.js` | **Data migration**: stored page addresses recomputed from `WEBSITE_PUBLIC_URL` (needs manual step 1 done **before** the deploy; without it nothing changes) |
+| `036_attribution_model.sql` | Attribution columns (additive): leads (touch models, flat source columns, click IDs, event/form ids, `client_submitted_at`, unique `event_id`), sessions (acquisition touch, `last_activity_at`), visitors (first/last/last non-direct touch, click IDs), touchpoints (`channel`, `touch`) |
+| `037_backfill_attribution_columns.js` | **Data migration**: fills those columns for existing rows from stored data (`attribution_basis = legacy` on old leads); the original `attribution` JSON is not changed |
+| `038_reporting_fixes.sql` | Marks Campaign Builder preview / canvas events recorded before ingest-time classification as `page_type = 'preview'` (website events untouched; nothing deleted); adds session indexes for visitor / new / returning counts |
+| `039_report_indexes.sql` | Index `(status, paid_at)` on order attribution for report date filters (additive) |
+| `040_lead_page_key.sql` | Leads store the page they were submitted on (`page_type`, `page_slug`, same key as events) for form / conversion-page reports (additive) |
+| `041_backfill_lead_page_key.js` | **Data migration**: fills `page_type` / `page_slug` for existing leads from `page_url` (idempotent) |
 
 Data migrations are `.js` files in `marketing/migrations/` exporting `async up()`; they run in
 name order with the `.sql` files. Put every future one-off data fix there, never in a manual
@@ -34,6 +40,7 @@ command. The same backfills can still be run by hand (dry run first):
 | 6 | `INTERNAL_JOB_API_KEY` in the API env **and** every Lambda/job caller (`x-job-key` header), see `docs/API_ACCESS.md`. Unset = job endpoints not enforced | [ ] | [ ] |
 | 7 | Delete `.env.bak-*` copies on the server after the release is confirmed (they contain secrets) | [ ] | [ ] |
 | 8 | Old React storefront staging (S3/CloudFront): staging-only `robots.txt` or `X-Robots-Tag: noindex` | [ ] | n/a |
+| 9 | After deploy: `npm run marketing:attribution-test` on a non-production DB copy (it writes and removes test rows) | [ ] | n/a |
 
 ## Known deploy pitfalls (fixed, keep in mind)
 

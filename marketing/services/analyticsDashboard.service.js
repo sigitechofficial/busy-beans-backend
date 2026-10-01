@@ -1,15 +1,17 @@
-const { Op } = require("sequelize");
+const { Op, literal } = require("sequelize");
 const { QueryTypes } = require("sequelize");
 const { getMarketingSequelize } = require("../db/sequelize.marketing");
 const { getTouchpointModel } = require("../models/touchpoint");
 const { getAnalyticsEventModel } = require("../models/analyticsEvent");
 const { appendTimestampFilter } = require("../utils/dateRange");
-const { parseReportRange } = require("../utils/businessTime");
+const { leadAttrExpr } = require("../utils/leadAttributionSql");
+const { rangeFromQuery } = require("../utils/reportQuery");
 const { getPageStats } = require("./pageStats.service");
 const customerReports = require("./customerReports.service");
 const { formatTouchpointRow } = require("./touchpoints.service");
 const { formatEventRow } = require("./analyticsEvents.service");
 const { countNonTestLeads, countLeadVisitors } = require("./leadSubmissionsAdmin.service");
+const { realEvents, realSessions, realTouchpoints } = require("../utils/reportFilters");
 
 const FUNNEL_STEPS = [
   { step: "landing_page_view", label: "Landing page views" },
@@ -41,32 +43,42 @@ function buildFunnel(countsByStep) {
   return funnel;
 }
 
-async function countUniqueVisitorsFromEvents(range) {
+/**
+ * Visitors in the range, split into new and returning (partition: new + returning = visitors).
+ *   visitor    distinct visitor with a real (non-preview) session started in the range
+ *              (same definition as the reports API, services/reports.service.js)
+ *   returning  that visitor has 2+ distinct sessions up to the range end
+ *   new        exactly one session up to the range end
+ * Several page views in one session never make a visitor "returning". Server-only events
+ * (e.g. a payment days later) are not visits.
+ */
+async function getVisitorStats(range) {
   const sequelize = getMarketingSequelize();
-  const filter = appendTimestampFilter(range, "timestamp", "AND");
-  const rows = await sequelize.query(
-    `SELECT COUNT(DISTINCT visitor_id) AS cnt FROM marketing_analytics_events
-     WHERE 1=1 ${filter.sql}`,
-    {
-      replacements: { ...filter.replacements },
-      type: QueryTypes.SELECT,
-    },
+  const replacements = {};
+  const active = [realSessions("s")];
+  const upToEnd = [realSessions("s2")];
+  if (range.end) {
+    active.push("s.started_at <= :end");
+    upToEnd.push("s2.started_at <= :end");
+    replacements.end = range.end;
+  }
+  if (range.start) {
+    active.push("s.started_at >= :start");
+    replacements.start = range.start;
+  }
+  const [row] = await sequelize.query(
+    `SELECT COUNT(*) AS visitors, COALESCE(SUM(v.sessions >= 2), 0) AS returning
+     FROM (
+       SELECT a.visitor_id, COUNT(DISTINCT s2.session_id) AS sessions
+       FROM (SELECT DISTINCT s.visitor_id FROM marketing_sessions s WHERE ${active.join(" AND ")}) a
+       JOIN marketing_sessions s2 ON s2.visitor_id = a.visitor_id AND ${upToEnd.join(" AND ")}
+       GROUP BY a.visitor_id
+     ) v`,
+    { replacements, type: QueryTypes.SELECT },
   );
-  return Number(rows[0]?.cnt || 0);
-}
-
-async function countReturningVisitors(range) {
-  const sequelize = getMarketingSequelize();
-  const filter = appendTimestampFilter(range, "last_seen_at", "AND");
-  const rows = await sequelize.query(
-    `SELECT COUNT(*) AS cnt FROM marketing_visitors
-     WHERE first_seen_at < last_seen_at ${filter.sql}`,
-    {
-      replacements: { ...filter.replacements },
-      type: QueryTypes.SELECT,
-    },
-  );
-  return Number(rows[0]?.cnt || 0);
+  const visitors = Number(row?.visitors || 0);
+  const returningVisitors = Number(row?.returning || 0);
+  return { visitors, newVisitors: visitors - returningVisitors, returningVisitors };
 }
 
 async function sumRevenueFromEvents(range) {
@@ -114,7 +126,7 @@ async function getFunnelCounts(range) {
   const rows = await sequelize.query(
     `SELECT event_type, COUNT(*) AS cnt
      FROM marketing_analytics_events
-     WHERE 1=1 ${filter.sql}
+     WHERE ${realEvents()} ${filter.sql}
      GROUP BY event_type`,
     {
       replacements: { ...filter.replacements },
@@ -159,110 +171,64 @@ async function getLeadCountsBySlug(range) {
   return bySlug;
 }
 
-async function getTrafficSources(range, touch) {
+/**
+ * One row per source (or campaign). Visitors, leads, won leads and order revenue are each
+ * grouped from their OWN table and merged on the group key (case-insensitive): a source or
+ * campaign with leads but few / no tracked visitors still appears, and the lead column always
+ * sums to the non-test leads in the range. Visitors come from touchpoints (a visitor is counted
+ * under every source they arrived from in the range); leads use the lead attribution model
+ * chosen by `touch` (utils/leadAttributionSql.js).
+ */
+async function getGroupedTraffic(range, touch, { field, fallback }) {
   const tpFilter = appendTimestampFilter(range, "tp.timestamp", "AND");
   const leadFilter = appendTimestampFilter(range, "l.submitted_at", "AND");
-
   const sequelize = getMarketingSequelize();
-  const rows = await sequelize.query(
-    `SELECT
-       COALESCE(NULLIF(tp.source, ''), 'direct') AS source,
-       COUNT(DISTINCT tp.visitor_id) AS visitors
-     FROM marketing_touchpoints tp
-     WHERE 1=1 ${tpFilter.sql}
-     GROUP BY COALESCE(NULLIF(tp.source, ''), 'direct')
-     ORDER BY visitors DESC
-     LIMIT 50`,
-    {
-      replacements: { ...tpFilter.replacements },
-      type: QueryTypes.SELECT,
-    },
-  );
+  const tpExpr = `COALESCE(NULLIF(tp.${field}, ''), '${fallback}')`;
+  const leadExpr = leadAttrExpr(field, { touch });
 
+  const visitorRows = await sequelize.query(
+    `SELECT ${tpExpr} AS grp, COUNT(DISTINCT tp.visitor_id) AS visitors
+     FROM marketing_touchpoints tp
+     WHERE ${realTouchpoints("tp")} ${tpFilter.sql}
+     GROUP BY ${tpExpr}`,
+    { replacements: { ...tpFilter.replacements }, type: QueryTypes.SELECT },
+  );
   const leadRows = await sequelize.query(
-    `SELECT
-       COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.source')), ''), 'direct') AS source,
-       COUNT(*) AS leads
+    `SELECT ${leadExpr} AS grp, COUNT(*) AS leads
      FROM lead_submissions l
      WHERE l.test_mode = 0 ${leadFilter.sql}
-     GROUP BY source`,
-    {
-      replacements: { ...leadFilter.replacements },
-      type: QueryTypes.SELECT,
-    },
+     GROUP BY ${leadExpr}`,
+    { replacements: { ...leadFilter.replacements }, type: QueryTypes.SELECT },
   );
+  const revenueByGroup = await getOrderRevenueBy(range, touch, field, fallback);
+  const wonByGroup = await customerReports.getWonLeadsBy(range, leadExpr);
 
-  const leadsBySource = {};
-  for (const row of leadRows) {
-    leadsBySource[row.source] = Number(row.leads || 0);
+  const rows = new Map();
+  const rowFor = (label) => {
+    const name = String(label ?? "").trim() || fallback;
+    const key = name.toLowerCase();
+    if (!rows.has(key)) rows.set(key, { [field]: name, visitors: 0, leads: 0, revenue: 0, wonLeads: 0, wonRevenue: 0 });
+    return rows.get(key);
+  };
+  for (const r of visitorRows) rowFor(r.grp).visitors += Number(r.visitors || 0);
+  for (const r of leadRows) rowFor(r.grp).leads += Number(r.leads || 0);
+  for (const [grp, revenue] of Object.entries(revenueByGroup)) rowFor(grp).revenue += Number(revenue || 0);
+  for (const [key, won] of wonByGroup) {
+    const row = rowFor(key);
+    row.wonLeads += won.wonLeads;
+    row.wonRevenue += won.wonRevenue;
   }
-  const revenueBySource = await getOrderRevenueBy(range, touch, "source", "direct");
-  const wonBySource = await customerReports.getWonLeadsBy(range, customerReports.LEAD_SOURCE);
+  return [...rows.values()].sort(
+    (a, b) => b.visitors - a.visitors || b.leads - a.leads || String(a[field]).localeCompare(String(b[field])),
+  );
+}
 
-  return rows.map((row) => {
-    const won = wonBySource.get(String(row.source).toLowerCase()) || { wonLeads: 0, wonRevenue: 0 };
-    return {
-      source: row.source,
-      visitors: Number(row.visitors || 0),
-      leads: leadsBySource[row.source] || 0,
-      revenue: revenueBySource[row.source] || 0,
-      wonLeads: won.wonLeads,
-      wonRevenue: won.wonRevenue,
-    };
-  });
+async function getTrafficSources(range, touch) {
+  return getGroupedTraffic(range, touch, { field: "source", fallback: "direct" });
 }
 
 async function getUtmCampaigns(range, touch) {
-  const tpFilter = appendTimestampFilter(range, "tp.timestamp", "AND");
-  const leadFilter = appendTimestampFilter(range, "l.submitted_at", "AND");
-  const sequelize = getMarketingSequelize();
-
-  const rows = await sequelize.query(
-    `SELECT
-       COALESCE(NULLIF(tp.campaign, ''), '(not set)') AS campaign,
-       COUNT(DISTINCT tp.visitor_id) AS visitors
-     FROM marketing_touchpoints tp
-     WHERE 1=1 ${tpFilter.sql}
-     GROUP BY COALESCE(NULLIF(tp.campaign, ''), '(not set)')
-     ORDER BY visitors DESC
-     LIMIT 50`,
-    {
-      replacements: { ...tpFilter.replacements },
-      type: QueryTypes.SELECT,
-    },
-  );
-
-  const leadRows = await sequelize.query(
-    `SELECT
-       COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(l.attribution, '$.utmCampaign')), ''), '(not set)') AS campaign,
-       COUNT(*) AS leads
-     FROM lead_submissions l
-     WHERE l.test_mode = 0 ${leadFilter.sql}
-     GROUP BY campaign`,
-    {
-      replacements: { ...leadFilter.replacements },
-      type: QueryTypes.SELECT,
-    },
-  );
-
-  const leadsByCampaign = {};
-  for (const row of leadRows) {
-    leadsByCampaign[row.campaign] = Number(row.leads || 0);
-  }
-  const revenueByCampaign = await getOrderRevenueBy(range, touch, "campaign", "(not set)");
-  const wonByCampaign = await customerReports.getWonLeadsBy(range, customerReports.LEAD_CAMPAIGN);
-
-  return rows.map((row) => {
-    const won = wonByCampaign.get(String(row.campaign).toLowerCase()) || { wonLeads: 0, wonRevenue: 0 };
-    return {
-      campaign: row.campaign,
-      visitors: Number(row.visitors || 0),
-      leads: leadsByCampaign[row.campaign] || 0,
-      revenue: revenueByCampaign[row.campaign] || 0,
-      wonLeads: won.wonLeads,
-      wonRevenue: won.wonRevenue,
-    };
-  });
+  return getGroupedTraffic(range, touch, { field: "campaign", fallback: "(not set)" });
 }
 
 /** Per landing page: id and view breakdowns by device / source / campaign (grouped, not per slug). */
@@ -358,7 +324,7 @@ async function getRecentTouchpoints(range, limit = 20) {
   }
 
   const rows = await Touchpoint.findAll({
-    where,
+    where: { ...where, [Op.and]: [literal(realTouchpoints())] },
     order: [["timestamp", "DESC"]],
     limit,
   });
@@ -376,7 +342,7 @@ async function getRecentEvents(range, limit = 30) {
   }
 
   const rows = await AnalyticsEvent.findAll({
-    where,
+    where: { ...where, [Op.and]: [literal(realEvents())] },
     order: [["timestamp", "DESC"]],
     limit,
   });
@@ -386,14 +352,15 @@ async function getRecentEvents(range, limit = 30) {
 
 async function getDashboard(query = {}) {
   // Dates are business-timezone days (MARKETING_REPORT_TIMEZONE), "to" inclusive.
-  const reportRange = parseReportRange(query.from, query.to);
+  const reportRange = rangeFromQuery(query, { defaultPreset: null });
   const range = {
     start: reportRange.start,
     end: reportRange.end ? new Date(reportRange.end.getTime() - 1000) : undefined,
   };
   const touch = query.touch === "first" ? "first" : "last";
 
-  const totalVisitors = await countUniqueVisitorsFromEvents(range);
+  // Visitors = distinct visitors with a real session in the range (split new / returning).
+  const { visitors: totalVisitors, newVisitors, returningVisitors } = await getVisitorStats(range);
   const funnelCounts = await getFunnelCounts(range);
   const totalLeads = await countNonTestLeads(range);
   funnelCounts.lead_created = totalLeads;
@@ -405,7 +372,6 @@ async function getDashboard(query = {}) {
     totalVisitors > 0 ? roundOneDecimal((Math.min(leadVisitors, totalVisitors) / totalVisitors) * 100) : 0;
   const averageOrderValue =
     totalOrders > 0 ? roundOneDecimal(revenue / totalOrders) : 0;
-  const returningVisitors = await countReturningVisitors(range);
 
   const trafficSources = await getTrafficSources(range, touch);
   const trafficSourceMediums = await customerReports.getTrafficSourceMediums(range, touch);
@@ -425,6 +391,7 @@ async function getDashboard(query = {}) {
       revenue,
       conversionRate,
       averageOrderValue,
+      newVisitors,
       returningVisitors,
       newCustomers: customerSummary.newCustomers,
       repeatCustomers: customerSummary.repeatCustomers,

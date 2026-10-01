@@ -88,6 +88,24 @@ function getTouchpointModel() {
         type: DataTypes.STRING(64),
         allowNull: true,
       },
+      channel: {
+        type: DataTypes.STRING(100),
+        field: "channel",
+        allowNull: true,
+      },
+      touch: {
+        type: DataTypes.JSON,
+        field: "touch",
+        allowNull: true,
+        get: jsonGetter("touch", null),
+        set: jsonSetter("touch"),
+      },
+      attributionConflict: {
+        type: DataTypes.BOOLEAN,
+        field: "attribution_conflict",
+        allowNull: false,
+        defaultValue: false,
+      },
       clickIds: {
         type: DataTypes.JSON,
         field: "click_ids",

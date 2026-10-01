@@ -47,6 +47,11 @@ async function run() {
     });
   const lp = `/lp/${slug}`;
 
+  // Any wide-range report request (another suite, the dashboard) may already have rolled these
+  // days up without this fixture; start from un-rolled days so both are computed from it.
+  await db.query("DELETE FROM marketing_daily_page_stats WHERE stat_date IN ('2026-01-15', '2026-01-16')");
+  await db.query("DELETE FROM marketing_daily_rollup_runs WHERE stat_date IN ('2026-01-15', '2026-01-16')");
+
   try {
     // A: converts (view → CTA → form → submit → lead → paid order), then leaves from a site page.
     await ev("a", "landing_page_view", "2026-01-15T14:00:00Z", lp);

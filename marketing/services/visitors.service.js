@@ -79,11 +79,13 @@ async function upsertSession(payload, timestamp, { eventType = "", page } = {}) 
     lastLandingPageSlug: isLanding ? ctx.landingPageSlug : null,
     pageCount: pageViews,
     engagedMs,
+    lastActivityAt: new Date(),
   });
   if (created) return;
 
   if (at < existing.startedAt) existing.startedAt = at;
   if (at > existing.endedAt) existing.endedAt = at;
+  existing.lastActivityAt = new Date();
   if (!existing.entryPathname && ctx.pathname) {
     existing.entryPathname = ctx.pathname;
     if (isLanding && !existing.entryLandingPageSlug) existing.entryLandingPageSlug = ctx.landingPageSlug;
@@ -104,6 +106,53 @@ async function upsertSession(payload, timestamp, { eventType = "", page } = {}) 
   }
 }
 
+/**
+ * The session's acquisition touch: set once, by the session's first touchpoint (a conditional
+ * UPDATE, so two concurrent touchpoints can't both win). Internal navigation never sends one.
+ */
+async function recordSessionTouch(sessionId, touch) {
+  if (!sessionId || !touch?.channel) return;
+  await getSessionModel().update(
+    {
+      channel: touch.channel,
+      source: touch.source || null,
+      medium: touch.medium || null,
+      campaign: touch.campaign || null,
+      content: touch.content || null,
+      term: touch.term || null,
+      referrer: touch.referrer || null,
+      landingUrl: touch.landingUrl || null,
+      touch,
+    },
+    { where: { sessionId, channel: null } },
+  );
+}
+
+/**
+ * Visitor touches (server time): first touch is write-once; every new touch is the last touch;
+ * a non-direct touch also becomes the last non-direct touch (a later Direct visit never
+ * overwrites it). Click IDs are merged, each with the time it was received.
+ */
+async function recordVisitorTouch(visitorId, touch) {
+  if (!visitorId || !touch?.channel) return;
+  const visitor = await getVisitorModel().findByPk(visitorId);
+  if (!visitor) return;
+  if (!visitor.firstTouch) {
+    visitor.firstTouch = touch;
+    visitor.firstTouchChannel = touch.channel;
+    visitor.firstTouchSource = touch.source ? String(touch.source).slice(0, 100) : null;
+  }
+  visitor.lastTouch = touch;
+  if (touch.channel !== "Direct") visitor.lastNonDirectTouch = touch;
+  const clickIds = { ...(visitor.clickIds || {}) };
+  for (const [key, value] of Object.entries(touch.clickIds || {})) {
+    if (value) clickIds[key] = { value, at: touch.receivedAt || new Date().toISOString() };
+  }
+  visitor.clickIds = Object.keys(clickIds).length ? clickIds : null;
+  visitor.changed("clickIds", true);
+  await visitor.save();
+}
+
 async function touchIdentity(payload, timestamp, options = {}) {
   const at = timestamp || new Date();
   await upsertVisitor(payload.visitorId, at);
@@ -114,4 +163,6 @@ module.exports = {
   upsertVisitor,
   upsertSession,
   touchIdentity,
+  recordSessionTouch,
+  recordVisitorTouch,
 };

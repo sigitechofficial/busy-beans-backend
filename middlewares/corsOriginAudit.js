@@ -90,6 +90,8 @@ function corsOptions(env = process.env) {
     },
     credentials: true,
     maxAge: 600,
+    // Report CSV downloads read the server filename and the "export truncated" flag.
+    exposedHeaders: ["Content-Disposition", "X-Export-Truncated"],
   };
 }
 
