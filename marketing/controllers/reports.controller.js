@@ -47,6 +47,18 @@ function reportFilters(query) {
   return filters;
 }
 
+/** Spend columns, when the report has entered ad spend (channel / source / medium / campaign groupings). */
+function spendColumns(data) {
+  if (!data.spendAvailable || !(data.totals?.spend > 0)) return [];
+  return [
+    { header: "spend_usd", key: "spend" },
+    { header: "cost_per_lead", value: (r) => pctCell(r.costPerLead) },
+    { header: "cost_per_won_lead", value: (r) => pctCell(r.costPerWonLead) },
+    { header: "roas_lead_revenue", value: (r) => pctCell(r.roas) },
+    { header: "roas_order_revenue", value: (r) => pctCell(r.orderRoas) },
+  ];
+}
+
 /** CSV key columns of a grouping: one per field for combined groupings (campaignDetail). */
 function groupingColumns(dimension) {
   const fields = reports.COMBINED[dimension];
@@ -82,6 +94,7 @@ exports.acquisition = catchAsync(async (req, res) => {
       { header: "lead_revenue", key: "leadRevenue" },
       { header: "orders", key: "orders" },
       { header: "order_revenue", key: "orderRevenue" },
+      ...spendColumns(data),
     ];
     const name = `${dimension}-${range.fromDay || "all"}-${range.toDay || "time"}.csv`;
     return sendCsv(res, name, toCsv(columns, [...data.rows, data.totals]));
@@ -92,6 +105,7 @@ exports.acquisition = catchAsync(async (req, res) => {
 exports.periodMeta = periodMeta;
 exports.reportFilters = reportFilters;
 exports.groupingColumns = groupingColumns;
+exports.spendColumns = spendColumns;
 
 function leadQuery(query) {
   const out = {};

@@ -8,6 +8,16 @@ const customerController = require("../controllers/admin/customerController");
 const machineController = require("../controllers/admin/machineController");
 const machineSubController = require("../controllers/customer/machineSubController");
 const leadController = require("../controllers/admin/leadController");
+const rateLimit = require("express-rate-limit");
+
+// Public machine-lead form: a few submissions per minute per IP (bots / email abuse).
+const publicLeadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.PUBLIC_LEAD_RATE_LIMIT_MAX || 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many requests. Please try again in a minute." },
+});
 const subscriptionController = require("../controllers/admin/subscriptionController");
 const categoryController = require("../controllers/admin/categoriesController");
 const userController = require("../controllers/userController");
@@ -573,7 +583,7 @@ router.get(
  *       201:
  *         description: Lead created successfully
  */
-router.post("/create-lead", fillMachineLeadValue, leadController.createLead);
+router.post("/create-lead", publicLeadLimiter, fillMachineLeadValue, leadController.createPublicLead);
 
 /**
  * @swagger

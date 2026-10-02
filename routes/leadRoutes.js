@@ -362,4 +362,7 @@ router.post("/:id/assign", leadController.assignLead);
  */
 router.get("/:id/logs", leadController.getLeadLogs);
 
+// Notes on the lead's activity timeline
+router.post("/:id/comments", leadController.addComment);
+
 module.exports = router;

@@ -296,6 +296,22 @@ async function recordLeadCreatedEvent({ eventId, leadId, visitorId, sessionId, p
 }
 
 /**
+ * Real leads also go on the admin panel Leads Dashboard (Kanban): linked to the lead the website's
+ * form already created there (same event id), or created (product quote / landing page forms).
+ * Never fails the submission.
+ */
+async function linkToSalesPipeline(input) {
+  try {
+    // Lazy: commerce models are not loaded in marketing-only scripts.
+    // eslint-disable-next-line global-require
+    const { linkOrCreateFromMarketing } = require("../../utils/leadPipeline");
+    await linkOrCreateFromMarketing(input);
+  } catch (error) {
+    console.error("lead → sales pipeline failed:", error.message);
+  }
+}
+
+/**
  * Store a lead. The browser supplies the visitor's form fields and its attribution CLAIM; the
  * server decides everything else:
  *   - test mode (Campaign Builder session or a valid preview token, services/leadTestMode),
@@ -411,6 +427,7 @@ async function submitLead(payload, requestMeta = {}) {
         },
       });
     }
+    await linkToSalesPipeline({ eventId, fields, formId, pageType: pageKey.pageType, pageSlug: landingPageSlug || pageKey.pageSlug, pageUrl });
   }
 
   return { id: leadId, leadId, stored: true, testMode };

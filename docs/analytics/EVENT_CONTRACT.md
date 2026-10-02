@@ -475,7 +475,41 @@ Leads, and a "Legacy reports" menu. Every change is a URL (history push); old li
 | Customers, Landing pages, Site pages, Compare, Products | Moved under Outcomes / Conversion / Products (unchanged) | Kept |
 
 **Not in Phase C.** Spend, CPL / CPA / ROAS, CRM stages (SQL, quote sent, deal stages), status
-history and CRM sync.
+history and CRM sync. (Entered spend and ROAS were added afterwards, see below.)
+
+## Campaigns, filters, devices and ad spend
+
+**Campaign with platform** (`dimension=campaignDetail`, Acquisition › Campaigns, Lead quality /
+Revenue "Campaign"): one row per channel + source + medium + campaign, so a campaign name used on
+two platforms is two rows; each row also carries `channel`, `source`, `medium`, `campaign`.
+Rows add up to the same totals as the plain campaign grouping. CSV: one column per field.
+
+**Filters.** The report bar's Channel / Source / Medium / Campaign filters write the same URL
+parameters as drill clicks and apply to every report that reads them (Overview, Acquisition,
+Conversion, Lead quality, Revenue, Audience › Devices); a filter on the grouped field itself applies
+too. Attribution comparison has none (it compares all leads).
+
+**Devices** (`/reports/audience/devices?dimension=deviceType|os|browser`). A visit's device = the
+device of its first page view (website tracker: `deviceType` mobile / tablet / desktop shown as
+Mobile / Tablet / Desktop / laptop, `os`, `browser`); a lead's device = the device it was submitted
+from, so visitor → lead counts visitors of that device who sent a lead from any device. Orders carry
+no device. "Unknown" = recorded before device details were tracked, or not revealed by the browser.
+iPhone / iPad = iOS (fixed in the website tracker; earlier iPhone visits were recorded as macOS).
+
+**Ad spend** (`marketing_ad_spend`, migration 042; Acquisition › Ad spend; API
+`/admin/analytics/ad-spend`). Entered by the marketing team until spend is imported from the ad
+platforms: amount (USD) per source (+ optional medium) + campaign over a date range.
+
+| Rule | Definition |
+|---|---|
+| Allocation | an entry is spread evenly over its days; a report period gets the share of the days inside it (all time = whole amount) |
+| Matching | campaign-with-platform rows: same source + campaign (+ medium when entered; the busiest row when several match). Channel / source / medium / campaign rows: the entry's value; channel = the tracker's classification of source + medium (no medium = a paid click, e.g. Paid Social for facebook) |
+| No visits | spend without a matching row gets its own row (spend with no visits or leads in the period) |
+| Cost / lead | spend ÷ leads (selected attribution model) |
+| Cost / won lead | spend ÷ won leads |
+| ROAS | lead revenue (won leads) ÷ spend; order ROAS = online order revenue ÷ spend — the two revenue kinds are never added |
+| Not available | groupings or filters by ad (content), keyword (term), landing page or device: spend has no such detail (`spendAvailable: false`) |
+
 
 ## Order / revenue events (server-side only)
 

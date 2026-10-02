@@ -21,6 +21,14 @@ recorded in `marketing_migrations`, so each one runs **once per environment**:
 | `039_report_indexes.sql` | Index `(status, paid_at)` on order attribution for report date filters (additive) |
 | `040_lead_page_key.sql` | Leads store the page they were submitted on (`page_type`, `page_slug`, same key as events) for form / conversion-page reports (additive) |
 | `041_backfill_lead_page_key.js` | **Data migration**: fills `page_type` / `page_slug` for existing leads from `page_url` (idempotent) |
+| `042_ad_spend.sql` | Ad spend table (`marketing_ad_spend`) for entered campaign spend: cost per lead and ROAS in the reports (additive, new table) |
+
+Commerce migrations (`migrations/`, run by `npm run migrate`, recorded once per environment):
+
+| Migration | What it does |
+|---|---|
+| `20261002_email_recipient_settings.sql` | `email_recipient_settings` table: developer copy address + on/off, lead alert recipients, customer test recipient (admin panel → Email configuration → Recipients). Empty table = today's behaviour |
+| `20261003_unified_leads.sql` | Leads get `enquiryType`, `marketingEventId`, `getInTouchId`, `wonAmount`, `wonAt` (+ 2 indexes); **imports every existing tasting / contact request (`get_in_touches`) once** as a "New Enquiry" lead on the Leads Dashboard |
 
 Data migrations are `.js` files in `marketing/migrations/` exporting `async up()`; they run in
 name order with the `.sql` files. Put every future one-off data fix there, never in a manual
@@ -41,6 +49,8 @@ command. The same backfills can still be run by hand (dry run first):
 | 7 | Delete `.env.bak-*` copies on the server after the release is confirmed (they contain secrets) | [ ] | [ ] |
 | 8 | Old React storefront staging (S3/CloudFront): staging-only `robots.txt` or `X-Robots-Tag: noindex` | [ ] | n/a |
 | 9 | After deploy: `npm run marketing:attribution-test` on a non-production DB copy (it writes and removes test rows) | [ ] | n/a |
+| 10 | Leads: `META_APP_SECRET` (signs the Meta lead webhook; unset = unsigned requests accepted with a warning) and `META_VERIFY_TOKEN` (no default any more) from the client; `ADMIN_PANEL_URL` (link in "lead assigned" emails); optional `PUBLIC_LEAD_RATE_LIMIT_MAX` (default 10/min per IP) | [ ] | [ ] |
+| 11 | Admin panel → Email configuration → Recipients: lead alert recipients, developer copy, and on staging the customer test recipient (all "request received" customer emails go only there) | [ ] | [ ] |
 
 ## Known deploy pitfalls (fixed, keep in mind)
 

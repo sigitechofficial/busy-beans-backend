@@ -4,6 +4,7 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const attachment = attachments();
 const { transporter } = require("./transpoter");
+const { customerEmailRecipients, leadAlertRecipients } = require("../utils/emailRecipients");
 let Footer = require("./footer");
 let { header } = require("./header");
 
@@ -348,10 +349,13 @@ module.exports = async function ({ data }) {
 `;
 
     // Send Email to Admin
+    // Busy Beans staff ("new lead" alert) + developer copy: admin → Email Configuration → Recipients.
+    const to = await leadAlertRecipients();
+    if (!to.length) return;
     transporter.sendMail(
       {
         from: process.env.EMAIL_USERNAME,
-        to: "sigidevelopers@gmail.com",
+        to,
         subject: `New Lead: ${contactName} - ${data?.machineName}`,
         html: htmlTemplate,
         attachments: attachment.footer,

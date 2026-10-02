@@ -26,10 +26,36 @@ const sendCustomerEmail = require("../../helper/coffeeMachineQuotation");
 const sendAdminEmail = require("../../helper/coffeeMachineQuotationAdmin");
 const { createLeadLog, formatLogDetails } = require("../../utils/leadLogger");
 const { sendIfAllowed, leadPerson, hqPerson } = require("../../utils/emailSendGate");
+const { customerEmailRecipients, leadAlertRecipients } = require("../../utils/emailRecipients");
 
-// Meta webhook verification token - should match what's configured in Meta App settings
-const META_VERIFY_TOKEN =
-  process.env.META_VERIFY_TOKEN || "your_meta_verify_token_here";
+const crypto = require("crypto");
+const { escapeStrings } = require("../../utils/escapeHtml");
+
+// Meta webhook verification token - must match the Meta App settings. No fallback: without it the
+// endpoint cannot be verified (a well-known placeholder would let anyone subscribe it).
+const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "";
+let warnedNoSecret = false;
+
+/**
+ * Meta signs every webhook call with the app secret (X-Hub-Signature-256: sha256=<hmac of the raw
+ * body>). With META_APP_SECRET set, unsigned or wrongly signed calls are refused; without it the
+ * old behaviour stays (accepted) and a warning is logged once.
+ */
+function metaSignatureValid(req) {
+  const secret = process.env.META_APP_SECRET;
+  if (!secret) {
+    if (!warnedNoSecret) {
+      console.warn("⚠️ META_APP_SECRET is not set: Meta lead webhook signatures are not verified.");
+      warnedNoSecret = true;
+    }
+    return true;
+  }
+  const header = String(req.headers["x-hub-signature-256"] || "");
+  if (!header.startsWith("sha256=") || !req.rawBody) return false;
+  const expected = Buffer.from(`sha256=${crypto.createHmac("sha256", secret).update(req.rawBody).digest("hex")}`);
+  const given = Buffer.from(header);
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}
 
 /**
  * Handle Meta webhook verification (GET request)
@@ -47,7 +73,7 @@ exports.verifyMetaWebhook = (req, res) => {
   });
 
   // Verify the mode and token
-  if (mode === "subscribe" && token === META_VERIFY_TOKEN) {
+  if (META_VERIFY_TOKEN && mode === "subscribe" && token === META_VERIFY_TOKEN) {
     console.log("✅ Meta webhook verified successfully");
     // Respond with the challenge token
     res.status(200).send(challenge);
@@ -65,7 +91,13 @@ exports.handleMetaLeadWebhook = async (req, res) => {
   try {
     const body = req.body;
 
-    console.log("📥 Meta webhook received:", JSON.stringify(body, null, 2));
+    if (!metaSignatureValid(req)) {
+      console.error("❌ Meta webhook: missing or invalid X-Hub-Signature-256, ignored");
+      return res.status(401).send("Invalid signature");
+    }
+
+    // Summary only: the payload holds personal data.
+    console.log("📥 Meta webhook received:", { object: body?.object, entries: Array.isArray(body?.entry) ? body.entry.length : 0 });
 
     // Meta sends webhook data in the format:
     // {
@@ -211,6 +243,7 @@ const processMetaLead = async (leadData) => {
       // Status
       status: "New Enquiry",
       tag: "Warm Lead",
+      enquiryType: "meta",
 
       // Notes - combine Meta metadata with any form notes
       notes: `${mappedLeadData.notes ? mappedLeadData.notes + "\n\n" : ""}${platform} Lead Ad Details:
@@ -255,14 +288,14 @@ const processMetaLead = async (leadData) => {
         await sendIfAllowed({
           ...leadPerson(),
           emailType: "coffee_machine_customer",
-          recipients: emailData.contactEmail,
-          send: async () => sendCustomerEmail({ data: emailData }),
+          recipients: (await customerEmailRecipients(emailData.contactEmail)).join(", "),
+          send: async () => sendCustomerEmail({ data: escapeStrings(emailData) }),
         });
         await sendIfAllowed({
           ...hqPerson(),
           emailType: "coffee_machine_admin",
-          recipients: "sigidevelopers@gmail.com",
-          send: async () => sendAdminEmail({ data: emailData }),
+          recipients: (await leadAlertRecipients()).join(", "),
+          send: async () => sendAdminEmail({ data: escapeStrings(emailData) }),
         });
       } catch (emailError) {
         console.error("⚠️ Error sending emails:", emailError);

@@ -61,7 +61,22 @@ async function updateLead(id, patch = {}) {
   }
 
   await row.save();
+  if (!row.testMode && row.eventId && (patch.conversionStatus !== undefined || patch.revenue !== undefined)) {
+    await syncToSalesPipeline(row);
+  }
   return formatLeadRow(row);
+}
+
+/** Status / revenue set here → the linked admin panel Kanban lead. Never fails the update. */
+async function syncToSalesPipeline(row) {
+  try {
+    // Lazy: commerce models are not loaded in marketing-only scripts.
+    // eslint-disable-next-line global-require
+    const { syncFromMarketing } = require("../../utils/leadPipeline");
+    await syncFromMarketing({ eventId: row.eventId, status: row.conversionStatus, revenue: row.revenue });
+  } catch (error) {
+    console.error("lead status → sales pipeline failed:", error.message);
+  }
 }
 
 async function deleteLead(id) {

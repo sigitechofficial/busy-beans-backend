@@ -2,7 +2,7 @@ const catchAsync = require("../../utils/catchAsync");
 const outcomes = require("../services/outcomeReports.service");
 const { sendData, sendError } = require("../utils/httpResponses");
 const { rangeFromQuery, compareRangeFromQuery, modelFromQuery, cleanFilter, toCsv, sendCsv } = require("../utils/reportQuery");
-const { periodMeta, reportFilters, groupingColumns } = require("./reports.controller");
+const { periodMeta, reportFilters, groupingColumns, spendColumns } = require("./reports.controller");
 
 /** Reporting Phase C endpoints (business outcomes). Same period / filter / CSV rules as Phase A / B. */
 
@@ -66,6 +66,7 @@ exports.revenue = catchAsync(async (req, res) => {
       { header: "orders", key: "orders" },
       { header: "order_revenue", key: "orderRevenue" },
       { header: "average_order_value", value: (r) => rate(r.averageOrderValue) },
+      ...spendColumns(data),
     ];
     return sendCsv(res, csvName("revenue", range, dimension), toCsv(columns, [...data.rows, data.totals]));
   }
@@ -91,6 +92,32 @@ exports.attributionComparison = catchAsync(async (req, res) => {
     return sendCsv(res, csvName("attribution-comparison", range, dimension), toCsv(columns, [...data.rows, total]));
   }
   return sendData(res, 200, { ...data, period: periodMeta(range, null) });
+});
+
+/** GET /reports/audience/devices?dimension=deviceType|os|browser&range|from&to&compare&attribution&…&format=csv */
+exports.devices = catchAsync(async (req, res) => {
+  const dimension = String(req.query.dimension || "deviceType");
+  if (!outcomes.DEVICE_DIMENSIONS.includes(dimension)) return sendError(res, 400, "Unknown dimension.", "VALIDATION_ERROR");
+  const range = rangeFromQuery(req.query);
+  const compareRange = compareRangeFromQuery(req.query, range);
+  const filters = reportFilters(req.query);
+  const data = await outcomes.getDevices({ range, compareRange, model: modelFromQuery(req.query), dimension, filters });
+  if (req.query.format === "csv") {
+    const columns = [
+      { header: dimension, key: "value" },
+      { header: "visitors", key: "visitors" },
+      { header: "sessions", key: "sessions" },
+      { header: "share_of_sessions_pct", value: (r) => rate(r.sessionShare) },
+      { header: "visitor_to_lead_rate_pct", value: (r) => rate(r.visitorToLeadRate) },
+      { header: "session_to_lead_rate_pct", value: (r) => rate(r.sessionToLeadRate) },
+      { header: "leads", key: "leads" },
+      { header: "qualified_or_won", key: "reachedQualified" },
+      { header: "won_leads", key: "wonLeads" },
+      { header: "lead_revenue", key: "leadRevenue" },
+    ];
+    return sendCsv(res, csvName("devices", range, dimension), toCsv(columns, [...data.rows, data.totals]));
+  }
+  return sendData(res, 200, { ...data, period: periodMeta(range, compareRange) });
 });
 
 /** GET /reports/audience/new-returning?range|from&to&compare&format=csv */
