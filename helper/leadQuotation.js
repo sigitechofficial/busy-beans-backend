@@ -4,6 +4,7 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const attachment = attachments();
 const { transporter } = require("./transpoter");
+const { customerEmailRecipients, leadAlertRecipients } = require("../utils/emailRecipients");
 let Footer = require("./footer");
 let { header } = require("./header");
 
@@ -209,10 +210,13 @@ module.exports = async function ({ lead, quotationAmount }) {
 `;
 
     // Send Email
+    // Customer + developer copy, or only the staging test recipient (Email Configuration → Recipients).
+    const to = await customerEmailRecipients(contactEmail);
+    if (!to.length) return;
     transporter.sendMail(
       {
         from: process.env.EMAIL_USERNAME,
-        to: [contactEmail, "sigidevelopers@gmail.com"],
+        to,
         subject: `${hiUser} Your Quotation is Ready`,
         html: htmlTemplate,
         attachments: attachment.footer,

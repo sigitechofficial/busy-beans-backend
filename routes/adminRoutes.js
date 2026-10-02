@@ -278,6 +278,20 @@ router.get(
   emailSettingsController.getSettings,
 );
 
+router.get(
+  "/email-settings/recipients",
+  protect,
+  auth.restrictTo("admin"),
+  emailSettingsController.getRecipients,
+);
+
+router.patch(
+  "/email-settings/recipients",
+  protect,
+  auth.restrictTo("admin"),
+  emailSettingsController.updateRecipients,
+);
+
 router.patch(
   "/email-settings/default-supplier",
   protect,
@@ -3705,9 +3719,10 @@ router.post(
   patnerOrderController.pullPartnerOrderPayment,
 );
 
-router.get("/coffee-machine/requests", machineController.coffeeMachineQuries);
-router.get("/get-in-touch", leadController.getAllGetInTouch);
-router.delete("/get-in-touch/:id", leadController.deleteGetInTouch);
+// Admin-panel inboxes (HQ only; customers, suppliers and partners also hold valid tokens).
+router.get("/coffee-machine/requests", auth.restrictTo("admin", "subAdmin", "adminEmployee"), machineController.coffeeMachineQuries);
+router.get("/get-in-touch", auth.restrictTo("admin", "subAdmin", "adminEmployee"), leadController.getAllGetInTouch);
+router.delete("/get-in-touch/:id", auth.restrictTo("admin", "subAdmin", "adminEmployee"), leadController.deleteGetInTouch);
 
 router
   .route("/coffee-machine")

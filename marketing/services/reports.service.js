@@ -20,6 +20,7 @@ const { formatLeadRow } = require("./leadSubmissions.service");
 const { leadAttrExpr, UNKNOWN_DEFAULTS } = require("../utils/leadAttributionSql");
 const { realSessions, realEvents } = require("../utils/reportFilters");
 const { MODELS, DIMENSIONS, rangeSql } = require("../utils/reportQuery");
+const adSpend = require("./adSpend.service");
 
 const select = (sql, replacements) => getMarketingSequelize().query(sql, { replacements, type: QueryTypes.SELECT });
 const num = (v) => {
@@ -40,7 +41,13 @@ const pct = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
  * The source groups use the canonical source names written by utils/attribution.js.
  */
 const NO_LP = "(not a landing page)";
-const REPORT_DIMENSIONS = [...DIMENSIONS, "landingPage", "searchEngine", "socialNetwork"];
+/**
+ * Device dimensions (Audience › Devices): a visit's device = the device of its first page view
+ * (website tracker metadata: deviceType mobile / tablet / desktop, os, browser); a lead's device =
+ * the device it was submitted from. Orders carry no device.
+ */
+const DEVICE_DIMENSIONS = ["deviceType", "os", "browser"];
+const REPORT_DIMENSIONS = [...DIMENSIONS, "landingPage", "searchEngine", "socialNetwork", ...DEVICE_DIMENSIONS];
 /**
  * Combined groupings (grouping only, never a filter): one row per combination of the fields, so a
  * campaign run on two platforms is two rows. The row's `value` is the last field and each field is
@@ -54,7 +61,9 @@ function groupSql(exprFor, field) {
   const fields = COMBINED[field];
   return fields ? `CONCAT_WS(CHAR(31 USING utf8mb4), ${fields.map(exprFor).join(", ")})` : exprFor(field);
 }
-const DIMENSION_DEFAULTS = { ...UNKNOWN_DEFAULTS, landingPage: NO_LP, searchEngine: "Other", socialNetwork: "Other" };
+const DIMENSION_DEFAULTS = {
+  ...UNKNOWN_DEFAULTS, landingPage: NO_LP, searchEngine: "Other", socialNetwork: "Other", deviceType: "Unknown", os: "Unknown", browser: "Unknown",
+};
 const SEARCH_ENGINES = [["Google", ["google"]], ["Bing", ["bing"]], ["DuckDuckGo", ["duckduckgo"]], ["Yahoo", ["yahoo"]]];
 const SOCIAL_NETWORKS = [
   ["Facebook", ["facebook", "fb", "m.facebook.com", "messenger"]],
@@ -78,11 +87,30 @@ function derived(field, sourceSql, landingSql) {
   return null;
 }
 
+/** Readable device bucket from a raw tracker value (mobile → Mobile, desktop → Desktop / laptop). */
+function deviceLabel(raw, field) {
+  if (field === "deviceType") {
+    return `CASE LOWER(COALESCE(${raw}, '')) WHEN 'mobile' THEN 'Mobile' WHEN 'tablet' THEN 'Tablet' WHEN 'desktop' THEN 'Desktop / laptop' ELSE 'Unknown' END`;
+  }
+  return `COALESCE(NULLIF(NULLIF(${raw}, ''), 'null'), 'Unknown')`;
+}
+const sessionDevice = (field) =>
+  deviceLabel(
+    `(SELECT JSON_UNQUOTE(JSON_EXTRACT(dv.metadata, '$.${field}')) FROM marketing_analytics_events dv
+       WHERE dv.session_id = s.session_id AND dv.event_type IN ('page_view', 'landing_page_view')
+       ORDER BY dv.timestamp LIMIT 1)`,
+    field,
+  );
+const leadDevice = (field) => deviceLabel(`JSON_UNQUOTE(JSON_EXTRACT(l.device, '$.${field}'))`, field);
+
 const sessionField = (field) => `COALESCE(NULLIF(s.${field}, ''), '${UNKNOWN_DEFAULTS[field]}')`;
-const sessionExpr = (field) => derived(field, sessionField("source"), "s.entry_landing_page_slug") || sessionField(field);
+const sessionExpr = (field) =>
+  DEVICE_DIMENSIONS.includes(field) ? sessionDevice(field) : derived(field, sessionField("source"), "s.entry_landing_page_slug") || sessionField(field);
 const leadExpr = (field, model) =>
-  derived(field, leadAttrExpr("source", { touch: MODELS[model].touch, unknown: true }), "l.landing_page_slug") ||
-  leadAttrExpr(field, { touch: MODELS[model].touch, unknown: true });
+  DEVICE_DIMENSIONS.includes(field)
+    ? leadDevice(field)
+    : derived(field, leadAttrExpr("source", { touch: MODELS[model].touch, unknown: true }), "l.landing_page_slug") ||
+      leadAttrExpr(field, { touch: MODELS[model].touch, unknown: true });
 
 const CATEGORY_CHANNEL = `CASE LOWER(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(%T, '$.category')), ''))
   WHEN 'paid_search' THEN 'Paid Search' WHEN 'paid_social' THEN 'Paid Social'
@@ -95,7 +123,8 @@ function orderField(field, model) {
   if (field === "channel") return `COALESCE(${value}, ${CATEGORY_CHANNEL.replace("%T", column)}, 'Unknown')`;
   return `COALESCE(${value}, '${UNKNOWN_DEFAULTS[field]}')`;
 }
-const orderExpr = (field, model) => derived(field, orderField("source", model), "m.landing_page_slug") || orderField(field, model);
+const orderExpr = (field, model) =>
+  DEVICE_DIMENSIONS.includes(field) ? "'Unknown'" : derived(field, orderField("source", model), "m.landing_page_slug") || orderField(field, model);
 
 /** WHERE fragments for drill filters, one per dataset. */
 function filterSql(filters, exprFor, prefix) {
@@ -149,7 +178,7 @@ async function sessionMetrics(range, filters, field) {
      LEFT JOIN (SELECT DISTINCT l.visitor_id FROM lead_submissions l
                 WHERE ${lv.sql} AND l.visitor_id IS NOT NULL) lv ON lv.visitor_id = s.visitor_id
      WHERE ${realSessions("s")} AND ${r.sql}${f.sql}
-     ${group ? `GROUP BY ${group}` : ""}`,
+     ${group ? "GROUP BY grp" : ""}`,
     { ...r.replacements, ...f.replacements, ...lr.replacements, ...lv.replacements },
   );
   return rows;
@@ -181,7 +210,7 @@ async function leadMetrics(range, filters, model, field) {
             ${LEAD_STATUS_SQL}
      FROM lead_submissions l
      WHERE ${lr.sql}${f.sql}
-     ${group ? `GROUP BY ${group}` : ""}`,
+     ${group ? "GROUP BY grp" : ""}`,
     { ...lr.replacements, ...f.replacements },
   );
 }
@@ -194,7 +223,7 @@ async function orderMetrics(range, filters, model, field) {
     `SELECT ${group ? `${group} AS grp,` : ""} COUNT(*) AS orders, SUM(m.revenue) AS orderRevenue
      FROM marketing_order_attribution m
      WHERE m.status = 'paid' AND ${r.sql}${f.sql}
-     ${group ? `GROUP BY ${group}` : ""}`,
+     ${group ? "GROUP BY grp" : ""}`,
     { ...r.replacements, ...f.replacements },
   );
 }
@@ -314,7 +343,7 @@ async function getAcquisition({ range, compareRange = null, model = "operational
     row.orders += num(r.orders);
     row.orderRevenue += num(r.orderRevenue);
   }
-  return {
+  const out = {
     dimension,
     model,
     modelLabel: MODELS[model].label,
@@ -325,6 +354,57 @@ async function getAcquisition({ range, compareRange = null, model = "operational
     totals,
     comparison: previous ? compareMetrics(pickCompared(totals), pickCompared(previous)) : null,
   };
+  await addSpend(out, { range, dimension, filters });
+  return out;
+}
+
+const lower = (v) => String(v ?? "").trim().toLowerCase();
+/** Spend metrics of a row (null when there is nothing to divide). */
+function spendMetrics(row) {
+  const spend = money(row.spend);
+  return {
+    spend,
+    costPerLead: row.leads > 0 && spend > 0 ? money(spend / row.leads) : null,
+    costPerWonLead: row.wonLeads > 0 && spend > 0 ? money(spend / row.wonLeads) : null,
+    roas: spend > 0 ? money(row.leadRevenue / spend) : null,
+    orderRoas: spend > 0 ? money(row.orderRevenue / spend) : null,
+  };
+}
+
+/**
+ * Entered ad spend (services/adSpend.service.js) on the rows of a channel / source / medium /
+ * campaign grouping: each entry goes to the row with its value (campaign with platform: same
+ * source + campaign, and medium when one was entered; the busiest such row). Spend without a
+ * matching row gets its own row (spend with no visits or leads in the period). Other groupings or
+ * filters (ad, keyword, landing page, device) have no spend: spendAvailable = false.
+ */
+async function addSpend(out, { range, dimension, filters }) {
+  out.spendAvailable = adSpend.spendApplies(dimension, filters);
+  if (!out.spendAvailable) return;
+  const entries = await adSpend.periodSpend(range, filters);
+  const extra = [];
+  for (const e of entries) {
+    let row;
+    if (dimension === "campaignDetail") {
+      row = [...out.rows, ...extra]
+        .filter((r) => lower(r.source) === lower(e.source) && lower(r.campaign) === lower(e.campaign) && (!e.medium || lower(r.medium) === lower(e.medium)))
+        .sort((a, b) => b.sessions + b.leads - (a.sessions + a.leads))[0];
+      if (!row) {
+        row = finishRow({ value: e.campaign, channel: e.channel, source: e.source, medium: e.matchMedium || "(not set)", campaign: e.campaign, ...EMPTY_ROW() }, out.totals.leads);
+        extra.push(row);
+      }
+    } else {
+      const value = dimension === "medium" ? e.matchMedium || "(not set)" : e[dimension];
+      row = [...out.rows, ...extra].find((r) => lower(r.value) === lower(value));
+      if (!row) {
+        row = finishRow({ value, ...EMPTY_ROW() }, out.totals.leads);
+        extra.push(row);
+      }
+    }
+    row.spend = money((row.spend || 0) + e.spend);
+  }
+  out.rows = [...out.rows, ...extra].map((r) => ({ ...r, ...spendMetrics(r) }));
+  out.totals = { ...out.totals, ...spendMetrics({ ...out.totals, spend: entries.reduce((sum, e) => sum + e.spend, 0) }) };
 }
 
 // ── overview ──────────────────────────────────────────────────────────────────
@@ -572,6 +652,7 @@ module.exports = {
   LEAD_STATUS_SQL,
   LEAD_COUNT_KEYS,
   REPORT_DIMENSIONS,
+  DEVICE_DIMENSIONS,
   GROUPINGS,
   COMBINED,
   DIMENSION_DEFAULTS,

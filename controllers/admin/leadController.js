@@ -18,11 +18,74 @@
     leadPerson,
     hqPerson,
     } = require("../../utils/emailSendGate");
+const { customerEmailRecipients, leadAlertRecipients } = require("../../utils/emailRecipients");
     const {
     createLeadLog,
     formatLogDetails,
     extractEntityInfo,
     } = require("../../utils/leadLogger");
+
+    const { escapeStrings, escapeHtml } = require("../../utils/escapeHtml");
+    const { ENQUIRY_TYPES, cleanEventId, syncToMarketing, attachMarketingSource } = require("../../utils/leadPipeline");
+    const { transporter } = require("../../helper/transpoter");
+
+    /**
+     * Leads a user may see or change: HQ (admin / sub-admin) all, a local partner the leads assigned
+     * to them, an employee the leads assigned to them. Anyone else none.
+     */
+    const leadScope = (user) => {
+    const entity = user?.entity;
+    if (isHqOperator(entity)) return {};
+    if (entity === "localPartner") return { salesRepId: user.id };
+    if (entity === "adminEmployee" || entity === "partnerEmployee") return { employeeId: user.id };
+    return { id: null };
+    };
+    /** Set only through /assign (and by HQ); never through a generic update or the public form. */
+    const ASSIGNMENT_FIELDS = ["salesRepId", "employeeId", "assignedBy", "assignedAt"];
+    /** What the public website form (POST /api/v1/users/create-lead) may set, with length limits. */
+    const PUBLIC_LEAD_FIELDS = {
+    machineId: 0, machineName: 255, userId: 50, contactName: 255, company: 255, role: 255, contactEmail: 255,
+    contactPhone: 20, addressLineOne: 255, addressLineTwo: 255, city: 255, state: 255, country: 255, zipCode: 32,
+    leadSource: 0, preferredContact: 0, businessType: 255, businessLocation: 255, estimatedValue: 50,
+    snapshotType: 255, snapshotUseCase: 255, snapshotVolume: 255, snapshotTimeline: 255, notes: 5000,
+    };
+    const LEAD_SOURCES = ["Instagram", "Website", "Referral", "Cold Call", "WhatsApp", "Other"];
+    const PREFERRED_CONTACT = ["Email", "Phone", "WhatsApp"];
+    const HONEYPOT_FIELD = "website";
+
+    /** Email the person a lead was just assigned to (their account email). Never blocks the assignment. */
+    async function notifyAssignee(person, lead, assignedByName) {
+    try {
+        if (!person?.email) return;
+        const name = person.srName || person.name || "there";
+        const url = `${String(process.env.ADMIN_PANEL_URL || "").replace(/\/+$/, "")}/leads/${lead.id}`;
+        const rows = [
+        ["Company", lead.company],
+        ["Contact", lead.contactName],
+        ["Email", lead.contactEmail],
+        ["Phone", lead.contactPhone],
+        ["Stage", lead.status],
+        ].filter(([, v]) => v);
+        await new Promise((resolve) => {
+        transporter.sendMail(
+            {
+            from: process.env.EMAIL_USERNAME,
+            to: person.email,
+            subject: `New lead assigned: ${lead.company || lead.contactName}`,
+            html: `<p>Hi ${escapeHtml(name)},</p><p>${escapeHtml(assignedByName || "Busy Beans")} assigned you a lead.</p>
+<table cellpadding="4">${rows.map(([k, v]) => `<tr><td><strong>${k}</strong></td><td>${escapeHtml(v)}</td></tr>`).join("")}</table>
+${process.env.ADMIN_PANEL_URL ? `<p><a href="${escapeHtml(url)}">Open the lead</a></p>` : ""}`,
+            },
+            (error) => {
+            if (error) console.error("lead assignment email failed:", error.message);
+            resolve();
+            },
+        );
+        });
+    } catch (error) {
+        console.error("lead assignment email failed:", error.message);
+    }
+    }
 
     /**
      * Controller for managing Leads
@@ -37,7 +100,7 @@
         const { page = 1, limit = 10, status, search, sort } = req.query;
         const offset = (page - 1) * limit;
 
-        const where = {};
+        const where = { ...leadScope(req.user) };
 
         // Filter by status
         if (status) {
@@ -140,7 +203,7 @@
         where.employeeId = req.user.id;
         }
 
-        const leads = await Lead.findAll({
+        const found = await Lead.findAll({
         where,
         order: [["createdAt", "DESC"]],
         include: [
@@ -156,6 +219,8 @@
             },
         ],
         });
+        // Source / campaign from the linked Campaign Builder lead.
+        const leads = await attachMarketingSource(found);
 
         const kanbanData = {
         newEnquiry: [],
@@ -201,7 +266,8 @@
     getLeadById = catchAsync(async (req, res, next) => {
         const { id } = req.params;
 
-        const lead = await Lead.findByPk(id, {
+        const lead = await Lead.findOne({
+        where: { id, ...leadScope(req.user) },
         include: [
             {
             model: LeadLog,
@@ -231,9 +297,10 @@
         return next(new AppError("Lead not found", 404));
         }
 
+        const [withSource] = await attachMarketingSource([lead]);
         res.status(200).json({
         success: true,
-        data: lead,
+        data: withSource,
         message: "Lead retrieved successfully",
         });
     });
@@ -247,10 +314,16 @@
         const transaction = await sequelize.transaction();
 
         try {
-        const leadData = req.body;
+        const leadData = { ...(req.body || {}) };
+        delete leadData.id;
+        if (req.user && !ENQUIRY_TYPES.includes(leadData.enquiryType)) leadData.enquiryType = "manual";
         // Set creator if available in req.user
         if (req.user) {
             leadData.createdById = req.user.id;
+            if (req.user.entity === "localPartner") leadData.salesRepId = req.user.id;
+            if (req.user.entity === "partnerEmployee" || req.user.entity === "adminEmployee") {
+            for (const k of ASSIGNMENT_FIELDS) delete leadData[k];
+            }
         }
 
         const newLead = await Lead.create(leadData, { transaction });
@@ -273,14 +346,14 @@
         await sendIfAllowed({
             ...leadPerson(),
             emailType: "coffee_machine_customer",
-            recipients: req.body?.contactEmail || req.body?.email,
-            send: async () => sendCustomerEmail({ data: req.body }),
+            recipients: (await customerEmailRecipients(req.body?.contactEmail || req.body?.email)).join(", "),
+            send: async () => sendCustomerEmail({ data: escapeStrings(leadData) }),
         });
         await sendIfAllowed({
             ...hqPerson(),
             emailType: "coffee_machine_admin",
-            recipients: "sigidevelopers@gmail.com",
-            send: async () => sendAdminEmail({ data: req.body }),
+            recipients: (await leadAlertRecipients()).join(", "),
+            send: async () => sendAdminEmail({ data: escapeStrings(leadData) }),
         });
 
         res.status(201).json({
@@ -295,17 +368,48 @@
     });
 
     /**
+     * Public website form (POST /api/v1/users/create-lead): only the contact / requirement fields
+     * are accepted (never status, assignment, quotation or ids); a filled honeypot field looks
+     * successful but stores nothing. Then the normal create (log + emails).
+     */
+    createPublicLead = catchAsync(async (req, res, next) => {
+        const body = req.body || {};
+        if (typeof body[HONEYPOT_FIELD] === "string" && body[HONEYPOT_FIELD].trim()) {
+        return res.status(201).json({ success: true, data: null, message: "Lead created successfully" });
+        }
+        const data = {};
+        for (const [key, max] of Object.entries(PUBLIC_LEAD_FIELDS)) {
+        const value = body[key];
+        if (value === undefined || value === null || value === "") continue;
+        data[key] = typeof value === "string" && max ? value.trim().slice(0, max) : value;
+        }
+        if (!LEAD_SOURCES.includes(data.leadSource)) data.leadSource = "Website";
+        if (data.preferredContact && !PREFERRED_CONTACT.includes(data.preferredContact)) delete data.preferredContact;
+        if (data.machineId !== undefined && !Number.isInteger(Number(data.machineId))) delete data.machineId;
+        if (!data.contactName || !data.company) return next(new AppError("Name and company are required.", 400));
+        data.enquiryType = "machine";
+        const eventId = cleanEventId(body.marketingEventId);
+        if (eventId) data.marketingEventId = eventId;
+        req.body = data;
+        req.user = undefined;
+        return this.createLead(req, res, next);
+    });
+
+    /**
      * Update a lead
      * @param {Object} req - Express request object
      * @param {Object} res - Express response object
      */
     updateLead = catchAsync(async (req, res, next) => {
         const { id } = req.params;
-        const updates = req.body;
+        const updates = { ...(req.body || {}) };
+        delete updates.id;
+        // Assignment changes go through /assign; only HQ may set them in a generic update.
+        if (!isHqOperator(req.user?.entity)) for (const k of ASSIGNMENT_FIELDS) delete updates[k];
         const transaction = await sequelize.transaction();
 
         try {
-        const lead = await Lead.findByPk(id, { transaction });
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) }, transaction });
 
         if (!lead) {
             await transaction.rollback();
@@ -313,6 +417,15 @@
         }
 
         const oldStatus = lead.status;
+        if (updates.wonAmount !== undefined && updates.wonAmount !== null && updates.wonAmount !== "") {
+            const n = Number(updates.wonAmount);
+            if (!Number.isFinite(n) || n < 0) {
+            await transaction.rollback();
+            return next(new AppError("Won amount must be a number of 0 or more.", 400));
+            }
+            updates.wonAmount = n;
+        }
+        if (updates.status === "WON" && oldStatus !== "WON") updates.wonAt = new Date();
 
         // Update lead
         await lead.update({ ...updates }, { transaction });
@@ -347,6 +460,7 @@
         }
 
         await transaction.commit();
+        if (updates.status !== undefined || updates.wonAmount !== undefined) await syncToMarketing(lead);
 
         res.status(200).json({
             success: true,
@@ -370,7 +484,7 @@
         const transaction = await sequelize.transaction();
 
         try {
-        const lead = await Lead.findByPk(id, { transaction });
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) }, transaction });
         if (!lead) {
             await transaction.rollback();
             return next(new AppError("Lead not found", 404));
@@ -423,7 +537,7 @@
         const transaction = await sequelize.transaction();
 
         try {
-        const lead = await Lead.findByPk(id, { transaction });
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) }, transaction });
         if (!lead) {
             await transaction.rollback();
             return next(new AppError("Lead not found", 404));
@@ -454,6 +568,7 @@
         });
 
         await transaction.commit();
+        await syncToMarketing(lead);
 
         // Send quotation email
         await sendIfAllowed({
@@ -486,7 +601,7 @@
         const transaction = await sequelize.transaction();
 
         try {
-        const lead = await Lead.findByPk(id, { transaction });
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) }, transaction });
         if (!lead) {
             await transaction.rollback();
             return next(new AppError("Lead not found", 404));
@@ -538,16 +653,27 @@
         const transaction = await sequelize.transaction();
 
         try {
-        const lead = await Lead.findByPk(id, { transaction });
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) }, transaction });
         if (!lead) {
             await transaction.rollback();
             return next(new AppError("Lead not found", 404));
         }
 
+        const rawAmount = req.body?.amount;
+        let wonAmount = lead.wonAmount;
+        if (rawAmount !== undefined && rawAmount !== null && rawAmount !== "") {
+            wonAmount = Number(rawAmount);
+            if (!Number.isFinite(wonAmount) || wonAmount < 0) {
+            await transaction.rollback();
+            return next(new AppError("Won amount must be a number of 0 or more.", 400));
+            }
+        }
         await lead.update(
             {
             status: "WON",
             customerStatus: "Interested", // Or whatever implies converted
+            wonAmount,
+            wonAt: lead.wonAt || new Date(),
             },
             { transaction }
         );
@@ -563,6 +689,7 @@
         });
 
         await transaction.commit();
+        await syncToMarketing(lead);
 
         res.status(200).json({
             success: true,
@@ -582,11 +709,13 @@
      */
     markAsLost = catchAsync(async (req, res, next) => {
         const { id } = req.params;
-        const { reason, feedback } = req.body;
+        const { feedback } = req.body || {};
+        const LOST_REASONS = ["Price Too High", "Timeline Mismatch", "Chose Competitor", "Not Interested", "Budget Constraints", "Other"];
+        const reason = LOST_REASONS.includes(req.body?.reason) ? req.body.reason : "Other";
         const transaction = await sequelize.transaction();
 
         try {
-        const lead = await Lead.findByPk(id, { transaction });
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) }, transaction });
         if (!lead) {
             await transaction.rollback();
             return next(new AppError("Lead not found", 404));
@@ -617,6 +746,7 @@
         });
 
         await transaction.commit();
+        await syncToMarketing(lead);
 
         res.status(200).json({
             success: true,
@@ -639,7 +769,7 @@
         // Hard delete or soft delete? Lead model has timestamps but not paranoid: true in the snippet I saw.
         // Assuming hard delete for now unless paranoid is enabled.
 
-        const lead = await Lead.findByPk(id);
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) } });
         if (!lead) {
         return next(new AppError("Lead not found", 404));
         }
@@ -659,9 +789,11 @@
      * @param {Object} res - Express response object
      */
     getLeadStats = catchAsync(async (req, res, next) => {
-        const totalLeads = await Lead.count();
+        const scope = leadScope(req.user);
+        const totalLeads = await Lead.count({ where: scope });
 
         const leadsByStatus = await Lead.findAll({
+        where: scope,
         attributes: [
             "status",
             [sequelize.fn("COUNT", sequelize.col("status")), "count"],
@@ -669,7 +801,7 @@
         group: ["status"],
         });
 
-        const wonCount = await Lead.count({ where: { status: "WON" } });
+        const wonCount = await Lead.count({ where: { ...scope, status: "WON" } });
         const conversionRate =
         totalLeads > 0 ? ((wonCount / totalLeads) * 100).toFixed(2) : 0;
 
@@ -703,10 +835,31 @@
             );
         }
 
-        const lead = await Lead.findByPk(id, { transaction });
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) }, transaction });
         if (!lead) {
             await transaction.rollback();
             return next(new AppError("Lead not found", 404));
+        }
+
+        // Who may assign what: HQ anything; a local partner only themselves / their own employees;
+        // employees cannot reassign.
+        const entity = req.user?.entity;
+        if (entity === "adminEmployee" || entity === "partnerEmployee") {
+            await transaction.rollback();
+            return next(new AppError("You cannot reassign leads.", 403));
+        }
+        if (entity === "localPartner") {
+            if (salesRepId !== undefined && salesRepId !== null && Number(salesRepId) !== Number(req.user.id)) {
+            await transaction.rollback();
+            return next(new AppError("You can only assign leads to yourself or your employees.", 403));
+            }
+            if (employeeId) {
+            const own = await employee.findOne({ where: { id: employeeId, salesRepId: req.user.id }, transaction });
+            if (!own) {
+                await transaction.rollback();
+                return next(new AppError("You can only assign leads to your own employees.", 403));
+            }
+            }
         }
 
         // Validate salesRep exists if provided
@@ -804,6 +957,7 @@
         });
 
         await transaction.commit();
+        await notifyAssignee(assignedSalesRep || assignedEmployee, lead, extractEntityInfo(req.user).entityName);
 
         // Reload lead with associations
         const updatedLead = await Lead.findByPk(id, {
@@ -837,10 +991,29 @@
      * @param {Object} req - Express request object
      * @param {Object} res - Express response object
      */
+    /** POST /api/v1/leads/:id/comments { message } — a note on the lead's activity timeline. */
+    addComment = catchAsync(async (req, res, next) => {
+        const { id } = req.params;
+        const message = typeof req.body?.message === "string" ? req.body.message.trim().slice(0, 2000) : "";
+        if (!message) return next(new AppError("Note cannot be empty.", 400));
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) } });
+        if (!lead) return next(new AppError("Lead not found", 404));
+        const entityInfo = extractEntityInfo(req.user);
+        const log = await createLeadLog({
+        leadId: lead.id,
+        action: "comment",
+        details: `${entityInfo.entityName || "Someone"} added a note`,
+        message,
+        user: req.user,
+        type: "comment",
+        });
+        res.status(201).json({ success: true, data: log, message: "Note added" });
+    });
+
     getLeadLogs = catchAsync(async (req, res, next) => {
         const { id } = req.params;
 
-        const lead = await Lead.findByPk(id);
+        const lead = await Lead.findOne({ where: { id, ...leadScope(req.user) } });
         if (!lead) {
         return next(new AppError("Lead not found", 404));
         }

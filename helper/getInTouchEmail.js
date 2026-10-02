@@ -5,6 +5,7 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const attachment = attachments();
 const { transporter } = require("./transpoter");
+const { customerEmailRecipients, leadAlertRecipients } = require("../utils/emailRecipients");
 let Footer = require("./footer");
 let { header } = require("./header");
 
@@ -189,11 +190,13 @@ module.exports = async function sendGetInTouchEmail({ data }) {
   </body>
 </html>`;
 
+    // Lead alert recipients (or ADMIN_NOTIFY_EMAIL) + developer copy: Email Configuration → Recipients.
+    const to = await leadAlertRecipients();
+    if (!to.length) return;
     transporter.sendMail(
       {
         from: process.env.EMAIL_USERNAME,
-        to: ADMIN_NOTIFY_EMAIL,
-        bcc: ["sigidevelopers@gmail.com"],
+        to,
         subject: `[Busy Beans] New Get in Touch Enquiry - ${name || "Unknown"}`,
         html: htmlTemplate,
         attachments: attachment.footer,

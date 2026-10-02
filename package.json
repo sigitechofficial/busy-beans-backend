@@ -34,6 +34,8 @@
     "marketing:reports-test": "node marketing/scripts/reportsApiTest.js",
     "marketing:conversion-test": "node marketing/scripts/conversionReportsTest.js",
     "marketing:outcome-test": "node marketing/scripts/outcomeReportsTest.js",
+    "marketing:devices-spend-test": "node marketing/scripts/devicesSpendTest.js",
+    "lead-pipeline-test": "node scripts/leadPipelineTest.js",
     "marketing:tracking-settings-test": "node marketing/scripts/trackingSettingsTest.js",
     "marketing:consent-log-test": "node marketing/scripts/consentLogTest.js",
     "marketing:product-analytics-test": "node marketing/scripts/productAnalyticsTest.js",

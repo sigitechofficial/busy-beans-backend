@@ -384,7 +384,25 @@ async function getReferrerUrls({ range, source, limit = 50 }) {
   };
 }
 
+// ── devices ───────────────────────────────────────────────────────────────────
+
+const DEVICE_DIMENSIONS = reports.DEVICE_DIMENSIONS;
+
+/**
+ * Visits, leads and lead outcomes by device type / operating system / browser (Audience ›
+ * Devices). Visits use the device of their first page view; leads the device they were submitted
+ * from (so visitor → lead counts the visitors of that device who submitted a lead anywhere).
+ */
+async function getDevices({ range, compareRange = null, model = "operational", dimension = "deviceType", filters = {} }) {
+  if (!DEVICE_DIMENSIONS.includes(dimension)) throw validation("Unknown dimension.");
+  const data = await reports.getAcquisition({ range, compareRange, model, dimension, filters, parts: { sessions: true, leads: true } });
+  const rows = data.rows.map((r) => ({ ...r, sessionShare: pct(r.sessions, data.totals.sessions), leadShare: pct(r.leads, data.totals.leads) }));
+  return { ...data, rows };
+}
+
 module.exports = {
+  getDevices,
+  DEVICE_DIMENSIONS,
   getLeadQuality,
   getRevenue,
   getAttributionComparison,

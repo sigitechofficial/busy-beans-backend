@@ -57,7 +57,8 @@ app.use(
 );
 
 // Meta webhook routes use JSON parser
-app.use("/webhook", express.json(), webhookRoute);
+// rawBody: the exact bytes, for webhook signature checks (Meta X-Hub-Signature-256).
+app.use("/webhook", express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }), webhookRoute);
 
 dotenv.config({ path: "./.env" });
 // Start express app

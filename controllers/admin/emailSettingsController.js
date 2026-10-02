@@ -18,6 +18,7 @@ const {
   isKnownEmailType,
 } = require("../../utils/emailCatalog");
 const { invalidateEmailSettingsCache } = require("../../utils/emailSendGate");
+const { getRecipientSettings, updateRecipientSettings } = require("../../utils/emailRecipients");
 
 const PEOPLE_MODELS = {
   customer: {
@@ -260,4 +261,21 @@ exports.setDefaultSupplier = catchAsync(async (req, res, next) => {
     status: "success",
     data: { defaultSupplierId: supplierId },
   });
+});
+
+/** GET /api/v1/admin/email-settings/recipients — developer copy, lead alert recipients, test recipient. */
+exports.getRecipients = catchAsync(async (req, res) => {
+  const data = await getRecipientSettings();
+  res.status(200).json({ status: "success", data });
+});
+
+/** PATCH /api/v1/admin/email-settings/recipients { developerCopyEmail?, developerCopyEnabled?, leadAlertTo?, customerTestRecipient? } */
+exports.updateRecipients = catchAsync(async (req, res, next) => {
+  try {
+    const data = await updateRecipientSettings(req.body || {});
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    if (error.code === "VALIDATION_ERROR") return next(new AppError(error.message, 400));
+    throw error;
+  }
 });

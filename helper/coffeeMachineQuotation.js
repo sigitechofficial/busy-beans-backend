@@ -4,6 +4,7 @@ dotenv.config({ path: "../.env" });
 const { attachments } = require("./attactments");
 const attachment = attachments();
 const { transporter } = require("./transpoter");
+const { customerEmailRecipients, leadAlertRecipients } = require("../utils/emailRecipients");
 let Footer = require("./footer");
 let { header } = require("./header");
 
@@ -186,10 +187,14 @@ module.exports = async function ({ data }) {
 `;
 
     // Send Email
+    // The customer's address is contactEmail (website, admin and Meta leads); "email" is a fallback.
+    // Recipients (developer copy, staging test recipient): admin → Email Configuration → Recipients.
+    const to = await customerEmailRecipients(contactEmail || data?.email);
+    if (!to.length) return;
     transporter.sendMail(
       {
         from: process.env.EMAIL_USERNAME,
-        to: [data?.email, "sigidevelopers@gmail.com"],
+        to,
         subject: `${hiUser} Your Coffee Machine Request Has Been Received`,
         html: htmlTemplate,
         attachments: attachment.footer,

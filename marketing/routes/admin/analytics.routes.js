@@ -6,6 +6,7 @@ const productAnalyticsController = require("../../controllers/productAnalytics.c
 const reportsController = require("../../controllers/reports.controller");
 const outcomeReportsController = require("../../controllers/outcomeReports.controller");
 const conversionReportsController = require("../../controllers/conversionReports.controller");
+const adSpendController = require("../../controllers/adSpend.controller");
 
 const router = express.Router();
 
@@ -39,6 +40,12 @@ router.get("/reports/attribution-comparison", outcomeReportsController.attributi
 router.get("/reports/audience/new-returning", outcomeReportsController.newReturning);
 router.get("/reports/audience/direct", outcomeReportsController.direct);
 router.get("/reports/audience/referrer-urls", outcomeReportsController.referrerUrls);
+router.get("/reports/audience/devices", outcomeReportsController.devices);
+// Ad spend entered by the marketing team (spend, cost per lead and ROAS in the reports).
+router.get("/ad-spend", adSpendController.list);
+router.post("/ad-spend", adSpendController.create);
+router.patch("/ad-spend/:id", adSpendController.update);
+router.delete("/ad-spend/:id", adSpendController.remove);
 router.get("/consent", consentLogController.summary);
 router.get("/consent/:consentId", consentLogController.lookup);
 

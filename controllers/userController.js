@@ -13,6 +13,8 @@ const account = require("../models/account");
 const { GetInTouch } = require("../models");
 const sendGetInTouchEmail = require("../helper/getInTouchEmail");
 const { sendIfAllowed, hqPerson } = require("../utils/emailSendGate");
+const { leadAlertRecipients } = require("../utils/emailRecipients");
+const { createFromGetInTouch } = require("../utils/leadPipeline");
 
 const signToken = (userId) =>
   jwt.sign({ id: userId || 1 }, process.env.JWT_SECRET, {
@@ -199,10 +201,16 @@ exports.getInTouch = catchAsync(async (req, res, next) => {
     notes: notes || null,
   });
 
+  // Every enquiry is also a lead on the admin Leads Dashboard (Kanban), linked to its Campaign
+  // Builder lead by the website's event id. Never blocks the enquiry itself.
+  await createFromGetInTouch(record, { formId: req.body.formId, marketingEventId: req.body.marketingEventId }).catch((error) =>
+    console.error("get-in-touch → lead failed:", error.message),
+  );
+
   await sendIfAllowed({
     ...hqPerson(),
     emailType: "get_in_touch",
-    recipients: process.env.ADMIN_NOTIFY_EMAIL,
+    recipients: (await leadAlertRecipients()).join(", "),
     send: async () => {
       await sendGetInTouchEmail({
         data: {
