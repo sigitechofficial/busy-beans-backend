@@ -50,9 +50,11 @@
 
     <script>
       window.addEventListener('DOMContentLoaded', async () => {
-        const orderId = new URLSearchParams(window.location.search).get(
-          'orderId',
-        );
+        const query = new URLSearchParams(window.location.search);
+        const orderId = query.get('orderId');
+        // Pay link code and invoice type from the link, passed on to the API.
+        const payCode = query.get('t');
+        const orderType = query.get('orderType') || 'customer';
         console.log('🚀 ~ window.addEventListener ~ orderId:', orderId);
         document.getElementById('order-id').innerText = orderId;
 
@@ -62,6 +64,7 @@
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payCode ? { orderType, t: payCode } : { orderType }),
             },
           );
 

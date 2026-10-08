@@ -3,6 +3,7 @@ const path = require("path");
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const { account } = require("../models"); // adjust path to your models
+const { invoicePayUrl } = require("./payLink");
 
 const generateInvoicePdf = async (data, invoiceId, issueDate) => {
   const currentUTC = new Date().toISOString().split("T")[0];
@@ -23,7 +24,9 @@ const generateInvoicePdf = async (data, invoiceId, issueDate) => {
   });
 
   const templatePath = path.join(__dirname, "../views/invoice-template.ejs");
-  const html = await ejs.renderFile(templatePath, { order: data, admin: adm });
+  // "Pay Online" link in the PDF: same link (with the invoice's pay code) as the invoice email.
+  const payLink = await invoicePayUrl(data);
+  const html = await ejs.renderFile(templatePath, { order: data, admin: adm, payLink });
 
   const browser = await puppeteer.launch({ headless: "new" });
   const page = await browser.newPage();

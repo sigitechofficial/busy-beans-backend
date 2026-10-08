@@ -17,6 +17,9 @@ config/
 .vscode/
 
 .env
+# Any env variant (backups such as .env.bak-*, .env.local, .env.production); templates stay tracked.
+.env.*
+!.env.example
 # Compiled Java class files
 *.class
 

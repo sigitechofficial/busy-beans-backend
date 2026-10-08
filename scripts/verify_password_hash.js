@@ -48,7 +48,7 @@ async function testPasswordUpdate() {
       console.error(
         "❌ FAILURE: Password does not match hash (unknown error)."
       );
-      console.log("Stored:", updatedEmp.password);
+      console.log("Stored: [bcrypt hash, not printed]");
       process.exit(1);
     }
   } catch (error) {

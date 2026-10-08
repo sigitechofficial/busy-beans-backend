@@ -16,6 +16,7 @@ const app = express();
 const server = require("http").createServer(app);
 const AppError = require("./utils/appError");
 const globalErrorHandler = require("./controllers/errorController");
+const { trustProxySetting } = require("./utils/trustProxy");
 const userRouter = require("./routes/userRoutes");
 const adminRouter = require("./routes/adminRoutes");
 const webhookRoute = require("./routes/webhooks");
@@ -30,12 +31,9 @@ app.use((req, res, next) => {
     "content-type": req.headers["content-type"],
     "user-agent": req.headers["user-agent"],
     host: req.headers.host,
-    authorization: req.headers.authorization
-      ? `${req.headers.authorization.slice(0, 24)}...`
-      : undefined,
-    "x-zepto-webhook-secret": req.headers["x-zepto-webhook-secret"]
-      ? `${String(req.headers["x-zepto-webhook-secret"]).slice(0, 12)}...`
-      : undefined,
+    // Presence only: never log any part of a token or secret.
+    authorization: req.headers.authorization ? "present" : undefined,
+    "x-zepto-webhook-secret": req.headers["x-zepto-webhook-secret"] ? "present" : undefined,
   };
   console.log(`📥 Incoming Header: ${JSON.stringify(safeHeaders)}`);
   next();
@@ -62,14 +60,34 @@ app.use("/webhook", express.json({ verify: (req, _res, buf) => { req.rawBody = b
 
 dotenv.config({ path: "./.env" });
 // Start express app
-app.enable("trust proxy");
+// Trust only the proxies in front of the API (nginx on the server = 1 hop), so req.ip — used
+// for rate limits and lead IPs — can't be spoofed with an X-Forwarded-For header.
+// TRUST_PROXY_HOPS: number of proxy hops (default 1), or an Express trust-proxy value such as
+// "loopback". See docs/API_ACCESS.md.
+app.set("trust proxy", trustProxySetting(process.env.TRUST_PROXY_HOPS));
 
 // app.set('view engine', 'pug');
 // app.set('views', path.join(__dirname, 'views'));
 
 // // 1) GLOBAL MIDDLEWARES
 // // Implement CORS
+// Invoice PDFs are only read from disk (email attachments); never served by URL, so nobody can
+// download invoice-00<number>.pdf by trying numbers.
+app.use("/public", (req, res, next) => {
+  let p;
+  try {
+    p = path.posix.normalize(decodeURIComponent(req.path).replace(/\\/g, "/")).toLowerCase();
+  } catch {
+    return res.status(400).end();
+  }
+  if (p.startsWith("/invoicepdfs") || p.includes("/invoicepdfs/")) return res.status(404).end();
+  return next();
+});
 app.use("/public", express.static(path.join(__dirname, "public")));
+// Public marketing ingest (tracking, leads, consent) never needs more than a few KB: a small
+// limit here, registered before the global parser (which then skips already-parsed bodies).
+app.use("/api/public", express.json({ limit: "64kb" }));
+app.use("/api/public", express.urlencoded({ extended: false, limit: "64kb" }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // Logs browser origins not in CORS_ALLOWED_ORIGINS; with CORS_ENFORCE=true only listed

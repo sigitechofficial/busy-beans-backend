@@ -181,6 +181,17 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: 0,
     },
+    /** Random code in the invoice email pay link (utils/payLink.js): shareable, unguessable. */
+    payToken: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+    },
+    /** Emailed before pay codes existed: the old link works without a code until PAY_LINK_LEGACY_UNTIL. */
+    payLinkLegacy: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     invoiceDate: {
       type: DataTypes.DATEONLY,
       allowNull: true,

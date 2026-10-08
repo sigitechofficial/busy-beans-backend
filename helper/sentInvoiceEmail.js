@@ -12,6 +12,7 @@ const generateFooterHtml = require("./footerLocalpatner");
 const { header } = require("./header");
 const { emailDateFormate } = require("../utils/emailDateFormate");
 const GenerateInvoicePdf = require("../utils/generateInvoicePdf");
+const { invoicePayUrl } = require("../utils/payLink");
 
 // async function downloadPDF(pdfUrl, outputPath) {
 //   const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
@@ -41,7 +42,8 @@ module.exports = async function ({ email, data, invoice }) {
   }
   // console.log('ðŸš€ ~ data:', data);
   //will use from env BASE URL
-  let SessionUrl = `https://busybeancoffee.com/paymentCheck?orderId=${data?.id}&orderType=${data?.orderOf || "customer"}`;
+  // Pay link with the invoice's pay code: no login needed, shareable, not guessable (utils/payLink.js).
+  let SessionUrl = await invoicePayUrl(data);
   let SessionUrlToShow = `https://busybeancoffee.com/pay-order-invoice`;
   console.log("__dirname:", __dirname);
 

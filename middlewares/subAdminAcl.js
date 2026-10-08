@@ -464,3 +464,9 @@ exports.enforceSubAdminAcl = (req, res, next) => {
   }
   return next();
 };
+
+/** URL → permission feature(s) and action, reused for employees (middlewares/adminAccess.js, log mode). */
+exports.__internals = {
+  domainsFor: (url) => domainsFromRule(resolveDomainRule(url)),
+  actionFor: (method, url) => resolveAction(method, url),
+};

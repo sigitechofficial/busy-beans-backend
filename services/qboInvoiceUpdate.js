@@ -284,7 +284,7 @@ async function updateInvoiceInQuickBooks({
     console.log("🚀 updateInvoiceInQuickBooks:", {
       orderId: order?.qboCustomerId,
     });
-    console.log("🚀 ~ updateInvoiceInQuickBooks ~ accessToken:", accessToken);
+    console.log("🚀 ~ updateInvoiceInQuickBooks ~ accessToken:", accessToken ? "present" : "missing");
     console.log("🚀 ~ updateInvoiceInQuickBooks ~ realmId:", realmId);
     console.log("🚀 ~ updateInvoiceInQuickBooks ~ qboInvoiceId:", qboInvoiceId);
 

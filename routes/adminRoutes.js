@@ -37,6 +37,20 @@ const path = require("path");
 const { createDestinationDirectory } = require("../utils/customFunctions");
 const auth = require("../middlewares/protect");
 const { protect, STAFF_ENTITIES, ADMIN_STAFF_ENTITIES } = auth;
+// Invoice edit / send: admin-panel staff only (ownership checked in the controllers).
+const { INVOICE_EDITOR_ENTITIES } = require("../utils/orderAccess");
+// Invoice payment page: pay link code, owner / staff login, or job key (middlewares/invoicePayAccess.js).
+const { invoicePayAccess, payLinkLimiter } = require("../middlewares/invoicePayAccess");
+// Order / invoice activity history (who did what, when): utils/orderActivity.js
+const { activityOnSuccess, describeJourney } = require("../utils/orderActivity");
+const orderActivityController = require("../controllers/admin/orderActivityController");
+const logJourney = activityOnSuccess(describeJourney);
+// Audit trail: customers, local partners, suppliers, sub-admins, employees (utils/auditTrail.js)
+const { auditRoute, auditPriceList } = require("../utils/auditTrail");
+const auditController = require("../controllers/admin/auditController");
+const { requestContext } = require("../utils/requestContext");
+// "Order created" / "paid" for every path (incl. Stripe webhooks and jobs) via model hooks.
+require("../utils/orderActivity").registerOrderHooks();
 // Scheduled jobs / internal calls: job key (INTERNAL_JOB_API_KEY) or a staff token. See docs/API_ACCESS.md.
 const { jobKeyOrStaff } = require("../middlewares/requireJobKey");
 // Customers (`user` tokens) must never read admin prices or edit the catalog.
@@ -67,6 +81,8 @@ const router = express.Router();
  */
 router.post(
   "/order-management/fetch-invoice/:orderId",
+  payLinkLimiter,
+  invoicePayAccess("orderId"),
   manageOrderController.fetchInvoice,
 );
 
@@ -1019,6 +1035,7 @@ router.post(
   "/employee",
   auth.protect,
   auth.restrictTo("admin", "localPartner", "subAdmin"),
+  auditRoute("employee", "created"),
   employeeController.createEmployee,
 );
 
@@ -1103,6 +1120,7 @@ router.patch(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner", "subAdmin"),
+  auditRoute("employee", "updated", (req) => req.params.employeeId),
   employeeController.updateEmployee,
 );
 
@@ -1131,6 +1149,7 @@ router.delete(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "localPartner", "subAdmin"),
+  auditRoute("employee", "deleted", (req) => req.params.employeeId),
   employeeController.deleteEmployee,
 );
 
@@ -1138,6 +1157,7 @@ router.post(
   "/sub-admin",
   auth.protect,
   auth.restrictTo("admin", "subAdmin"),
+  auditRoute("subAdmin", "created"),
   subAdminController.createSubAdmin,
 );
 router.get(
@@ -1156,6 +1176,7 @@ router.patch(
   "/sub-admin/me",
   auth.protect,
   auth.restrictTo("subAdmin"),
+  auditRoute("subAdmin", "updated", (req) => req.user?.id),
   subAdminController.updateMyProfile,
 );
 router.get(
@@ -1168,12 +1189,14 @@ router.patch(
   "/sub-admin/:id",
   auth.protect,
   auth.restrictTo("admin", "subAdmin"),
+  auditRoute("subAdmin", "updated"),
   subAdminController.updateSubAdmin,
 );
 router.delete(
   "/sub-admin/:id",
   auth.protect,
   auth.restrictTo("admin", "subAdmin"),
+  auditRoute("subAdmin", "deleted"),
   subAdminController.deleteSubAdmin,
 );
 
@@ -1208,6 +1231,7 @@ router.put(
   "/employee/:employeeId",
   auth.protect,
   auth.restrictTo("admin", "salesRep", "subAdmin"),
+  auditRoute("employee", "updated", (req) => req.params.employeeId),
   employeeController.updateEmployee,
 );
 
@@ -1465,6 +1489,7 @@ router.patch(
   "/employee/:employeeId/commission",
   auth.protect,
   auth.restrictTo("admin", "localPartner"),
+  auditRoute("employee", "updated", (req) => req.params.employeeId),
   employeeController.updateCommission,
 );
 
@@ -1597,6 +1622,13 @@ router.get("/category/", categoryController.getAllCatagories);
 
 //!MIDDLEWARE PRIVATE ROUTES
 router.use(protect);
+// What each kind of account may reach here (customers, suppliers, partners: their own data only).
+router.use(require("../middlewares/adminAccess"));
+// Who is acting, for model hooks (order created / paid).
+router.use(requestContext);
+
+/** History of a customer / local partner / supplier / sub-admin / employee (who changed what, when). */
+router.get("/audit/:entityPath/:entityId", auditController.list);
 
 /**
  * @swagger
@@ -1747,6 +1779,7 @@ const uploadSalesRepImage = multer({
 router.post(
   "/product",
   catalogAdminOnly,
+  auditRoute("product", "created"),
   uploadProductImage.single("image"),
   productController.addProduct,
 );
@@ -1823,8 +1856,8 @@ router.post(
 router
   .route("/product/:id")
   .get(staffOnly, productController.getProduct) // For fetching a product by ID
-  .delete(catalogAdminOnly, productController.deleteProduct) // For deleting a product by ID
-  .patch(catalogAdminOnly, uploadProductImage.single("image"), productController.updateProduct); // For updating a product (including image upload)
+  .delete(catalogAdminOnly, auditRoute("product", "deleted"), productController.deleteProduct) // For deleting a product by ID
+  .patch(catalogAdminOnly, auditRoute("product", "updated"), uploadProductImage.single("image"), productController.updateProduct); // For updating a product (including image upload)
 
 //! Sales Rep Product Price Management
 /**
@@ -1870,6 +1903,7 @@ router
 router.post(
   "/sales-rep-product-price",
   protect,
+  auditPriceList(),
   salesRepProductPriceController.createSalesRepProductPrices,
 );
 
@@ -1912,6 +1946,7 @@ router.post(
 router.patch(
   "/sales-rep-product-price",
   protect,
+  auditPriceList(),
   salesRepProductPriceController.updateSalesRepProductPrices,
 );
 
@@ -2071,6 +2106,7 @@ router.get(
 router.delete(
   "/sales-rep-product-price/:id",
   protect,
+  auditPriceList(),
   salesRepProductPriceController.deleteSalesRepProductPrice,
 );
 
@@ -2115,6 +2151,7 @@ router.delete(
 router.delete(
   "/sales-rep-product-price",
   protect,
+  auditPriceList(),
   salesRepProductPriceController.deleteSalesRepProductPrices,
 );
 
@@ -2285,7 +2322,19 @@ router.get(
  */
 router.post(
   "/order-management/send-invoice/:orderId",
+  auth.restrictTo(...INVOICE_EDITOR_ENTITIES),
+  activityOnSuccess((req) => ({
+    ...(req.body?.order?.partnerOrderId ? { partnerOrderId: req.params.orderId } : { orderId: req.params.orderId }),
+    action: "invoice_sent",
+    summary: "Invoice emailed",
+  })),
   manageOrderController.sendInvoice,
+);
+
+/** Activity history of an order or partner order (who did what, when). */
+router.get(
+  "/order-management/activity/:orderType/:orderId",
+  orderActivityController.list,
 );
 
 /**
@@ -2316,6 +2365,14 @@ router.post(
  */
 router.post(
   "/order-management/send-invoice",
+  auth.restrictTo(...INVOICE_EDITOR_ENTITIES),
+  activityOnSuccess((req) =>
+    (Array.isArray(req.body?.order) ? req.body.order : []).map((o) => ({
+      orderId: o?.orderId,
+      action: "invoice_sent",
+      summary: "Invoice emailed (bulk send)",
+    })),
+  ),
   manageOrderController.sendInvoiceMultiple,
 );
 
@@ -2348,6 +2405,7 @@ router.post(
  */
 router.patch(
   "/order-management/update-order/:orderId",
+  auth.restrictTo(...INVOICE_EDITOR_ENTITIES),
   manageOrderController.updateOrder,
 );
 
@@ -2374,6 +2432,7 @@ router.patch(
  */
 router.delete(
   "/order-management/delete-order/:orderId",
+  activityOnSuccess((req) => ({ orderId: req.params.orderId, action: "order_deleted", summary: "Order deleted" })),
   manageOrderController.deleteOrder,
 );
 
@@ -2413,6 +2472,11 @@ router.delete(
  */
 router.post(
   "/order-management/delete-invoice",
+  activityOnSuccess((req) => ({
+    ...(req.body?.orderType === "partnerOrder" ? { partnerOrderId: req.body?.id } : { orderId: req.body?.id }),
+    action: "invoice_deleted",
+    summary: "Invoice deleted (payment link cancelled)",
+  })),
   manageOrderController.deleteInvoice,
 );
 
@@ -2460,6 +2524,11 @@ router.get(
  */
 router.patch(
   "/order-management/update-tracking-number",
+  activityOnSuccess((req) => ({
+    ...(["local-partner", "partner-order"].includes(req.body?.orderType) ? { partnerOrderId: req.body?.orderId } : { orderId: req.body?.orderId }),
+    action: "tracking_updated",
+    summary: `Tracking number set${req.body?.trackingNumber ? `: ${String(req.body.trackingNumber).slice(0, 60)}` : ""}`,
+  })),
   manageOrderController.updateTrackingNumber,
 );
 
@@ -2507,7 +2576,7 @@ router.get("/order-details/:id", manageOrderController.orderDetails);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/assign-supplier", manageOrderController.orderJourneryComplete);
+router.patch("/assign-supplier", logJourney, manageOrderController.orderJourneryComplete);
 
 /**
  * @swagger
@@ -2532,6 +2601,7 @@ router.patch("/assign-supplier", manageOrderController.orderJourneryComplete);
  */
 router.patch(
   "/supplier-acknowledgement",
+  logJourney,
   manageOrderController.orderJourneryComplete,
 );
 
@@ -2556,7 +2626,7 @@ router.patch(
  *       401:
  *         description: Unauthorized
  */
-router.patch("/order-dispatch", manageOrderController.orderJourneryComplete);
+router.patch("/order-dispatch", logJourney, manageOrderController.orderJourneryComplete);
 
 /**
  * @swagger
@@ -2579,7 +2649,7 @@ router.patch("/order-dispatch", manageOrderController.orderJourneryComplete);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/order-deliver", manageOrderController.orderJourneryComplete);
+router.patch("/order-deliver", logJourney, manageOrderController.orderJourneryComplete);
 
 /**
  * @swagger
@@ -2602,7 +2672,7 @@ router.patch("/order-deliver", manageOrderController.orderJourneryComplete);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/order-cancel", manageOrderController.orderJourneryComplete);
+router.patch("/order-cancel", logJourney, manageOrderController.orderJourneryComplete);
 
 /**
  * @swagger
@@ -2625,7 +2695,7 @@ router.patch("/order-cancel", manageOrderController.orderJourneryComplete);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/edit-order", manageOrderController.orderJourneryComplete);
+router.patch("/edit-order", logJourney, manageOrderController.orderJourneryComplete);
 
 /**
  * @swagger
@@ -2648,7 +2718,7 @@ router.patch("/edit-order", manageOrderController.orderJourneryComplete);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/add-cheque", manageOrderController.orderJourneryComplete);
+router.patch("/add-cheque", logJourney, manageOrderController.orderJourneryComplete);
 
 /**
  * @swagger
@@ -2671,7 +2741,25 @@ router.patch("/add-cheque", manageOrderController.orderJourneryComplete);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/edit-cheque", manageOrderController.eidtCheque);
+router.patch(
+  "/edit-cheque",
+  activityOnSuccess(async (req) => {
+    // eslint-disable-next-line global-require
+    const { chequeDetail } = require("../models");
+    const row = req.body?.chequeId
+      ? await chequeDetail.findOne({ where: { id: req.body.chequeId }, attributes: ["orderId", "partnerOrderId"], raw: true })
+      : null;
+    if (!row) return null;
+    return {
+      orderId: row.orderId,
+      partnerOrderId: row.partnerOrderId,
+      action: "cheque_edited",
+      summary: "Cheque details edited",
+      details: { number: req.body?.cheque?.chequeNumber, bank: req.body?.cheque?.bankName, status: req.body?.cheque?.chequeStatus },
+    };
+  }),
+  manageOrderController.eidtCheque,
+);
 
 //! Customer Management
 
@@ -2748,8 +2836,8 @@ router.get(
  *       401:
  *         description: Unauthorized
  */
-router.patch("/customer-update/:id", customerController.updateCutomer);
-router.patch("/customer-approve/:id", customerController.approveCustomer);
+router.patch("/customer-update/:id", auditRoute("customer", "updated"), customerController.updateCutomer);
+router.patch("/customer-approve/:id", auditRoute("customer", "updated"), customerController.approveCustomer);
 
 /**
  * @swagger
@@ -3095,6 +3183,7 @@ router.get(
  */
 router.patch(
   "/customer-management/assign-sale-rep/:id",
+  auditRoute("customer", "updated"),
   customerController.assignSalesRep,
 );
 
@@ -3177,8 +3266,8 @@ router.post(
   orderFrequencyController.bookNewOrder,
 );
 
-router.post("/add-customer/sales-rep/:srId", salesRepController.addCustomer);
-router.post("/add-customer", salesRepController.addCustomer);
+router.post("/add-customer/sales-rep/:srId", auditRoute("customer", "created"), salesRepController.addCustomer);
+router.post("/add-customer", auditRoute("customer", "created"), salesRepController.addCustomer);
 
 router.post(
   "/create-bank-setup-intent/sales-rep/:srId",
@@ -3217,17 +3306,18 @@ router.get(
 router
   .route("/supplier/")
   .get(supplierController.getAllSuppliers) // For fetching all categories
-  .post(uploadSupplierImage.single("image"), supplierController.createSupplier); // For creating a new category
+  .post(auditRoute("supplier", "created"), uploadSupplierImage.single("image"), supplierController.createSupplier);
 
 // Category by ID routes
 router
   .route("/supplier/:id")
   .get(supplierController.getSupplier) // For fetching a category by ID
-  .patch(uploadSupplierImage.single("image"), supplierController.updateSupplier) // For updating category by ID
-  .delete(supplierController.deleteSupplier); // For deleting a category by ID
+  .patch(auditRoute("supplier", "updated"), uploadSupplierImage.single("image"), supplierController.updateSupplier)
+  .delete(auditRoute("supplier", "deleted"), supplierController.deleteSupplier);
 
 router.patch(
   "/sales-rep/address-update/:srId",
+  auditRoute("partner", "updated", (req) => req.params.srId),
   salesRepController.updateAddresses,
 );
 
@@ -3244,14 +3334,14 @@ router.get(
 router
   .route("/sales-rep/")
   .get(salesRepController.getAllSalesRep) // For fetching all categories
-  .post(uploadSalesRepImage.single("image"), salesRepController.createSalesRep); // For creating a new category
+  .post(auditRoute("partner", "created"), uploadSalesRepImage.single("image"), salesRepController.createSalesRep);
 
 // Category by ID routes
 router
   .route("/sales-rep/:id")
   .get(salesRepController.getSalesRep)
-  .patch(uploadSalesRepImage.single("image"), salesRepController.updateSalesRep)
-  .delete(salesRepController.deleteSalesRep);
+  .patch(auditRoute("partner", "updated"), uploadSalesRepImage.single("image"), salesRepController.updateSalesRep)
+  .delete(auditRoute("partner", "deleted"), salesRepController.deleteSalesRep);
 
 //! Address Management
 
@@ -3669,9 +3759,9 @@ router.get(
 
 router.get("/view-customer-detail/:id", customerController.customerDetail);
 
-router.delete("/delete-customer/:id", customerController.deleteCustomer);
+router.delete("/delete-customer/:id", auditRoute("customer", "deleted"), customerController.deleteCustomer);
 
-router.delete("/customer-discounts/:userId", customerController.dicounts);
+router.delete("/customer-discounts/:userId", auditRoute("customer", "updated", (req) => req.params.userId), customerController.dicounts);
 
 router.post(
   "/partner-order/book-new-order",
@@ -3691,6 +3781,7 @@ router.get(
 
 router.patch(
   "/partner-order/update-order/:orderId",
+  auth.restrictTo(...INVOICE_EDITOR_ENTITIES),
   patnerOrderController.updatePartnerOrder,
 );
 
@@ -3716,6 +3807,7 @@ router.get(
 
 router.post(
   "/partner-order/pull-payment-from-bank/:partnerOrderId",
+  activityOnSuccess((req) => ({ partnerOrderId: req.params.partnerOrderId, action: "payment_pulled", summary: "Bank payment pulled from partner" })),
   patnerOrderController.pullPartnerOrderPayment,
 );
 
