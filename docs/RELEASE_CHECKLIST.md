@@ -29,6 +29,10 @@ Commerce migrations (`migrations/`, run by `npm run migrate`, recorded once per 
 |---|---|
 | `20261002_email_recipient_settings.sql` | `email_recipient_settings` table: developer copy address + on/off, lead alert recipients, customer test recipient (admin panel → Email configuration → Recipients). Empty table = today's behaviour |
 | `20261003_unified_leads.sql` | Leads get `enquiryType`, `marketingEventId`, `getInTouchId`, `wonAmount`, `wonAt` (+ 2 indexes); **imports every existing tasting / contact request (`get_in_touches`) once** as a "New Enquiry" lead on the Leads Dashboard |
+| `20261008_invoice_unit_prices.sql` | Order lines get `unitPrice`, `priceOverride`, `catalogUnitPrice`; new `orderItemPriceLogs` table (who changed a unit price, old / new). Additive, existing lines unchanged |
+| `20261009_invoice_pay_links.sql` | Orders and partner orders get `payToken` (random code in the invoice email pay link) and `payLinkLegacy`; every order that exists at release is marked legacy (paid or not), so every old link (emails, PDFs, links copied from the website) keeps working without a code |
+| `20261010_order_activity_logs.sql` | `orderActivityLogs` table: who did what and when on an order / invoice (Activity history on the order pages) |
+| `20261011_audit_logs.sql` | `auditLogs` table: who created, changed or deleted a customer, local partner (incl. price list), supplier, sub-admin or employee (incl. permissions), with old → new values (History section on those pages) |
 
 Data migrations are `.js` files in `marketing/migrations/` exporting `async up()`; they run in
 name order with the `.sql` files. Put every future one-off data fix there, never in a manual
@@ -48,9 +52,13 @@ command. The same backfills can still be run by hand (dry run first):
 | 6 | `INTERNAL_JOB_API_KEY` in the API env **and** every Lambda/job caller (`x-job-key` header), see `docs/API_ACCESS.md`. Unset = job endpoints not enforced | [ ] | [ ] |
 | 7 | Delete `.env.bak-*` copies on the server after the release is confirmed (they contain secrets) | [ ] | [ ] |
 | 8 | Old React storefront staging (S3/CloudFront): staging-only `robots.txt` or `X-Robots-Tag: noindex` | [ ] | n/a |
-| 9 | After deploy: `npm run marketing:attribution-test` on a non-production DB copy (it writes and removes test rows) | [ ] | n/a |
-| 10 | Leads: `META_APP_SECRET` (signs the Meta lead webhook; unset = unsigned requests accepted with a warning) and `META_VERIFY_TOKEN` (no default any more) from the client; `ADMIN_PANEL_URL` (link in "lead assigned" emails); optional `PUBLIC_LEAD_RATE_LIMIT_MAX` (default 10/min per IP) | [ ] | [ ] |
-| 11 | Admin panel → Email configuration → Recipients: lead alert recipients, developer copy, and on staging the customer test recipient (all "request received" customer emails go only there) | [ ] | [ ] |
+| 9 | `TRUST_PROXY_HOPS` in the API env only if more than one proxy (nginx) sits in front of Node, see `docs/API_ACCESS.md`. Default 1 | [ ] check | [ ] check |
+| 10 | After deploy: `npm run marketing:attribution-test` on a non-production DB copy (it writes and removes test rows) | [ ] | n/a |
+| 11 | Leads: `META_APP_SECRET` (signs the Meta lead webhook; unset = unsigned requests accepted with a warning) and `META_VERIFY_TOKEN` (no default any more) from the client; `ADMIN_PANEL_URL` (link in "lead assigned" emails); optional `PUBLIC_LEAD_RATE_LIMIT_MAX` (default 10/min per IP) | [ ] | [ ] |
+| 12 | Admin panel → Email configuration → Recipients: lead alert recipients, developer copy, and on staging the customer test recipient (all "request received" customer emails go only there) | [ ] | [ ] |
+| 13 | Pay links. **Order: the website that hosts /paymentCheck (React `stage` for staging, React `main` for www) must be live with the pay-code change before or together with this backend**, otherwise new invoice links (with `t=`) fail on the old site. Set `PAY_LINK_BASE_URL` (site hosting /paymentCheck; default https://busybeancoffee.com; on staging https://stageweb.busybeancoffee.com). Leave `PAY_LINK_LEGACY_UNTIL` **unset** (old links keep working forever); only set an ISO date after deciding to retire old links. Emergency: `PAY_LINK_REQUIRE_CODE=false` + restart reopens every invoice by number (old behaviour) if clients report broken links. Optional: `PAY_LINK_RATE_LIMIT_MAX` (default 60 per 10 min per IP) | [ ] | [ ] |
+| 14 | Employee permissions run in log mode: check the API log for `[employee-acl] would refuse` lines for a week, then set `EMPLOYEE_ACL_MODE=enforce` | [ ] | [ ] |
+| 15 | Invoice PDFs: after deploy, `curl -I https://<api>/public/invoicePDFs/invoice-00<recent id>.pdf` must answer 404 (it used to download any invoice by number). If it still answers 200, nginx serves `/public` itself: add `location /public/invoicePDFs/ { return 404; }` there. Then open a fresh invoice email: Pay Now and the PDF's Pay Online link both carry `t=` and open the payment page; an old email's link (no `t=`) still opens it; a paid invoice's link says already paid | [ ] | [ ] |
 
 ## Known deploy pitfalls (fixed, keep in mind)
 

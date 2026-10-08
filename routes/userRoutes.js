@@ -24,6 +24,16 @@ const userController = require("../controllers/userController");
 const multiInvoiceCheckoutController = require("../controllers/customer/multiInvoiceCheckoutController");
 const Authorization = require("../middlewares/protect");
 const { requireOwnSubscription } = require("../middlewares/subscriptionAccess");
+// Customers only reach their own records (staff: HQ any, partners their own customers).
+const {
+  ownCustomerParam,
+  ownOrderParam,
+  ownCustomerInBody,
+  ownProfileAddresses,
+} = require("../middlewares/customerAccess");
+const { invoicePayAccess, payLinkLimiter } = require("../middlewares/invoicePayAccess");
+const { requestContext } = require("../utils/requestContext");
+const { auditRoute } = require("../utils/auditTrail");
 const { hideMachinePrices, fillMachineLeadValue } = require("../middlewares/machinePricing");
 const {
   signupRateLimiter,
@@ -518,6 +528,7 @@ router.post("/sheet-upload", orderController.SheetUplod);
  */
 router.post(
   "/coffee-machine/contact",
+  publicLeadLimiter,
   machineSubController.coffeeMachineContact,
 );
 
@@ -620,7 +631,7 @@ router.post("/create-lead", publicLeadLimiter, fillMachineLeadValue, leadControl
  *       201:
  *         description: Submission saved and notification sent
  */
-router.post("/get-in-touch", userController.getInTouch);
+router.post("/get-in-touch", publicLeadLimiter, userController.getInTouch);
 
 /**
  * @swagger
@@ -668,6 +679,8 @@ router.post("/create-users-bulk", orderController.createUsersBulk);
  */
 router.post("/create-order-direct", orderController.createOrderDirect);
 router.use(Authorization.protect);
+// Who is acting, for model hooks (order created / paid).
+router.use(requestContext);
 
 /**
  * @swagger
@@ -704,7 +717,7 @@ router.use(Authorization.protect);
  *       401:
  *         description: Unauthorized - Authentication required
  */
-router.post("/book-order/:id", orderController.bookOrder);
+router.post("/book-order/:id", ownCustomerInBody, orderController.bookOrder);
 
 /**
  * @swagger
@@ -734,7 +747,7 @@ router.post("/book-order/:id", orderController.bookOrder);
  *       401:
  *         description: Unauthorized - Authentication required
  */
-router.post("/book-order", orderController.bookOrder);
+router.post("/book-order", ownCustomerInBody, orderController.bookOrder);
 
 /**
  * @swagger
@@ -762,7 +775,7 @@ router.post("/book-order", orderController.bookOrder);
  *       401:
  *         description: Unauthorized
  */
-router.post("/create-payment-intent", orderController.paymentIntent);
+router.post("/create-payment-intent", ownCustomerInBody, orderController.paymentIntent);
 
 /**
  * @swagger
@@ -819,7 +832,7 @@ router.get("/invoices/", manageOrderController.allOrder);
  *       401:
  *         description: Unauthorized
  */
-router.get("/order-details/:id", manageOrderController.orderDetails);
+router.get("/order-details/:id", ownOrderParam("id"), manageOrderController.orderDetails);
 
 /**
  * @swagger
@@ -849,7 +862,12 @@ router.get("/order-details/:id", manageOrderController.orderDetails);
  *       401:
  *         description: Unauthorized
  */
-router.put("/drawer/update-profile", profileController.updateProfile);
+router.put(
+  "/drawer/update-profile",
+  ownProfileAddresses,
+  auditRoute("customer", "updated", (req) => req.user?.id),
+  profileController.updateProfile,
+);
 
 /**
  * @swagger
@@ -888,7 +906,7 @@ router.put("/drawer/update-profile", profileController.updateProfile);
  *       401:
  *         description: Unauthorized
  */
-router.post("/address/add-new/:id", profileController.addAddress);
+router.post("/address/add-new/:id", ownCustomerParam("id"), profileController.addAddress);
 
 /**
  * @swagger
@@ -948,7 +966,7 @@ router.get("/category", categoryController.getAllCatagories);
  *       401:
  *         description: Unauthorized
  */
-router.get("/view-customer-detail/:id", customerController.customerDetail);
+router.get("/view-customer-detail/:id", ownCustomerParam("id"), customerController.customerDetail);
 
 /**
  * @swagger
@@ -973,6 +991,8 @@ router.get("/view-customer-detail/:id", customerController.customerDetail);
  */
 router.post(
   "/invoices/:orderId/create-payment-intent",
+  payLinkLimiter,
+  invoicePayAccess("orderId"),
   manageOrderController.createPaymentIntentForUser,
 );
 
@@ -1008,6 +1028,7 @@ router.post(
  */
 router.post(
   "/invoices/:orderId/confirm-payment",
+  payLinkLimiter,
   manageOrderController.confirmPaymentForInvoiceIntent,
 );
 
@@ -1086,6 +1107,7 @@ router.get("/subscriptions", subscriptionController.listSubscriptions);
  */
 router.post(
   "/subscriptions/:id/cancel",
+  requireOwnSubscription,
   subscriptionController.cancelSubscription,
 );
 
@@ -1112,6 +1134,7 @@ router.post(
  */
 router.post(
   "/subscriptions/:id/reactivate",
+  requireOwnSubscription,
   subscriptionController.reactivateSubscription,
 );
 

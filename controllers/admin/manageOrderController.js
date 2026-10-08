@@ -17,7 +17,30 @@ const {
   account,
   employee,
   emailLog,
+  orderItemPriceLog,
+  sequelize,
 } = require("../../models");
+const {
+  canAccessOrder,
+  pickFields,
+  paymentLocked,
+  EDITABLE_ORDER_FIELDS,
+  SEND_INVOICE_FIELDS,
+} = require("../../utils/orderAccess");
+const {
+  PricingError,
+  canEditUnitPrice,
+  catalogUnitPriceOf,
+  minUnitPrice,
+  priceInvoiceLines,
+} = require("../../utils/invoiceLinePricing");
+const { ensurePayToken, payUrl } = require("../../utils/payLink");
+const { logOrderActivity, money: activityMoney } = require("../../utils/orderActivity");
+const {
+  verifyInvoicePayment,
+  invoiceTotal,
+  estimateStripeFee,
+} = require("../../services/invoicePaymentVerification");
 
 const fs = require("fs");
 const path = require("path");
@@ -228,6 +251,13 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     where: { id: req.params?.orderId },
   });
 
+  if (!details) {
+    return next(new AppError("Order not found.", 404));
+  }
+  if (!canAccessOrder(req.user, details.salesRepId, { kind: orderType === "local-partner" ? "partner" : "customer", action: "create" })) {
+    return next(new AppError("You do not have permission to send this invoice.", 403));
+  }
+
   if (details.userId && !details?.quickBooksInvoiceId) {
     syncInvoiceOnQuikBooks({ orderId: details.id, orderType });
   }
@@ -241,8 +271,10 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
     );
   }
 
-  console.log("🚀 ~ req.body:", req.body);
-  await model.update(req.body.order, { where: { id: req.params?.orderId } });
+  // Only the invoice date / reminder stamps; everything else on the order is server-managed.
+  await model.update(pickFields(req.body?.order, SEND_INVOICE_FIELDS), {
+    where: { id: req.params?.orderId },
+  });
 
   sentPaymentInvoiceEvent({
     orderId: req.params?.orderId,
@@ -280,9 +312,17 @@ exports.sendInvoice = catchAsync(async (req, res, next) => {
 });
 
 exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
-  const listOrder = req.body?.order;
-  console.log("🚀 ~ sendInvoiceMultiple ~ Body:", listOrder);
-  if (listOrder && listOrder.length > 0) {
+  const listOrder = Array.isArray(req.body?.order) ? req.body.order : [];
+  if (listOrder.length > 0) {
+    const ids = listOrder.map((ele) => Number(ele?.orderId)).filter(Boolean);
+    const found = await order.findAll({
+      where: { id: { [Op.in]: ids } },
+      attributes: ["id", "salesRepId"],
+      raw: true,
+    });
+    if (found.length !== new Set(ids).size || found.some((o) => !canAccessOrder(req.user, o.salesRepId, { action: "create" }))) {
+      return next(new AppError("You do not have permission to send one or more of these invoices.", 403));
+    }
     console.log("🚀 ~ sendInvoiceMultiple ~ listOrder:", listOrder);
     for (const ele of listOrder) {
       console.log("🚀 ~ sendInvoiceMultiple ~ orderId:", ele);
@@ -291,7 +331,9 @@ exports.sendInvoiceMultiple = catchAsync(async (req, res, next) => {
         orderType: ele.orderType || "customer",
       });
 
-      await order.update(ele, { where: { id: ele.orderId } });
+      await order.update(pickFields(ele, SEND_INVOICE_FIELDS), {
+        where: { id: ele.orderId },
+      });
     }
   }
 
@@ -450,15 +492,8 @@ exports.createPaymentIntentForUser = catchAsync(async (req, res, next) => {
 
 exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
   const { orderId } = req.params;
-  const {
-    paymentIntentId,
-    paymentMethodId,
-    adminReceivableStatus,
-    localPatnerCommission,
-    adminReceivableAmount,
-    proportionalStripeFee,
-    orderType,
-  } = req.body;
+  // Amounts and commissions are computed here, never taken from the browser.
+  const { paymentIntentId, orderType } = req.body || {};
 
   if (!orderId) {
     return next(new AppError("Order ID is required", 400));
@@ -488,6 +523,38 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
     });
   }
 
+  // Stripe must confirm this payment succeeded, for this order, covering the invoice total.
+  const { details } = await dataForEmailAndNotifications(orderId, orderType || "customer");
+  const total = invoiceTotal(details);
+  const verdict = await verifyInvoicePayment({ paymentIntentId, orderId, expectedTotal: total });
+  if (!verdict.ok) {
+    console.warn(`[invoice-payment] order ${orderId} not marked paid: ${verdict.reason}`);
+    return next(new AppError(verdict.message, 400));
+  }
+  const reused = await model.findOne({
+    where: { paymentIntentId, id: { [Op.ne]: orderId } },
+    attributes: ["id"],
+    raw: true,
+  });
+  if (reused) {
+    return next(new AppError("This payment was already used for another invoice.", 400));
+  }
+  if (verdict.shortByCents > 0) {
+    // Invoice raised after the customer started paying: paid, but staff must collect the difference.
+    const paid = Number(verdict.paymentIntent.amount_received || 0) / 100;
+    console.warn(`[invoice-payment] order ${orderId} paid ${paid} but the invoice total is ${total}`);
+    await logOrderActivity({
+      req,
+      [orderType === "local-partner" ? "partnerOrderId" : "orderId"]: orderId,
+      action: "payment_short",
+      summary: `Card payment ${activityMoney(paid)} is ${activityMoney(verdict.shortByCents / 100)} less than the invoice total ${activityMoney(total)} (invoice changed after payment started)`,
+      details: { paymentIntentId, paid, invoiceTotal: total },
+    });
+  }
+  const localPatnerCommission = Number(details?.localPatnerCommission || 0);
+  const adminReceivableAmount = Number(details?.adminReceivableAmount || 0);
+  const proportionalStripeFee = estimateStripeFee(details?.totalBill || total);
+
   // Prepare update data
   const updateData = {
     paymentIntentId: paymentIntentId || null,
@@ -502,7 +569,7 @@ exports.confirmPaymentForInvoiceIntent = catchAsync(async (req, res, next) => {
 
   // Add optional fields if provided
 
-  updateData.adminReceivableStatus = adminReceivableStatus || true;
+  updateData.adminReceivableStatus = true;
 
   updateData.localPatnerCommission = localPatnerCommission || 0;
 
@@ -1166,6 +1233,9 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
           "productId",
           "wholesalePrice",
           "type",
+          "unitPrice",
+          "priceOverride",
+          "catalogUnitPrice",
         ],
       },
       {
@@ -1304,11 +1374,29 @@ exports.orderDetails = catchAsync(async (req, res, next) => {
     ],
   });
 
+  const plain = doc.toJSON();
+  const pricing = await invoicePricingInfo(req.user, { ...plain, userId: plain.user?.id });
+  if (req.user?.entity === "user") {
+    // Customers get the invoice as before (line totals); unit-price bookkeeping is internal.
+    for (const line of plain.items || []) {
+      delete line.unitPrice;
+      delete line.priceOverride;
+      delete line.catalogUnitPrice;
+    }
+  }
+  // Shareable pay link for unpaid orders (callers already passed the order access checks).
+  const payToken =
+    plain.paymentStatus !== "done" ? await ensurePayToken(order, plain.id).catch(() => null) : null;
+
   res.status(200).json({
     status: "success",
     data: {
-      order: doc,
+      order: plain,
       adminAddress: adm,
+      // Invoice screens: may this user set unit prices; per-product minimum (partner wholesale).
+      pricing,
+      payToken,
+      payUrl: payToken ? payUrl({ id: plain.id, orderType: "customer", payToken }) : null,
     },
   });
 });
@@ -1859,14 +1947,89 @@ exports.findShippingCompanyForWeight = catchAsync(async (req, res, next) => {
 });
 
 //* UPDATE ORDER
+/**
+ * Product attributes for pricing a customer order's lines: list price and wholesale (the local
+ * partner's price list when it has the product, else the product's own), weight, category and the
+ * customer's category discount.
+ */
+function catalogProductAttributes({ userId, salesRepId }) {
+  const attributes = [
+    "id",
+    "name",
+    "quantity",
+    "categoryId",
+    "weight",
+    "sku",
+    "grind",
+    "productCode",
+    [
+      literal(`(SELECT percentage FROM userDiscounts WHERE userDiscounts.categoryId = product.categoryId AND userDiscounts.userId = ${Number(userId) || 0} LIMIT 1)`),
+      "discountPercentage",
+    ],
+  ];
+  if (salesRepId) {
+    const rep = Number(salesRepId) || 0;
+    attributes.push(
+      [
+        literal(`COALESCE((SELECT srpp.price FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${rep} AND srpp.deleted = 0 LIMIT 1), product.price)`),
+        "price",
+      ],
+      [
+        literal(`COALESCE((SELECT srpp.wholesalePrice FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${rep} AND srpp.deleted = 0 LIMIT 1), product.wholesalePrice)`),
+        "wholesalePrice",
+      ],
+    );
+  } else {
+    attributes.push("price", "wholesalePrice");
+  }
+  return attributes;
+}
+
+/** Order-details extras for the invoice screens: may this user set unit prices, and the minimums. */
+async function invoicePricingInfo(user, doc) {
+  const info = {
+    canEditUnitPrice: canEditUnitPrice(user, { partnerCustomer: Boolean(doc?.salesRepId) }),
+    minUnitPrices: {},
+    // Today's catalog unit price per product ("Reset to catalog" shows exactly what the server charges).
+    catalogUnitPrices: {},
+  };
+  const productIds = [
+    ...new Set((doc?.items || []).filter((i) => i.type !== "charges" && i.productId).map((i) => i.productId)),
+  ];
+  if (!productIds.length) return info;
+  let orderInfo = { salesRepId: null };
+  if (doc.salesRepId) {
+    const rep = await salesRep.findOne({ where: { id: doc.salesRepId }, attributes: ["partnerType"], raw: true });
+    orderInfo = { salesRepId: doc.salesRepId, partnerType: rep?.partnerType };
+  }
+  const rows = await product.findAll({
+    where: { id: { [Op.in]: productIds } },
+    attributes: catalogProductAttributes({ userId: doc.userId, salesRepId: doc.salesRepId }),
+    raw: true,
+  });
+  for (const row of rows) {
+    info.catalogUnitPrices[row.id] = catalogUnitPriceOf(row);
+    const min = minUnitPrice(orderInfo, row.wholesalePrice);
+    if (min !== null) info.minUnitPrices[row.id] = min;
+  }
+  return info;
+}
+
+/**
+ * Edit a customer order's invoice: product lines (quantities, custom unit prices with the "Edit unit
+ * price" permission — utils/invoiceLinePricing.js), extra charges, invoice fields; then cancel the
+ * open payment link, rebuild the PDF / QuickBooks invoice and optionally email or charge the
+ * customer. All checks run before anything is changed.
+ */
 exports.updateOrder = catchAsync(async (req, res, next) => {
-  console.log("🚀 ~ req.body:", req.body);
   const fetchedOrder = await order.findOne({
     where: { id: req.params.orderId },
     attributes: [
       "id",
       "supplierId",
       "paymentStatus",
+      "paymentIntentId",
+      "pulloutIntentId",
       "salesRepId",
       "invoiceId",
       "orderFrequencyId",
@@ -1877,6 +2040,9 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       "userId",
       "quickBooksInvoiceId",
       "shippingCharges",
+      "vat",
+      "totalBill",
+      "itemsPrice",
       [
         literal(
           `(SELECT users.stripeCustomerId FROM users WHERE users.id = order.userId LIMIT 1)`,
@@ -1908,234 +2074,111 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
 
   if (!placedOrder) {
     return next(new AppError("Order not found.", 404));
-  } else if (placedOrder.paymentStatus == "done") {
+  }
+  if (!canAccessOrder(req.user, placedOrder.salesRepId)) {
+    return next(new AppError("You do not have permission to edit this order.", 403));
+  }
+  if (paymentLocked(placedOrder)) {
     return next(
       new AppError(
-        "The order payment has already been made. You may proceed with the update.",
-        404,
+        "This order is already paid or a payment is in progress, so the invoice can no longer be changed.",
+        400,
       ),
     );
   }
 
-  if (req.body?.order) {
-    await order.update(req.body?.order, { where: { id: placedOrder.id } });
-  }
+  const body = req.body || {};
+  const orderInput = body.order && typeof body.order === "object" ? body.order : {};
+  const inputItems = Array.isArray(body.items) ? body.items : [];
+  // Screens without a charges section (invoice PDF "Update") leave the extra charges as they are.
+  const chargesProvided = Array.isArray(body.typeCharges);
 
-  let checkSession = false;
-
-  if (placedOrder?.invoiceId) {
-    const session = await Stripe.checkCheckoutSessionStatus(
-      placedOrder?.invoiceId,
-    );
-    console.log("🚀 ~ exports.fetchInvoice=catchAsync ~ session:", session);
-
-    if (session == "paid") {
-      await order.update(
-        { paymentMethod: "card", paymentStatus: "done" },
-        { where: { id: placedOrder.id } },
-      );
-
-      return next(
-        new AppError(
-          "As the payment for the order has already been made, we are unable to update an invoice at this point.",
-          404,
-        ),
-      );
-    } else if (session == "open") {
-      checkSession = true;
-    }
-  }
-
-  if (checkSession) await Stripe.blockCheckoutSession(placedOrder?.invoiceId);
-
-  const input = req.body;
-  input.order.invoiceId = null;
-  input.order.hostedInvoiceUrl = null;
-  input.items = req.body.items;
-
-  if (input?.items?.length < 1 && input?.typeCharges?.length < 1) {
-    throw new AppError("Update possible, but no changes were made.", 404);
-  }
-
-  let productIds = input?.items.map((item) => item.productId);
-  let totalWeight = 0;
-  let itemsPrice = 0;
-  let discountOnItemsPrice = 0;
-  let totalLocalPatnerCommission = 0;
-
-  const productAttributes = [
-    `id`,
-    `name`,
-    `quantity`,
-    `categoryId`,
-    `weight`,
-    `sku`,
-    `grind`,
-    `productCode`,
-    [
-      literal(`
-          (SELECT percentage
-          FROM userDiscounts
-          WHERE userDiscounts.categoryId = product.categoryId
-            AND userDiscounts.userId = ${placedOrder?.userId}
-          LIMIT 1)
-        `),
-      "discountPercentage",
-    ],
-  ];
-  if (placedOrder?.salesRepId) {
-    console.log(
-      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE LOCALPARTNER INVENTORY PRICE & WHOLESALE APPLIED:",
-      placedOrder?.salesRepId,
-    );
-    productAttributes.push(
-      [
-        literal(
-          `(SELECT COALESCE(srpp.price, product.price) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${placedOrder?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
-        ),
-        "price",
-      ],
-      [
-        literal(
-          `(SELECT COALESCE(srpp.wholesalePrice, product.wholesalePrice) FROM salesRepProductPrices srpp WHERE srpp.productId = product.id AND srpp.salesRepId = ${placedOrder?.salesRepId} AND srpp.deleted = 0 LIMIT 1)`,
-        ),
-        "wholesalePrice",
-      ],
-    );
-  } else {
-    console.log(
-      "🚀 ~ exports.bookNewOrder=catchAsync ~ CASE ADMIN INVENTORY PRICE APPLIED:",
-      placedOrder?.salesRepId,
-    );
-    productAttributes.push(`price`, `wholesalePrice`);
-  }
-
-  const products = await product.findAll({
-    where: {
-      id: {
-        [Op.in]: productIds,
-      },
-    },
-    attributes: productAttributes,
+  const existingLines = await item.findAll({
+    where: { orderId: placedOrder.id },
     raw: true,
   });
+  const existingProductLines = existingLines.filter((l) => l.type !== "charges");
+  const existingChargeLines = existingLines.filter((l) => l.type === "charges");
 
-  console.log(
-    "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length,
-  );
+  const chargeInputs = chargesProvided
+    ? body.typeCharges
+    : existingChargeLines.map((l) => ({ code: l.code, qty: l.qty, total: l.price, name: l.productName }));
 
-  // let percentageDiscount = input?.order?.discountPercentage
-  //   ? input.order?.discountPercentage
-  //   : 0;
+  if (inputItems.length < 1 && chargeInputs.length < 1) {
+    return next(new AppError("Add at least one product or charge to the invoice.", 400));
+  }
 
-  console.log(
-    "🚀 ~ exports.bookOrder=catchAsync ~ products:",
-    products?.length,
-  );
+  // 1) Product lines: catalog, kept or custom prices (permission + minimums checked here).
+  const productIds = [...new Set(inputItems.map((i) => Number(i.productId)).filter(Boolean))];
+  const products = productIds.length
+    ? await product.findAll({
+        where: { id: { [Op.in]: productIds } },
+        attributes: catalogProductAttributes(placedOrder),
+        raw: true,
+      })
+    : [];
+  let priced;
+  try {
+    priced = priceInvoiceLines({
+      inputItems,
+      products: new Map(products.map((p) => [Number(p.id), p])),
+      existingLines: existingProductLines,
+      order: { salesRepId: placedOrder.salesRepId, partnerType: placedOrder.partnerType },
+      canEdit: canEditUnitPrice(req.user, { partnerCustomer: Boolean(placedOrder.salesRepId) }),
+    });
+  } catch (error) {
+    if (error instanceof PricingError) return next(new AppError(error.message, error.status));
+    throw error;
+  }
+  // Manually set / changed unit prices must be confirmed on the invoice screen (checkbox).
+  const manualPriceChanges = priced.changes.filter((c) => c.action !== "reset");
+  if (manualPriceChanges.length && body.confirmPriceChanges !== true) {
+    return next(new AppError("Please confirm the unit price changes before saving the invoice.", 400));
+  }
 
-  const finalItems = products.map((obj) => {
-    const element = {};
-    const percentageDiscount = parseFloat(obj?.discountPercentage || 0);
-    element.productId = obj?.id;
-    // console.log("🚀 ~ finalItems ~ obj:", obj)
+  const finalItems = priced.lines.map((line) => ({
+    ...line,
+    orderId: placedOrder.id,
+    orderFrequencyId: placedOrder.orderFrequencyId,
+  }));
+  let itemsPrice = priced.totals.itemsPrice;
+  let totalLocalPatnerCommission = priced.totals.commission;
 
-    // Find the matching product in input.items based on productId
-    let prod = input?.items.find((item) => item.productId == obj.id);
-
-    // Set the qty from input.items or default to 1 if not found
-    let qty = prod ? parseInt(prod.qty) : 1;
-    console.log("🚀 ~ finalItems ~ qty:", qty);
-    element.qty = qty;
-    // Calculate price, wholesalePrice, and weight for the item
-    element.categoryId = obj.categoryId;
-    element.price = obj.price * qty;
-    console.log("🚀 ~  element.price :", element.price);
-    element.wholesalePrice = obj.wholesalePrice * qty;
-    element.weight = obj.weight * qty;
-    element.orderId = placedOrder?.id;
-    element.orderFrequencyId = placedOrder?.orderFrequencyId;
-
-    element.discount = 0;
-    if (percentageDiscount > 0) {
-      // Calculate discount amount
-      const discountAmount = (element.price * percentageDiscount) / 100;
-      // Calculate final price after discount
-      const discountedPrice = element.price - discountAmount;
-
-      element.price = discountedPrice;
-      element.discount = discountAmount;
+  // 2) Extra charges (delivery, setup, ...): any non-negative amount.
+  for (const obj of chargeInputs) {
+    const amount = Number(obj?.total ?? 0);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return next(new AppError("Extra charge amounts must be 0 or more.", 400));
     }
-    // Accumulate the total weight and price
-    discountOnItemsPrice += element.discount;
-    itemsPrice += element.price;
-    console.log("🚀 ~ itemsPrice:", itemsPrice);
-    totalWeight += element.weight;
-
-    // Handle salesRep commission if applicable
+    const element = {
+      code: obj.code,
+      qty: obj.qty,
+      price: amount,
+      productName: obj.name,
+      orderId: placedOrder.id,
+      type: "charges",
+      orderFrequencyId: placedOrder.orderFrequencyId,
+      discount: 0,
+    };
+    itemsPrice += amount;
     if (placedOrder?.salesRepId) {
-      if (placedOrder.partnerType == "direct-partner") {
-        element.salerCommission = parseFloat(element.price);
-        totalLocalPatnerCommission += element.salerCommission || 0;
-        element.wholesalePrice = 0;
-      } else {
-        element.salerCommission =
-          parseFloat(element.price) - parseFloat(element.wholesalePrice);
-        totalLocalPatnerCommission += element.salerCommission || 0;
-      }
+      element.salerCommission = amount;
+      totalLocalPatnerCommission += amount;
     } else {
       element.wholesalePrice = 0;
       element.salerCommission = 0;
     }
-
-    return element; // Return the transformed element
-  });
-
-  if (req.body?.typeCharges?.length > 0) {
-    console.log(
-      "🚀 ~ req.body?.typeCharges?.length:",
-      req.body?.typeCharges?.length,
-    );
-    req.body?.typeCharges.forEach((obj) => {
-      const element = {};
-      element.code = obj.code;
-      element.qty = obj.qty;
-      element.price = obj.total;
-      console.log("🚀 ~  element.price = obj.typeCharges;:", obj.price);
-      element.productName = obj.name;
-      element.orderId = placedOrder?.id;
-      element.type = "charges";
-      element.orderFrequencyId = placedOrder?.orderFrequencyId;
-      element.discount = 0;
-
-      itemsPrice += parseFloat(element?.price || 0);
-      console.log("🚀 ~ itemsPrice TYPR CHARGES:", itemsPrice);
-
-      // Handle salesRep commission if applicable
-      if (placedOrder?.salesRepId) {
-        element.salerCommission = parseFloat(element?.price);
-        totalLocalPatnerCommission += element.salerCommission || 0;
-      } else {
-        element.wholesalePrice = 0;
-        element.salerCommission = 0;
-      }
-
-      finalItems.push(element);
-    });
+    finalItems.push(element);
   }
 
-  console.log("🚀 ~ finalItems:", finalItems);
-
+  // 3) Shipping: entered amount, else by weight (direct partners keep their current shipping).
+  const totalWeight = priced.totals.weight;
   let shippingCompany;
-  if (!req.body?.order?.shippingCharges) {
+  if (!orderInput.shippingCharges) {
     shippingCompany = await shippingCompanies.findOne({
       where: {
-        weightFrom: {
-          [Op.lte]: totalWeight, // Less than or equal to the weight
-        },
-        weightTo: {
-          [Op.gte]: totalWeight, // Greater than or equal to the weight
-        },
+        weightFrom: { [Op.lte]: totalWeight },
+        weightTo: { [Op.gte]: totalWeight },
       },
       attributes: ["charges"],
     });
@@ -2148,63 +2191,102 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
       );
     }
   }
-
-  input.order.itemsPrice = itemsPrice;
-  input.order.discountPrice = discountOnItemsPrice;
-  // input.order.discountPercentage = percentageDiscount;
-  input.order.invoiceNumber = req.body?.order?.invoiceNumber;
-  input.order.totalWeight = parseFloat(totalWeight);
-  input.order.shippingCompany =
-    input.order.totalWeight > 400 ? `Shipping By Truck` : "UPS";
-  input.order.invoicePdf = 1;
-  input.order.shippingCharges =
+  const shippingCharges =
     placedOrder?.partnerType == "direct-partner"
-      ? req.body?.order?.shippingCharges || placedOrder?.shippingCharges
-      : req.body?.order?.shippingCharges || shippingCompany?.charges;
+      ? orderInput.shippingCharges || placedOrder?.shippingCharges || 0
+      : orderInput.shippingCharges || shippingCompany?.charges || 0;
+  const vat = parseFloat(orderInput.vat ?? placedOrder.vat ?? 0) || 0;
 
-  input.order.subTotal = itemsPrice + parseFloat(input?.order?.vat || 0);
-  input.order.totalBill =
-    itemsPrice +
-    parseFloat(input?.order?.vat || 0) +
-    parseFloat(req.body?.order?.shippingCharges || shippingCompany?.charges);
-
-  if (placedOrder.invoiceDate || !input?.order?.emailInvoiceToCustomer) {
-    delete input.order.invoiceDate;
+  // 4) The open payment link (if any) is for the old amount: stop it (or notice it was paid).
+  if (placedOrder?.invoiceId) {
+    const session = await Stripe.checkCheckoutSessionStatus(placedOrder?.invoiceId);
+    if (session == "paid") {
+      await order.update(
+        { paymentMethod: "card", paymentStatus: "done" },
+        { where: { id: placedOrder.id } },
+      );
+      return next(
+        new AppError(
+          "As the payment for the order has already been made, we are unable to update an invoice at this point.",
+          400,
+        ),
+      );
+    } else if (session == "open") {
+      await Stripe.blockCheckoutSession(placedOrder?.invoiceId);
+    }
   }
 
-  await order.update(input?.order, { where: { id: placedOrder?.id } });
-  await item.destroy({ where: { orderId: placedOrder?.id } });
-  await item.bulkCreate(finalItems);
-  const pdfFilename = `invoice-00${placedOrder.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
-  const pdfPath = path.join(__dirname, "../../public/invoicePDFs", pdfFilename);
+  const orderUpdate = {
+    ...pickFields(orderInput, EDITABLE_ORDER_FIELDS),
+    invoiceId: null,
+    hostedInvoiceUrl: null,
+    itemsPrice,
+    discountPrice: priced.totals.discount,
+    totalWeight: parseFloat(totalWeight),
+    shippingCompany: totalWeight > 400 ? `Shipping By Truck` : "UPS",
+    invoicePdf: 1,
+    shippingCharges,
+    subTotal: itemsPrice + vat,
+    totalBill: itemsPrice + vat + parseFloat(shippingCharges || 0),
+  };
+  if (placedOrder.invoiceDate || !orderInput.emailInvoiceToCustomer) {
+    delete orderUpdate.invoiceDate;
+  }
 
-  // Check if file exists, then delete
-  fs.access(pdfPath, fs.constants.F_OK, (err) => {
-    if (!err) {
-      fs.unlink(pdfPath, (unlinkErr) => {
-        if (unlinkErr) {
-          console.error(
-            `❌ Failed to delete invoice PDF for order ${placedOrder.id}:`,
-            unlinkErr,
-          );
-        } else {
-          console.log(`🗑️ Deleted invoice PDF: ${pdfFilename}`);
-        }
-      });
-    } else {
-      console.warn(
-        `⚠️ No invoice PDF found for order ${placedOrder.id} at ${pdfPath}`,
+  await sequelize.transaction(async (transaction) => {
+    await order.update(orderUpdate, { where: { id: placedOrder.id }, transaction });
+    await item.destroy({ where: { orderId: placedOrder.id }, transaction });
+    await item.bulkCreate(finalItems, { transaction });
+    if (priced.changes.length) {
+      await orderItemPriceLog.bulkCreate(
+        priced.changes.map((change) => ({
+          ...change,
+          orderId: placedOrder.id,
+          changedByEntity: req.user?.entity || null,
+          changedById: req.user?.id || null,
+          changedByName: req.user?.name || req.user?.srName || req.user?.email || null,
+        })),
+        { transaction },
       );
     }
   });
 
-  if (input?.order?.paymentCardId) {
+  const lineSummary = (lines) =>
+    lines.map((l) => ({ productId: l.productId ?? null, name: l.productName ?? null, type: l.type || "product", qty: Number(l.qty), total: Number(l.price || 0) }));
+  await logOrderActivity({
+    req,
+    orderId: placedOrder.id,
+    action: "invoice_edited",
+    summary: `Invoice edited: total ${activityMoney(placedOrder.totalBill)} → ${activityMoney(orderUpdate.totalBill)}`,
+    details: {
+      before: { totalBill: Number(placedOrder.totalBill || 0), itemsPrice: Number(placedOrder.itemsPrice || 0), shippingCharges: Number(placedOrder.shippingCharges || 0), lines: lineSummary(existingLines) },
+      after: { totalBill: orderUpdate.totalBill, itemsPrice: orderUpdate.itemsPrice, shippingCharges: Number(orderUpdate.shippingCharges || 0), lines: lineSummary(finalItems) },
+      priceChanges: priced.changes.length,
+      priceChangesConfirmed: manualPriceChanges.length ? true : undefined,
+      emailToCustomer: Boolean(orderInput.emailInvoiceToCustomer),
+      chargeSavedCard: Boolean(orderInput.paymentCardId),
+    },
+  });
+
+  const pdfFilename = `invoice-00${placedOrder.id}.pdf`;
+  const pdfPath = path.join(__dirname, "../../public/invoicePDFs", pdfFilename);
+  fs.access(pdfPath, fs.constants.F_OK, (err) => {
+    if (!err) {
+      fs.unlink(pdfPath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error(`❌ Failed to delete invoice PDF for order ${placedOrder.id}:`, unlinkErr);
+        }
+      });
+    }
+  });
+
+  if (orderInput.paymentCardId) {
     const payment = await Stripe.createPaymentIntent({
-      adminReceivableAmount: input.order.totalBill,
+      adminReceivableAmount: orderUpdate.totalBill,
       hasLocalPatner: placedOrder.salesRepId,
       localPartnerAccountId: placedOrder.connectAccountId,
       localPatnerCommission: totalLocalPatnerCommission,
-      paymentMethodId: input?.order?.paymentCardId,
+      paymentMethodId: orderInput.paymentCardId,
       stripeCustomer: placedOrder?.stripeCustomerId,
       connectedCustomerForPartner: placedOrder?.stripeCustomerIdForPartner,
       partnerType: placedOrder?.partnerType,
@@ -2213,8 +2295,6 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
         invoiceNumber: placedOrder.invoiceNumber,
       },
     });
-
-    // console.log("🚀 ~ payment:", payment)
 
     if (payment && payment?.status) {
       await order.update(payment?.data, { where: { id: placedOrder?.id } });
@@ -2248,19 +2328,15 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
         message: "Payment capture success",
         data: { id: req.params.orderId },
       });
-    } else {
-      return res.status(200).json({
-        status: "success",
-        message: payment?.message || "Payment failed",
-        data: { id: req.params.orderId },
-      });
     }
+    return res.status(200).json({
+      status: "success",
+      message: payment?.message || "Payment failed",
+      data: { id: req.params.orderId },
+    });
   }
 
-  if (
-    input?.order?.emailInvoiceToCustomer &&
-    !input?.order?.attemptImmediatePayment
-  ) {
+  if (orderInput.emailInvoiceToCustomer && !orderInput.attemptImmediatePayment) {
     sentPaymentInvoiceEvent({
       orderId: placedOrder?.id,
       orderType: "customer",
@@ -2272,7 +2348,7 @@ exports.updateOrder = catchAsync(async (req, res, next) => {
   return res.status(200).json({
     status: "success",
     message: "success",
-    data: { id: req.params.orderId },
+    data: { id: req.params.orderId, priceChanges: priced.changes.length },
   });
 });
 

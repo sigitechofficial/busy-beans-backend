@@ -69,7 +69,7 @@ async function revokeAllTokensForUser(userId) {
 async function userAllTokens(userId) {
   console.log("🚀 ~ userAllTokens REDIS:");
   const tokens = await redisClient.sMembers(`${userId}`);
-  console.log(`Tokens for user ${userId}:`, tokens);
+  console.log(`Tokens for user ${userId}: ${tokens.length}`);
   return tokens;
 }
 

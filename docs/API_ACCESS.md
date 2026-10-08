@@ -57,6 +57,31 @@ then the endpoints are enforced.
 Still public by design: `POST /api/v1/admin/order-management/fetch-invoice/:orderId` (pay-invoice
 links from the websites and `views/pay.ejs`).
 
+## Client IP and proxies (`app.js`, `utils/trustProxy.js`)
+
+Request path: browser → (optional CDN / load balancer) → nginx on the API server → Node (PM2).
+Express trusts exactly `TRUST_PROXY_HOPS` proxies (default `1` = nginx) when reading
+`X-Forwarded-For`, so `req.ip` (rate limits, anonymized lead IPs) can't be set by a client header.
+If a load balancer or CDN is added in front of nginx, set `TRUST_PROXY_HOPS=2` (or an Express
+trust-proxy value such as `loopback, 10.0.0.0/8`). Never `true`.
+
+## Public marketing ingest (`/api/public/*`)
+
+| Endpoint | Limits |
+|---|---|
+| `POST /api/public/tracking/events`, `/touchpoints` | 300/min per IP, bots dropped (204), 64 KB body |
+| `POST /api/public/tracking/consent` | 30/min per IP, 64 KB body |
+| `POST /api/public/lead-submissions` | 20/min per IP, 64 KB body, honeypot, field limits, idempotent `event_id` |
+
+The rest of the API keeps the 50 MB body limit (uploads). Test mode, lead time and attribution are
+decided by the server (see `docs/analytics/EVENT_CONTRACT.md`, "Server authority").
+
+## Logging secrets
+
+Never log a secret, token, password, API key or Authorization header, not even a prefix. Log
+presence only (`Stripe webhook configured: yes`, `authorization: "present"`). Request logs
+(`app.js`, `marketing/middlewares/requestLogger.js`) follow this.
+
 ## Known issues (not changed here)
 
 - `restrictTo("admin", "salesRep")` in `routes/adminRoutes.js` (`PUT /employee/:employeeId` and two
@@ -66,7 +91,11 @@ links from the websites and `views/pay.ejs`).
   tokens. The customer websites call only `shipping-charges-on-weight/customer/:id` and the
   address lists there; a router-wide "no customer tokens" guard with that allowlist would close the
   rest.
-- `middlewares/protect.js` logs bearer tokens to the console.
+- Stripe webhook signing secrets that were hard-coded in `controllers/webhook/webhookController.js`
+  (removed; verification now uses `STRIPE_WEBHOOK_SECERET` only and answers 500 when it is unset)
+  remain in Git history: rotate them. Test: `node scripts/stripeWebhookSecretTest.js`.
+- `firebase.json` (Firebase Admin service-account private key, used by `utils/throwNotification.js`)
+  is tracked in Git: move it to the environment / secret storage and rotate the key.
 - `POST /api/v1/users/create-lead` saves the request body as-is (`Lead.create(req.body)`).
 
 Test: `node scripts/productAccessTest.js` (local API; set `INTERNAL_JOB_API_KEY` to the API's value to

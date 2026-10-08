@@ -17,7 +17,16 @@ const {
   statuses,
   orderFrequency,
   account,
+  sequelize,
 } = require("../../models");
+const {
+  canAccessOrder,
+  pickFields,
+  paymentLocked,
+  EDITABLE_ORDER_FIELDS,
+} = require("../../utils/orderAccess");
+const { logOrderActivity, money: activityMoney } = require("../../utils/orderActivity");
+const { ensurePayToken, payUrl } = require("../../utils/payLink");
 
 const fs = require("fs");
 const path = require("path");
@@ -778,24 +787,32 @@ exports.partnerOrderDetails = catchAsync(async (req, res, next) => {
     ],
   });
 
+  // Shareable pay link for unpaid partner invoices (callers passed the admin access checks).
+  const payToken =
+    output?.id && output?.paymentStatus !== "done"
+      ? await ensurePayToken(partnerOrder, output.id).catch(() => null)
+      : null;
+
   res.status(200).json({
     status: "success",
     data: {
       order: output,
       adminAddress: adm,
+      payUrl: payToken ? payUrl({ id: output.id, orderType: "local-partner", payToken }) : null,
     },
   });
 });
 
 //* UPDATE ORDER
 exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
-  console.log("🚀 ~ req.body:", req.body);
   const fetchedOrder = await partnerOrder.findOne({
     where: { id: req.params.orderId },
     attributes: [
       "id",
       "supplierId",
       "paymentStatus",
+      "paymentIntentId",
+      "pulloutIntentId",
       "salesRepId",
       "invoiceId",
       //   "orderFrequencyId",
@@ -804,6 +821,7 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
       "invoiceReminder",
       "invoicePaidDate",
       "invoiceNumber",
+      "totalBill",
       //   "userId",
       [
         literal(
@@ -824,19 +842,25 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
 
   if (!placedOrder) {
     return next(new AppError("Order not found.", 404));
-  } else if (placedOrder.paymentStatus == "done") {
+  }
+  if (!canAccessOrder(req.user, placedOrder.salesRepId, { kind: "partner" })) {
+    return next(new AppError("You do not have permission to edit this order.", 403));
+  }
+  if (paymentLocked(placedOrder)) {
     return next(
       new AppError(
-        "The order payment has already been made. You may proceed with the update.",
-        404,
+        "This order is already paid or a payment is in progress, so the invoice can no longer be changed.",
+        400,
       ),
     );
   }
-
-  if (req.body?.order) {
-    await partnerOrder.update(req.body?.order, {
-      where: { id: placedOrder.id },
-    });
+  const orderInput =
+    req.body?.order && typeof req.body.order === "object" ? req.body.order : {};
+  const invalidCharge = (Array.isArray(req.body?.typeCharges) ? req.body.typeCharges : []).some(
+    (c) => !Number.isFinite(Number(c?.total ?? 0)) || Number(c?.total ?? 0) < 0,
+  );
+  if (invalidCharge) {
+    return next(new AppError("Extra charge amounts must be 0 or more.", 400));
   }
 
   let checkSession = false;
@@ -865,11 +889,16 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
 
   if (checkSession) await Stripe.blockCheckoutSession(placedOrder?.invoiceId);
 
-  const input = req.body;
-  console.log("🚀 ~ input:", input);
-  input.order.invoiceId = null;
-  input.order.hostedInvoiceUrl = null;
-  input.items = req.body.items;
+  const input = {
+    // Only the invoice fields the screens edit; everything else on the order is server-managed.
+    order: {
+      ...pickFields(orderInput, EDITABLE_ORDER_FIELDS),
+      invoiceId: null,
+      hostedInvoiceUrl: null,
+    },
+    items: Array.isArray(req.body?.items) ? req.body.items : [],
+    typeCharges: Array.isArray(req.body?.typeCharges) ? req.body.typeCharges : [],
+  };
 
   // console.log('🚀 ~ exports.bookOrder=catchAsync ~ input:', input);
 
@@ -1042,12 +1071,27 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
   if (placedOrder?.invoiceDate) {
     delete input.order.invoiceDate;
   }
-  await partnerOrder.update(input?.order, { where: { id: placedOrder?.id } });
-  await partnerOrderItem.destroy({
-    where: { partnerOrderId: placedOrder?.id },
+  await sequelize.transaction(async (transaction) => {
+    await partnerOrder.update(input.order, { where: { id: placedOrder?.id }, transaction });
+    await partnerOrderItem.destroy({
+      where: { partnerOrderId: placedOrder?.id },
+      transaction,
+    });
+    await partnerOrderItem.bulkCreate(finalItems, { transaction });
   });
-  console.log("🚀 ~ finalItems:", finalItems);
-  await partnerOrderItem.bulkCreate(finalItems);
+  await logOrderActivity({
+    req,
+    partnerOrderId: placedOrder.id,
+    action: "invoice_edited",
+    summary: `Invoice edited: total ${activityMoney(placedOrder.totalBill)} → ${activityMoney(input.order.totalBill)}`,
+    details: {
+      before: { totalBill: Number(placedOrder.totalBill || 0) },
+      after: {
+        totalBill: input.order.totalBill,
+        lines: finalItems.map((l) => ({ productId: l.productId ?? null, name: l.productName ?? null, type: l.type || "product", qty: Number(l.qty), total: Number(l.price || 0) })),
+      },
+    },
+  });
   const pdfFilename = `invoice-00${placedOrder.id}.pdf`; // or `inv-${order.id}.pdf` if you're using dash
   const pdfPath = path.join(__dirname, "../../public/invoicePDFs", pdfFilename);
 
@@ -1071,13 +1115,13 @@ exports.updatePartnerOrder = catchAsync(async (req, res, next) => {
     }
   });
 
-  if (input?.order?.paymentCardId) {
+  if (orderInput.paymentCardId) {
     const payment = await Stripe.createPaymentIntent({
       adminReceivableAmount: input.order.totalBill,
       hasLocalPatner: placedOrder.salesRepId,
       localPartnerAccountId: placedOrder.connectAccountId,
       localPatnerCommission: totalLocalPatnerCommission,
-      paymentMethodId: input?.order?.paymentCardId,
+      paymentMethodId: orderInput.paymentCardId,
       stripeCustomer: placedOrder?.stripeCustomerId,
       metadata: {
         orderId: placedOrder.id,

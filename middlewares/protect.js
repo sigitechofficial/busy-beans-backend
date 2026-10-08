@@ -52,11 +52,10 @@ exports.protect = catchAsync(async (req, res, next) => {
     );
   }
   // 2) Verify JWT
-  console.log("🚀 ~ protect >>>>>>:", token);
   let decoded;
   try {
     decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
-    console.log("🚀 ~promisify(jwt.verify) decoded:", decoded);
+    console.log("🚀 ~promisify(jwt.verify) decoded:", { id: decoded?.id, entity: decoded?.entity });
   } catch (err) {
     return next(
       new AppError("Invalid or expired token.", 401, "authentication-fail"),

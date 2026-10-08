@@ -1508,7 +1508,7 @@ async function handlePartnerQboSync({
     const { accessToken, realmId } = await refreshAccessTokenIfNeeded({
       condition: partnerQboCondition,
     });
-    console.log("🚀 ~ handlePartnerQboSync ~ accessToken:", accessToken);
+    console.log("🚀 ~ handlePartnerQboSync ~ accessToken:", accessToken ? "present" : "missing");
     console.log("🚀 ~ handlePartnerQboSync ~ realmId:", realmId);
     console.log(
       "🚀 ~ handlePartnerQboSync ~ quickBooksInvoiceIdPartner:",

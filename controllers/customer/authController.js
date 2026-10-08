@@ -74,7 +74,7 @@ const signToken = (data) =>
   );
 
 const createSendToken = (input, statusCode, req, res, tokenId = "") => {
-  console.log("ðŸš€ ~ createSendToken ~ input:", input);
+  console.log("ðŸš€ ~ createSendToken ~ input:", input?.id);
   const token = signToken({
     id: input.id,
     name: input.name,
@@ -105,7 +105,7 @@ const createSendToken = (input, statusCode, req, res, tokenId = "") => {
 };
 
 exports.signup = catchAsync(async (req, res, next) => {
-  console.log("ðŸš€ ~ exports.signup=catchAsync ~  req.body:", req.body);
+  console.log("ðŸš€ ~ exports.signup=catchAsync ~  req.body keys:", Object.keys(req.body || {}));
 
   const OTP = otpGenerator.generate(4, {
     lowerCaseAlphabets: false,

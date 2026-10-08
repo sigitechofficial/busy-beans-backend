@@ -144,7 +144,7 @@ exports.authLogin = async (req, res) => {
 exports.authExchange = async (req, res) => {
   try {
     const { fullUrl } = req.body || {};
-    console.log("🚀 ~ req.body:", req.body);
+    console.log("🚀 ~ req.body keys:", Object.keys(req.body || {}));
     if (!fullUrl)
       return httpError(res, 400, "Missing fullUrl from request body");
     const data = await exchangeFromFullUrl({ fullUrl, req: req });

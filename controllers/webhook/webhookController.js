@@ -28,8 +28,9 @@ const {
   onMultiInvoiceCheckoutCompleted,
 } = require("./multiInvoiceWebhookHandler");
 
-const endpointSecret = `${STRIPE_WEBHOOK_SECERET}`;
-console.log("🚀 ~ endpointSecret:", endpointSecret);
+// Webhook signing secret: environment only (never hard-coded, never logged).
+const endpointSecret = STRIPE_WEBHOOK_SECERET || "";
+console.log(`Stripe webhook configured: ${endpointSecret ? "yes" : "no"}`);
 
 const {
   syncInvoiceOnQuikBooks,
@@ -39,7 +40,6 @@ const {
 const {
   syncPaymentToQuickBooks,
 } = require("../../services/paymentSyncService");
-// const endpointSecret = `whsec_PgzwORQviUKawaKDIXDeRbSSHINHQRik`; //SANDBOX
 exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   const sig = req.headers["stripe-signature"];
 
@@ -47,6 +47,11 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
   console.log(
     "ЁЯЪА ~~~~~~~~~~~ exportts.sripeSubscriptionWebhookEventHandler= ~ event:",
   );
+  if (!endpointSecret) {
+    // Misconfiguration: refuse (Stripe retries on 5xx) instead of processing an unverified event.
+    console.error("Stripe webhook verification unavailable: STRIPE_WEBHOOK_SECERET is not configured.");
+    return res.status(500).send("Webhook verification unavailable.");
+  }
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
     console.log(
@@ -54,24 +59,11 @@ exports.stripeSubscriptionWebhookEventHandler = async (req, res) => {
       JSON.stringify(event),
     );
   } catch (err) {
-    try {
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        sig,
-        "whsec_vRdjANXLfDuijIllCevBlJJ2OorLO4Sq",
-      );
-    } catch (err) {
-      console.error(
-        "тЪая╕ПтЪая╕ПтЪая╕П Webhook signature verification failed.",
-        err.message,
-      );
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
     console.error(
       "тЪая╕ПтЪая╕ПтЪая╕П Webhook signature verification failed.",
       err.message,
     );
-    // return res.status(400).send(`Webhook Error: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   console.log("ЁЯЪАЁЯЪАЁЯЪА ~~~~~~~~~~ >  EVENT TYPE }:", event.type);
