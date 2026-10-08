@@ -71,18 +71,6 @@ app.set("trust proxy", trustProxySetting(process.env.TRUST_PROXY_HOPS));
 
 // // 1) GLOBAL MIDDLEWARES
 // // Implement CORS
-// Invoice PDFs are only read from disk (email attachments); never served by URL, so nobody can
-// download invoice-00<number>.pdf by trying numbers.
-app.use("/public", (req, res, next) => {
-  let p;
-  try {
-    p = path.posix.normalize(decodeURIComponent(req.path).replace(/\\/g, "/")).toLowerCase();
-  } catch {
-    return res.status(400).end();
-  }
-  if (p.startsWith("/invoicepdfs") || p.includes("/invoicepdfs/")) return res.status(404).end();
-  return next();
-});
 app.use("/public", express.static(path.join(__dirname, "public")));
 // Public marketing ingest (tracking, leads, consent) never needs more than a few KB: a small
 // limit here, registered before the global parser (which then skips already-parsed bodies).
