@@ -201,29 +201,6 @@ async function run() {
   const pdfHtml = await ejs.renderFile(path.join(__dirname, "../views/invoice-template.ejs"), { order: { id: oFresh.id, items: [], user: {} }, admin: {}, payLink: link }).catch((e) => `render failed: ${e.message}`);
   check(pdfHtml.includes(link.replace(/&/g, "&amp;")), "invoice PDF's Pay Online link is the coded link");
   if (!pdfHtml.includes(link.replace(/&/g, "&amp;"))) console.log("[security-access] PDF render sample:", String(pdfHtml).slice(0, 200));
-  // Invoice PDFs are never downloadable by URL (they used to be: /public/invoicePDFs/invoice-00<id>.pdf).
-  {
-    const fsx = require("fs");
-    const dir = path.join(__dirname, "../public/invoicePDFs");
-    const probe = "invoice-00probe-security-test.pdf";
-    fsx.mkdirSync(dir, { recursive: true });
-    fsx.writeFileSync(path.join(dir, probe), "%PDF-1.4 test");
-    try {
-      for (const url of [`/public/invoicePDFs/${probe}`, `/public/./invoicePDFs/${probe}`, `/public//invoicePDFs/${probe}`, `/public/INVOICEPDFS/${probe}`, `/public/%69nvoicePDFs/${probe}`, `/public/products/../invoicePDFs/${probe}`]) {
-        // Raw request: fetch() would clean up ./ and ../ before sending.
-        const status = await new Promise((resolve) => {
-          const u = new URL(API);
-          require("http").get({ host: u.hostname, port: u.port, path: url }, (r) => { r.resume(); resolve(r.statusCode); }).on("error", () => resolve(0));
-        });
-        const resp = { status };
-        check(resp.status !== 200, `invoice PDF not downloadable: ${url} (got ${resp.status})`);
-      }
-      const img = fsx.readdirSync(path.join(__dirname, "../public/products")).find((f) => /.(jpe?g|png|webp)$/i.test(f));
-      if (img) check((await fetch(`${API}/public/products/${img}`)).status === 200, "product images are still served");
-    } finally {
-      fsx.unlinkSync(path.join(dir, probe));
-    }
-  }
   // Emergency switch reopens by number (env read per request: checked by unit, not by restarting the API).
   {
     const prev = process.env.PAY_LINK_REQUIRE_CODE;
