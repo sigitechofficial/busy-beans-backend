@@ -26,7 +26,9 @@ exports.marketingProtect = catchAsync(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, secret);
-    if (decoded.scope && decoded.scope !== "marketing") {
+    // Required, not just checked when present: with MARKETING_JWT_SECRET unset the secret falls
+    // back to the commerce JWT_SECRET, and commerce tokens carry no scope.
+    if (decoded.scope !== "marketing") {
       return sendError(res, 401, "Invalid token scope", "UNAUTHORIZED");
     }
     req.marketingUser = decoded;

@@ -1,6 +1,7 @@
 const { getCustomTemplateModel } = require("../models/customTemplate");
 const { getBuiltinTemplateOverrideModel } = require("../models/builtinTemplateOverride");
 const { getCustomTemplateUsageMap } = require("../utils/usageCounts");
+const { normalizeDesignSystem } = require("../utils/designSystem");
 
 function buildCustomTemplateId() {
   return `tpl-custom-${Date.now()}`;
@@ -39,6 +40,7 @@ async function createCustomTemplate(payload) {
     status: payload.status || "draft",
     description: payload.description || null,
     initialSections: payload.initialSections || null,
+    designSystem: normalizeDesignSystem(payload.designSystem),
     usageCount: 0,
   });
 }
@@ -86,6 +88,7 @@ async function updateCustomTemplate(id, payload) {
   fields.forEach((field) => {
     if (payload[field] !== undefined) row[field] = payload[field];
   });
+  if (payload.designSystem !== undefined) row.designSystem = normalizeDesignSystem(payload.designSystem);
   await row.save();
   return row;
 }

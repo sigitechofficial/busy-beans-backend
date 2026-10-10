@@ -2,6 +2,15 @@ const { Op } = require("sequelize");
 const { getLandingPageModel } = require("../models/landingPage");
 const { getLandingPageVersionModel } = require("../models/landingPageVersion");
 const { injectLeadSubmitUrls } = require("../services/landingPages.service");
+const { revalidateWebsiteLandingPage } = require("../services/websiteRevalidate.service");
+const { attachCustomHtmlSsr } = require("../utils/customHtmlSsr");
+const { normalizeDesignSystem } = require("../utils/designSystem");
+const { syncPaidOrders } = require("../services/orderAttribution.service");
+const { runRollupCycle: runPageStatsRollup } = require("../services/pageStats.service");
+const { purgeOldConsent } = require("../services/consentLog.service");
+const { purgeOldPiiAccess } = require("../services/piiAccess.service");
+
+let lastConsentPurgeAt = 0;
 
 let intervalRef = null;
 let running = false;
@@ -44,14 +53,16 @@ async function runScheduledPublishCycle() {
     // eslint-disable-next-line no-await-in-loop
     await page.update({
       status: "published",
-      publishedSections: injectLeadSubmitUrls(
-        JSON.parse(JSON.stringify(page.draftSections || [])),
+      publishedSections: attachCustomHtmlSsr(
+        injectLeadSubmitUrls(JSON.parse(JSON.stringify(page.draftSections || []))),
       ),
+      publishedDesignSystem: normalizeDesignSystem(page.designSystem),
       publishedAt: now,
       updatedBy: "scheduler",
     });
     // eslint-disable-next-line no-await-in-loop
     await createVersion(page.id, "published", page.draftSections || []);
+    revalidateWebsiteLandingPage(page.slug);
   }
 
   return pages.length;
@@ -78,9 +89,22 @@ async function runScheduledUnpublishCycle() {
     });
     // eslint-disable-next-line no-await-in-loop
     await createVersion(page.id, "unpublished", page.draftSections || []);
+    revalidateWebsiteLandingPage(page.slug);
   }
 
   return pages.length;
+}
+
+/** Revenue attribution: emit order_completed for attributed orders that are now paid. */
+async function runOrderRevenueSync() {
+  try {
+    const result = await syncPaidOrders();
+    return result.paid + result.voided + (result.inherited || 0) > 0 ? result : null;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[marketing:scheduler] order revenue sync failed:", error.message);
+    return null;
+  }
 }
 
 async function runLandingPageSchedulerCycle() {
@@ -89,6 +113,28 @@ async function runLandingPageSchedulerCycle() {
   try {
     const published = await runScheduledPublishCycle();
     const unpublished = await runScheduledUnpublishCycle();
+    const orders = await runOrderRevenueSync();
+    if (orders) {
+      // eslint-disable-next-line no-console
+      console.log(`[marketing:scheduler] orders paid=${orders.paid} voided=${orders.voided} repeat-credited=${orders.inherited || 0}`);
+    }
+    // Reporting rollups for recent closed days (self-gated to every 15 min).
+    await runPageStatsRollup().catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error("[marketing:scheduler] page stats rollup failed:", error.message);
+    });
+    // Consent log retention: at most once an hour.
+    if (Date.now() - lastConsentPurgeAt > 60 * 60 * 1000) {
+      lastConsentPurgeAt = Date.now();
+      await purgeOldConsent().catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error("[marketing:scheduler] consent log purge failed:", error.message);
+      });
+      await purgeOldPiiAccess().catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error("[marketing:scheduler] customer data access log purge failed:", error.message);
+      });
+    }
     return { skipped: false, published, unpublished };
   } finally {
     running = false;

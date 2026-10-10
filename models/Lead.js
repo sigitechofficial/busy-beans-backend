@@ -216,10 +216,40 @@ module.exports = (sequelize) => {
       customerFeedback: {
         type: DataTypes.TEXT,
       },
+      // Unified enquiries (utils/leadPipeline.js): every website enquiry is a lead.
+      /** machine · contact · tasting · machine_enquiry · product_quote · landing_page · meta · manual */
+      enquiryType: {
+        type: DataTypes.STRING(32),
+        allowNull: true,
+        defaultValue: "machine",
+      },
+      /** Event id shared with the Campaign Builder lead (lead_submissions.event_id): source + status sync. */
+      marketingEventId: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      /** The get_in_touches row this lead was created from (contact / tasting forms). */
+      getInTouchId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      /** Deal amount when Won (lead revenue in Analytics). */
+      wonAmount: {
+        type: DataTypes.DECIMAL(12, 2),
+        allowNull: true,
+      },
+      wonAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
     },
     {
       tableName: "leads",
       timestamps: true,
+      indexes: [
+        { fields: ["marketingEventId"], name: "leads_marketing_event_idx" },
+        { fields: ["getInTouchId"], name: "leads_get_in_touch_idx" },
+      ],
     }
   );
 

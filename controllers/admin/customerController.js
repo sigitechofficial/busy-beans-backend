@@ -765,7 +765,7 @@ exports.customerDetail = catchAsync(async (req, res, next) => {
 // exports.getAllProducts = factory.getAll(product);
 // exports.getProduct = factory.getOne(product);
 exports.updateCutomer = catchAsync(async (req, res, next) => {
-  console.log("🚀 ~ req.body:", req.body);
+  console.log("🚀 ~ req.body keys:", Object.keys(req.body || {}));
   if (req.body?.info) {
     if (req.body.info?.status == false)
       REDIS.revokeAllTokensForUser(req.params.id);

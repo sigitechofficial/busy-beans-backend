@@ -198,7 +198,7 @@ function parseDDMMYYYY(val) {
       <p>Thanks for your business!</p>
     <p><%= order?.salesRep?.territoryName || order?.salesRep?.srName || 'Busy Bean Coffee Inc.' %></p>
       <p>
-        <a href="https://busybeancoffee.com/paymentCheck?orderId=<%=order?.id%>">Pay Online using Credit/Debit Card</a>
+        <a href="<%= payLink || ('https://busybeancoffee.com/paymentCheck?orderId=' + order?.id) %>">Pay Online using Credit/Debit Card</a>
       </p>
     </div>
   </body>

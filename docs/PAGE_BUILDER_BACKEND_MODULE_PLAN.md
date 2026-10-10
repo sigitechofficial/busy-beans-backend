@@ -1,5 +1,7 @@
 # Page Builder Backend Module Plan
 
+> **Partly outdated (2026-09).** Original module plan; the module has since gained publish revalidation, custom-HTML sanitizing, order attribution, daily page stats and SSO. Current references: `docs/analytics/EVENT_CONTRACT.md` (events, reports, revenue), `docs/security/HARDENING.md` (API security), and in the Campaign Builder repo `docs/landing-pages/ARCHITECTURE.md` / `ENVIRONMENT.md` / `RENDERER_PACKAGE.md`.
+
 ## Purpose
 
 This document defines the implementation plan for adding the new Page Builder backend module to `busy-beans-backend` without disturbing existing modules and flows (`/api/v1/*`, webhook handling, order/subscription/QBO logic).

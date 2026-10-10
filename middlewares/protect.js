@@ -52,11 +52,10 @@ exports.protect = catchAsync(async (req, res, next) => {
     );
   }
   // 2) Verify JWT
-  console.log("🚀 ~ protect >>>>>>:", token);
   let decoded;
   try {
     decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
-    console.log("🚀 ~promisify(jwt.verify) decoded:", decoded);
+    console.log("🚀 ~promisify(jwt.verify) decoded:", { id: decoded?.id, entity: decoded?.entity });
   } catch (err) {
     return next(
       new AppError("Invalid or expired token.", 401, "authentication-fail"),
@@ -165,3 +164,17 @@ exports.restrictTo = (...allowedRoles) => {
     next();
   };
 };
+
+/** Every signed-in entity except customers (`user`): admin panel, partner and supplier accounts. */
+exports.STAFF_ENTITIES = [
+  "admin",
+  "subAdmin",
+  "adminEmployee",
+  "localPartner",
+  "partnerEmployee",
+  "supplier",
+];
+
+/** HQ accounts that manage the catalog (products, categories). */
+exports.ADMIN_STAFF_ENTITIES = ["admin", "subAdmin", "adminEmployee"];
+

@@ -49,3 +49,20 @@ exports.upsertBuiltinOverride = catchAsync(async (req, res) => {
   );
   return sendData(res, 200, data);
 });
+
+/** POST /admin/templates/import-url { url } — fetch an external HTML page for the importer. */
+exports.importFromUrl = catchAsync(async (req, res) => {
+  // eslint-disable-next-line global-require
+  const { importFromUrl } = require("../services/importFromUrl.service");
+  try {
+    const data = await importFromUrl(req.body?.url);
+    // eslint-disable-next-line no-console
+    console.log(`[marketing:import-url] user=${req.marketingUser?.sub || "?"} url=${data.finalUrl} bytes=${data.bytes}`);
+    return sendData(res, 200, data);
+  } catch (error) {
+    if (error.code && error.code.startsWith("IMPORT_URL")) {
+      return sendError(res, error.status || 400, error.message, error.code);
+    }
+    throw error;
+  }
+});

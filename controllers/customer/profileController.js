@@ -6,7 +6,7 @@ const { response } = require("../../utils/response");
 const bcrypt = require("bcryptjs");
 
 exports.updateProfile = catchAsync(async (req, res, next) => {
-  console.log("🚀 ~ req.body:", req.body);
+  console.log("🚀 ~ req.body keys:", Object.keys(req.body || {}));
 
   console.log("🚀 ~ req.user.Id:", req.user.id);
 

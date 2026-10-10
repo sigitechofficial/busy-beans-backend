@@ -3,6 +3,7 @@ const fs = require("fs/promises");
 const crypto = require("crypto");
 const { getMediaAssetModel } = require("../models/mediaAsset");
 const { getMediaUsageMap, getMediaUsageCount } = require("../utils/usageCounts");
+const { getApiPublicUrl } = require("../utils/publicUrls");
 
 const MAX_UPLOAD_BYTES = Number(process.env.MEDIA_UPLOAD_MAX_BYTES || 5 * 1024 * 1024);
 const uploadDir = path.resolve(__dirname, "../../public/marketing-media");
@@ -33,8 +34,9 @@ function extensionFromMime(mimeType) {
 function buildPublicUrl(fileName) {
   const cdnBase = String(process.env.CDN_BASE_URL || "").replace(/\/+$/, "");
   if (cdnBase) return `${cdnBase}/marketing-media/${fileName}`;
-  const site = String(process.env.PUBLIC_SITE_URL || "").replace(/\/+$/, "");
-  if (site) return `${site}/public/marketing-media/${fileName}`;
+  // Files are served by this API's /public static route, so the base is the API origin.
+  const api = getApiPublicUrl();
+  if (api) return `${api}/public/marketing-media/${fileName}`;
   return `/public/marketing-media/${fileName}`;
 }
 

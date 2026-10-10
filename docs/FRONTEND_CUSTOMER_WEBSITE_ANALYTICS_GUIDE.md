@@ -1,5 +1,7 @@
 # Customer Website & Marketing Analytics — Frontend Integration Guide
 
+> **Partly outdated (2026-09).** Landing-page fields are now derived server-side; dashboard revenue and avg time are real values; per-page reports live at `/api/admin/analytics/pages`. Current references: `docs/analytics/EVENT_CONTRACT.md` (events, reports, revenue), `docs/security/HARDENING.md` (API security), and in the Campaign Builder repo `docs/landing-pages/ARCHITECTURE.md` / `ENVIRONMENT.md` / `RENDERER_PACKAGE.md`.
+
 **Backend:** `busy-beans-backend` (marketing module only)  
 **Audience:** Customer website + page-builder frontend teams  
 **Base URL:** `{NEXT_PUBLIC_API_BASE_URL}` — e.g. `https://testingbb.trimworldwide.com/api`  

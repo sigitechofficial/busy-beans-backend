@@ -17,10 +17,15 @@ const handleDuplicateFieldsDB = (err) => {
   return new AppError(message, 400);
 };
 
-const handleForeignKeyErrorDB = (err) => {
-  const message = `Foreign key violation: ${err.message}. Please check your data.`;
-  return new AppError(message, 400);
-};
+const handleForeignKeyErrorDB = () =>
+  // The driver message contains table/column names — keep it in the server log only.
+  new AppError("This record references data that does not exist (or is still in use).", 400);
+
+/** body-parser errors (malformed JSON, body too large) are client errors, not 500s. */
+const handleBodyParserError = (err) =>
+  err.type === "entity.too.large"
+    ? new AppError("Request body is too large.", 413)
+    : new AppError("Malformed request body.", 400);
 
 const handleJWTError = () =>
   new AppError("Invalid token. Please log in again!", 401);
@@ -43,12 +48,8 @@ const sendErrorDev = (err, req, res) => {
     });
   }
 
-  // B) RENDERED WEBSITE
-  console.error("ERROR 💥", err);
-  return res.status(err.statusCode).render("error", {
-    title: "Something went wrong!",
-    msg: err.message,
-  });
+  // B) Non-API URL (there is no "error" view template): plain text.
+  return res.status(err.statusCode).type("text/plain").send(err.stack || err.message);
 };
 
 const sendErrorProd = (err, req, res) => {
@@ -71,29 +72,24 @@ const sendErrorProd = (err, req, res) => {
     });
   }
 
-  // B) RENDERED WEBSITE
-  // A) Operational, trusted error: send message to client
-  if (err.isOperational) {
-    return res.status(err.statusCode).render("error", {
-      title: "Something went wrong!",
-      msg: err.message,
-    });
-  }
-  // B) Programming or other unknown error: don't leak error details
-  // 1) Log error
-  console.error("ERROR 💥", err);
-  // 2) Send generic message
-  return res.status(err.statusCode).render("error", {
-    title: "Something went wrong!",
-    msg: "Please try again later.",
-  });
+  // B) Non-API URL (there is no "error" view template): plain text, no internals.
+  return res
+    .status(err.isOperational ? err.statusCode : 500)
+    .type("text/plain")
+    .send(err.isOperational ? err.message : "Something went wrong. Please try again later.");
 };
+/**
+ * Error details (stack, raw error object) are only sent when API_ERROR_DETAILS=true — set it on
+ * a developer machine, never on a shared server. Every other environment, including an unset or
+ * unexpected NODE_ENV, gets the production handler (previously such requests got no response).
+ */
 module.exports = (err, req, res, next) => {
-  // console.log(err.stack);
+  if (res.headersSent) return next(err);
   if (err.name === "SequelizeConnectionRefusedError") {
+    console.error("ERROR 💥", err);
     return res.status(503).json({
       status: "fail",
-      error: "database not connected -- start server",
+      message: "Service temporarily unavailable.",
     });
   }
   err.statusCode = err.statusCode || 500;
@@ -101,24 +97,28 @@ module.exports = (err, req, res, next) => {
 
   console.error("ERROR 💥", err);
 
-  if (process.env.NODE_ENV === "development") {
-    sendErrorDev(err, req, res);
-  } else if (process.env.NODE_ENV === "production") {
-    let error = { ...err };
-    error.message = err.message;
-
-    if (error.name === "SequelizeValidationError") {
-      error = handleSequelizeValidationErrorDB(error);
-    }
-    if (error.code === "ER_DUP_ENTRY") {
-      error = handleDuplicateFieldsDB(error);
-    }
-    if (error.name === "SequelizeForeignKeyConstraintError") {
-      error = handleForeignKeyErrorDB(error);
-    }
-    if (error.name === "JsonWebTokenError") error = handleJWTError();
-    if (error.name === "TokenExpiredError") error = handleJWTExpiredError();
-
-    sendErrorProd(error, req, res);
+  if (process.env.API_ERROR_DETAILS === "true") {
+    return sendErrorDev(err, req, res);
   }
+
+  let error = { ...err };
+  error.name = err.name;
+  error.message = err.message;
+
+  if (error.name === "SequelizeValidationError") {
+    error = handleSequelizeValidationErrorDB(error);
+  }
+  if (error.code === "ER_DUP_ENTRY" || error.name === "SequelizeUniqueConstraintError") {
+    error = handleDuplicateFieldsDB(error);
+  }
+  if (error.name === "SequelizeForeignKeyConstraintError") {
+    error = handleForeignKeyErrorDB(error);
+  }
+  if (error.name === "JsonWebTokenError") error = handleJWTError();
+  if (error.name === "TokenExpiredError") error = handleJWTExpiredError();
+  if (err.type === "entity.parse.failed" || err.type === "entity.too.large") {
+    error = handleBodyParserError(err);
+  }
+
+  return sendErrorProd(error, req, res);
 };

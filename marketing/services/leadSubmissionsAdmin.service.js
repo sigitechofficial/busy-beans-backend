@@ -43,6 +43,8 @@ async function updateLead(id, patch = {}) {
       error.code = "VALIDATION_ERROR";
       throw error;
     }
+    if (patch.conversionStatus === "won" && row.conversionStatus !== "won") row.convertedAt = new Date();
+    if (patch.conversionStatus !== "won") row.convertedAt = null;
     row.conversionStatus = patch.conversionStatus;
   }
 
@@ -59,7 +61,22 @@ async function updateLead(id, patch = {}) {
   }
 
   await row.save();
+  if (!row.testMode && row.eventId && (patch.conversionStatus !== undefined || patch.revenue !== undefined)) {
+    await syncToSalesPipeline(row);
+  }
   return formatLeadRow(row);
+}
+
+/** Status / revenue set here → the linked admin panel Kanban lead. Never fails the update. */
+async function syncToSalesPipeline(row) {
+  try {
+    // Lazy: commerce models are not loaded in marketing-only scripts.
+    // eslint-disable-next-line global-require
+    const { syncFromMarketing } = require("../../utils/leadPipeline");
+    await syncFromMarketing({ eventId: row.eventId, status: row.conversionStatus, revenue: row.revenue });
+  } catch (error) {
+    console.error("lead status → sales pipeline failed:", error.message);
+  }
 }
 
 async function deleteLead(id) {
@@ -83,10 +100,31 @@ async function countNonTestLeads(range) {
   return LeadSubmission.count({ where });
 }
 
+/** Distinct visitors with a non-test lead in the range (a lead without a visitor id counts once). */
+async function countLeadVisitors(range) {
+  const LeadSubmission = getLeadSubmissionModel();
+  const where = ["test_mode = 0"];
+  const replacements = {};
+  if (range.start) {
+    where.push("submitted_at >= :start");
+    replacements.start = range.start;
+  }
+  if (range.end) {
+    where.push("submitted_at <= :end");
+    replacements.end = range.end;
+  }
+  const [row] = await LeadSubmission.sequelize.query(
+    `SELECT COUNT(DISTINCT COALESCE(visitor_id, CONCAT('lead:', id))) AS n FROM lead_submissions WHERE ${where.join(" AND ")}`,
+    { replacements, type: LeadSubmission.sequelize.QueryTypes.SELECT },
+  );
+  return Number(row?.n || 0);
+}
+
 module.exports = {
   listLeads,
   getLeadById,
   updateLead,
   deleteLead,
   countNonTestLeads,
+  countLeadVisitors,
 };

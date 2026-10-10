@@ -1,6 +1,7 @@
 const express = require("express");
 const { marketingProtect } = require("../../middlewares/marketingAuth");
 const landingPagesController = require("../../controllers/landingPages.controller");
+const { guardLandingPageCustomHtml } = require("../../middlewares/customHtmlGuard");
 
 const router = express.Router();
 
@@ -8,8 +9,8 @@ router.use(marketingProtect);
 
 router.get("/", landingPagesController.list);
 router.get("/:id", landingPagesController.getById);
-router.post("/", landingPagesController.create);
-router.patch("/:id/draft", landingPagesController.patchDraft);
+router.post("/", guardLandingPageCustomHtml, landingPagesController.create);
+router.patch("/:id/draft", guardLandingPageCustomHtml, landingPagesController.patchDraft);
 router.get("/:id/validate", landingPagesController.validate);
 router.post("/:id/publish", landingPagesController.publish);
 router.post("/:id/unpublish", landingPagesController.unpublish);

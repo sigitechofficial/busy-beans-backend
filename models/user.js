@@ -203,7 +203,6 @@ module.exports = (sequelize) => {
   user.addHook("beforeCreate", (instance) => {
     if (instance.password) {
       instance.password = bcrypt.hashSync(instance.password, SALT_ROUNDS);
-      console.log("🚀 ~  instance.password:", instance.password);
     }
   });
 

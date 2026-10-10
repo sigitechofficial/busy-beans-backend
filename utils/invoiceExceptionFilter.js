@@ -19,6 +19,10 @@ function invoiceExceptionWhere(kind, tableAlias, extraWhere = {}) {
   } else if (kind === "shippedNotInvoiced") {
     condition.statusId = { [Op.in]: [4, 5] };
     condition.invoiceDate = { [Op.is]: null };
+    // Only orders still to be collected: paid orders (website card, cheque marked paid) can't be
+    // invoiced afterwards, so they don't belong in this to-do list.
+    const unpaid = { [Op.or]: [{ paymentStatus: { [Op.ne]: "done" } }, { paymentStatus: null }] };
+    condition[Op.and] = Array.isArray(condition[Op.and]) ? [...condition[Op.and], unpaid] : [unpaid];
   }
 
   return condition;

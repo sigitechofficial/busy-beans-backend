@@ -1,3 +1,11 @@
+/**
+ * DATETIME columns hold UTC (Sequelize model writes use +00:00), but a Date passed as a raw
+ * query replacement is formatted in the Node process's local timezone. Pass this instead.
+ */
+function toSqlUtc(date) {
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
+
 function parseDateRange(from, to) {
   const range = {};
   if (from) {
@@ -16,11 +24,11 @@ function buildTimestampWhere(range, column = "timestamp") {
   const replacements = {};
   if (range.start) {
     conditions.push(`${column} >= :rangeStart`);
-    replacements.rangeStart = range.start;
+    replacements.rangeStart = toSqlUtc(range.start);
   }
   if (range.end) {
     conditions.push(`${column} <= :rangeEnd`);
-    replacements.rangeEnd = range.end;
+    replacements.rangeEnd = toSqlUtc(range.end);
   }
   return {
     sql: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
@@ -33,11 +41,11 @@ function appendTimestampFilter(range, column = "timestamp", prefix = "AND") {
   const replacements = {};
   if (range.start) {
     parts.push(`${column} >= :rangeStart`);
-    replacements.rangeStart = range.start;
+    replacements.rangeStart = toSqlUtc(range.start);
   }
   if (range.end) {
     parts.push(`${column} <= :rangeEnd`);
-    replacements.rangeEnd = range.end;
+    replacements.rangeEnd = toSqlUtc(range.end);
   }
   if (!parts.length) return { sql: "", replacements };
   return {
@@ -47,6 +55,7 @@ function appendTimestampFilter(range, column = "timestamp", prefix = "AND") {
 }
 
 module.exports = {
+  toSqlUtc,
   parseDateRange,
   buildTimestampWhere,
   appendTimestampFilter,

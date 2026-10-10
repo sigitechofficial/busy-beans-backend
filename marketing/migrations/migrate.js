@@ -43,10 +43,15 @@ async function createMigrationsTable(connection) {
   await connection.query(sql);
 }
 
+/**
+ * Schema migrations are .sql files. Data migrations are .js files exporting `async up()`
+ * (one-off backfills): they run once per environment, in name order with the .sql files, and
+ * are recorded in marketing_migrations the same way, so no manual step is needed on deploy.
+ */
 function getMigrationFiles() {
   return fs
     .readdirSync(__dirname)
-    .filter((file) => file.endsWith(".sql"))
+    .filter((file) => /^\d+_.+\.(sql|js)$/.test(file))
     .sort();
 }
 
@@ -66,6 +71,13 @@ async function getNextBatch(connection) {
 }
 
 async function runMigration(connection, filename) {
+  if (filename.endsWith(".js")) {
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    const { up } = require(path.join(__dirname, filename));
+    if (typeof up !== "function") throw new Error(`${filename} must export an async up() function`);
+    await up();
+    return;
+  }
   const sql = fs.readFileSync(path.join(__dirname, filename), "utf8");
   await connection.query(sql);
 }
@@ -108,8 +120,12 @@ async function migrate() {
 
 if (require.main === module) {
   migrate()
-    // eslint-disable-next-line no-console
-    .then(() => console.log("Marketing migrations completed."))
+    .then(() => {
+      // eslint-disable-next-line no-console
+      console.log("Marketing migrations completed.");
+      // Data migrations open pooled DB/Redis connections that would keep the process alive.
+      process.exit(0);
+    })
     // eslint-disable-next-line no-console
     .catch((error) => {
       console.error("Marketing migrations failed:", error.message);

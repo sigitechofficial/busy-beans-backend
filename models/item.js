@@ -51,6 +51,23 @@ module.exports = (sequelize) => {
         type: DataTypes.ENUM("product", "charges"),
         defaultValue: "product",
       },
+      // Invoice pricing (utils/invoiceLinePricing.js). `price` stays the line total.
+      /** Unit price charged (after discount; the custom price when priceOverride). */
+      unitPrice: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+      /** Unit price set by hand ("Edit unit price" permission); kept on later edits. */
+      priceOverride: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      /** Catalog unit price (after the customer's discount) when the line was last saved. */
+      catalogUnitPrice: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
     },
     {
       tableName: "items",

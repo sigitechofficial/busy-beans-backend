@@ -59,8 +59,20 @@ async function resolveInitialSections(templateId) {
   return sectionsFromTypes(getBuiltinSectionTypes(templateId));
 }
 
+/** Page theme of a custom template (imported pages keep their designSystem), or null. */
+async function resolveTemplateDesignSystem(templateId) {
+  if (!templateId) return null;
+  try {
+    const custom = await getCustomTemplateModel().findByPk(templateId, { attributes: ["id", "designSystem"] });
+    return custom?.designSystem || null;
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   resolveInitialSections,
+  resolveTemplateDesignSystem,
   getBuiltinSectionTypes,
   sectionsFromTypes,
   buildSection,

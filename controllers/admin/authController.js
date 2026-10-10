@@ -426,8 +426,6 @@ const resetPassword = (Model, entity) =>
       return next(new AppError("Token is invalid or has expired", 400));
     }
 
-    console.log("🚀 ~ catchAsync ~ req.body?.password:", req.body?.password);
-    console.log("🚀 ~ catchAsync ~ data?.password:", data?.password);
     // await Model.update({password:req.body?.password},{where:{id:data?.id}})
     data.password = req.body.password;
     await data.save();
@@ -466,7 +464,7 @@ exports.supplierResetPassword = resetPassword(supplier, "supplier");
 
 exports.logina = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
-  console.log("🚀 ~ exports.login=catchAsync ~ req.body;:", req.body);
+  console.log("🚀 ~ exports.login=catchAsync ~ email:", req.body?.email);
 
   // 1) Check if email and password exist
   if (!email || !password) {
